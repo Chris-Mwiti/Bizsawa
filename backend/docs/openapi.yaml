@@ -1,0 +1,2520 @@
+openapi: 3.1.0
+info:
+  title: BizSawa Backend API
+  version: 0.1.0
+  description: >
+    OpenAPI contract for the BizSawa Go backend.
+    It is intended for product learning, API mocking, and test fixture generation.
+
+    Conventions:
+    - `Authorization: Bearer <token>` is required for protected routes.
+    - Business-scoped routes accept tenant context from the `businessID` path param, JWT claims, or `X-Business-ID`.
+    - Mutating requests may accept `X-Idempotency-Key`; it is required for payment initiation.
+    - List endpoints use `limit` and `offset` query parameters.
+    - Date range filters use RFC3339 timestamps.
+    - Money and decimal values are serialized as JSON strings by `shopspring/decimal`.
+servers:
+  - url: http://localhost:5504
+    description: Local development server
+tags:
+  - name: Health
+  - name: Auth
+  - name: Tenancy
+  - name: Business
+  - name: Users
+  - name: Products
+  - name: Customers
+  - name: Taxes
+  - name: Inventory
+  - name: Orders
+  - name: Sales
+  - name: Expenses
+  - name: Invoices
+  - name: Payments
+security:
+  - bearerAuth: []
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Health check
+      security: []
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: ok
+  /ready:
+    get:
+      tags: [Health]
+      summary: Readiness check
+      security: []
+      responses:
+        "200":
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadinessResponse"
+              example:
+                status: ready
+        "503":
+          description: Service is not ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadinessResponse"
+              example:
+                status: not_ready
+  /api/v1/status:
+    get:
+      tags: [Health]
+      summary: API status
+      security: []
+      responses:
+        "200":
+          description: API status payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiStatusResponse"
+              example:
+                service: bizsawa-api
+                phase: invoices-payments
+  /api/v1/public/plans:
+    get:
+      tags: [Tenancy]
+      summary: List available subscription plans
+      security: []
+      responses:
+        "200":
+          description: Available plans
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Plan"
+              example:
+                - code: free
+                  name: Free
+                  maxBusinesses: 1
+                  aiAccess: false
+                  reports: basic
+                  apiAccess: false
+                - code: premium
+                  name: Premium
+                  maxBusinesses: 5
+                  aiAccess: true
+                  reports: full
+                  apiAccess: true
+  /api/v1/auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a user
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+            example:
+              email: owner@example.com
+              password: secret123
+      responses:
+        "201":
+          description: Authentication tokens for the newly created user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+              example:
+                userId: 2b1a4ad8-4e77-4f1c-9d59-bd8c2a7d2d71
+                accessToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                refreshToken: rt_123456789
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/v1/auth/login:
+    post:
+      tags: [Auth]
+      summary: Log in a user
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+            example:
+              email: owner@example.com
+              password: secret123
+              businessId: 2b1a4ad8-4e77-4f1c-9d59-bd8c2a7d2d72
+      responses:
+        "200":
+          description: Authentication tokens
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+              example:
+                userId: 2b1a4ad8-4e77-4f1c-9d59-bd8c2a7d2d71
+                accessToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                refreshToken: rt_123456789
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/v1/auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh access tokens
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+            example:
+              refreshToken: rt_123456789
+      responses:
+        "200":
+          description: Refreshed authentication tokens
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/v1/subscriptions/subscription:
+    get:
+      tags: [Tenancy]
+      summary: Get or create the active subscription for the current user
+      responses:
+        "200":
+          description: Subscription record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subscription"
+  /api/v1/profile:
+    get:
+      tags: [Users]
+      summary: Get the current user's profile
+      responses:
+        "200":
+          description: Profile record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+    put:
+      tags: [Users]
+      summary: Update the current user's profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProfileRequest"
+      responses:
+        "200":
+          description: Updated profile record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+    post: 
+      tags: [Users]
+      summary: Create user's profile under the businessId context
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProfileRequest"
+      responses:
+        "200":
+          description: Created profile record
+          content:
+            application/json:
+              schema:
+                $ref: "$/components/schemas/UserProfile"
+  /api/v1/businesses:
+    get:
+      tags: [Business]
+      summary: List businesses owned by the current user
+      responses:
+        "200":
+          description: Business list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [businesses]
+                properties:
+                  businesses:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Business"
+    post:
+      tags: [Business]
+      summary: Create a new business
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBusinessRequest"
+      responses:
+        "201":
+          description: Created business
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Business"
+  /api/v1/businesses/{businessID}:
+    parameters:
+      - $ref: "#/components/parameters/BusinessIDPath"
+    get:
+      tags: [Business]
+      summary: Get a business by ID
+      responses:
+        "200":
+          description: Business record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Business"
+    put:
+      tags: [Business]
+      summary: Update a business
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateBusinessRequest"
+      responses:
+        "200":
+          description: Updated business record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Business"
+    delete:
+      tags: [Business]
+      summary: Delete a business
+      responses:
+        "200":
+          description: Deletion confirmation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeletionResponse"
+  /api/v1/businesses/{businessID}/members:
+    parameters:
+      - $ref: "#/components/parameters/BusinessIDPath"
+    get:
+      tags: [Users]
+      summary: List business members
+      responses:
+        "200":
+          description: Member list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [members]
+                properties:
+                  members:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/BusinessMember"
+    post:
+      tags: [Users]
+      summary: Invite a member to the business
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InviteMemberRequest"
+      responses:
+        "201":
+          description: Created member invite
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessMember"
+  /api/v1/businesses/{businessID}/members/{memberID}/role:
+    parameters:
+      - $ref: "#/components/parameters/BusinessIDPath"
+      - $ref: "#/components/parameters/MemberIDPath"
+    put:
+      tags: [Users]
+      summary: Update a member role
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateRoleRequest"
+      responses:
+        "200":
+          description: Role updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+  /api/v1/businesses/{businessID}/members/{memberID}:
+    parameters:
+      - $ref: "#/components/parameters/BusinessIDPath"
+      - $ref: "#/components/parameters/MemberIDPath"
+    delete:
+      tags: [Users]
+      summary: Deactivate a member
+      responses:
+        "200":
+          description: Member deactivated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+  /api/v1/products:
+    get:
+      tags: [Products]
+      summary: List products
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Product list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [products]
+                properties:
+                  products:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Product"
+    post:
+      tags: [Products]
+      summary: Create a product
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductRequest"
+      responses:
+        "201":
+          description: Created product
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+  /api/v1/products/{id}:
+    parameters:
+      - $ref: "#/components/parameters/IDPath"
+    get:
+      tags: [Products]
+      summary: Get a product
+      responses:
+        "200":
+          description: Product record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+    put:
+      tags: [Products]
+      summary: Update a product
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductRequest"
+      responses:
+        "200":
+          description: Updated product
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+    delete:
+      tags: [Products]
+      summary: Delete a product
+      responses:
+        "200":
+          description: Deletion confirmation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeletionResponse"
+  /api/v1/products/{id}/generate-description:
+    parameters:
+      - $ref: "#/components/parameters/IDPath"
+    post:
+      tags: [Products]
+      summary: Generate a product description
+      responses:
+        "200":
+          description: Generated description
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenerateDescriptionResponse"
+  /api/v1/customers:
+    get:
+      tags: [Customers]
+      summary: List customers
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Customer list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [customers]
+                properties:
+                  customers:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Customer"
+    post:
+      tags: [Customers]
+      summary: Create a customer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomerRequest"
+      responses:
+        "201":
+          description: Created customer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+  /api/v1/customers/top:
+    get:
+      tags: [Customers]
+      summary: Get top customers
+      responses:
+        "200":
+          description: Top customers
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [customers]
+                properties:
+                  customers:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Customer"
+  /api/v1/customers/{id}:
+    parameters:
+      - $ref: "#/components/parameters/IDPath"
+    get:
+      tags: [Customers]
+      summary: Get a customer
+      responses:
+        "200":
+          description: Customer record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+    put:
+      tags: [Customers]
+      summary: Update a customer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomerRequest"
+      responses:
+        "200":
+          description: Updated customer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+    delete:
+      tags: [Customers]
+      summary: Delete a customer
+      responses:
+        "200":
+          description: Deletion confirmation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeletionResponse"
+  /api/v1/customers/{id}/purchase-history:
+    parameters:
+      - $ref: "#/components/parameters/IDPath"
+    get:
+      tags: [Customers]
+      summary: Get a customer's purchase history
+      responses:
+        "200":
+          description: Purchase history entries
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [history]
+                properties:
+                  history:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PurchaseHistoryEntry"
+  /api/v1/taxes/rules:
+    get:
+      tags: [Taxes]
+      summary: List tax rules
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Tax rule list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [taxRules]
+                properties:
+                  taxRules:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TaxRule"
+    post:
+      tags: [Taxes]
+      summary: Create a tax rule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RuleRequest"
+      responses:
+        "201":
+          description: Created tax rule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaxRule"
+  /api/v1/taxes/kenya-vat-default:
+    post:
+      tags: [Taxes]
+      summary: Ensure the default Kenya VAT rule exists
+      responses:
+        "200":
+          description: VAT rule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaxRule"
+  /api/v1/taxes/summary:
+    get:
+      tags: [Taxes]
+      summary: Get tax summary for a period
+      parameters:
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+      responses:
+        "200":
+          description: Summary list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [summary]
+                properties:
+                  summary:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PeriodSummary"
+  /api/v1/inventory:
+    get:
+      tags: [Inventory]
+      summary: List inventory items
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Inventory list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [inventory]
+                properties:
+                  inventory:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/InventoryItem"
+  /api/v1/inventory/adjustments:
+    post:
+      tags: [Inventory]
+      summary: Adjust stock
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdjustmentRequest"
+      responses:
+        "201":
+          description: Created stock movement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StockMovement"
+  /api/v1/inventory/low-stock:
+    get:
+      tags: [Inventory]
+      summary: List low stock items
+      responses:
+        "200":
+          description: Low stock items
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/InventoryItem"
+  /api/v1/inventory/movements:
+    get:
+      tags: [Inventory]
+      summary: List stock movements
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Movement list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [movements]
+                properties:
+                  movements:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/StockMovement"
+  /api/v1/inventory/valuation:
+    get:
+      tags: [Inventory]
+      summary: Get inventory valuation
+      responses:
+        "200":
+          description: Valuation list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [valuation]
+                properties:
+                  valuation:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Valuation"
+  /api/v1/orders:
+    get:
+      tags: [Orders]
+      summary: List orders
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Order list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [orders]
+                properties:
+                  orders:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Order"
+    post:
+      tags: [Orders]
+      summary: Create an order
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKeyOptional"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOrderRequest"
+      responses:
+        "201":
+          description: Created order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+  /api/v1/orders/{id}:
+    parameters:
+      - $ref: "#/components/parameters/IDPath"
+    get:
+      tags: [Orders]
+      summary: Get an order
+      responses:
+        "200":
+          description: Order record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+  /api/v1/orders/{id}/confirm:
+    parameters:
+      - $ref: "#/components/parameters/IDPath"
+    post:
+      tags: [Orders]
+      summary: Confirm an order
+      responses:
+        "200":
+          description: Confirmed order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+  /api/v1/orders/{id}/fulfill:
+    parameters:
+      - $ref: "#/components/parameters/IDPath"
+    post:
+      tags: [Orders]
+      summary: Fulfill an order
+      responses:
+        "200":
+          description: Fulfilled order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+  /api/v1/orders/{id}/cancel:
+    parameters:
+      - $ref: "#/components/parameters/IDPath"
+    post:
+      tags: [Orders]
+      summary: Cancel an order
+      responses:
+        "200":
+          description: Cancellation confirmation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+  /api/v1/orders/{id}/refund:
+    parameters:
+      - $ref: "#/components/parameters/IDPath"
+    post:
+      tags: [Orders]
+      summary: Refund an order
+      responses:
+        "200":
+          description: Refund confirmation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+  /api/v1/sales:
+    get:
+      tags: [Sales]
+      summary: List sales
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Sales list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sales]
+                properties:
+                  sales:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Sale"
+    post:
+      tags: [Sales]
+      summary: Create a sale
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKeyOptional"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSaleRequest"
+      responses:
+        "201":
+          description: Created sale
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sale"
+  /api/v1/sales/summary:
+    get:
+      tags: [Sales]
+      summary: Get sales summary
+      parameters:
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+      responses:
+        "200":
+          description: Sales summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SalesSummary"
+  /api/v1/sales/by-payment-method:
+    get:
+      tags: [Sales]
+      summary: Breakdown sales by payment method
+      responses:
+        "200":
+          description: Breakdown items
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Breakdown"
+  /api/v1/sales/by-staff:
+    get:
+      tags: [Sales]
+      summary: Breakdown sales by staff member
+      responses:
+        "200":
+          description: Breakdown items
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Breakdown"
+  /api/v1/sales/by-product:
+    get:
+      tags: [Sales]
+      summary: Breakdown sales by product
+      responses:
+        "200":
+          description: Breakdown items
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Breakdown"
+  /api/v1/sales/{id}:
+    parameters:
+      - $ref: "#/components/parameters/IDPath"
+    get:
+      tags: [Sales]
+      summary: Get a sale
+      responses:
+        "200":
+          description: Sale record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sale"
+  /api/v1/sales/{id}/void:
+    parameters:
+      - $ref: "#/components/parameters/IDPath"
+    post:
+      tags: [Sales]
+      summary: Void a sale
+      responses:
+        "200":
+          description: Void confirmation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+  /api/v1/expenses:
+    get:
+      tags: [Expenses]
+      summary: List expenses
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Expense list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [expenses]
+                properties:
+                  expenses:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Expense"
+    post:
+      tags: [Expenses]
+      summary: Create an expense
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExpenseRequest"
+      responses:
+        "201":
+          description: Created expense
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Expense"
+  /api/v1/expenses/summary:
+    get:
+      tags: [Expenses]
+      summary: Get expense summary by category
+      parameters:
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+      responses:
+        "200":
+          description: Category summary
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [summary]
+                properties:
+                  summary:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/CategorySummary"
+  /api/v1/expenses/{id}:
+    parameters:
+      - $ref: "#/components/parameters/IDPath"
+    get:
+      tags: [Expenses]
+      summary: Get an expense
+      responses:
+        "200":
+          description: Expense record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Expense"
+    delete:
+      tags: [Expenses]
+      summary: Delete an expense
+      responses:
+        "200":
+          description: Deletion confirmation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeletionResponse"
+  /api/v1/invoices:
+    get:
+      tags: [Invoices]
+      summary: List invoices
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Invoice list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [invoices]
+                properties:
+                  invoices:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Invoice"
+    post:
+      tags: [Invoices]
+      summary: Create an invoice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInvoiceRequest"
+      responses:
+        "201":
+          description: Created invoice
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+  /api/v1/invoices/{id}:
+    parameters:
+      - $ref: "#/components/parameters/IDPath"
+    get:
+      tags: [Invoices]
+      summary: Get an invoice
+      responses:
+        "200":
+          description: Invoice record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+  /api/v1/invoices/{id}/send:
+    parameters:
+      - $ref: "#/components/parameters/IDPath"
+    post:
+      tags: [Invoices]
+      summary: Mark an invoice as sent via email
+      responses:
+        "200":
+          description: Updated invoice
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+  /api/v1/invoices/{id}/send-whatsapp:
+    parameters:
+      - $ref: "#/components/parameters/IDPath"
+    post:
+      tags: [Invoices]
+      summary: Mark an invoice as sent via WhatsApp
+      responses:
+        "200":
+          description: Updated invoice
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+  /api/v1/invoices/{id}/record-payment:
+    parameters:
+      - $ref: "#/components/parameters/IDPath"
+    post:
+      tags: [Invoices]
+      summary: Record payment against an invoice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecordPaymentRequest"
+      responses:
+        "200":
+          description: Updated invoice
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+  /api/v1/invoices/{id}/pdf:
+    parameters:
+      - $ref: "#/components/parameters/IDPath"
+    get:
+      tags: [Invoices]
+      summary: Download the invoice PDF
+      responses:
+        "200":
+          description: Deterministic PDF document
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+  /api/v1/payments:
+    get:
+      tags: [Payments]
+      summary: List payment commands
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Payment command list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [payments]
+                properties:
+                  payments:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PaymentCommand"
+    post:
+      tags: [Payments]
+      summary: Initiate a payment command
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKeyRequired"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InitiateRequest"
+      responses:
+        "202":
+          description: Created payment command
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentCommand"
+  /api/v1/payments/{id}:
+    parameters:
+      - $ref: "#/components/parameters/IDPath"
+    get:
+      tags: [Payments]
+      summary: Get a payment command
+      responses:
+        "200":
+          description: Payment command record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentCommand"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    BusinessIDPath:
+      name: businessID
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    IDPath:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    MemberIDPath:
+      name: memberID
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+    Offset:
+      name: offset
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+    From:
+      name: from
+      in: query
+      required: false
+      schema:
+        type: string
+        format: date-time
+    To:
+      name: to
+      in: query
+      required: false
+      schema:
+        type: string
+        format: date-time
+    IdempotencyKeyOptional:
+      name: X-Idempotency-Key
+      in: header
+      required: false
+      schema:
+        type: string
+    IdempotencyKeyRequired:
+      name: X-Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+  responses:
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unprocessable:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Conflict:
+      description: Conflict
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+    HealthResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          example: ok
+    ReadinessResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          example: ready
+    ApiStatusResponse:
+      type: object
+      required: [service, phase]
+      properties:
+        service:
+          type: string
+        phase:
+          type: string
+    DeletionResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          example: deleted
+    StatusResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+    GenerateDescriptionResponse:
+      type: object
+      required: [description]
+      properties:
+        description:
+          type: string
+    RegisterRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+        businessId:
+          type: string
+          format: uuid
+          nullable: true
+    RefreshRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken:
+          type: string
+    AuthResponse:
+      type: object
+      required: [userId, accessToken, refreshToken]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+    Subscription:
+      type: object
+      required: [id, userId, planCode, status, startedAt, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        planCode:
+          type: string
+          enum: [free, premium, enterprise]
+        status:
+          type: string
+        startedAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    Plan:
+      type: object
+      required: [code, name, maxBusinesses, aiAccess, reports, apiAccess]
+      properties:
+        code:
+          type: string
+          enum: [free, premium, enterprise]
+        name:
+          type: string
+        maxBusinesses:
+          type: integer
+        aiAccess:
+          type: boolean
+        reports:
+          type: string
+        apiAccess:
+          type: boolean
+    UserProfile:
+      type: object
+      required: [id, tenantId, createdAt, updatedAt, userId, timezone, language]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        userId:
+          type: string
+          format: uuid
+        firstName:
+          type: string
+        lastName:
+          type: string
+        phone:
+          type: string
+        avatarUrl:
+          type: string
+        timezone:
+          type: string
+        language:
+          type: string
+    UpdateProfileRequest:
+      type: object
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        phone:
+          type: string
+        avatarUrl:
+          type: string
+        timezone:
+          type: string
+        language:
+          type: string
+    CreateProfileRequest:
+      type: object
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        phone:
+          type: string
+        avatarUrl:
+          type: string
+        timezone:
+          type: string
+        language:
+          type: string
+    Business:
+      type: object
+      required: [id, tenantId, ownerId, name, slug, currency, timezone, createdAt, updatedAt, mpesaShortcodeConfigured]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        ownerId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        currency:
+          type: string
+        timezone:
+          type: string
+        taxPin:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        address:
+          type: string
+        mpesaPaymentType:
+          type: string
+        mpesaShortcodeConfigured:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    CreateBusinessRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        slug:
+          type: string
+        currency:
+          type: string
+        timezone:
+          type: string
+        taxPin:
+          type: string
+        mpesaPaymentType:
+          type: string
+          enum: [paybill, pochi_biashara, buy_goods]
+        mpesaShortcode:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        address:
+          type: string
+    UpdateBusinessRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        taxPin:
+          type: string
+        mpesaPaymentType:
+          type: string
+          enum: [paybill, pochi_biashara, buy_goods]
+        mpesaShortcode:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        address:
+          type: string
+    BusinessMember:
+      type: object
+      required: [id, tenantId, createdAt, updatedAt, businessId, userId, role, isActive, invitedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        businessId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum: [OWNER, MANAGER, CASHIER, VIEWER]
+        isActive:
+          type: boolean
+        invitedBy:
+          type: string
+          format: uuid
+        invitedAt:
+          type: string
+          format: date-time
+        joinedAt:
+          type: string
+          format: date-time
+          nullable: true
+    InviteMemberRequest:
+      type: object
+      required: [userId, role]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum: [MANAGER, CASHIER, VIEWER]
+    UpdateRoleRequest:
+      type: object
+      required: [role]
+      properties:
+        role:
+          type: string
+          enum: [MANAGER, CASHIER, VIEWER]
+    Product:
+      type: object
+      required: [id, tenantId, createdAt, updatedAt, businessId, name, price, cost, isActive]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        businessId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        sku:
+          type: string
+        category:
+          type: string
+        barcode:
+          type: string
+        imageUrl:
+          type: string
+        taxRuleId:
+          type: string
+          format: uuid
+          nullable: true
+        price:
+          type: string
+        cost:
+          type: string
+        isActive:
+          type: boolean
+        variants:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductVariant"
+    ProductVariant:
+      type: object
+      required: [id, tenantId, createdAt, updatedAt, businessId, productId, name, price, cost, isActive]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        businessId:
+          type: string
+          format: uuid
+        productId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        sku:
+          type: string
+        barcode:
+          type: string
+        price:
+          type: string
+        cost:
+          type: string
+        isActive:
+          type: boolean
+    VariantRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        sku:
+          type: string
+        barcode:
+          type: string
+        price:
+          type: string
+        cost:
+          type: string
+        isActive:
+          type: boolean
+    ProductRequest:
+      type: object
+      required: [name, price, cost]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        sku:
+          type: string
+        category:
+          type: string
+        barcode:
+          type: string
+        imageUrl:
+          type: string
+        taxRuleId:
+          type: string
+          format: uuid
+          nullable: true
+        price:
+          type: string
+        cost:
+          type: string
+        isActive:
+          type: boolean
+        variants:
+          type: array
+          items:
+            $ref: "#/components/schemas/VariantRequest"
+    Customer:
+      type: object
+      required: [id, tenantId, createdAt, updatedAt, businessId, name, loyaltyPoints, totalSpend]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        businessId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        address:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        notes:
+          type: string
+        loyaltyPoints:
+          type: integer
+        totalSpend:
+          type: string
+        lastPurchaseAt:
+          type: string
+          format: date-time
+          nullable: true
+    CustomerRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        address:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        notes:
+          type: string
+        loyaltyPoints:
+          type: integer
+        totalSpend:
+          type: string
+    PurchaseHistoryEntry:
+      type: object
+      required: [saleId, receiptNumber, purchasedAt, total]
+      properties:
+        saleId:
+          type: string
+          format: uuid
+        receiptNumber:
+          type: string
+        purchasedAt:
+          type: string
+          format: date-time
+        total:
+          type: string
+    TaxRule:
+      type: object
+      required: [id, tenantId, createdAt, updatedAt, businessId, name, rate, country, isDefault, isActive]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        businessId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        rate:
+          type: string
+        country:
+          type: string
+        isDefault:
+          type: boolean
+        isActive:
+          type: boolean
+    RuleRequest:
+      type: object
+      required: [name, rate]
+      properties:
+        name:
+          type: string
+        rate:
+          type: string
+        country:
+          type: string
+        isDefault:
+          type: boolean
+        isActive:
+          type: boolean
+          nullable: true
+    PeriodSummary:
+      type: object
+      required: [taxType, taxable, amount]
+      properties:
+        taxType:
+          type: string
+        taxable:
+          type: string
+        amount:
+          type: string
+    InventoryItem:
+      type: object
+      required: [id, tenantId, createdAt, updatedAt, businessId, productId, quantity, lowStockThreshold]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        businessId:
+          type: string
+          format: uuid
+        productId:
+          type: string
+          format: uuid
+        quantity:
+          type: string
+        lowStockThreshold:
+          type: string
+    AdjustmentRequest:
+      type: object
+      required: [productId, quantityDelta]
+      properties:
+        productId:
+          type: string
+          format: uuid
+        quantityDelta:
+          type: string
+        lowStockThreshold:
+          type: string
+        notes:
+          type: string
+    StockMovement:
+      type: object
+      required: [id, tenantId, createdAt, updatedAt, businessId, productId, quantityDelta, movementType, occurredAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        businessId:
+          type: string
+          format: uuid
+        productId:
+          type: string
+          format: uuid
+        quantityDelta:
+          type: string
+        movementType:
+          type: string
+        referenceType:
+          type: string
+        referenceId:
+          type: string
+          format: uuid
+          nullable: true
+        notes:
+          type: string
+        occurredAt:
+          type: string
+          format: date-time
+    Valuation:
+      type: object
+      required: [productId, quantity]
+      properties:
+        productId:
+          type: string
+          format: uuid
+        quantity:
+          type: string
+    Order:
+      type: object
+      required: [id, tenantId, createdAt, updatedAt, businessId, status, subtotal, taxAmount, total, paymentMethod]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        businessId:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          type: string
+          enum: [draft, confirmed, fulfilled, cancelled, refunded]
+        subtotal:
+          type: string
+        taxAmount:
+          type: string
+        total:
+          type: string
+        paymentMethod:
+          type: string
+        confirmedAt:
+          type: string
+          format: date-time
+          nullable: true
+        fulfilledAt:
+          type: string
+          format: date-time
+          nullable: true
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderLine"
+    OrderLine:
+      type: object
+      required: [id, tenantId, createdAt, updatedAt, businessId, orderId, productId, quantity, unitPrice, lineTotal]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        businessId:
+          type: string
+          format: uuid
+        orderId:
+          type: string
+          format: uuid
+        productId:
+          type: string
+          format: uuid
+        quantity:
+          type: string
+        unitPrice:
+          type: string
+        lineTotal:
+          type: string
+    OrderLineRequest:
+      type: object
+      required: [productId, quantity, unitPrice]
+      properties:
+        productId:
+          type: string
+          format: uuid
+        quantity:
+          type: string
+        unitPrice:
+          type: string
+    CreateOrderRequest:
+      type: object
+      required: [lines]
+      properties:
+        customerId:
+          type: string
+          format: uuid
+          nullable: true
+        paymentMethod:
+          type: string
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderLineRequest"
+    Sale:
+      type: object
+      required: [id, tenantId, createdAt, updatedAt, businessId, receiptNumber, staffId, paymentMethod, subtotal, taxAmount, total, status, soldAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        businessId:
+          type: string
+          format: uuid
+        orderId:
+          type: string
+          format: uuid
+          nullable: true
+        customerId:
+          type: string
+          format: uuid
+          nullable: true
+        receiptNumber:
+          type: string
+        staffId:
+          type: string
+          format: uuid
+        paymentMethod:
+          type: string
+        subtotal:
+          type: string
+        taxAmount:
+          type: string
+        total:
+          type: string
+        status:
+          type: string
+        soldAt:
+          type: string
+          format: date-time
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/SaleLine"
+    SaleLine:
+      type: object
+      required: [id, tenantId, createdAt, updatedAt, businessId, saleId, productId, quantity, unitPrice, lineTotal]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        businessId:
+          type: string
+          format: uuid
+        saleId:
+          type: string
+          format: uuid
+        productId:
+          type: string
+          format: uuid
+        quantity:
+          type: string
+        unitPrice:
+          type: string
+        lineTotal:
+          type: string
+    SaleLineRequest:
+      type: object
+      required: [productId, quantity, unitPrice]
+      properties:
+        productId:
+          type: string
+          format: uuid
+        quantity:
+          type: string
+        unitPrice:
+          type: string
+    CreateSaleRequest:
+      type: object
+      required: [lines]
+      properties:
+        orderId:
+          type: string
+          format: uuid
+          nullable: true
+        customerId:
+          type: string
+          format: uuid
+          nullable: true
+        paymentMethod:
+          type: string
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/SaleLineRequest"
+    SalesSummary:
+      type: object
+      required: [count, subtotal, taxAmount, total]
+      properties:
+        count:
+          type: integer
+        subtotal:
+          type: string
+        taxAmount:
+          type: string
+        total:
+          type: string
+    Breakdown:
+      type: object
+      required: [key, total, count]
+      properties:
+        key:
+          type: string
+        total:
+          type: string
+        count:
+          type: integer
+    Expense:
+      type: object
+      required: [id, tenantId, createdAt, updatedAt, businessId, category, amount, taxAmount, isRecurring, spentAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        businessId:
+          type: string
+          format: uuid
+        category:
+          type: string
+        description:
+          type: string
+        vendor:
+          type: string
+        amount:
+          type: string
+        taxAmount:
+          type: string
+        isRecurring:
+          type: boolean
+        recurringInterval:
+          type: string
+        spentAt:
+          type: string
+          format: date-time
+        createdBy:
+          type: string
+          format: uuid
+    ExpenseRequest:
+      type: object
+      required: [category, amount]
+      properties:
+        category:
+          type: string
+        description:
+          type: string
+        vendor:
+          type: string
+        amount:
+          type: string
+        taxAmount:
+          type: string
+        isRecurring:
+          type: boolean
+        recurringInterval:
+          type: string
+        spentAt:
+          type: string
+          format: date-time
+          nullable: true
+    CategorySummary:
+      type: object
+      required: [category, amount, taxAmount, count]
+      properties:
+        category:
+          type: string
+        amount:
+          type: string
+        taxAmount:
+          type: string
+        count:
+          type: integer
+    Invoice:
+      type: object
+      required: [id, tenantId, createdAt, updatedAt, businessId, invoiceNumber, status, subtotal, taxAmount, total, amountPaid, amountDue, currency]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        businessId:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+          nullable: true
+        invoiceNumber:
+          type: string
+        status:
+          type: string
+          enum: [draft, sent, viewed, partial, paid, overdue, cancelled]
+        subtotal:
+          type: string
+        taxAmount:
+          type: string
+        total:
+          type: string
+        amountPaid:
+          type: string
+        amountDue:
+          type: string
+        currency:
+          type: string
+        notes:
+          type: string
+        dueAt:
+          type: string
+          format: date-time
+          nullable: true
+        sentAt:
+          type: string
+          format: date-time
+          nullable: true
+        viewedAt:
+          type: string
+          format: date-time
+          nullable: true
+        paidAt:
+          type: string
+          format: date-time
+          nullable: true
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceLine"
+    InvoiceLine:
+      type: object
+      required: [id, tenantId, createdAt, updatedAt, businessId, invoiceId, description, quantity, unitPrice, lineTotal]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        businessId:
+          type: string
+          format: uuid
+        invoiceId:
+          type: string
+          format: uuid
+        productId:
+          type: string
+          format: uuid
+          nullable: true
+        description:
+          type: string
+        quantity:
+          type: string
+        unitPrice:
+          type: string
+        lineTotal:
+          type: string
+    InvoiceLineRequest:
+      type: object
+      required: [description, quantity, unitPrice]
+      properties:
+        productId:
+          type: string
+          format: uuid
+          nullable: true
+        description:
+          type: string
+        quantity:
+          type: string
+        unitPrice:
+          type: string
+    CreateInvoiceRequest:
+      type: object
+      required: [lines]
+      properties:
+        customerId:
+          type: string
+          format: uuid
+          nullable: true
+        currency:
+          type: string
+        notes:
+          type: string
+        dueAt:
+          type: string
+          format: date-time
+          nullable: true
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceLineRequest"
+    RecordPaymentRequest:
+      type: object
+      required: [amount]
+      properties:
+        amount:
+          type: string
+        paymentId:
+          type: string
+          format: uuid
+          nullable: true
+        paidAt:
+          type: string
+          format: date-time
+          nullable: true
+    PaymentCommand:
+      type: object
+      required: [id, tenantId, createdAt, updatedAt, businessId, type, status, amount, currency, provider]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        businessId:
+          type: string
+          format: uuid
+        invoiceId:
+          type: string
+          format: uuid
+          nullable: true
+        type:
+          type: string
+          enum: [stk_push, b2c, c2b]
+        status:
+          type: string
+          enum: [pending, processing, succeeded, failed]
+        amount:
+          type: string
+        currency:
+          type: string
+        phone:
+          type: string
+        accountReference:
+          type: string
+        provider:
+          type: string
+        providerRequestId:
+          type: string
+        providerReceipt:
+          type: string
+        failureCode:
+          type: string
+        failureMessage:
+          type: string
+        payload:
+          type: object
+          additionalProperties: true
+        resultPayload:
+          type: object
+          additionalProperties: true
+        processedAt:
+          type: string
+          format: date-time
+          nullable: true
+    InitiateRequest:
+      type: object
+      required: [amount]
+      properties:
+        type:
+          type: string
+          enum: [stk_push, b2c, c2b]
+        invoiceId:
+          type: string
+          format: uuid
+          nullable: true
+        amount:
+          type: string
+        currency:
+          type: string
+        phone:
+          type: string
+        accountReference:
+          type: string
+        payload:
+          type: object
+          additionalProperties: true

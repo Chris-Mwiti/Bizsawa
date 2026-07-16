@@ -1,0 +1,9 @@
+DROP TABLE IF EXISTS expenses;
+DROP TABLE IF EXISTS sale_lines;
+DROP TABLE IF EXISTS sales;
+DROP TABLE IF EXISTS order_lines;
+DROP TABLE IF EXISTS orders;
+DROP TABLE IF EXISTS stock_movements;
+DROP TABLE IF EXISTS inventory_items;
+DROP TABLE IF EXISTS tax_entries;
+DROP TABLE IF EXISTS tax_rules;

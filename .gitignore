@@ -1,0 +1,43 @@
+go.mod
+go.sum
+.env
+
+*.exe
+# --------------------------
+# Build Outputs
+# --------------------------
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+app
+server
+
+# --------------------------
+# Vendor Directory (if using vendoring)
+# --------------------------
+vendor/
+
+# --------------------------
+# IDE/Editor Configuration
+# --------------------------
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# --------------------------
+# OS Specific
+# --------------------------
+.DS_Store
+Thumbs.db
+
+# --------------------------
+# Test Coverage
+# --------------------------
+coverage.out
+coverage.html   
