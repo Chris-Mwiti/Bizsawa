@@ -95,7 +95,10 @@ func main() {
 	paymentModule := payments.New(gormDB, outboxRepo)
 	breaker := circuitbreaker.New[payments.ProviderResult](circuitbreaker.Config{Name: "mpesa-daraja", Logger: logger})
 	provider := MpesaProvider{}
-	worker := Worker{logger: logger, service: paymentModule.Service(), provider: ProviderFunc(func(ctx context.Context, cmd payments.PaymentCommand) (payments.ProviderResult, error) {
+	worker := Worker{
+		logger: logger, 
+		service: paymentModule.Service(), 
+		provider: ProviderFunc(func(ctx context.Context, cmd payments.PaymentCommand) (payments.ProviderResult, error) {
 		return breaker.Execute(func() (payments.ProviderResult, error) { return provider.Execute(ctx, cmd) })
 	})}
 

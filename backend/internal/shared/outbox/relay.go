@@ -46,16 +46,19 @@ func (r *Relay) Start(ctx context.Context) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			r.processBatch(ctx)
+			err := r.processBatch(ctx)
+			if err != nil {
+				r.logger.Warn("failed to process event: ", "err", err)
+			}
 		}
 	}
 }
 
-func (r *Relay) processBatch(ctx context.Context) {
+func (r *Relay) processBatch(ctx context.Context) (error){
 	events, err := r.repo.ClaimBatch(ctx, r.cfg.BatchSize)
 	if err != nil {
 		r.logger.Error("outbox claim failed", "err", err)
-		return
+		return err
 	}
 
 	for _, evt := range events {
@@ -73,10 +76,18 @@ func (r *Relay) processBatch(ctx context.Context) {
 			OccurredAt:    evt.CreatedAt,
 		})
 		if err != nil {
-			_ = r.repo.MarkFailed(ctx, evt.ID, err)
+			err = r.repo.MarkFailed(ctx, evt.ID, err)
+			if err != nil {
+				return err
+			}
 			r.logger.Warn("outbox publish failed", "eventID", evt.ID, "err", err)
 			continue
 		}
-		_ = r.repo.MarkSent(ctx, evt.ID)
+		err = r.repo.MarkSent(ctx, evt.ID)
+		if err != nil {
+			return err
+		}
 	}
+
+	return nil
 }

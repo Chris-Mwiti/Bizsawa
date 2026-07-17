@@ -19,7 +19,7 @@ type Config struct {
 
 func New[T any](cfg Config) *gobreaker.CircuitBreaker[T] {
 	if cfg.MaxRequests == 0 {
-		cfg.MaxRequests = 3
+		cfg.MaxRequests = 5
 	}
 	if cfg.Interval == 0 {
 		cfg.Interval = time.Minute
@@ -31,7 +31,7 @@ func New[T any](cfg Config) *gobreaker.CircuitBreaker[T] {
 		cfg.FailureRate = 0.6
 	}
 	if cfg.MinRequests == 0 {
-		cfg.MinRequests = 5
+		cfg.MinRequests = 3
 	}
 	logger := cfg.Logger
 	if logger == nil {

@@ -63,6 +63,21 @@ func (r *Repository) ClaimPending(ctx context.Context, limit int) ([]PaymentComm
 	return items, err
 }
 
+func (r *Repository) ClaimSinglePayment(ctx context.Context, command *PaymentCommand) (error) {
+
+	command, err := r.Find(ctx, command.BusinessID, command.ID)
+
+	if err != nil {
+		return err
+	}
+
+	if err := r.db.WithContext(ctx).Model(&PaymentCommand{}).Scopes(shareddb.BusinessScope(command.BusinessID)).Where("id = ? AND status = ?", command.ID, StatusPending).Update("status", StatusProcessing).Error; err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (r *Repository) MarkSucceeded(ctx context.Context, id uuid.UUID, requestID, receipt string, raw []byte) error {
 	now := time.Now().UTC()
 	return r.db.WithContext(ctx).Model(&PaymentCommand{}).Where("id = ?", id).Updates(map[string]any{"status": StatusSucceeded, "provider_request_id": requestID, "provider_receipt": receipt, "result_payload": raw, "processed_at": now}).Error

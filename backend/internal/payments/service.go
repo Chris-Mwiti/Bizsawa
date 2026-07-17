@@ -95,6 +95,28 @@ func (s *Service) List(ctx context.Context, businessID uuid.UUID, page paginatio
 	return s.repo.List(ctx, businessID, page)
 }
 
+func (s *Service) ClaimPayment(ctx context.Context, businessID, cmdId uuid.UUID) (error) {
+
+	paymentCmd, err := s.Get(ctx, businessID, cmdId);
+
+	if err != nil {
+		return err
+	}
+	sm := s.buildPaymentMachine(businessID, paymentCmd)
+
+	if err := sm.FireCtx(ctx, TriggerProcessing); err != nil {
+		return err
+	}
+
+	err = s.repo.ClaimSinglePayment(ctx, paymentCmd)
+
+	if err != nil {
+		return err
+	}
+ 
+	return nil
+}
+
 func (s *Service) ClaimPending(ctx context.Context, limit int) ([]PaymentCommand, error) {
 	return s.repo.ClaimPending(ctx, limit)
 }
@@ -159,6 +181,99 @@ func (s *Service) emitCommand(ctx context.Context, cmd *PaymentCommand) (error) 
 		return apperrors.ErrInternal.WithMessage("error while emmiting command")
 	}
 	return nil
+}
+
+func (s *Service) emitProcessingCmd(ctx context.Context, cmd *PaymentCommand) (error) {
+	if s.outbox == nil {
+		return apperrors.ErrInternal.WithMessage("service outbox not available")
+	}
+
+	raw, _ := json.Marshal(map[string]any{
+		"paymentId": cmd.ID,
+		"businessId": cmd.BusinessID,
+		"amount": cmd.Amount.String(),
+		"currency": cmd.Currency,
+		"phone": cmd.Phone,
+		"invoiceId": cmd.InvoiceID,
+	})
+
+	err := s.outbox.Insert(ctx, &outbox.Event{
+		TenantID: cmd.TenantID,
+		AggregateID: cmd.ID.String(),
+		AggregateType: "payment_command",
+		EventType: "payment.command.processing",
+		Stream: "payments.commands",
+		Payload: raw,
+	})
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *Service) emitRetryCommand(ctx context.Context, cmd *PaymentCommand) (error) {
+	if s.outbox == nil {
+		return apperrors.ErrInternal.WithMessage("service outbox not available")
+	}
+
+	raw, _ := json.Marshal(
+		map[string]any{
+			"paymentId": cmd.ID,
+			"businessId": cmd.BusinessID,
+			"amount": cmd.Amount.String(),
+			"currency": cmd.Currency,
+			"phone": cmd.Phone,
+			"invoiceId": cmd.InvoiceID,
+	})
+
+	err := s.outbox.Insert(ctx, &outbox.Event{
+		TenantID: cmd.TenantID,
+		AggregateID: cmd.ID.String(),
+		AggregateType: "payment_command",
+		EventType: "payment.command.retry",
+		Stream: "payments.commands",
+		Payload: raw,
+	})
+
+	if err != nil {
+		return apperrors.ErrInternal.WithMessage("error while emmitting command")
+	}
+
+	return nil
+}
+
+func (s *Service) emitFail(ctx context.Context, cmd PaymentCommand) (error) {
+	if s.outbox == nil {
+		return apperrors.ErrInternal.WithMessage("service outbox not available")
+	}
+
+	raw, _ := json.Marshal(
+		map[string]any{
+			"paymentId": cmd.ID,
+			"businessId": cmd.BusinessID,
+			"amount": cmd.Amount.String(),
+			"currency": cmd.Currency,
+			"phone": cmd.Phone,
+			"invoiceId": cmd.InvoiceID,
+	})
+
+	err := s.outbox.Insert(ctx, &outbox.Event{
+		TenantID: cmd.TenantID,
+		AggregateID: cmd.ID.String(),
+		AggregateType: "payment_command",
+		EventType: "payment.command.fail",
+		Stream: "payments.commands",
+		Payload: raw,
+	})
+
+	if err != nil {
+		return apperrors.ErrInternal.WithMessage("error while emmitting command")
+	}
+
+	return nil
+
 }
 
 func (s *Service) emitResult(ctx context.Context, cmd PaymentCommand, status Status, requestID, receipt, code, message string) (error){

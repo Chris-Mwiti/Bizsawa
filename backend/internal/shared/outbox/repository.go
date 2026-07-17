@@ -52,8 +52,9 @@ func (r *GormRepository) ClaimBatch(ctx context.Context, batchSize int) ([]Event
 
 	var events []Event
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).
-			Where("status = ? AND scheduled_at <= ?", StatusPending, time.Now().UTC()).
+			Where("status = ? AND scheduled_at <= ? AND attempts <= ?", StatusPending, time.Now().UTC(), 5).
 			Order("created_at ASC").
 			Limit(batchSize).
 			Find(&events).Error; err != nil {
