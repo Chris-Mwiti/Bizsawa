@@ -57,21 +57,23 @@ func (w Worker) RunBatch(ctx context.Context) error {
 }
 
 func (w Worker) Run(ctx context.Context) error {
-	ticker := time.NewTicker(2 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <- ctx.Done():
+		for {
+			select {
+			case <- ctx.Done():
 				return ctx.Err()
-		case <- ticker.C:
-		default:
-		}
-		err := w.bus.Subscribe(ctx, "payments.commands", "payement.command.created", w.process)
-		if err != nil {
-			w.logger.Error("error while subscribing to payment.commands stream", "error", err)
-			continue
-		}
+			default:
+			}
+			err := w.bus.Subscribe(ctx, "payments.commands", "payment.command.created", w.process)
+			if err != nil {
+				w.logger.Error("error while subscribing to payment.commands stream", "error", err)
+
+				//instead of returninig an error we can wait for 10 seconds before actually retrying the processa again
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-time.After(10 * time.Second):
+				}
+			}
 	}
 	
 }
@@ -105,21 +107,21 @@ func (w Worker) process(ctx context.Context, rawMsg map[string]string) error {
 	}
 
 	var cmd map[string]any 
-	err = json.Unmarshal(event.Payload, cmd)
+	err = json.Unmarshal(event.Payload, &cmd)
 	if err != nil {
 		return err
 	}
 
-	businessId, ok := cmd["businessId"].(uuid.UUID) 
-	if !ok {
+	businessId, err := uuid.Parse(cmd["businessId"].(string)) 	
+	if err != nil {
 		return fmt.Errorf("unsupported businessId type: %x", cmd["businessId"])
 	}
-	paymentId, ok := cmd["paymentId"].(uuid.UUID) 
-	if !ok {
-		return fmt.Errorf("unsupported paymentId type: %x", cmd["paymentId"])
+
+	paymentId, err := uuid.Parse(cmd["businessId"].(string)) 	
+	if err != nil {
+		return fmt.Errorf("unsupported businessId type: %x", cmd["paymentId"])
 	}
-	
-	
+
 	payment, err := w.service.ClaimPayment(ctx, businessId, paymentId)
 
 	if err != nil {
@@ -132,6 +134,7 @@ func (w Worker) process(ctx context.Context, rawMsg map[string]string) error {
 		if markErr := w.service.MarkFailed(ctx, *payment, "PROVIDER_ERROR", providerMessage(err), nil); markErr != nil {
 			return markErr
 		}
+		return err
 	}
 
 	if err := w.service.MarkSucceeded(ctx, *payment, result); err != nil {
