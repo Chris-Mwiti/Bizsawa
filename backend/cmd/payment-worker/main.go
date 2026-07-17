@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -14,7 +16,9 @@ import (
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/circuitbreaker"
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/config"
 	shareddb "github.com/Codecx-Org/FinAI/backend/internal/shared/db"
+	"github.com/Codecx-Org/FinAI/backend/internal/shared/eventbus"
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/outbox"
+	"github.com/google/uuid"
 )
 
 type Provider interface {
@@ -34,13 +38,14 @@ type Worker struct {
 	logger   *slog.Logger
 	service  *payments.Service
 	provider Provider
+	bus 			eventbus.Bus
 }
 
-func (w Worker) Run(ctx context.Context) error {
+func (w Worker) RunBatch(ctx context.Context) error {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 	for {
-		if err := w.process(ctx); err != nil {
+		if err := w.processBatch(ctx); err != nil {
 			w.logger.Error("payment command processing failed", "err", err)
 		}
 		select {
@@ -51,7 +56,27 @@ func (w Worker) Run(ctx context.Context) error {
 	}
 }
 
-func (w Worker) process(ctx context.Context) error {
+func (w Worker) Run(ctx context.Context) error {
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <- ctx.Done():
+				return ctx.Err()
+		case <- ticker.C:
+		default:
+		}
+		err := w.bus.Subscribe(ctx, "payments.commands", "payement.command.created", w.process)
+		if err != nil {
+			w.logger.Error("error while subscribing to payment.commands stream", "error", err)
+			continue
+		}
+	}
+	
+}
+
+func (w Worker) processBatch(ctx context.Context) error {
 	commands, err := w.service.ClaimPending(ctx, 25)
 	if err != nil {
 		return err
@@ -68,6 +93,51 @@ func (w Worker) process(ctx context.Context) error {
 			return err
 		}
 	}
+	return nil
+}
+
+func (w Worker) process(ctx context.Context, rawMsg map[string]string) error {
+
+	event, err := eventbus.MapToEvent(rawMsg)
+
+	if err != nil {
+		return err
+	}
+
+	var cmd map[string]any 
+	err = json.Unmarshal(event.Payload, cmd)
+	if err != nil {
+		return err
+	}
+
+	businessId, ok := cmd["businessId"].(uuid.UUID) 
+	if !ok {
+		return fmt.Errorf("unsupported businessId type: %x", cmd["businessId"])
+	}
+	paymentId, ok := cmd["paymentId"].(uuid.UUID) 
+	if !ok {
+		return fmt.Errorf("unsupported paymentId type: %x", cmd["paymentId"])
+	}
+	
+	
+	payment, err := w.service.ClaimPayment(ctx, businessId, paymentId)
+
+	if err != nil {
+		return err
+	}
+
+	result, err := w.provider.Execute(ctx, *payment)
+
+	if err != nil {
+		if markErr := w.service.MarkFailed(ctx, *payment, "PROVIDER_ERROR", providerMessage(err), nil); markErr != nil {
+			return markErr
+		}
+	}
+
+	if err := w.service.MarkSucceeded(ctx, *payment, result); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -95,9 +165,11 @@ func main() {
 	paymentModule := payments.New(gormDB, outboxRepo)
 	breaker := circuitbreaker.New[payments.ProviderResult](circuitbreaker.Config{Name: "mpesa-daraja", Logger: logger})
 	provider := MpesaProvider{}
+	eventBus := eventbus.NewRedisStreamsBus(redisClient.Raw())
 	worker := Worker{
 		logger: logger, 
 		service: paymentModule.Service(), 
+		bus: eventBus,
 		provider: ProviderFunc(func(ctx context.Context, cmd payments.PaymentCommand) (payments.ProviderResult, error) {
 		return breaker.Execute(func() (payments.ProviderResult, error) { return provider.Execute(ctx, cmd) })
 	})}

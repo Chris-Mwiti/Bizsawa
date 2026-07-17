@@ -47,7 +47,7 @@ func (b *RedisStreamsBus) Subscribe(ctx context.Context, stream, targetType stri
 
 		streams, err := b.client.XRead(ctx, &redis.XReadArgs{
 			Streams: []string{stream, lastId},
-			Count:   10,
+			Count:   1,
 			Block:   2 * time.Second,
 		}).Result()
 

@@ -95,26 +95,26 @@ func (s *Service) List(ctx context.Context, businessID uuid.UUID, page paginatio
 	return s.repo.List(ctx, businessID, page)
 }
 
-func (s *Service) ClaimPayment(ctx context.Context, businessID, cmdId uuid.UUID) (error) {
+func (s *Service) ClaimPayment(ctx context.Context, businessID, cmdId uuid.UUID) (*PaymentCommand,error) {
 
 	paymentCmd, err := s.Get(ctx, businessID, cmdId);
 
 	if err != nil {
-		return err
+		return nil,err
 	}
 	sm := s.buildPaymentMachine(businessID, paymentCmd)
 
 	if err := sm.FireCtx(ctx, TriggerProcessing); err != nil {
-		return err
+		return nil,err
 	}
 
 	err = s.repo.ClaimSinglePayment(ctx, paymentCmd)
 
 	if err != nil {
-		return err
+		return nil,err
 	}
  
-	return nil
+	return paymentCmd, nil
 }
 
 func (s *Service) ClaimPending(ctx context.Context, limit int) ([]PaymentCommand, error) {
