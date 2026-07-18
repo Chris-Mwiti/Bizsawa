@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 
+	"github.com/Codecx-Org/FinAI/backend/internal/customers"
 	"github.com/Codecx-Org/FinAI/backend/internal/inventory"
+	"github.com/Codecx-Org/FinAI/backend/internal/invoices"
+	"github.com/Codecx-Org/FinAI/backend/internal/payments"
 	"github.com/Codecx-Org/FinAI/backend/internal/sales"
 	shareddb "github.com/Codecx-Org/FinAI/backend/internal/shared/db"
 	apperrors "github.com/Codecx-Org/FinAI/backend/internal/shared/errors"
@@ -22,17 +25,33 @@ type InventoryWriter interface {
 type SaleCreator interface {
 	CreateFromOrder(ctx context.Context, businessID, staffID, orderID uuid.UUID, customerID *uuid.UUID, paymentMethod string, lines []sales.OrderLineInput) (*sales.Sale, error)
 }
+
+type InvoiceCreator interface {
+	CreateInvoice(ctx context.Context, businessID uuid.UUID, req invoices.CreateInvoiceRequest) (*invoices.Invoice, error) 
+}
+
+type PaymentCreator interface {
+	Initiate(ctx context.Context, businessID uuid.UUID, req payments.InitiateRequest) (*payments.PaymentCommand, error) 
+}
+
+type CustomerFetcher interface {
+	Get(ctx context.Context, businessID, customerID uuid.UUID) (*customers.Customer, error) 
+}
+
 type Service struct {
 	repo      *Repository
 	inventory InventoryWriter
 	sales     SaleCreator
+	invoices	InvoiceCreator
+	payment		PaymentCreator
+	customers CustomerFetcher
 	outbox    outbox.Repository
 }
 
 
-func NewService(repo *Repository, inventory InventoryWriter, sales SaleCreator, outboxRepo outbox.Repository) *Service {
+func NewService(repo *Repository, inventory InventoryWriter, sales SaleCreator, outboxRepo outbox.Repository, invoices InvoiceCreator, payment PaymentCreator, customers CustomerFetcher) *Service {
 	//@todo: here you will right instances of the order machine
-	return &Service{repo: repo, inventory: inventory, sales: sales, outbox: outboxRepo}
+	return &Service{repo: repo, inventory: inventory, sales: sales, outbox: outboxRepo, invoices: invoices, payment: payment, customers: customers}
 }
 
 type OrderLineRequest struct {
@@ -74,17 +93,23 @@ func (s *Service) Create(ctx context.Context, businessID uuid.UUID, req CreateOr
 	}
 	order := &Order{BaseModel: shareddb.BaseModel{TenantID: businessID}, BusinessID: businessID, CustomerID: req.CustomerID, Status: StatusDraft, Subtotal: subtotal, TaxAmount: tax, Total: subtotal.Add(tax), PaymentMethod: pay, IdempotencyKey: key}
 
+	//@TODO: In the future when it works out aggregate this multiple database calls into a single database query
 	if err := s.repo.Create(ctx, order, lines); err != nil {
 		return nil, err
 	}
+
 	return s.repo.Find(ctx, businessID, order.ID)
+
 }
+
 func (s *Service) List(ctx context.Context, businessID uuid.UUID, page pagination.Page) ([]Order, error) {
 	return s.repo.List(ctx, businessID, page)
 }
+
 func (s *Service) Get(ctx context.Context, businessID, orderID uuid.UUID) (*Order, error) {
 	return s.repo.Find(ctx, businessID, orderID)
 }
+
 func (s *Service) Confirm(ctx context.Context, businessID, orderID uuid.UUID) (*Order, error) {
 	order, err := s.repo.Find(ctx, businessID, orderID)
 	if err != nil {
@@ -98,8 +123,15 @@ func (s *Service) Confirm(ctx context.Context, businessID, orderID uuid.UUID) (*
 		return nil, apperrors.ErrConflict.WithMessage("order cannot be confirmed from current status")
 	}
 
+	//get the customer phone number
+	customer, err := s.customers.Get(ctx, businessID,*order.CustomerID)
+
+	if err != nil {
+		return nil, apperrors.ErrInternal.WithMessage("customer detail can not be fetched")
+	}
+
 	sm := s.buildOrderMachine(businessID, order)
-	if err := sm.FireCtx(ctx, TriggerConfirm); err != nil {
+	if err := sm.FireCtx(ctx, TriggerConfirm, customer.Phone); err != nil {
 		return nil, err
 	}
 

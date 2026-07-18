@@ -60,10 +60,10 @@ func main() {
 	taxesModule := taxes.New(gormDB)
 	inventoryModule := inventory.New(gormDB)
 	salesModule := sales.New(gormDB, taxesModule.Service(), outboxRepo)
-	ordersModule := orders.New(gormDB, inventoryModule.Service(), salesModule.Service(), outboxRepo)
 	expensesModule := expenses.New(gormDB, taxesModule.Service())
 	invoicesModule := invoices.New(gormDB, outboxRepo)
 	paymentsModule := payments.New(gormDB, outboxRepo)
+ordersModule := orders.New(gormDB, inventoryModule.Service(), salesModule.Service(), outboxRepo, customersModule.Service(),paymentsModule.Service(),invoicesModule.Service())
 	authzEnforcer := authz.NewEnforcer(usersModule)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

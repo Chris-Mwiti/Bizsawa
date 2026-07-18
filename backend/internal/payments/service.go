@@ -30,6 +30,7 @@ type InitiateRequest struct {
 	Currency         string          `json:"currency"`
 	Phone            string          `json:"phone"`
 	AccountReference string          `json:"accountReference"`
+	Provider				 string           `json:"provider"`
 	Payload          map[string]any  `json:"payload"`
 }
 type ProviderResult struct {
@@ -49,8 +50,9 @@ func (s *Service) Initiate(ctx context.Context, businessID uuid.UUID, req Initia
 	if !req.Amount.IsPositive() {
 		return nil, apperrors.ErrUnprocessable.WithMessage("payment amount must be positive")
 	}
-	if req.Type == "" {
-		req.Type = CommandSTKPush
+	if req.Type == "" || req.Type == CommandCash {
+		req.Type = CommandCash
+		req.Provider = "cash"
 	}
 	currency := req.Currency
 	if currency == "" {
@@ -73,7 +75,7 @@ func (s *Service) Initiate(ctx context.Context, businessID uuid.UUID, req Initia
 		Currency: currency, 
 		Phone: req.Phone, 
 		AccountReference: req.AccountReference, 
-		Provider: "mpesa", 
+		Provider: req.Provider, 
 		Payload: payload,
 	}
 	if err := s.repo.Create(ctx, cmd); err != nil {

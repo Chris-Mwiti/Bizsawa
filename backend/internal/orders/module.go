@@ -11,9 +11,9 @@ type Module struct {
 	svc  *Service
 }
 
-func New(db *gorm.DB, inventory InventoryWriter, sales SaleCreator, outboxRepo outbox.Repository) *Module {
+func New(db *gorm.DB, inventory InventoryWriter, sales SaleCreator, outboxRepo outbox.Repository, customers CustomerFetcher, payment PaymentCreator, invoice InvoiceCreator) *Module {
 	repo := NewRepository(db)
-	return &Module{repo: repo, svc: NewService(repo, inventory, sales, outboxRepo)}
+	return &Module{repo: repo, svc: NewService(repo, inventory, sales, outboxRepo,invoice,payment,customers)}
 }
 func (m *Module) RegisterRoutes(r chi.Router) {
 	h := Handler{svc: m.svc}

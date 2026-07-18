@@ -104,6 +104,7 @@ func (s *Service) Create(ctx context.Context, businessID uuid.UUID, req CreateIn
 	}
 	return s.repo.Find(ctx, businessID, invoice.ID)
 }
+
 func (s *Service) List(ctx context.Context, businessID uuid.UUID, page pagination.Page) ([]Invoice, error) {
 	return s.repo.List(ctx, businessID, page)
 }
@@ -154,6 +155,7 @@ func (s *Service) RecordPayment(ctx context.Context, businessID, invoiceID uuid.
 	}
 	return inv, nil
 }
+
 func (s *Service) Cancel(ctx context.Context, businessID, invoiceID uuid.UUID) (*Invoice, error) {
 	inv, err := s.repo.Find(ctx, businessID, invoiceID)
 	if err != nil {
@@ -162,6 +164,7 @@ func (s *Service) Cancel(ctx context.Context, businessID, invoiceID uuid.UUID) (
 	inv.Status = StatusCancelled
 	return inv, s.repo.Update(ctx, inv)
 }
+
 func (s *Service) MarkOverdue(ctx context.Context, now time.Time) ([]Invoice, error) {
 	items, err := s.repo.MarkOverdue(ctx, now)
 	if err != nil {
@@ -192,6 +195,7 @@ func deterministicPDF(inv *Invoice) []byte {
 	b.WriteString("%%EOF\n")
 	return b.Bytes()
 }
+
 func (s *Service) emit(ctx context.Context, businessID, invoiceID uuid.UUID, eventType string, extra map[string]any) {
 	if s.outbox == nil {
 		return

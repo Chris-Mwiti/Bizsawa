@@ -37,7 +37,7 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 		sharedhttp.Error(w, err)
 		return
 	}
-	inv, err := h.svc.Create(r.Context(), bid, req)
+	inv, err := h.svc.CreateInvoice(r.Context(), bid, req)
 	if err != nil {
 		sharedhttp.Error(w, err)
 		return

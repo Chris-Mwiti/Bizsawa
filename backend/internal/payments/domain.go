@@ -16,6 +16,7 @@ const (
 	CommandSTKPush CommandType = "stk_push"
 	CommandB2C     CommandType = "b2c"
 	CommandC2B     CommandType = "c2b"
+	CommandCash 	 CommandType = "cash"
 
 	StatusPending    Status = "pending"
 	StatusProcessing Status = "processing"

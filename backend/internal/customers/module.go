@@ -25,3 +25,6 @@ func (m *Module) RegisterRoutes(r chi.Router) {
 	r.Delete("/{id}", h.Delete)
 	r.Get("/{id}/purchase-history", h.PurchaseHistory)
 }
+
+func (m *Module) Service() *Service { return m.svc }
+
