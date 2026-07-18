@@ -2,12 +2,14 @@ package expenses
 
 import (
 	"context"
+	"time"
+
 	shareddb "github.com/Codecx-Org/FinAI/backend/internal/shared/db"
 	apperrors "github.com/Codecx-Org/FinAI/backend/internal/shared/errors"
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/pagination"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
-	"time"
+	"gorm.io/gorm"
 )
 
 type TaxRecorder interface {
@@ -32,6 +34,19 @@ type ExpenseRequest struct {
 	RecurringInterval string          `json:"recurringInterval"`
 	SpentAt           *time.Time      `json:"spentAt"`
 }
+
+func (s *Service) WithTx(tx *gorm.DB) *Service {
+	if tx == nil {
+		return s
+	}
+
+	return &Service{
+		repo: s.repo.WithTx(tx),
+		taxes: s.taxes,
+	}
+}
+
+
 
 func (s *Service) Create(ctx context.Context, businessID, userID uuid.UUID, req ExpenseRequest) (*Expense, error) {
 	if req.Category == "" {

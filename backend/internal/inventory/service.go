@@ -2,16 +2,30 @@ package inventory
 
 import (
 	"context"
+	"time"
+
 	shareddb "github.com/Codecx-Org/FinAI/backend/internal/shared/db"
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/pagination"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
-	"time"
+	"gorm.io/gorm"
 )
 
 type Service struct{ repo *Repository }
 
 func NewService(repo *Repository) *Service { return &Service{repo: repo} }
+
+func (s *Service) WithTx(tx *gorm.DB) *Service {
+	if tx == nil {
+		return s
+	}
+
+	return &Service{
+		repo: s.repo.WithTx(tx),
+	}
+}
+
+
 
 type AdjustmentRequest struct {
 	ProductID         uuid.UUID       `json:"productId"`

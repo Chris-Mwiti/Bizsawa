@@ -16,6 +16,15 @@ type Repository struct{ db *gorm.DB }
 
 func NewRepository(db *gorm.DB) *Repository { return &Repository{db: db} }
 
+func (r *Repository) WithTx(tx *gorm.DB) *Repository {
+	if tx == nil {
+		return r
+	}
+	return &Repository{
+		db: tx,
+	}
+}
+
 func (r *Repository) NextNumber(ctx context.Context, businessID uuid.UUID) (string, error) {
 	var count int64
 	if err := r.db.WithContext(ctx).Model(&Invoice{}).Where("business_id = ?", businessID).Count(&count).Error; err != nil {

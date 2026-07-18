@@ -40,6 +40,18 @@ type VariantRequest struct {
 	IsActive *bool           `json:"isActive"`
 }
 
+func (s *Service) WithTx(tx *gorm.DB) *Service {
+	if tx == nil {
+		return s
+	}
+
+	return &Service{
+		repo: s.repo.WithTx(tx),
+	}
+}
+
+
+
 func (s *Service) Create(ctx context.Context, businessID uuid.UUID, req ProductRequest) (*Product, error) {
 	product, variants, err := productFromRequest(businessID, uuid.Nil, req)
 	if err != nil {

@@ -1,6 +1,11 @@
 package orders
 
 import (
+	"github.com/Codecx-Org/FinAI/backend/internal/customers"
+	"github.com/Codecx-Org/FinAI/backend/internal/inventory"
+	"github.com/Codecx-Org/FinAI/backend/internal/invoices"
+	"github.com/Codecx-Org/FinAI/backend/internal/payments"
+	"github.com/Codecx-Org/FinAI/backend/internal/sales"
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/outbox"
 	"github.com/go-chi/chi/v5"
 	"gorm.io/gorm"
@@ -11,7 +16,7 @@ type Module struct {
 	svc  *Service
 }
 
-func New(db *gorm.DB, inventory InventoryWriter, sales SaleCreator, outboxRepo outbox.Repository, customers CustomerFetcher, payment PaymentCreator, invoice InvoiceCreator) *Module {
+func New(db *gorm.DB, inventory *inventory.Service, sales *sales.Service, outboxRepo outbox.Repository, customers *customers.Service, payment *payments.Service, invoice *invoices.Service) *Module {
 	repo := NewRepository(db)
 	return &Module{repo: repo, svc: NewService(repo, inventory, sales, outboxRepo,invoice,payment,customers)}
 }

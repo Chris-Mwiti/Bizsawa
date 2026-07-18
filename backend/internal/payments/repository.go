@@ -16,6 +16,16 @@ type Repository struct{ db *gorm.DB }
 
 func NewRepository(db *gorm.DB) *Repository { return &Repository{db: db} }
 
+func (r *Repository) WithTx(tx *gorm.DB) *Repository {
+	if tx == nil {
+		return r
+	}
+
+	return &Repository{
+		db: tx,
+	}
+}
+
 func (r *Repository) FindByIdempotency(ctx context.Context, businessID uuid.UUID, key string) (*PaymentCommand, error) {
 	var cmd PaymentCommand
 	err := r.db.WithContext(ctx).Scopes(shareddb.BusinessScope(businessID)).Where("idempotency_key = ?", key).First(&cmd).Error

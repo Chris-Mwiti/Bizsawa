@@ -16,6 +16,7 @@ import (
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/pagination"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
+	"gorm.io/gorm"
 )
 
 type Service struct {
@@ -46,7 +47,18 @@ type RecordPaymentRequest struct {
 	PaidAt    *time.Time      `json:"paidAt"`
 }
 
-func (s *Service) Create(ctx context.Context, businessID uuid.UUID, req CreateInvoiceRequest) (*Invoice, error) {
+func (s *Service) WithTx(tx *gorm.DB) *Service {
+	if tx == nil {
+		return s
+	}
+
+	return &Service{
+		repo: s.repo.WithTx(tx),
+		outbox: s.outbox,
+	}
+}
+
+func (s *Service) CreateInvoice(ctx context.Context, businessID uuid.UUID, req CreateInvoiceRequest) (*Invoice, error) {
 	if len(req.Lines) == 0 {
 		return nil, apperrors.ErrUnprocessable.WithMessage("invoice requires at least one line")
 	}

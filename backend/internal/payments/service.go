@@ -12,6 +12,7 @@ import (
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/pagination"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
+	"gorm.io/gorm"
 )
 
 type Service struct {
@@ -37,6 +38,17 @@ type ProviderResult struct {
 	RequestID string
 	Receipt   string
 	Raw       json.RawMessage
+}
+
+func (s *Service) WithTx(tx *gorm.DB) *Service {
+	if tx == nil {
+		return s
+	}
+
+	return &Service{
+		repo: s.repo.WithTx(tx),
+		outbox: s.outbox,
+	}
 }
 
 func (s *Service) Initiate(ctx context.Context, businessID uuid.UUID, req InitiateRequest) (*PaymentCommand, error) {
@@ -97,26 +109,33 @@ func (s *Service) List(ctx context.Context, businessID uuid.UUID, page paginatio
 	return s.repo.List(ctx, businessID, page)
 }
 
-func (s *Service) ClaimPayment(ctx context.Context, businessID, cmdId uuid.UUID) (*PaymentCommand,error) {
+func (s *Service) ClaimPayment(ctx context.Context, businessID, cmdId uuid.UUID) (error) {
 
-	paymentCmd, err := s.Get(ctx, businessID, cmdId);
+	err := s.repo.db.Transaction(func(tx *gorm.DB) error {
 
-	if err != nil {
-		return nil,err
-	}
-	sm := s.buildPaymentMachine(businessID, paymentCmd)
+		paymentCmd, err := s.WithTx(tx).Get(ctx, businessID, cmdId);
 
-	if err := sm.FireCtx(ctx, TriggerProcessing); err != nil {
-		return nil,err
-	}
+		if err != nil {
+			return err
+		}
+		sm := s.buildPaymentMachine(businessID, paymentCmd)
 
-	err = s.repo.ClaimSinglePayment(ctx, paymentCmd)
+		if err := sm.FireCtx(ctx, TriggerProcessing); err != nil {
+			return err
+		}
 
-	if err != nil {
-		return nil,err
-	}
- 
-	return paymentCmd, nil
+		err = s.WithTx(tx).repo.ClaimSinglePayment(ctx, paymentCmd)
+
+		if err != nil {
+			return err
+		}
+		
+		return s.emitProcessingCmd(ctx, paymentCmd)
+
+	})
+
+	return err
+
 }
 
 func (s *Service) ClaimPending(ctx context.Context, limit int) ([]PaymentCommand, error) {

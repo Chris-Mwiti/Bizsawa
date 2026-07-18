@@ -44,6 +44,18 @@ type OrderLineInput struct {
 	UnitPrice decimal.Decimal
 }
 
+func (s *Service) WithTx(tx *gorm.DB) *Service {
+	if tx == nil {
+		return s
+	}
+
+	return &Service{
+		repo: s.repo.WithTx(tx),
+	}
+}
+
+
+
 func (s *Service) Create(ctx context.Context, businessID, staffID uuid.UUID, req CreateSaleRequest) (*Sale, error) {
 	key, _ := middleware.IdempotencyKeyFromCtx(ctx)
 	if key != "" {

@@ -11,6 +11,7 @@ import (
 
 type Repository struct{ db *gorm.DB }
 
+
 func NewRepository(db *gorm.DB) *Repository { return &Repository{db: db} }
 func (r *Repository) FindByIdempotency(ctx context.Context, businessID uuid.UUID, key string) (*Order, error) {
 	var order Order
@@ -20,6 +21,17 @@ func (r *Repository) FindByIdempotency(ctx context.Context, businessID uuid.UUID
 	}
 	return &order, nil
 }
+
+func (r *Repository) WithTx(tx *gorm.DB) *Repository {
+	if tx == nil {
+		return r
+	}
+
+	return &Repository{
+		db: tx,
+	}
+}
+
 func (r *Repository) Create(ctx context.Context, order *Order, lines []OrderLine) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(order).Error; err != nil {

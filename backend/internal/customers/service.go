@@ -9,6 +9,7 @@ import (
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/pagination"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
+	"gorm.io/gorm"
 )
 
 type Service struct{ repo *Repository }
@@ -24,6 +25,16 @@ type CustomerRequest struct {
 	Notes         string          `json:"notes"`
 	LoyaltyPoints int             `json:"loyaltyPoints"`
 	TotalSpend    decimal.Decimal `json:"totalSpend"`
+}
+
+func (s *Service) WithTx(tx *gorm.DB) *Service {
+	if tx == nil {
+		return s
+	}
+
+	return &Service{
+		repo: s.repo.WithTx(tx),
+	}
 }
 
 func (s *Service) Create(ctx context.Context, businessID uuid.UUID, req CustomerRequest) (*Customer, error) {
