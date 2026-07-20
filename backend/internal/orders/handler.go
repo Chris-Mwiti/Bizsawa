@@ -71,7 +71,14 @@ func (h Handler) Confirm(w http.ResponseWriter, r *http.Request) {
 		sharedhttp.Error(w, err)
 		return
 	}
-	order, err := h.svc.Confirm(r.Context(), bid, id)
+
+	var req ConfirmOrderRequest
+	if err := sharedhttp.Decode(r, &req); err != nil {
+		sharedhttp.Error(w, err)
+		return
+	}
+
+	order, err := h.svc.Confirm(r.Context(), bid, id, req.CustomerPhone)
 	if err != nil {
 		sharedhttp.Error(w, err)
 		return
@@ -94,7 +101,7 @@ func (h Handler) Fulfill(w http.ResponseWriter, r *http.Request) {
 		sharedhttp.Error(w, err)
 		return
 	}
-	order, err := h.svc.Fulfill(r.Context(), bid, uid, id)
+	order, err := h.svc.FulfillOrder(r.Context(), bid, uid, id)
 	if err != nil {
 		sharedhttp.Error(w, err)
 		return

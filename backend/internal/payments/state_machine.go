@@ -3,7 +3,6 @@ package payments
 import (
 	"context"
 
-	"github.com/Codecx-Org/FinAI/backend/internal/shared/circuitbreaker"
 	"github.com/google/uuid"
 	"github.com/qmuntal/stateless"
 )

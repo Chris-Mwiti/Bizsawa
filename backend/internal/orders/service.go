@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"maps"
 	"time"
 
 	"github.com/Codecx-Org/FinAI/backend/internal/customers"
@@ -23,24 +22,6 @@ import (
 	"gorm.io/gorm"
 )
 
-type InventoryWriter interface {
-	DecrementForOrder(ctx context.Context, businessID, orderID uuid.UUID, lines []inventory.DecrementLine) error
-}
-type SaleCreator interface {
-	CreateFromOrder(ctx context.Context, businessID, staffID, orderID uuid.UUID, customerID *uuid.UUID, paymentMethod string, lines []sales.OrderLineInput) (*sales.Sale, error)
-}
-
-type InvoiceCreator interface {
-	CreateInvoice(ctx context.Context, businessID uuid.UUID, req invoices.CreateInvoiceRequest) (*invoices.Invoice, error) 
-}
-
-type PaymentCreator interface {
-	Initiate(ctx context.Context, businessID uuid.UUID, req payments.InitiateRequest) (*payments.PaymentCommand, error) 
-}
-
-type CustomerFetcher interface {
-	Get(ctx context.Context, businessID, customerID uuid.UUID) (*customers.Customer, error) 
-}
 
 type Service struct {
 	repo      *Repository
@@ -67,6 +48,10 @@ type CreateOrderRequest struct {
 	CustomerID    *uuid.UUID         `json:"customerId"`
 	PaymentMethod string             `json:"paymentMethod"`
 	Lines         []OrderLineRequest `json:"lines"`
+}
+
+type ConfirmOrderRequest struct {
+	CustomerPhone string  `json:"customerPhone"`
 }
 
 func (s *Service) WithTx(tx *gorm.DB) *Service {
@@ -288,18 +273,27 @@ func (s *Service) FulfillOrder(ctx context.Context, businessID, orderID, staffID
 }
 
 func (s *Service) Cancel(ctx context.Context, businessID, orderID uuid.UUID) error {
-	order, err := s.repo.Find(ctx, businessID, orderID)
 	
-	if err != nil {
-		return err
-	}
+	err := s.repo.db.Transaction(func(tx *gorm.DB) error {
 
-	sm := s.buildOrderMachine(businessID, order)
+		//fetch the order
+		order, err := s.repo.Find(ctx, businessID, orderID)
 
-	if err := sm.FireCtx(ctx, TriggerCancel); err != nil {
-		return err
-	}
+		if err != nil {
+			return err
+		}
 
+		sm := s.buildOrderMachine(businessID, order)
+
+		if err := sm.FireCtx(ctx, TriggerCancel); err != nil {
+			return err
+		}
+
+		//cancel the invoice of the order
+ 
+		return nil
+	})
+	
 	return nil
 }
 

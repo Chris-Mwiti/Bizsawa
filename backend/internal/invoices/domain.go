@@ -24,6 +24,7 @@ type Invoice struct {
 	db.BaseModel
 	BusinessID    uuid.UUID       `gorm:"type:uuid;not null;index" json:"businessId"`
 	CustomerID    *uuid.UUID      `gorm:"type:uuid;index" json:"customerId"`
+	OrderID       *uuid.UUID			`gorm:"type:uuid;index" json:"orderId"`
 	InvoiceNumber string          `gorm:"type:text;not null;uniqueIndex:idx_invoices_business_number" json:"invoiceNumber"`
 	Status        Status          `gorm:"type:text;not null;default:'draft';index" json:"status"`
 	Subtotal      decimal.Decimal `gorm:"type:numeric(18,2);not null" json:"subtotal"`

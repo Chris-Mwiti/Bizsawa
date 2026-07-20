@@ -1,15 +1,6 @@
 package orders
 
 import (
-	"context"
-	"errors"
-	"fmt"
-	"time"
-
-	"github.com/Codecx-Org/FinAI/backend/internal/inventory"
-	"github.com/Codecx-Org/FinAI/backend/internal/invoices"
-	"github.com/Codecx-Org/FinAI/backend/internal/payments"
-	"github.com/Codecx-Org/FinAI/backend/internal/sales"
 	"github.com/google/uuid"
 	"github.com/qmuntal/stateless"
 )

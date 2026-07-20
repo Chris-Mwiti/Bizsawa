@@ -13,6 +13,7 @@ type Repository struct{ db *gorm.DB }
 
 
 func NewRepository(db *gorm.DB) *Repository { return &Repository{db: db} }
+
 func (r *Repository) FindByIdempotency(ctx context.Context, businessID uuid.UUID, key string) (*Order, error) {
 	var order Order
 	err := r.db.WithContext(ctx).Scopes(shareddb.BusinessScope(businessID)).Preload("Lines").Where("idempotency_key = ?", key).First(&order).Error
