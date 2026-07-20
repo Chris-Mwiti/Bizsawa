@@ -27,15 +27,5 @@ func (s *Service) buildInvoiceMachine(invoice Invoice) *stateless.StateMachine {
 	sm.Configure(StatusPartial).Permit(TriggerPaid, StatusPaid)
 
 	
-	sm.Configure(StatusSent).OnEntryFrom(TriggerSent, func(ctx context.Context, args ...interface{}) (error) {
-		_, err := s.Send(ctx, invoice.BusinessID, invoice.ID, "invoices")
-
-		if err != nil {
-			return err
-		}
-
-		return nil
-	})
-
 	return sm
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"maps"
@@ -18,6 +19,17 @@ import (
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 )
+
+type InvoiceEventType string
+
+const (
+	InvoiceOverdue InvoiceEventType = "invoice.overdue"
+	InvoiceSent		 InvoiceEventType = "invoice.sent"
+	InvoiceViewed	 InvoiceEventType =  "invoice.viewed"
+	InvoicePaid    InvoiceEventType =   "invoice.paid"
+	InvoiceCancelled 	InvoiceEventType = "invoice.cancelled"
+)
+
 
 type Service struct {
 	repo   *Repository
@@ -36,6 +48,7 @@ type LineRequest struct {
 }
 type CreateInvoiceRequest struct {
 	CustomerID *uuid.UUID    `json:"customerId"`
+	OrderID 	 *uuid.UUID    `json:"orderId"`
 	Currency   string        `json:"currency"`
 	Notes      string        `json:"notes"`
 	DueAt      *time.Time    `json:"dueAt"`
@@ -99,6 +112,7 @@ func (s *Service) CreateInvoice(ctx context.Context, businessID uuid.UUID, req C
 		}, 
 		BusinessID: businessID, 
 		CustomerID: req.CustomerID, 
+		OrderID: req.OrderID,
 		InvoiceNumber: number, 
 		Status: StatusDraft, 
 		Subtotal: subtotal, 
@@ -123,68 +137,163 @@ func (s *Service) List(ctx context.Context, businessID uuid.UUID, page paginatio
 func (s *Service) Get(ctx context.Context, businessID, invoiceID uuid.UUID) (*Invoice, error) {
 	return s.repo.Find(ctx, businessID, invoiceID)
 }
+
+func (s *Service) GetInvoiceByOrderID(ctx context.Context, businessID, invoiceID, orderID uuid.UUID) (*Invoice, error) {
+	
+	invoice, err := s.repo.FindByOrderId(ctx, businessID, invoiceID, orderID)
+
+	if err != nil {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, err
+		}
+		return nil, apperrors.ErrNotFound.WithMessage("invoice not found")
+	}
+
+	return invoice, nil
+}
+
 func (s *Service) Send(ctx context.Context, businessID, invoiceID uuid.UUID, channel string) (*Invoice, error) {
-	inv, err := s.repo.Find(ctx, businessID, invoiceID)
+
+	var invoice *Invoice
+
+	err := s.repo.db.Transaction(func(tx *gorm.DB) error {
+
+		var err error
+		invoice, err = s.WithTx(tx).repo.Find(ctx, businessID, invoiceID)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound){
+				return apperrors.ErrNotFound.WithMessage("invoice not found")
+			}
+			return err
+		}
+
+
+		now := time.Now().UTC()
+		invoice.Status = StatusSent
+		invoice.SentAt = &now
+		if err := s.WithTx(tx).repo.Update(ctx, invoice); err != nil {
+			return err
+		}
+		err = s.emit(ctx, businessID, invoice.ID, InvoiceSent, map[string]any{"channel": channel})
+		if err != nil {
+			return err
+		}
+
+		return nil
+
+	})
+
 	if err != nil {
 		return nil, err
 	}
-	now := time.Now().UTC()
-	inv.Status = StatusSent
-	inv.SentAt = &now
-	if err := s.repo.Update(ctx, inv); err != nil {
-		return nil, err
-	}
-	s.emit(ctx, businessID, inv.ID, "invoice.sent", map[string]any{"channel": channel})
-	return inv, nil
+
+	return invoice, nil
 }
 
 func (s *Service) RecordPayment(ctx context.Context, businessID, invoiceID uuid.UUID, req RecordPaymentRequest) (*Invoice, error) {
-	inv, err := s.repo.Find(ctx, businessID, invoiceID)
+	var inv *Invoice
+
+	err := s.repo.db.Transaction(func(tx *gorm.DB) error {
+		var err error
+		inv, err = s.WithTx(tx).repo.Find(ctx, businessID, invoiceID)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return apperrors.ErrNotFound.WithMessage("invoice record not found")
+			}
+			return err
+		}
+		if !req.Amount.IsPositive() {
+			return apperrors.ErrUnprocessable.WithMessage("payment amount must be positive")
+		}
+		inv.AmountPaid = inv.AmountPaid.Add(req.Amount).Round(2)
+		inv.AmountDue = inv.Total.Sub(inv.AmountPaid).Round(2)
+		if inv.AmountDue.LessThanOrEqual(decimal.Zero) {
+			inv.AmountDue = decimal.Zero
+			inv.Status = StatusPaid
+			paidAt := time.Now().UTC()
+			if req.PaidAt != nil {
+				paidAt = *req.PaidAt
+			}
+			inv.PaidAt = &paidAt
+		} else {
+			inv.Status = StatusPartial
+		}
+		if err := s.WithTx(tx).repo.Update(ctx, inv); err != nil {
+			return err
+		}
+
+		if inv.Status == StatusPaid {
+
+			err := s.emit(ctx, businessID, inv.ID, InvoicePaid, map[string]any{"amount": inv.AmountPaid.String(), "paymentId": req.PaymentID})
+
+			if err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+
 	if err != nil {
 		return nil, err
 	}
-	if !req.Amount.IsPositive() {
-		return nil, apperrors.ErrUnprocessable.WithMessage("payment amount must be positive")
-	}
-	inv.AmountPaid = inv.AmountPaid.Add(req.Amount).Round(2)
-	inv.AmountDue = inv.Total.Sub(inv.AmountPaid).Round(2)
-	if inv.AmountDue.LessThanOrEqual(decimal.Zero) {
-		inv.AmountDue = decimal.Zero
-		inv.Status = StatusPaid
-		paidAt := time.Now().UTC()
-		if req.PaidAt != nil {
-			paidAt = *req.PaidAt
-		}
-		inv.PaidAt = &paidAt
-	} else {
-		inv.Status = StatusPartial
-	}
-	if err := s.repo.Update(ctx, inv); err != nil {
-		return nil, err
-	}
-	if inv.Status == StatusPaid {
-		s.emit(ctx, businessID, inv.ID, "invoice.paid", map[string]any{"amountPaid": inv.AmountPaid.String(), "paymentId": req.PaymentID})
-	}
+
 	return inv, nil
 }
 
 func (s *Service) Cancel(ctx context.Context, businessID, invoiceID uuid.UUID) (*Invoice, error) {
-	inv, err := s.repo.Find(ctx, businessID, invoiceID)
+	var invoice *Invoice
+
+	err := s.repo.db.Transaction(func(tx *gorm.DB) error {
+		var err error
+
+	  invoice, err = s.WithTx(tx).repo.Find(ctx, businessID, invoiceID)	
+
+		if err != nil{
+			if errors.Is(err, gorm.ErrRecordNotFound){
+				return apperrors.ErrNotFound.WithMessage("invoice record not found")
+			}
+			return err
+		}
+
+		invoice.Status = StatusCancelled	
+
+		err = s.emit(ctx, businessID, invoiceID, InvoiceCancelled, map[string]any{"amount": invoice.Total})
+
+		return err
+	})
+
+
 	if err != nil {
 		return nil, err
 	}
-	inv.Status = StatusCancelled
-	return inv, s.repo.Update(ctx, inv)
+
+	return invoice, nil
 }
 
 func (s *Service) MarkOverdue(ctx context.Context, now time.Time) ([]Invoice, error) {
-	items, err := s.repo.MarkOverdue(ctx, now)
+
+	var items []Invoice
+
+	err := s.repo.db.Transaction(func(tx *gorm.DB) error {
+		var err error
+
+		items, err = s.WithTx(tx).repo.MarkOverdue(ctx, now)
+
+		for _, inv := range items {
+			err := s.emit(ctx, inv.BusinessID, inv.ID, InvoiceOverdue, map[string]any{"amount": inv.AmountDue})
+			if err != nil {
+				return err
+			}
+		}
+
+		return err
+	})
+
 	if err != nil {
 		return nil, err
 	}
-	for _, inv := range items {
-		s.emit(ctx, inv.BusinessID, inv.ID, "invoice.overdue", nil)
-	}
+
 	return items, nil
 }
 
@@ -208,18 +317,19 @@ func deterministicPDF(inv *Invoice) []byte {
 	return b.Bytes()
 }
 
-func (s *Service) emit(ctx context.Context, businessID, invoiceID uuid.UUID, eventType string, extra map[string]any) {
+func (s *Service) emit(ctx context.Context, businessID, invoiceID uuid.UUID, eventType InvoiceEventType, extra map[string]any) (error){
 	if s.outbox == nil {
-		return
+		return fmt.Errorf("service outbox missing")
 	}
 	payload := map[string]any{"invoiceId": invoiceID, "businessId": businessID}
 	
 	maps.Copy(payload, extra)
 	raw, _ := json.Marshal(payload)
-	err := s.outbox.Insert(ctx, &outbox.Event{TenantID: businessID, AggregateID: invoiceID.String(), AggregateType: "invoice", EventType: eventType, Stream: "invoices", Payload: raw})
+	err := s.outbox.Insert(ctx, &outbox.Event{TenantID: businessID, AggregateID: invoiceID.String(), AggregateType: "invoice", EventType: string(eventType), Stream: "invoices", Payload: raw})
 
 	if err != nil {
 		log.Printf("error while submitting an outbox insert request: %v", err)
-		return
+		return err
 	}
+	return nil
 }

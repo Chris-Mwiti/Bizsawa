@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"time"
 
 	"github.com/Codecx-Org/FinAI/backend/internal/customers"
@@ -312,11 +313,12 @@ func (s *Service) Refund(ctx context.Context, businessID, orderID uuid.UUID) err
 	return nil
 }
 
-func (s *Service) emit(ctx context.Context, businessID, orderID uuid.UUID, eventType string) (error){
+func (s *Service) emit(ctx context.Context, businessID, orderID uuid.UUID, eventType string, extras map[string]any) (error){
 	if s.outbox == nil {
 		return apperrors.ErrInternal.WithCause(errors.New("outbox repository is missing"))
 	}
 	payload, _ := json.Marshal(map[string]any{"orderId": orderID, "businessId": businessID})
+
 	err := s.outbox.Insert(ctx, &outbox.Event{TenantID: businessID, AggregateID: orderID.String(), AggregateType: "order", EventType: eventType, Stream: "orders", Payload: payload})
 
 	if err != nil {
