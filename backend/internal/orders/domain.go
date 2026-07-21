@@ -8,6 +8,7 @@ import (
 )
 
 type Status string
+type PaymentStatus string
 
 const (
 	StatusDraft     Status = "draft"
@@ -15,6 +16,11 @@ const (
 	StatusFulfilled Status = "fulfilled"
 	StatusCancelled Status = "cancelled"
 	StatusRefunded  Status = "refunded"
+	
+	PaymentPending	PaymentStatus = "pending"	
+	PaymentProcessing PaymentStatus = "processing"
+	PaymentFailed 		PaymentStatus = "failed"
+	PaymentCancelled  PaymentStatus = "cancelled"
 )
 
 type Order struct {
@@ -26,6 +32,7 @@ type Order struct {
 	TaxAmount      decimal.Decimal `gorm:"type:numeric(18,2);not null" json:"taxAmount"`
 	Total          decimal.Decimal `gorm:"type:numeric(18,2);not null" json:"total"`
 	PaymentMethod  string          `gorm:"type:text;not null;default:'cash'" json:"paymentMethod"`
+	PaymentStatus PaymentStatus `gorm:"type:varchar(50);not null;default:'pending';index" json:"paymentStatus"`
 	IdempotencyKey string          `gorm:"type:text;uniqueIndex:idx_orders_business_idem" json:"-"`
 	ConfirmedAt    *time.Time      `json:"confirmedAt"`
 	FulfilledAt    *time.Time      `json:"fulfilledAt"`

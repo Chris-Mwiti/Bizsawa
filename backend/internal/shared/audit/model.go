@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 )
 
+//@TODO: It is important for this table to bonkers strict and also be append only. This is something am looking forward to implement in the future
 
 // Keeps track of who, what, where a specific action occured
 type Entry struct {

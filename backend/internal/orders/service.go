@@ -23,6 +23,15 @@ import (
 	"gorm.io/gorm"
 )
 
+type OrderEventType string
+
+const (
+	OrderConfirmed OrderEventType = "order.confirmed"
+	OrderCancelled OrderEventType = "order.cancelled"
+	OrderRefund    OrderEventType = "order.refund"
+	OrderFulfilled OrderEventType = "order.fulfilled" 
+)
+
 
 type Service struct {
 	repo      *Repository
@@ -113,7 +122,7 @@ func (s *Service) Get(ctx context.Context, businessID, orderID uuid.UUID) (*Orde
 	return s.repo.Find(ctx, businessID, orderID)
 }
 
-func (s *Service) Confirm(ctx context.Context, businessID, orderID uuid.UUID, customerPhone string) (*Order, error) {
+func (s *Service) Confirm(ctx context.Context, businessID, orderID, key uuid.UUID, customerPhone string) (*Order, error) {
 	
 	var order *Order
 
@@ -127,8 +136,15 @@ func (s *Service) Confirm(ctx context.Context, businessID, orderID uuid.UUID, cu
 		}
 
 		if order.Status == StatusConfirmed || order.Status == StatusFulfilled {
-			return nil
+
+			//check if the its the same client making the request through IdempotencyKey
+			if order.IdempotencyKey == key.String(){
+				return nil
+			}
+
+			return apperrors.ErrConflict.WithMessage("this order has already been completed by another request")
 		}
+		
 
 		sm := s.buildOrderMachine(businessID, order)
 
@@ -136,12 +152,7 @@ func (s *Service) Confirm(ctx context.Context, businessID, orderID uuid.UUID, cu
 			return apperrors.ErrConflict.WithMessage("order cannot confirmed from its state")
 		}
 
-		invoice, err := s.invoices.WithTx(tx).CreateInvoice(ctx, businessID, buildInvoicePayload(order))
-		if err != nil {
-			return err
-		}
-
-		_, err = s.payment.WithTx(tx).Initiate(ctx, businessID, buildPaymentPayload(order, invoice, customerPhone))
+		_, err = s.invoices.WithTx(tx).CreateInvoice(ctx, businessID, buildInvoicePayload(order))
 		if err != nil {
 			return err
 		}
@@ -164,29 +175,12 @@ func (s *Service) Confirm(ctx context.Context, businessID, orderID uuid.UUID, cu
 			return err
 		}
 
-		payload := struct {
-			*Order
-			CustomerPhone string `json:"customerPhone"`
-		}{
-			Order: order,
-			CustomerPhone: customerPhone,
-		}
-		jsonPayload, _ := json.Marshal(payload)
-	
-
 		if err != nil {
 			return err
 		}
 
 		//emit an event that says the order has been confirmed
-		return s.outbox.WithTx(tx).Insert(ctx, &outbox.Event{
-			AggregateID:  order.ID.String(),
-			AggregateType: "orders",
-			EventType: "order.confirmed",
-			TenantID: order.BusinessID,
-			Stream: "orders",
-			Payload: jsonPayload,
-		})
+		return s.emit(ctx, tx,businessID, orderID, OrderConfirmed, map[string]any{"amount": order.Total}) 	
 	})
 
 	if err != nil {
@@ -250,17 +244,10 @@ func (s *Service) FulfillOrder(ctx context.Context, businessID, orderID, staffID
 			return fmt.Errorf("failed to save order state: %w", err)
 		}
 
-		jsonPayload, _ := json.Marshal(order)
-		// 9. Emit the domain event. 
-		// (Ideally inside the outbox repo so it rolls back if the tx fails!)
-		if err := s.outbox.WithTx(tx).Insert(ctx, &outbox.Event{
-			AggregateID: order.ID.String(),
-			AggregateType: "orders",
-			EventType: "order.fulfilled",
-			Stream: "orders",
-			Payload: jsonPayload,
-		}); err != nil {
-			return fmt.Errorf("failed to emit fulfillment event: %w", err)
+		err = s.emit(ctx, tx, businessID, orderID, OrderFulfilled, map[string]any{"amount": order.Total})
+
+		if err != nil {
+			return err
 		}
 
 		return nil
@@ -291,9 +278,14 @@ func (s *Service) Cancel(ctx context.Context, businessID, orderID uuid.UUID) err
 		}
 
 		//cancel the invoice of the order
+		
  
 		return nil
 	})
+
+	if err != nil {
+		return err
+	}
 	
 	return nil
 }
@@ -313,13 +305,21 @@ func (s *Service) Refund(ctx context.Context, businessID, orderID uuid.UUID) err
 	return nil
 }
 
-func (s *Service) emit(ctx context.Context, businessID, orderID uuid.UUID, eventType string, extras map[string]any) (error){
+func (s *Service) emit(ctx context.Context, tx *gorm.DB, businessID, orderID uuid.UUID, eventType OrderEventType, extras map[string]any) (error){
 	if s.outbox == nil {
 		return apperrors.ErrInternal.WithCause(errors.New("outbox repository is missing"))
 	}
-	payload, _ := json.Marshal(map[string]any{"orderId": orderID, "businessId": businessID})
 
-	err := s.outbox.Insert(ctx, &outbox.Event{TenantID: businessID, AggregateID: orderID.String(), AggregateType: "order", EventType: eventType, Stream: "orders", Payload: payload})
+	payload := map[string]any{
+		"orderId": orderID,
+		"businessID": businessID,
+	}
+
+	maps.Copy(payload, extras)
+
+	jsonPayload, _ := json.Marshal(payload)
+
+	err := s.outbox.WithTx(tx).Insert(ctx, &outbox.Event{TenantID: businessID, AggregateID: orderID.String(), AggregateType: "order", EventType: string(eventType), Stream: "orders", Payload: jsonPayload})
 
 	if err != nil {
 		return apperrors.ErrInternal.WithCause(err)

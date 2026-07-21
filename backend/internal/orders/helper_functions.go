@@ -33,9 +33,11 @@ func buildInvoicePayload(order *Order) invoices.CreateInvoiceRequest {
 	// Calculate due date (5 days from now). 
 	// Assuming order.ConfirmedAt was set right before calling this.
 	dueAt := order.ConfirmedAt.AddDate(0, 0, 5)
+	orderId := order.ID
 
 	return invoices.CreateInvoiceRequest{
 		CustomerID: order.CustomerID,
+		OrderID: &orderId,
 		DueAt:      &dueAt,
 		Currency:   "KES", // Hardcoded per your original logic, can be parameterized
 		Lines:      invoiceLines,
