@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"maps"
 	"time"
 
@@ -40,6 +41,7 @@ type Service struct {
 	invoices *invoices.Service
 	payment		*payments.Service
 	customers *customers.Service
+	logger 		*slog.Logger
 	outbox    outbox.Repository
 }
 
@@ -66,7 +68,6 @@ type ConfirmOrderRequest struct {
 
 func (s *Service) WithTx(tx *gorm.DB) *Service {
 	if tx == nil {
-
 		return s
 	}
 
@@ -84,6 +85,7 @@ func (s *Service) Create(ctx context.Context, businessID uuid.UUID, req CreateOr
 			return existing, nil
 		}
 	} else {
+		s.logger.DebugContext(ctx, "[ORDERS]-request without IdempotencyKey", "businessID", businessID.String())
 		return nil, apperrors.ErrForbidden.WithCause(errors.New("IdempotencyKey not provided"))
 	}
 	if len(req.Lines) == 0 {
@@ -107,19 +109,71 @@ func (s *Service) Create(ctx context.Context, businessID uuid.UUID, req CreateOr
 
 	//@TODO: In the future when it works out aggregate this multiple database calls into a single database query
 	if err := s.repo.Create(ctx, order, lines); err != nil {
-		return nil, err
+		s.logger.ErrorContext(ctx, "[ORDERS]-could not create order", "err", err.Error(), "businessID", businessID.String())
+		return nil, apperrors.ErrInternal.WithCause(err).WithMessage("error while creating order")
+	}
+	s.logger.InfoContext(ctx, "[ORDERS]-order created", "orderID", order.ID.String(), "businessID", order.BusinessID.String())
+
+	order, err := s.repo.Find(ctx, businessID, order.ID)
+	if err != nil {
+
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			s.logger.InfoContext(ctx, "[ORDERS]-order not found", "orderID", order.ID.String(), "businessID", order.BusinessID.String())
+			return nil, apperrors.ErrNotFound.WithMessage("order not found")
+		}
+
+		s.logger.ErrorContext(ctx, "[ORDERS]-could not fetch orders", "err", err.Error())
 	}
 
-	return s.repo.Find(ctx, businessID, order.ID)
+	s.logger.DebugContext(ctx, "[ORDERS]-order found", "orderID", order.ID, "businessID", order.BusinessID.String())
 
+	return order, nil
 }
 
 func (s *Service) List(ctx context.Context, businessID uuid.UUID, page pagination.Page) ([]Order, error) {
-	return s.repo.List(ctx, businessID, page)
+	orders, err := s.repo.List(ctx, businessID, page)
+	
+	if err != nil {
+		s.logger.ErrorContext(ctx, "[ORDERS]-could not fetch orders", "err", err.Error(), "businessID", businessID.String())
+		return nil, apperrors.ErrInternal.WithMessage("could not fetch orders")
+	}
+
+	return orders, nil
 }
 
 func (s *Service) Get(ctx context.Context, businessID, orderID uuid.UUID) (*Order, error) {
-	return s.repo.Find(ctx, businessID, orderID)
+	order, err := s.repo.Find(ctx, businessID, orderID)
+	if err != nil {
+
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			s.logger.DebugContext(ctx, "[ORDERS]-order not found", "orderID", order.ID.String(), "businessID", order.BusinessID.String())
+			return nil, apperrors.ErrNotFound.WithMessage("order not found")
+		}
+
+		s.logger.ErrorContext(ctx, "[ORDERS]-could not fetch orders", "err", err.Error(), "businessID", businessID.String(), "orderID", orderID.String())
+	}
+
+	s.logger.DebugContext(ctx, "[ORDERS]-order found", "orderID", order.ID.String(), "businessID", order.BusinessID.String())
+
+	return order, nil
+}
+
+func (s *Service) FindOrderByUpdate(ctx context.Context, businessID, orderID uuid.UUID) (*Order, error) {
+
+	order, err := s.repo.FindOrderByUpdate(ctx, businessID, orderID)
+	
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			s.logger.DebugContext(ctx, "[ORDERS]-order not found", "orderID", order.ID, "businessID", order.BusinessID.String())
+			return nil, apperrors.ErrNotFound.WithMessage("order not found")
+		}
+
+		s.logger.ErrorContext(ctx, "[ORDERS]-could not fetch order", "err", err.Error(), "businessID", businessID.String())
+		return nil, apperrors.ErrInternal.WithCause(err).WithMessage("err while processing order request")
+	}
+
+	return order, nil
+
 }
 
 func (s *Service) Confirm(ctx context.Context, businessID, orderID, key uuid.UUID, customerPhone string) (*Order, error) {
@@ -132,8 +186,14 @@ func (s *Service) Confirm(ctx context.Context, businessID, orderID, key uuid.UUI
 		var err error
 		order, err = s.repo.WithTx(tx).Find(ctx, businessID, orderID);
 		if err != nil {
-			return err
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				s.logger.DebugContext(ctx, "[ORDERS]-order not found", "orderID", order.ID.String(), "businessID", order.BusinessID.String())
+				return err
+			}
+			s.logger.ErrorContext(ctx, "[ORDERS]-could not fetch order", "err", err.Error(), "businessID", businessID.String())
+			return apperrors.ErrInternal.WithCause(err).WithMessage("err while processing order request")
 		}
+
 
 		if order.Status == StatusConfirmed || order.Status == StatusFulfilled {
 
@@ -142,6 +202,7 @@ func (s *Service) Confirm(ctx context.Context, businessID, orderID, key uuid.UUI
 				return nil
 			}
 
+			s.logger.InfoContext(ctx, "[ORDERS]-order confirmation retry with diff IdempotencyKey", "businessID",businessID.String(), "orderID", orderID.String())
 			return apperrors.ErrConflict.WithMessage("this order has already been completed by another request")
 		}
 		
@@ -149,12 +210,22 @@ func (s *Service) Confirm(ctx context.Context, businessID, orderID, key uuid.UUI
 		sm := s.buildOrderMachine(businessID, order)
 
 		if err := sm.FireCtx(ctx, TriggerConfirm); err != nil {
+			s.logger.DebugContext(ctx, "[ORDERS]-state transition denied", "orderID", orderID.String())
 			return apperrors.ErrConflict.WithMessage("order cannot confirmed from its state")
 		}
 
-		_, err = s.invoices.WithTx(tx).CreateInvoice(ctx, businessID, buildInvoicePayload(order))
-		if err != nil {
+		order.Status = StatusConfirmed
+
+		//save the order
+		if err := s.repo.WithTx(tx).Update(ctx, order); err != nil {
+			s.logger.ErrorContext(ctx, "[ORDERS]-could not update order", "businessID", businessID.String(), "orderID", orderID.String())
 			return err
+		}
+
+		invoice, err := s.invoices.WithTx(tx).CreateInvoice(ctx, businessID, buildInvoicePayload(order))
+		if err != nil {
+			s.logger.ErrorContext(ctx, "[ORDER/INVOICES]-could not create invoice", "businessID", businessID.String, "orderID", orderID.String(), "err", err.Error())
+			return apperrors.ErrInternal.WithMessage("could not create invoice from order")
 		}
 
 		inventoryLines := make([]inventory.DecrementLine, 0, len(order.Lines))
@@ -165,30 +236,35 @@ func (s *Service) Confirm(ctx context.Context, businessID, orderID, key uuid.UUI
 				Quantity: line.Quantity,
 			})
 		}
+		
 		if err := s.inventory.WithTx(tx).DecrementForOrder(ctx, businessID, order.ID, inventoryLines); err != nil {
-			return err
+			s.logger.ErrorContext(ctx, "[ORDER/INVENTORY]-could not decrement inventory", "businessID", businessID.String(), "orderID", orderID.String(), "err", err.Error())
+			return apperrors.ErrInternal.WithMessage("could not decrement inventory")
 		}
 
+		
 
-		//save the order
-		if err := s.repo.WithTx(tx).Update(ctx, order); err != nil {
-			return err
-		}
-
+	  cmd,err := s.payment.Initiate(ctx, businessID, buildPaymentPayload(order,invoice, customerPhone)); 		
 		if err != nil {
-			return err
+			s.logger.ErrorContext(ctx, "[ORDER/PAYMENTS]-could not initiate payment", "businessID", businessID.String(), "orderID", orderID.String(), "err", err.Error())
+			return apperrors.ErrInternal.WithMessage("could not initiate payments")
 		}
+		
 
 		//emit an event that says the order has been confirmed
-		return s.emit(ctx, tx,businessID, orderID, OrderConfirmed, map[string]any{"amount": order.Total}) 	
+		if err := s.emit(ctx, tx,businessID, orderID, OrderConfirmed, map[string]any{"amount": order.Total, "paymentCmd": cmd.ID.String()}); err != nil {
+			s.logger.ErrorContext(ctx, "[ORDER/OUTBOX]-could not emit order created event", "businessID", businessID.String(), "orderID", orderID.String(), "err", err.Error())
+			return apperrors.ErrInternal.WithMessage("error while emitting event")
+		} 	
+	
+		return nil
 	})
 
 	if err != nil {
-		return nil, err
+		return nil, err 
 	}
-
-	
-	return s.repo.Find(ctx, businessID, order.ID)
+		
+	return order, nil
 }
 
 // FulfillOrder processes the order fulfillment within a safe database transaction block
@@ -200,7 +276,7 @@ func (s *Service) FulfillOrder(ctx context.Context, businessID, orderID, staffID
 		var err error
 		
 		// 2. Fetch the order attached to the current transaction context
-		order, err = s.repo.WithTx(tx).Find(ctx, businessID, orderID)
+		order, err = s.repo.WithTx(tx).FindOrderByUpdate(ctx, businessID, orderID)
 		if err != nil {
 			return err
 		}
@@ -215,6 +291,18 @@ func (s *Service) FulfillOrder(ctx context.Context, businessID, orderID, staffID
 		if err := sm.Fire(TriggerFullfill); err != nil {
 			return fmt.Errorf("invalid state transition: %w", err)
 		}
+		// 7. Update internal order state
+		now := time.Now().UTC()
+		order.FulfilledAt = &now
+		order.Status = StatusFulfilled
+
+		// 8. Save the final order state back to the database
+		if err := s.repo.WithTx(tx).Update(ctx, order); err != nil {
+			return fmt.Errorf("failed to save order state: %w", err)
+		}
+
+		//[TODO:]update the invoice status of the order
+
 
 		// 5. Map the domain payload cleanly using our pure helper
 		saleLines := buildSalesPayload(order)
@@ -233,15 +321,6 @@ func (s *Service) FulfillOrder(ctx context.Context, businessID, orderID, staffID
 			if err != nil {
 				return fmt.Errorf("failed to record sale record: %w", err)
 			}
-		}
-
-		// 7. Update internal order state
-		now := time.Now().UTC()
-		order.FulfilledAt = &now
-
-		// 8. Save the final order state back to the database
-		if err := s.repo.WithTx(tx).Update(ctx, order); err != nil {
-			return fmt.Errorf("failed to save order state: %w", err)
 		}
 
 		err = s.emit(ctx, tx, businessID, orderID, OrderFulfilled, map[string]any{"amount": order.Total})

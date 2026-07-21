@@ -2,11 +2,13 @@ package orders
 
 import (
 	"context"
+
 	shareddb "github.com/Codecx-Org/FinAI/backend/internal/shared/db"
 	apperrors "github.com/Codecx-Org/FinAI/backend/internal/shared/errors"
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/pagination"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type Repository struct{ db *gorm.DB }
@@ -47,6 +49,28 @@ func (r *Repository) Create(ctx context.Context, order *Order, lines []OrderLine
 		return nil
 	})
 }
+
+func (r *Repository) FindOrderByUpdate(ctx context.Context, businessID, orderID uuid.UUID) (*Order, error) {
+	var order Order
+
+	err := r.db.WithContext(ctx).Scopes(shareddb.BusinessScope(businessID)).Transaction(func(tx *gorm.DB) error {
+
+		var err error
+		err = tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", orderID).First(&order).Error
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &order, nil
+}
+
 func (r *Repository) Find(ctx context.Context, businessID, orderID uuid.UUID) (*Order, error) {
 	var order Order
 	err := r.db.WithContext(ctx).Scopes(shareddb.BusinessScope(businessID)).Preload("Lines").Where("id = ?", orderID).First(&order).Error
