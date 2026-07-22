@@ -27,7 +27,6 @@ const (
 type PaymentCommand struct {
 	db.BaseModel
 	BusinessID        uuid.UUID       `gorm:"type:uuid;not null;index;uniqueIndex:idx_payment_business_idem" json:"businessId"`
-	InvoiceID         *uuid.UUID      `gorm:"type:uuid;index" json:"invoiceId"`
 	Type              CommandType     `gorm:"type:text;not null;index" json:"type"`
 	Status            Status          `gorm:"type:text;not null;default:'pending';index" json:"status"`
 	IdempotencyKey    string          `gorm:"type:text;not null;uniqueIndex:idx_payment_business_idem" json:"-"`

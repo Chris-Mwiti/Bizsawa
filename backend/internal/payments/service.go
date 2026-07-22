@@ -2,6 +2,8 @@ package payments
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 
@@ -15,6 +17,18 @@ import (
 	"gorm.io/gorm"
 )
 
+type PaymentEventType string
+
+const PaymentStream = "payments"
+
+const (
+	PaymentCreated   PaymentEventType = "payment.created"
+	PaymentConfirmed PaymentEventType = "payment.confirmed"
+	PaymentProcessing PaymentEventType = "payment.processing"
+	PaymentFailed 		PaymentEventType = "payment.failed"
+	PaymentRetry      PaymentEventType = "payment.retry"
+)
+
 type Service struct {
 	repo   *Repository
 	outbox outbox.Repository
@@ -26,7 +40,6 @@ func NewService(repo *Repository, outboxRepo outbox.Repository) *Service {
 
 type InitiateRequest struct {
 	Type             CommandType     `json:"type"`
-	InvoiceID        *uuid.UUID      `json:"invoiceId"`
 	Amount           decimal.Decimal `json:"amount"`
 	Currency         string          `json:"currency"`
 	Phone            string          `json:"phone"`
@@ -62,10 +75,44 @@ func (s *Service) Initiate(ctx context.Context, businessID uuid.UUID, req Initia
 	if !req.Amount.IsPositive() {
 		return nil, apperrors.ErrUnprocessable.WithMessage("payment amount must be positive")
 	}
-	if req.Type == "" || req.Type == CommandCash {
+	
+	switch req.Type {
+	case CommandB2C:
+		req.Type = CommandB2C
+		req.Provider = "mpesa"
+	case CommandC2B:
+		req.Type = CommandC2B
+		req.Provider = "mpesa"
+	case CommandSTKPush:
+		req.Type = CommandSTKPush
+		req.Provider = "mpesa"
+	case CommandCash:
+		req.Type = CommandCash
+		req.Provider = "cash"
+	default:
 		req.Type = CommandCash
 		req.Provider = "cash"
 	}
+
+	if len(req.Payload) > 0 {
+		if val, ok := req.Payload["invoiceID"].(string); ok {
+			req.AccountReference = val
+		}
+	} else {
+		//create an accountreference by hashing both the reqType+reqAmount+orderID
+		hash := sha256.New()
+
+		hash.Write([]byte(req.Type))
+		hash.Write([]byte(req.Amount.String()))
+		hash.Write([]byte(req.Provider))
+
+		result := hash.Sum(nil)
+
+		hexString := hex.EncodeToString(result)
+
+		req.AccountReference = hexString
+	}
+
 	currency := req.Currency
 	if currency == "" {
 		currency = "KES"
@@ -79,7 +126,6 @@ func (s *Service) Initiate(ctx context.Context, businessID uuid.UUID, req Initia
 			TenantID: businessID,
 		}, 
 		BusinessID: businessID, 
-		InvoiceID: req.InvoiceID, 
 		Type: req.Type, 
 		Status: StatusPending, 
 		IdempotencyKey: key, 
@@ -187,13 +233,12 @@ func (s *Service) emitCommand(ctx context.Context, cmd *PaymentCommand) (error) 
 		"amount": cmd.Amount.String(), 
 		"currency": cmd.Currency, 
 		"phone": cmd.Phone, 
-		"invoiceId": cmd.InvoiceID,
 	})
 	err := s.outbox.Insert(ctx, &outbox.Event{
 		TenantID: cmd.BusinessID, 
 		AggregateID: cmd.ID.String(), 
 		AggregateType: "payment_command", 
-		EventType: "payment.command.created", 
+		EventType:  string(PaymentCreated), 
 		Stream: "payments.commands", 
 		Payload: raw,
 	})
@@ -215,7 +260,6 @@ func (s *Service) emitProcessingCmd(ctx context.Context, cmd *PaymentCommand) (e
 		"amount": cmd.Amount.String(),
 		"currency": cmd.Currency,
 		"phone": cmd.Phone,
-		"invoiceId": cmd.InvoiceID,
 	})
 
 	err := s.outbox.Insert(ctx, &outbox.Event{
@@ -246,7 +290,6 @@ func (s *Service) emitRetryCommand(ctx context.Context, cmd *PaymentCommand) (er
 			"amount": cmd.Amount.String(),
 			"currency": cmd.Currency,
 			"phone": cmd.Phone,
-			"invoiceId": cmd.InvoiceID,
 	})
 
 	err := s.outbox.Insert(ctx, &outbox.Event{
@@ -277,7 +320,6 @@ func (s *Service) emitFail(ctx context.Context, cmd PaymentCommand) (error) {
 			"amount": cmd.Amount.String(),
 			"currency": cmd.Currency,
 			"phone": cmd.Phone,
-			"invoiceId": cmd.InvoiceID,
 	})
 
 	err := s.outbox.Insert(ctx, &outbox.Event{
@@ -285,7 +327,7 @@ func (s *Service) emitFail(ctx context.Context, cmd PaymentCommand) (error) {
 		AggregateID: cmd.ID.String(),
 		AggregateType: "payment_command",
 		EventType: "payment.command.fail",
-		Stream: "payments.commands",
+		Stream: string(PaymentStream),
 		Payload: raw,
 	})
 
