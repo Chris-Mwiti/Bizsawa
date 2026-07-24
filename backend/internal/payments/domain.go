@@ -16,7 +16,7 @@ const (
 	CommandSTKPush CommandType = "stk_push"
 	CommandB2C     CommandType = "b2c"
 	CommandC2B     CommandType = "c2b"
-	CommandCash 	 CommandType = "cash"
+	CommandCash    CommandType = "cash"
 
 	StatusPending    Status = "pending"
 	StatusProcessing Status = "processing"
@@ -27,6 +27,7 @@ const (
 type PaymentCommand struct {
 	db.BaseModel
 	BusinessID        uuid.UUID       `gorm:"type:uuid;not null;index;uniqueIndex:idx_payment_business_idem" json:"businessId"`
+	OrderID           uuid.UUID       `gorm:"type:uuid;not null;index" json:"orderId"`
 	Type              CommandType     `gorm:"type:text;not null;index" json:"type"`
 	Status            Status          `gorm:"type:text;not null;default:'pending';index" json:"status"`
 	IdempotencyKey    string          `gorm:"type:text;not null;uniqueIndex:idx_payment_business_idem" json:"-"`
@@ -49,6 +50,7 @@ func (PaymentCommand) TableName() string { return "payment_commands" }
 type ResultEvent struct {
 	PaymentID         uuid.UUID       `json:"paymentId"`
 	BusinessID        uuid.UUID       `json:"businessId"`
+	OrderID           uuid.UUID       `json:"orderId"`
 	Status            Status          `json:"status"`
 	Provider          string          `json:"provider"`
 	ProviderRequestID string          `json:"providerRequestId"`
