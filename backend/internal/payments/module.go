@@ -1,7 +1,6 @@
 package payments
 
 import (
-	"github.com/Codecx-Org/FinAI/backend/internal/shared/outbox"
 	"github.com/go-chi/chi/v5"
 	"gorm.io/gorm"
 )

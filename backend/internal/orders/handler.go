@@ -1,12 +1,14 @@
 package orders
 
 import (
+	"net/http"
+
+	apperrors "github.com/Codecx-Org/FinAI/backend/internal/shared/errors"
 	sharedhttp "github.com/Codecx-Org/FinAI/backend/internal/shared/http"
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/middleware"
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/pagination"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"net/http"
 )
 
 type Handler struct{ svc *Service }
@@ -66,6 +68,20 @@ func (h Handler) Confirm(w http.ResponseWriter, r *http.Request) {
 		sharedhttp.Error(w, errBusinessRequired())
 		return
 	}
+
+	val, ok := middleware.IdempotencyKeyFromCtx(r.Context())
+
+	if !ok {
+		sharedhttp.Error(w, apperrors.ErrConflict.WithMessage("idempotency key required"))
+		return
+	}
+	//parse the key to uuid.UUID format
+	key, err := uuid.Parse(val)
+	if err != nil {
+		sharedhttp.Error(w, apperrors.ErrConflict.WithMessage("idempotency key should be of type uuid"))
+		return
+	}
+
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		sharedhttp.Error(w, err)
@@ -78,7 +94,7 @@ func (h Handler) Confirm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	order, err := h.svc.Confirm(r.Context(), bid, id, req.CustomerPhone)
+	order, err := h.svc.Confirm(r.Context(), bid, id, key, req.CustomerPhone)
 	if err != nil {
 		sharedhttp.Error(w, err)
 		return

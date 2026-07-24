@@ -7,7 +7,6 @@ import (
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/middleware"
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/outbox"
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/pagination"
-	"github.com/Codecx-Org/FinAI/backend/internal/taxes"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
@@ -65,12 +64,14 @@ func (s *Service) Create(ctx context.Context, businessID, staffID uuid.UUID, req
 	}
 	return s.create(ctx, businessID, staffID, req.OrderID, req.CustomerID, req.PaymentMethod, key, toLineInputs(req.Lines))
 }
+
 func (s *Service) CreateFromOrder(ctx context.Context, businessID, staffID, orderID uuid.UUID, customerID *uuid.UUID, paymentMethod string, lines []OrderLineInput) (*Sale, error) {
 	if existing, err := s.repo.FindByOrder(ctx, businessID, orderID); err == nil {
 		return existing, nil
 	}
 	return s.create(ctx, businessID, staffID, &orderID, customerID, paymentMethod, "", lines)
 }
+
 func (s *Service) create(ctx context.Context, businessID, staffID uuid.UUID, orderID, customerID *uuid.UUID, paymentMethod, key string, inputs []OrderLineInput) (*Sale, error) {
 	if paymentMethod == "" {
 		paymentMethod = "cash"
@@ -84,10 +85,36 @@ func (s *Service) create(ctx context.Context, businessID, staffID uuid.UUID, ord
 	for _, in := range inputs {
 		total := in.Quantity.Mul(in.UnitPrice).Round(2)
 		subtotal = subtotal.Add(total)
-		lines = append(lines, SaleLine{BaseModel: shareddb.BaseModel{TenantID: businessID}, BusinessID: businessID, ProductID: in.ProductID, Quantity: in.Quantity, UnitPrice: in.UnitPrice, LineTotal: total})
+		lines = append(lines, SaleLine{
+			BaseModel: shareddb.BaseModel{
+				TenantID: businessID,
+			}, 
+			BusinessID: businessID, 
+			ProductID: in.ProductID, 
+			Quantity: in.Quantity, 
+			UnitPrice: in.UnitPrice, 
+			LineTotal: total,
+		})
 	}
 	tax := subtotal.Mul(decimal.NewFromFloat(0.16)).Round(2)
-	sale := &Sale{BaseModel: shareddb.BaseModel{TenantID: businessID}, BusinessID: businessID, OrderID: orderID, CustomerID: customerID, ReceiptNumber: receipt, StaffID: staffID, PaymentMethod: paymentMethod, Subtotal: subtotal, TaxAmount: tax, Total: subtotal.Add(tax), Status: "completed", IdempotencyKey: key, SoldAt: time.Now().UTC()}
+	sale := &Sale{
+		BaseModel: shareddb.BaseModel{
+			TenantID: businessID,
+		}, 
+		BusinessID: businessID, 
+		OrderID: orderID, 
+		CustomerID: customerID, 
+		ReceiptNumber: receipt, 
+		StaffID: staffID, 
+		PaymentMethod: paymentMethod, 
+		Subtotal: subtotal, 
+		TaxAmount: tax, 
+		Total: subtotal.Add(tax), 
+		Status: "completed", 
+		IdempotencyKey: key, 
+		SoldAt: time.Now().UTC(),
+	}
+
 	if err := s.repo.Create(ctx, sale, lines); err != nil {
 		return nil, err
 	}
@@ -100,27 +127,36 @@ func (s *Service) create(ctx context.Context, businessID, staffID uuid.UUID, ord
 	}
 	return s.repo.Find(ctx, businessID, sale.ID)
 }
+
+
 func (s *Service) List(ctx context.Context, businessID uuid.UUID, page pagination.Page) ([]Sale, error) {
 	return s.repo.List(ctx, businessID, page)
 }
+
 func (s *Service) Get(ctx context.Context, businessID, saleID uuid.UUID) (*Sale, error) {
 	return s.repo.Find(ctx, businessID, saleID)
 }
+
 func (s *Service) Void(ctx context.Context, businessID, saleID uuid.UUID) error {
 	return s.repo.Void(ctx, businessID, saleID)
 }
+
 func (s *Service) GetSalesSummary(ctx context.Context, businessID uuid.UUID, from, to time.Time) (Summary, error) {
 	return s.repo.Summary(ctx, businessID, from, to)
 }
+
 func (s *Service) GetSalesByPaymentMethod(ctx context.Context, businessID uuid.UUID) ([]Breakdown, error) {
 	return s.repo.Breakdown(ctx, businessID, "payment_method")
 }
+
 func (s *Service) GetSalesByStaff(ctx context.Context, businessID uuid.UUID) ([]Breakdown, error) {
 	return s.repo.Breakdown(ctx, businessID, "staff_id")
 }
+
 func (s *Service) GetSalesByProduct(ctx context.Context, businessID uuid.UUID) ([]Breakdown, error) {
 	return s.repo.ProductBreakdown(ctx, businessID)
 }
+
 func toLineInputs(lines []SaleLineRequest) []OrderLineInput {
 	out := make([]OrderLineInput, 0, len(lines))
 	for _, l := range lines {
@@ -129,5 +165,3 @@ func toLineInputs(lines []SaleLineRequest) []OrderLineInput {
 	return out
 }
 
-var _ taxes.Service
-var _ *gorm.DB

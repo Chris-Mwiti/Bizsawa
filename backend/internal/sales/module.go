@@ -1,7 +1,6 @@
 package sales
 
 import (
-	"github.com/Codecx-Org/FinAI/backend/internal/shared/outbox"
 	"github.com/go-chi/chi/v5"
 	"gorm.io/gorm"
 )
@@ -15,6 +14,7 @@ func New(db *gorm.DB, taxes TaxRecorder, outboxRepo outbox.Repository) *Module {
 	repo := NewRepository(db)
 	return &Module{repo: repo, svc: NewService(repo, taxes, outboxRepo)}
 }
+
 func (m *Module) RegisterRoutes(r chi.Router) {
 	h := Handler{svc: m.svc}
 	r.Get("/", h.List)
@@ -26,4 +26,5 @@ func (m *Module) RegisterRoutes(r chi.Router) {
 	r.Get("/{id}", h.Get)
 	r.Post("/{id}/void", h.Void)
 }
+
 func (m *Module) Service() *Service { return m.svc }
