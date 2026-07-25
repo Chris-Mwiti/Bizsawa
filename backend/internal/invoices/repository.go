@@ -63,16 +63,16 @@ func (r *Repository) Find(ctx context.Context, businessID, invoiceID uuid.UUID) 
 	return &invoice, nil
 }
 
-func (r *Repository) FindByOrderId(ctx context.Context, businessID, invoiceID, orderID uuid.UUID) (*Invoice, error) {
-	var invoice Invoice
+func (r *Repository) FindByOrderId(ctx context.Context, businessID, invoiceID, orderID uuid.UUID, page pagination.Page) ([]Invoice, error) {
+	var invoices []Invoice
 
-	err := r.db.WithContext(ctx).Scopes(shareddb.BusinessScope(businessID)).Preload("Lines").Where("id = ? AND order_id = ?", invoiceID, orderID).First(&invoice).Error
+	err := r.db.WithContext(ctx).Scopes(shareddb.BusinessScope(businessID)).Preload("Lines").Where("id = ? AND order_id = ?", invoiceID, orderID).Limit(page.Limit).Offset(page.Offset).Find(&invoices).Error
 
 	if err != nil {
 		return nil, err
 	}
 
-	return &invoice, nil
+	return invoices, nil
 }
 
 func (r *Repository) Update(ctx context.Context, invoice *Invoice) error {

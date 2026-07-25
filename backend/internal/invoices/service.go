@@ -3,19 +3,18 @@ package invoices
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"database/sql"
 	"errors"
 	"fmt"
-	"log"
-	"maps"
+	"log/slog"
 	"sort"
 	"time"
 
 	shareddb "github.com/Codecx-Org/FinAI/backend/internal/shared/db"
 	apperrors "github.com/Codecx-Org/FinAI/backend/internal/shared/errors"
-	"github.com/Codecx-Org/FinAI/backend/internal/shared/outbox"
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/pagination"
 	"github.com/google/uuid"
+	"github.com/riverqueue/river"
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 )
@@ -23,21 +22,21 @@ import (
 type InvoiceEventType string
 
 const (
-	InvoiceOverdue InvoiceEventType = "invoice.overdue"
-	InvoiceSent		 InvoiceEventType = "invoice.sent"
-	InvoiceViewed	 InvoiceEventType =  "invoice.viewed"
-	InvoicePaid    InvoiceEventType =   "invoice.paid"
-	InvoiceCancelled 	InvoiceEventType = "invoice.cancelled"
+	InvoiceOverdue   InvoiceEventType = "invoice.overdue"
+	InvoiceSent      InvoiceEventType = "invoice.sent"
+	InvoiceViewed    InvoiceEventType = "invoice.viewed"
+	InvoicePaid      InvoiceEventType = "invoice.paid"
+	InvoiceCancelled InvoiceEventType = "invoice.cancelled"
 )
-
 
 type Service struct {
 	repo   *Repository
-	outbox outbox.Repository
+	outbox *river.Client[*sql.Tx]
+	logger *slog.Logger
 }
 
-func NewService(repo *Repository, outboxRepo outbox.Repository) *Service {
-	return &Service{repo: repo, outbox: outboxRepo}
+func NewService(repo *Repository, outboxRepo *river.Client[*sql.Tx], logger *slog.Logger) *Service {
+	return &Service{repo: repo, outbox: outboxRepo, logger: logger}
 }
 
 type LineRequest struct {
@@ -46,14 +45,16 @@ type LineRequest struct {
 	Quantity    decimal.Decimal `json:"quantity"`
 	UnitPrice   decimal.Decimal `json:"unitPrice"`
 }
+
 type CreateInvoiceRequest struct {
 	CustomerID *uuid.UUID    `json:"customerId"`
-	OrderID 	 *uuid.UUID    `json:"orderId"`
+	OrderID    *uuid.UUID    `json:"orderId"`
 	Currency   string        `json:"currency"`
 	Notes      string        `json:"notes"`
 	DueAt      *time.Time    `json:"dueAt"`
 	Lines      []LineRequest `json:"lines"`
 }
+
 type RecordPaymentRequest struct {
 	Amount    decimal.Decimal `json:"amount"`
 	PaymentID *uuid.UUID      `json:"paymentId"`
@@ -66,8 +67,9 @@ func (s *Service) WithTx(tx *gorm.DB) *Service {
 	}
 
 	return &Service{
-		repo: s.repo.WithTx(tx),
+		repo:   s.repo.WithTx(tx),
 		outbox: s.outbox,
+		logger: s.logger,
 	}
 }
 
@@ -75,73 +77,92 @@ func (s *Service) CreateInvoice(ctx context.Context, businessID uuid.UUID, req C
 	if len(req.Lines) == 0 {
 		return nil, apperrors.ErrUnprocessable.WithMessage("invoice requires at least one line")
 	}
-	number, err := s.repo.NextNumber(ctx, businessID)
+	var inv *Invoice
+
+	err := s.repo.db.Transaction(func(tx *gorm.DB) error {
+		number, err := s.repo.NextNumber(ctx, businessID)
+		if err != nil {
+			s.logger.ErrorContext(ctx, "[INVOICES]-error while creating invoice next number", "businessID", businessID.String(), "err", err.Error())
+			return apperrors.ErrInternal.WithMessage("error while creating next number for invoice")
+		}
+		subtotal := decimal.Zero
+		lines := make([]InvoiceLine, 0, len(req.Lines))
+
+		for _, line := range req.Lines {
+			if line.Description == "" {
+				return apperrors.ErrUnprocessable.WithMessage("invoice line description is required")
+			}
+			lineTotal := line.Quantity.Mul(line.UnitPrice).Round(2)
+			subtotal = subtotal.Add(lineTotal)
+			lines = append(lines, InvoiceLine{
+				BaseModel: shareddb.BaseModel{
+					TenantID: businessID,
+				},
+				BusinessID:  businessID,
+				ProductID:   line.ProductID,
+				Description: line.Description,
+				Quantity:    line.Quantity,
+				UnitPrice:   line.UnitPrice,
+				LineTotal:   lineTotal,
+			})
+		}
+
+		tax := subtotal.Mul(decimal.NewFromFloat(0.16)).Round(2)
+		currency := req.Currency
+		if currency == "" {
+			currency = "KES"
+		}
+
+		invoice := &Invoice{
+			BaseModel: shareddb.BaseModel{
+				TenantID: businessID,
+			},
+			BusinessID:    businessID,
+			CustomerID:    req.CustomerID,
+			OrderID:       req.OrderID,
+			InvoiceNumber: number,
+			Status:        StatusDraft,
+			Subtotal:      subtotal,
+			TaxAmount:     tax,
+			Total:         subtotal.Add(tax),
+			AmountPaid:    decimal.Zero,
+			AmountDue:     subtotal.Add(tax),
+			Currency:      currency,
+			Notes:         req.Notes,
+			DueAt:         req.DueAt,
+		}
+
+		if err := s.WithTx(tx).repo.Create(ctx, invoice, lines); err != nil {
+			s.logger.ErrorContext(ctx, "[INVOICE]- error while creating invoice", "buinessID", businessID.String(), "orderID", invoice.OrderID, "err", err)
+			return err
+		}
+
+		inv, err = s.WithTx(tx).repo.Find(ctx, businessID, invoice.ID)
+		if err != nil {
+			s.logger.ErrorContext(ctx, "[INVOICE]- error while finding created invoice", "buinessID", businessID.String(), "invoiceID", invoice.ID, "err", err)
+			return err
+		}
+
+		return nil
+	})
+
 	if err != nil {
 		return nil, err
 	}
-	subtotal := decimal.Zero
-	lines := make([]InvoiceLine, 0, len(req.Lines))
 
-	for _, line := range req.Lines {
-		if line.Description == "" {
-			return nil, apperrors.ErrUnprocessable.WithMessage("invoice line description is required")
-		}
-		lineTotal := line.Quantity.Mul(line.UnitPrice).Round(2)
-		subtotal = subtotal.Add(lineTotal)
-		lines = append(lines, InvoiceLine{
-			BaseModel: shareddb.BaseModel{
-				TenantID: businessID,
-			}, BusinessID: businessID, 
-			ProductID: line.ProductID, 
-			Description: line.Description, 
-			Quantity: line.Quantity, 
-			UnitPrice: line.UnitPrice, 
-			LineTotal: lineTotal,
-		})
-	}
-
-	tax := subtotal.Mul(decimal.NewFromFloat(0.16)).Round(2)
-	currency := req.Currency
-	if currency == "" {
-		currency = "KES"
-	}
-
-	invoice := &Invoice{
-		BaseModel: shareddb.BaseModel{
-			TenantID: businessID,
-		}, 
-		BusinessID: businessID, 
-		CustomerID: req.CustomerID, 
-		OrderID: req.OrderID,
-		InvoiceNumber: number, 
-		Status: StatusDraft, 
-		Subtotal: subtotal, 
-		TaxAmount: tax, 
-		Total: subtotal.Add(tax), 
-		AmountPaid: decimal.Zero, 
-		AmountDue: subtotal.Add(tax), 
-		Currency: currency, 
-		Notes: req.Notes, 
-		DueAt: req.DueAt,
-	}
-
-	if err := s.repo.Create(ctx, invoice, lines); err != nil {
-		return nil, err
-	}
-	return s.repo.Find(ctx, businessID, invoice.ID)
+	return inv, nil
 }
 
 func (s *Service) List(ctx context.Context, businessID uuid.UUID, page pagination.Page) ([]Invoice, error) {
 	return s.repo.List(ctx, businessID, page)
 }
+
 func (s *Service) Get(ctx context.Context, businessID, invoiceID uuid.UUID) (*Invoice, error) {
 	return s.repo.Find(ctx, businessID, invoiceID)
 }
 
-func (s *Service) GetInvoiceByOrderID(ctx context.Context, businessID, invoiceID, orderID uuid.UUID) (*Invoice, error) {
-	
-	invoice, err := s.repo.FindByOrderId(ctx, businessID, invoiceID, orderID)
-
+func (s *Service) GetInvoiceByOrderID(ctx context.Context, businessID, invoiceID, orderID uuid.UUID, page pagination.Page) ([]Invoice, error) {
+	invoice, err := s.repo.FindByOrderId(ctx, businessID, invoiceID, orderID, page)
 	if err != nil {
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, err
@@ -153,20 +174,17 @@ func (s *Service) GetInvoiceByOrderID(ctx context.Context, businessID, invoiceID
 }
 
 func (s *Service) Send(ctx context.Context, businessID, invoiceID uuid.UUID, channel string) (*Invoice, error) {
-
 	var invoice *Invoice
 
 	err := s.repo.db.Transaction(func(tx *gorm.DB) error {
-
 		var err error
 		invoice, err = s.WithTx(tx).repo.Find(ctx, businessID, invoiceID)
 		if err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound){
+			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return apperrors.ErrNotFound.WithMessage("invoice not found")
 			}
 			return err
 		}
-
 
 		now := time.Now().UTC()
 		invoice.Status = StatusSent
@@ -174,13 +192,14 @@ func (s *Service) Send(ctx context.Context, businessID, invoiceID uuid.UUID, cha
 		if err := s.WithTx(tx).repo.Update(ctx, invoice); err != nil {
 			return err
 		}
-		err = s.emit(ctx, businessID, invoice.ID, InvoiceSent, map[string]any{"channel": channel})
+
+		sqlTx, _ := tx.Statement.ConnPool.(*sql.Tx)
+		err = s.WithTx(tx).emit(ctx, sqlTx, businessID, invoice.ID, InvoiceSent, map[string]any{"channel": channel})
 		if err != nil {
 			return err
 		}
 
 		return nil
-
 	})
 
 	if err != nil {
@@ -223,9 +242,8 @@ func (s *Service) RecordPayment(ctx context.Context, businessID, invoiceID uuid.
 		}
 
 		if inv.Status == StatusPaid {
-
-			err := s.emit(ctx, businessID, inv.ID, InvoicePaid, map[string]any{"amount": inv.AmountPaid.String(), "paymentId": req.PaymentID})
-
+			sqlTx, _ := tx.Statement.ConnPool.(*sql.Tx)
+			err := s.WithTx(tx).emit(ctx, sqlTx, businessID, inv.ID, InvoicePaid, map[string]any{"amount": inv.AmountPaid.String(), "paymentId": req.PaymentID})
 			if err != nil {
 				return err
 			}
@@ -246,23 +264,23 @@ func (s *Service) Cancel(ctx context.Context, businessID, invoiceID uuid.UUID) (
 
 	err := s.repo.db.Transaction(func(tx *gorm.DB) error {
 		var err error
-
-	  invoice, err = s.WithTx(tx).repo.Find(ctx, businessID, invoiceID)	
-
-		if err != nil{
-			if errors.Is(err, gorm.ErrRecordNotFound){
+		invoice, err = s.WithTx(tx).repo.Find(ctx, businessID, invoiceID)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return apperrors.ErrNotFound.WithMessage("invoice record not found")
 			}
 			return err
 		}
 
-		invoice.Status = StatusCancelled	
+		invoice.Status = StatusCancelled
+		if err := s.WithTx(tx).repo.Update(ctx, invoice); err != nil {
+			return err
+		}
 
-		err = s.emit(ctx, businessID, invoiceID, InvoiceCancelled, map[string]any{"amount": invoice.Total})
-
+		sqlTx, _ := tx.Statement.ConnPool.(*sql.Tx)
+		err = s.WithTx(tx).emit(ctx, sqlTx, businessID, invoiceID, InvoiceCancelled, map[string]any{"amount": invoice.Total.String()})
 		return err
 	})
-
 
 	if err != nil {
 		return nil, err
@@ -272,22 +290,24 @@ func (s *Service) Cancel(ctx context.Context, businessID, invoiceID uuid.UUID) (
 }
 
 func (s *Service) MarkOverdue(ctx context.Context, now time.Time) ([]Invoice, error) {
-
 	var items []Invoice
 
 	err := s.repo.db.Transaction(func(tx *gorm.DB) error {
 		var err error
-
 		items, err = s.WithTx(tx).repo.MarkOverdue(ctx, now)
+		if err != nil {
+			return err
+		}
 
+		sqlTx, _ := tx.Statement.ConnPool.(*sql.Tx)
 		for _, inv := range items {
-			err := s.emit(ctx, inv.BusinessID, inv.ID, InvoiceOverdue, map[string]any{"amount": inv.AmountDue})
+			err := s.WithTx(tx).emit(ctx, sqlTx, inv.BusinessID, inv.ID, InvoiceOverdue, map[string]any{"amount": inv.AmountDue.String()})
 			if err != nil {
 				return err
 			}
 		}
 
-		return err
+		return nil
 	})
 
 	if err != nil {
@@ -304,32 +324,36 @@ func (s *Service) PDF(ctx context.Context, businessID, invoiceID uuid.UUID) ([]b
 	}
 	return deterministicPDF(inv), nil
 }
+
 func deterministicPDF(inv *Invoice) []byte {
 	var b bytes.Buffer
+
 	lines := append([]InvoiceLine(nil), inv.Lines...)
 	sort.Slice(lines, func(i, j int) bool { return lines[i].ID.String() < lines[j].ID.String() })
 	b.WriteString("%PDF-1.4\n% BizSawa Invoice\n")
-	b.WriteString(fmt.Sprintf("Invoice: %s\nStatus: %s\nSubtotal: %s\nTax: %s\nTotal: %s\nPaid: %s\nDue: %s\n", inv.InvoiceNumber, inv.Status, inv.Subtotal.StringFixed(2), inv.TaxAmount.StringFixed(2), inv.Total.StringFixed(2), inv.AmountPaid.StringFixed(2), inv.AmountDue.StringFixed(2)))
+
+	b.WriteString(
+		fmt.Sprintf("Invoice: %s\nStatus: %s\nSubtotal: %s\nTax: %s\nTotal: %s\nPaid: %s\nDue: %s\n",
+			inv.InvoiceNumber,
+			inv.Status,
+			inv.Subtotal.StringFixed(2),
+			inv.TaxAmount.StringFixed(2),
+			inv.Total.StringFixed(2),
+			inv.AmountPaid.StringFixed(2),
+			inv.AmountDue.StringFixed(2),
+		),
+	)
+
 	for _, line := range lines {
-		b.WriteString(fmt.Sprintf("Line: %s | %s | %s | %s\n", line.Description, line.Quantity.String(), line.UnitPrice.StringFixed(2), line.LineTotal.StringFixed(2)))
+		b.WriteString(
+			fmt.Sprintf("Line: %s | %s | %s | %s\n",
+				line.Description,
+				line.Quantity.String(),
+				line.UnitPrice.StringFixed(2),
+				line.LineTotal.StringFixed(2),
+			),
+		)
 	}
 	b.WriteString("%%EOF\n")
 	return b.Bytes()
-}
-
-func (s *Service) emit(ctx context.Context, businessID, invoiceID uuid.UUID, eventType InvoiceEventType, extra map[string]any) (error){
-	if s.outbox == nil {
-		return fmt.Errorf("service outbox missing")
-	}
-	payload := map[string]any{"invoiceId": invoiceID, "businessId": businessID}
-	
-	maps.Copy(payload, extra)
-	raw, _ := json.Marshal(payload)
-	err := s.outbox.Insert(ctx, &outbox.Event{TenantID: businessID, AggregateID: invoiceID.String(), AggregateType: "invoice", EventType: string(eventType), Stream: "invoices", Payload: raw})
-
-	if err != nil {
-		log.Printf("error while submitting an outbox insert request: %v", err)
-		return err
-	}
-	return nil
 }
