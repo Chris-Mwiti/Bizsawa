@@ -1,24 +1,28 @@
 package orders
 
 import (
+	"database/sql"
+	"log/slog"
+
 	"github.com/Codecx-Org/FinAI/backend/internal/customers"
 	"github.com/Codecx-Org/FinAI/backend/internal/inventory"
 	"github.com/Codecx-Org/FinAI/backend/internal/invoices"
 	"github.com/Codecx-Org/FinAI/backend/internal/payments"
 	"github.com/Codecx-Org/FinAI/backend/internal/sales"
-	"github.com/Codecx-Org/FinAI/backend/internal/shared/outbox"
 	"github.com/go-chi/chi/v5"
+	"github.com/riverqueue/river"
 	"gorm.io/gorm"
 )
 
 type Module struct {
 	repo *Repository
 	svc  *Service
+	logger *slog.Logger
 }
 
-func New(db *gorm.DB, inventory *inventory.Service, sales *sales.Service, outboxRepo outbox.Repository, customers *customers.Service, payment *payments.Service, invoice *invoices.Service) *Module {
+func New(db *gorm.DB, inventory *inventory.Service, sales *sales.Service, outboxRepo *river.Client[*sql.Tx], customers *customers.Service, payment *payments.Service, invoice *invoices.Service, logger *slog.Logger) *Module {
 	repo := NewRepository(db)
-	return &Module{repo: repo, svc: NewService(repo, inventory, sales, outboxRepo,invoice,payment,customers)}
+	return &Module{repo: repo, svc: NewService(repo, inventory, sales, outboxRepo,logger,invoice,payment,customers), logger: logger}
 }
 func (m *Module) RegisterRoutes(r chi.Router) {
 	h := Handler{svc: m.svc}
@@ -31,3 +35,7 @@ func (m *Module) RegisterRoutes(r chi.Router) {
 	r.Post("/{id}/refund", h.Refund)
 }
 func (m *Module) Service() *Service { return m.svc }
+
+func (m *Module) RegisterWorkers(worker *river.Workers) {
+	river.AddWorker(worker, &orderWorker{service: m.svc, logger: m.logger})	
+}

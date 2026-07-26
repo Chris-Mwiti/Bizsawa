@@ -45,9 +45,9 @@ type Service struct {
 }
 
 
-func NewService(repo *Repository, inventory *inventory.Service, sales *sales.Service, outboxRepo *river.Client[*sql.Tx], invoices *invoices.Service, payment *payments.Service, customers *customers.Service) *Service {
+func NewService(repo *Repository, inventory *inventory.Service, sales *sales.Service, outboxRepo *river.Client[*sql.Tx],logger *slog.Logger, invoices *invoices.Service, payment *payments.Service, customers *customers.Service) *Service {
 	//@todo: here you will right instances of the order machine
-	return &Service{repo: repo, inventory: inventory, sales: sales, outbox: outboxRepo, invoices: invoices, payment: payment, customers: customers}
+	return &Service{repo: repo, inventory: inventory, sales: sales, outbox: outboxRepo, invoices: invoices, payment: payment, customers: customers, logger: logger}
 }
 
 type OrderLineRequest struct {

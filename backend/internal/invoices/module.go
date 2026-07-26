@@ -33,6 +33,7 @@ func (m *Module) RegisterRoutes(r chi.Router) {
 
 func (m *Module) RegisterWorker(worker *river.Workers) error {
 
+	river.AddWorker(worker, &invoiceWorker{service: m.svc, logger: m.logger})
 
 	return nil
 
