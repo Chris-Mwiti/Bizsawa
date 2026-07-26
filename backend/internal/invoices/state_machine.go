@@ -12,6 +12,7 @@ const (
 	TriggerPartial  InvoiceTrigger = "invoice_partial"
 	TriggerPaid     InvoiceTrigger = "invoice_paid"
 	TriggerCanceled InvoiceTrigger = "invoice_canceled"
+	TriggerDue			InvoiceTrigger = 	"invoice_due"
 )
 
 func (s *Service) buildInvoiceMachine(invoice Invoice) *stateless.StateMachine {
@@ -19,10 +20,10 @@ func (s *Service) buildInvoiceMachine(invoice Invoice) *stateless.StateMachine {
 	sm := stateless.NewStateMachine(invoice.Status)
 
 	sm.Configure(StatusDraft).Permit(TriggerSent, StatusSent).Permit(TriggerCanceled, StatusCancelled)
-	sm.Configure(StatusSent).Permit(TriggerViewed, StatusViewed).Permit(TriggerCanceled, StatusCancelled)
-	sm.Configure(StatusViewed).Permit(TriggerPartial, StatusPartial).Permit(TriggerPaid, StatusPaid).Permit(TriggerCanceled, StatusCancelled)
+	sm.Configure(StatusSent).Permit(TriggerViewed, StatusViewed).Permit(TriggerCanceled, StatusCancelled).Permit(TriggerDue, StatusOverdue)
+	sm.Configure(StatusViewed).Permit(TriggerPartial, StatusPartial).Permit(TriggerPaid, StatusPaid).Permit(TriggerCanceled, StatusCancelled).Permit(TriggerDue, StatusOverdue)
 
-	sm.Configure(StatusPartial).Permit(TriggerPaid, StatusPaid)
+	sm.Configure(StatusPartial).Permit(TriggerPaid, StatusPaid).Permit(TriggerDue, StatusOverdue)
 
 	return sm
 }

@@ -2,11 +2,10 @@ package orders
 
 import (
 	"context"
-	"encoding/json"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
-	"maps"
 	"time"
 
 	"github.com/Codecx-Org/FinAI/backend/internal/customers"
@@ -17,9 +16,9 @@ import (
 	shareddb "github.com/Codecx-Org/FinAI/backend/internal/shared/db"
 	apperrors "github.com/Codecx-Org/FinAI/backend/internal/shared/errors"
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/middleware"
-	"github.com/Codecx-Org/FinAI/backend/internal/shared/outbox"
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/pagination"
 	"github.com/google/uuid"
+	"github.com/riverqueue/river"
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 )
@@ -42,11 +41,11 @@ type Service struct {
 	payment		*payments.Service
 	customers *customers.Service
 	logger 		*slog.Logger
-	outbox    outbox.Repository
+	outbox		*river.Client[*sql.Tx]    
 }
 
 
-func NewService(repo *Repository, inventory *inventory.Service, sales *sales.Service, outboxRepo outbox.Repository, invoices *invoices.Service, payment *payments.Service, customers *customers.Service) *Service {
+func NewService(repo *Repository, inventory *inventory.Service, sales *sales.Service, outboxRepo *river.Client[*sql.Tx], invoices *invoices.Service, payment *payments.Service, customers *customers.Service) *Service {
 	//@todo: here you will right instances of the order machine
 	return &Service{repo: repo, inventory: inventory, sales: sales, outbox: outboxRepo, invoices: invoices, payment: payment, customers: customers}
 }
@@ -184,7 +183,7 @@ func (s *Service) Confirm(ctx context.Context, businessID, orderID, key uuid.UUI
 	err := s.repo.db.Transaction(func(tx *gorm.DB) error {
 		//fetch the roder
 		var err error
-		order, err = s.repo.WithTx(tx).Find(ctx, businessID, orderID);
+		order, err = s.repo.WithTx(tx).FindOrderByUpdate(ctx, businessID, orderID);
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				s.logger.DebugContext(ctx, "[ORDERS]-order not found", "orderID", order.ID.String(), "businessID", order.BusinessID.String())
@@ -227,6 +226,7 @@ func (s *Service) Confirm(ctx context.Context, businessID, orderID, key uuid.UUI
 			s.logger.ErrorContext(ctx, "[ORDER/INVOICES]-could not create invoice", "businessID", businessID.String, "orderID", orderID.String(), "err", err.Error())
 			return apperrors.ErrInternal.WithMessage("could not create invoice from order")
 		}
+		s.logger.InfoContext(ctx, "[ORDER/INVOICES]-invoice created by orderID", "businessID", businessID.String(), "invoiceID", invoice.ID.String(), "orderID", order.ID.String())
 
 		inventoryLines := make([]inventory.DecrementLine, 0, len(order.Lines))
 
@@ -244,15 +244,20 @@ func (s *Service) Confirm(ctx context.Context, businessID, orderID, key uuid.UUI
 
 		
 
-	  cmd,err := s.payment.Initiate(ctx, businessID, buildPaymentPayload(order,invoice, customerPhone)); 		
+	  cmd,err := s.payment.WithTx(tx).Initiate(ctx, businessID, buildPaymentPayload(order,invoice, customerPhone)); 		
 		if err != nil {
 			s.logger.ErrorContext(ctx, "[ORDER/PAYMENTS]-could not initiate payment", "businessID", businessID.String(), "orderID", orderID.String(), "err", err.Error())
 			return apperrors.ErrInternal.WithMessage("could not initiate payments")
 		}
 		
+		sqlTx, ok := tx.Statement.ConnPool.(*sql.Tx)
+		if !ok {
+			s.logger.ErrorContext(ctx, "[ORDERS]-error while initializing sql tx conn pool", "businessID", businessID.String(), "orderID", orderID.String(), "err", err.Error())
+			return fmt.Errorf("sqlTx not acceptable: received of type: %v", sqlTx)
+		}
 
 		//emit an event that says the order has been confirmed
-		if err := s.emit(ctx, tx,businessID, orderID, OrderConfirmed, map[string]any{"amount": order.Total, "paymentCmd": cmd.ID.String()}); err != nil {
+		if err := s.emit(ctx, sqlTx,businessID, orderID, OrderConfirmed, map[string]any{"amount": order.Total, "paymentCmd": cmd.ID.String(), "invoiceID": invoice.ID.String()}); err != nil {
 			s.logger.ErrorContext(ctx, "[ORDER/OUTBOX]-could not emit order created event", "businessID", businessID.String(), "orderID", orderID.String(), "err", err.Error())
 			return apperrors.ErrInternal.WithMessage("error while emitting event")
 		} 	
@@ -301,9 +306,7 @@ func (s *Service) FulfillOrder(ctx context.Context, businessID, orderID, staffID
 			return fmt.Errorf("failed to save order state: %w", err)
 		}
 
-		//[TODO:]update the invoice status of the order
-
-
+		
 		// 5. Map the domain payload cleanly using our pure helper
 		saleLines := buildSalesPayload(order)
 
@@ -323,7 +326,15 @@ func (s *Service) FulfillOrder(ctx context.Context, businessID, orderID, staffID
 			}
 		}
 
-		err = s.emit(ctx, tx, businessID, orderID, OrderFulfilled, map[string]any{"amount": order.Total})
+		sqlTx, ok := tx.Statement.ConnPool.(*sql.Tx)
+		if !ok {
+			s.logger.ErrorContext(ctx, "[ORDERS]-error while initializing sql tx conn pool", "businessID", businessID.String(), "orderID", orderID.String(), "err", err.Error())
+			return fmt.Errorf("sqlTx not acceptable: received of type: %v", sqlTx)
+		}
+
+
+
+		err = s.emit(ctx, sqlTx, businessID, orderID, OrderFulfilled, map[string]any{"amount": order.Total})
 
 		if err != nil {
 			return err
@@ -344,7 +355,7 @@ func (s *Service) Cancel(ctx context.Context, businessID, orderID uuid.UUID) err
 	err := s.repo.db.Transaction(func(tx *gorm.DB) error {
 
 		//fetch the order
-		order, err := s.repo.Find(ctx, businessID, orderID)
+		order, err := s.repo.FindOrderByUpdate(ctx, businessID, orderID)
 
 		if err != nil {
 			return err
@@ -357,8 +368,25 @@ func (s *Service) Cancel(ctx context.Context, businessID, orderID uuid.UUID) err
 		}
 
 		//cancel the invoice of the order
-		
- 
+		orderInvoices, err := s.invoices.WithTx(tx).GetInvoiceByOrderID(ctx, businessID, orderID, pagination.Page{
+			Limit: 1,
+		})
+
+		if err != nil {
+			s.logger.ErrorContext(ctx, "[ORDERS/INVOICES]-error while fetching order invoices", "businessID", businessID.String(), "orderID", orderID.String(), "err", err.Error())
+			return err
+		}
+
+		if len(orderInvoices) > 0 {
+			//get the latest invoice
+			invoice := orderInvoices[0]
+			_, err := s.invoices.WithTx(tx).Cancel(ctx,businessID,invoice.ID)
+
+			if err != nil {
+				s.logger.ErrorContext(ctx, "[ORDERS/INVOICES]-error while fetching order invoices", "businessID", businessID.String(), "orderID", orderID.String(), "err", err.Error())
+				return err
+			}
+		}
 		return nil
 	})
 
@@ -384,25 +412,4 @@ func (s *Service) Refund(ctx context.Context, businessID, orderID uuid.UUID) err
 	return nil
 }
 
-func (s *Service) emit(ctx context.Context, tx *gorm.DB, businessID, orderID uuid.UUID, eventType OrderEventType, extras map[string]any) (error){
-	if s.outbox == nil {
-		return apperrors.ErrInternal.WithCause(errors.New("outbox repository is missing"))
-	}
 
-	payload := map[string]any{
-		"orderId": orderID,
-		"businessID": businessID,
-	}
-
-	maps.Copy(payload, extras)
-
-	jsonPayload, _ := json.Marshal(payload)
-
-	err := s.outbox.WithTx(tx).Insert(ctx, &outbox.Event{TenantID: businessID, AggregateID: orderID.String(), AggregateType: "order", EventType: string(eventType), Stream: "orders", Payload: jsonPayload})
-
-	if err != nil {
-		return apperrors.ErrInternal.WithCause(err)
-	}
-
-	return nil
-}

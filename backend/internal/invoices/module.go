@@ -1,19 +1,24 @@
 package invoices
 
 import (
-	"github.com/Codecx-Org/FinAI/backend/internal/shared/outbox"
+	"log/slog"
+
 	"github.com/go-chi/chi/v5"
 	"gorm.io/gorm"
+
+	"database/sql"
+	"github.com/riverqueue/river"
 )
 
 type Module struct {
 	repo *Repository
 	svc  *Service
+	logger *slog.Logger
 }
 
-func New(db *gorm.DB, outboxRepo outbox.Repository) *Module {
+func New(db *gorm.DB, outboxRepo *river.Client[*sql.Tx], logger *slog.Logger) *Module {
 	repo := NewRepository(db)
-	return &Module{repo: repo, svc: NewService(repo, outboxRepo)}
+	return &Module{repo: repo, svc: NewService(repo, outboxRepo, logger)}
 }
 func (m *Module) RegisterRoutes(r chi.Router) {
 	h := Handler{svc: m.svc}
@@ -25,4 +30,12 @@ func (m *Module) RegisterRoutes(r chi.Router) {
 	r.Post("/{id}/record-payment", h.RecordPayment)
 	r.Get("/{id}/pdf", h.PDF)
 }
+
+func (m *Module) RegisterWorker(worker *river.Workers) error {
+
+
+	return nil
+
+}
+
 func (m *Module) Service() *Service { return m.svc }

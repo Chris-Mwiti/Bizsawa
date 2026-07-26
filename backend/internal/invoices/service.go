@@ -146,11 +146,7 @@ func (s *Service) CreateInvoice(ctx context.Context, businessID uuid.UUID, req C
 		return nil
 	})
 
-	if err != nil {
-		return nil, err
-	}
-
-	return inv, nil
+	return inv, err
 }
 
 func (s *Service) List(ctx context.Context, businessID uuid.UUID, page pagination.Page) ([]Invoice, error) {
@@ -161,8 +157,8 @@ func (s *Service) Get(ctx context.Context, businessID, invoiceID uuid.UUID) (*In
 	return s.repo.Find(ctx, businessID, invoiceID)
 }
 
-func (s *Service) GetInvoiceByOrderID(ctx context.Context, businessID, invoiceID, orderID uuid.UUID, page pagination.Page) ([]Invoice, error) {
-	invoice, err := s.repo.FindByOrderId(ctx, businessID, invoiceID, orderID, page)
+func (s *Service) GetInvoiceByOrderID(ctx context.Context, businessID, orderID uuid.UUID, page pagination.Page) ([]Invoice, error) {
+	invoice, err := s.repo.FindByOrderId(ctx, businessID, orderID, page)
 	if err != nil {
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, err
@@ -252,11 +248,8 @@ func (s *Service) RecordPayment(ctx context.Context, businessID, invoiceID uuid.
 		return nil
 	})
 
-	if err != nil {
-		return nil, err
-	}
 
-	return inv, nil
+	return inv, err
 }
 
 func (s *Service) Cancel(ctx context.Context, businessID, invoiceID uuid.UUID) (*Invoice, error) {
@@ -283,18 +276,20 @@ func (s *Service) Cancel(ctx context.Context, businessID, invoiceID uuid.UUID) (
 	})
 
 	if err != nil {
+		s.logger.ErrorContext(ctx, "[INVOICES]-error while cancelling order", "businessID", businessID.String(), "err", err)
 		return nil, err
 	}
 
-	return invoice, nil
+	return invoice, err
 }
 
-func (s *Service) MarkOverdue(ctx context.Context, now time.Time) ([]Invoice, error) {
+func (s *Service) MarkOverdue(ctx context.Context, businessID uuid.UUID, now time.Time) ([]Invoice, error) {
 	var items []Invoice
 
 	err := s.repo.db.Transaction(func(tx *gorm.DB) error {
 		var err error
-		items, err = s.WithTx(tx).repo.MarkOverdue(ctx, now)
+
+		items, err = s.WithTx(tx).repo.MarkOverdue(ctx, businessID, now)
 		if err != nil {
 			return err
 		}
@@ -303,6 +298,7 @@ func (s *Service) MarkOverdue(ctx context.Context, now time.Time) ([]Invoice, er
 		for _, inv := range items {
 			err := s.WithTx(tx).emit(ctx, sqlTx, inv.BusinessID, inv.ID, InvoiceOverdue, map[string]any{"amount": inv.AmountDue.String()})
 			if err != nil {
+				s.logger.ErrorContext(ctx, "[INVOICES]-error while marking invoice overdue", "invoiceID", inv.ID.String(), "err", err)
 				return err
 			}
 		}
@@ -311,6 +307,7 @@ func (s *Service) MarkOverdue(ctx context.Context, now time.Time) ([]Invoice, er
 	})
 
 	if err != nil {
+		s.logger.ErrorContext(ctx, "[INVOICES]-error while marking overdue order", "err", err)
 		return nil, err
 	}
 

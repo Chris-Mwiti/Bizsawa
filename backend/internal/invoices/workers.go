@@ -87,10 +87,9 @@ func (w *invoiceWorker) Work(ctx context.Context, job *river.Job[InvoiceEventArg
 			)
 
 			globalErr = err
-			break
 		}
 		//submit document as an attachment to the channel
-		break
+	break
 	case InvoiceCancelled:
 		//for this case the admin should be notified (by this is the businessOwner)
 		//get the userID from the args which will be used by the businessService to get the phone
@@ -107,7 +106,7 @@ func (w *invoiceWorker) Work(ctx context.Context, job *river.Job[InvoiceEventArg
 			globalErr = apperrors.ErrInternal.WithMessage("internal server err")
 		}
 
-		break
+	break
 	case InvoiceOverdue:
 		//send the invoice again with a reminder of the invoice being overdue
 		_, err := w.service.PDF(ctx, job.Args.TenantID, job.Args.InvoiceID)
@@ -122,7 +121,7 @@ func (w *invoiceWorker) Work(ctx context.Context, job *river.Job[InvoiceEventArg
 			globalErr = err
 		}
 		//submit document as an attachment to the channel
-		break
+	break
 
 	case InvoiceSent:
 		//by default the customer should receive the invoice document through whatsapp, or preffered communication channel
@@ -139,7 +138,7 @@ func (w *invoiceWorker) Work(ctx context.Context, job *river.Job[InvoiceEventArg
 			globalErr = err
 		}
 		//submit document as an attachment to the channel
-		break
+	break
 	}
 
 	return globalErr

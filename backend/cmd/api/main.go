@@ -25,7 +25,6 @@ import (
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/config"
 	sharedcrypto "github.com/Codecx-Org/FinAI/backend/internal/shared/crypto"
 	shareddb "github.com/Codecx-Org/FinAI/backend/internal/shared/db"
-	"github.com/Codecx-Org/FinAI/backend/internal/shared/outbox"
 	"github.com/Codecx-Org/FinAI/backend/internal/taxes"
 	"github.com/Codecx-Org/FinAI/backend/internal/tenancy"
 	"github.com/Codecx-Org/FinAI/backend/internal/users"

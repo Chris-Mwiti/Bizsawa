@@ -63,10 +63,10 @@ func (r *Repository) Find(ctx context.Context, businessID, invoiceID uuid.UUID) 
 	return &invoice, nil
 }
 
-func (r *Repository) FindByOrderId(ctx context.Context, businessID, invoiceID, orderID uuid.UUID, page pagination.Page) ([]Invoice, error) {
+func (r *Repository) FindByOrderId(ctx context.Context, businessID, orderID uuid.UUID, page pagination.Page) ([]Invoice, error) {
 	var invoices []Invoice
 
-	err := r.db.WithContext(ctx).Scopes(shareddb.BusinessScope(businessID)).Preload("Lines").Where("id = ? AND order_id = ?", invoiceID, orderID).Limit(page.Limit).Offset(page.Offset).Find(&invoices).Error
+	err := r.db.WithContext(ctx).Scopes(shareddb.BusinessScope(businessID)).Preload("Lines").Where("order_id = ?",orderID).Limit(page.Limit).Offset(page.Offset).Find(&invoices).Error
 
 	if err != nil {
 		return nil, err
@@ -79,9 +79,9 @@ func (r *Repository) Update(ctx context.Context, invoice *Invoice) error {
 	return r.db.WithContext(ctx).Save(invoice).Error
 }
 
-func (r *Repository) MarkOverdue(ctx context.Context, now time.Time) ([]Invoice, error) {
+func (r *Repository) MarkOverdue(ctx context.Context, businessID uuid.UUID,now time.Time) ([]Invoice, error) {
 	var invoices []Invoice
-	err := r.db.WithContext(ctx).Where("due_at IS NOT NULL AND due_at < ? AND status IN ?", now, []Status{StatusSent, StatusViewed, StatusPartial}).Find(&invoices).Error
+	err := r.db.WithContext(ctx).Scopes(shareddb.BusinessScope(businessID)).Where("due_at IS NOT NULL AND due_at < ? AND status IN ?", now, []Status{StatusSent, StatusViewed, StatusPartial}).Find(&invoices).Error
 	if err != nil {
 		return nil, err
 	}
