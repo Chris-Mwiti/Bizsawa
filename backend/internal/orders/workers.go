@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"maps"
 
-	"github.com/Codecx-Org/FinAI/backend/internal/payments"
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/models"
 	"github.com/google/uuid"
 	"github.com/riverqueue/river"
