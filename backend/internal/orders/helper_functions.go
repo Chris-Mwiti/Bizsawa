@@ -5,6 +5,7 @@ import (
 
 	"github.com/Codecx-Org/FinAI/backend/internal/invoices"
 	"github.com/Codecx-Org/FinAI/backend/internal/sales"
+	"github.com/Codecx-Org/FinAI/backend/internal/shared/models"
 )
 
 // buildInvoicePayload maps an Order struct to a CreateInvoiceRequest payload
@@ -45,26 +46,27 @@ func buildInvoicePayload(order *Order) invoices.CreateInvoiceRequest {
 }
 
 // buildPaymentPayload maps the Order and Invoice into a payment InitiateRequest
-func buildPaymentPayload(order *Order,customerPhone string) OrderPayInitReq{
-	var commandType CommandType
+func buildPaymentPayload(order *Order,customerPhone string) models.InitiateRequest{
+	var commandType models.CommandType
 	var provider string
 
 	// Map the business domain payment method to the technical payment provider/command
 	switch order.PaymentMethod {
 	case "cash":
-		commandType = CommandCash
+		commandType = models.CommandCash
 		provider = "cash"
 	case "mpesa":
-		commandType = CommandSTKPush
+		commandType = models.CommandSTKPush
 		provider = "mpesa"
 	default:
 		// Fallback for unknown/generic methods
-		commandType = CommandType(order.PaymentMethod)
+		commandType = models.CommandCash
 		provider = order.PaymentMethod
 	}
 
-		return OrderPayInitReq{
+		return models.InitiateRequest{
 		Provider:         provider,
+		OrderID: order.ID.String(),
 		Type:             commandType,
 		AccountReference: fmt.Sprintf("OrderID:%s|IdempotencyKey:%s", order.ID.String(), order.IdempotencyKey),
 		Amount:           order.Total,
