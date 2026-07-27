@@ -3,6 +3,7 @@ package orders
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -11,7 +12,6 @@ import (
 	"github.com/Codecx-Org/FinAI/backend/internal/customers"
 	"github.com/Codecx-Org/FinAI/backend/internal/inventory"
 	"github.com/Codecx-Org/FinAI/backend/internal/invoices"
-	"github.com/Codecx-Org/FinAI/backend/internal/payments"
 	"github.com/Codecx-Org/FinAI/backend/internal/sales"
 	shareddb "github.com/Codecx-Org/FinAI/backend/internal/shared/db"
 	apperrors "github.com/Codecx-Org/FinAI/backend/internal/shared/errors"
@@ -30,7 +30,28 @@ const (
 	OrderCancelled OrderEventType = "order.cancelled"
 	OrderRefund    OrderEventType = "order.refund"
 	OrderFulfilled OrderEventType = "order.fulfilled" 
+	OrderPaymentInit OrderEventType = "order.payment.init"
 )
+
+type CommandType string
+const (
+	CommandSTKPush CommandType = "stk_push"
+	CommandB2C     CommandType = "b2c"
+	CommandC2B     CommandType = "c2b"
+	CommandCash    CommandType = "cash"
+)
+
+
+type OrderPayInitReq struct {
+	Type             CommandType     `json:"type"`
+	Amount           decimal.Decimal `json:"amount"`
+	OrderID 				 string						`json:"orderID"`
+	Currency         string          `json:"currency"`
+	Phone            string          `json:"phone"`
+	AccountReference string          `json:"accountReference"`
+	Provider				 string           `json:"provider"`
+	Payload          map[string]any  `json:"payload"`
+}
 
 
 type Service struct {
@@ -38,16 +59,15 @@ type Service struct {
 	inventory *inventory.Service
 	sales     *sales.Service
 	invoices *invoices.Service
-	payment		*payments.Service
 	customers *customers.Service
 	logger 		*slog.Logger
 	outbox		*river.Client[*sql.Tx]    
 }
 
 
-func NewService(repo *Repository, inventory *inventory.Service, sales *sales.Service, outboxRepo *river.Client[*sql.Tx],logger *slog.Logger, invoices *invoices.Service, payment *payments.Service, customers *customers.Service) *Service {
+func NewService(repo *Repository, inventory *inventory.Service, sales *sales.Service, outboxRepo *river.Client[*sql.Tx],logger *slog.Logger, invoices *invoices.Service, customers *customers.Service) *Service {
 	//@todo: here you will right instances of the order machine
-	return &Service{repo: repo, inventory: inventory, sales: sales, outbox: outboxRepo, invoices: invoices, payment: payment, customers: customers, logger: logger}
+	return &Service{repo: repo, inventory: inventory, sales: sales, outbox: outboxRepo, invoices: invoices,  customers: customers, logger: logger}
 }
 
 type OrderLineRequest struct {
@@ -243,21 +263,34 @@ func (s *Service) Confirm(ctx context.Context, businessID, orderID, key uuid.UUI
 		}
 
 		
-
-	  cmd,err := s.payment.WithTx(tx).Initiate(ctx, businessID, buildPaymentPayload(order,invoice, customerPhone)); 		
-		if err != nil {
-			s.logger.ErrorContext(ctx, "[ORDER/PAYMENTS]-could not initiate payment", "businessID", businessID.String(), "orderID", orderID.String(), "err", err.Error())
-			return apperrors.ErrInternal.WithMessage("could not initiate payments")
-		}
-		
 		sqlTx, ok := tx.Statement.ConnPool.(*sql.Tx)
 		if !ok {
 			s.logger.ErrorContext(ctx, "[ORDERS]-error while initializing sql tx conn pool", "businessID", businessID.String(), "orderID", orderID.String(), "err", err.Error())
 			return fmt.Errorf("sqlTx not acceptable: received of type: %v", sqlTx)
 		}
 
+		rawPayReq := buildPaymentPayload(order, customerPhone) 
+		payReqByte, err := json.Marshal(rawPayReq)
+		if err != nil {
+			s.logger.ErrorContext(ctx, "[ORDERS/PAYMENTS]-error while marshalling req")
+			return err
+		}
+
+		var result map[string]any
+		if err := json.Unmarshal(payReqByte, &result); err != nil {
+			s.logger.ErrorContext(ctx, "[ORDERS/PAYMENTS]-error while unmarshaling req")
+			return err
+		}
+
+
 		//emit an event that says the order has been confirmed
-		if err := s.emit(ctx, sqlTx,businessID, orderID, OrderConfirmed, map[string]any{"amount": order.Total, "paymentCmd": cmd.ID.String(), "invoiceID": invoice.ID.String()}); err != nil {
+		if err := s.emit(ctx, sqlTx,businessID, orderID, OrderPaymentInit, result); err != nil {
+			s.logger.ErrorContext(ctx, "[ORDER/OUTBOX]-could not emit order created event", "businessID", businessID.String(), "orderID", orderID.String(), "err", err.Error())
+			return apperrors.ErrInternal.WithMessage("error while emitting event")
+		} 	
+		
+		//emit an event that says the order has been confirmed
+		if err := s.emit(ctx, sqlTx,businessID, orderID, OrderConfirmed, map[string]any{"amount": order.Total, "invoiceID": invoice.ID.String()}); err != nil {
 			s.logger.ErrorContext(ctx, "[ORDER/OUTBOX]-could not emit order created event", "businessID", businessID.String(), "orderID", orderID.String(), "err", err.Error())
 			return apperrors.ErrInternal.WithMessage("error while emitting event")
 		} 	

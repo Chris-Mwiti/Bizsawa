@@ -1,0 +1,78 @@
+package payments
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"log/slog"
+	"maps"
+
+	"github.com/google/uuid"
+	"github.com/riverqueue/river"
+)
+
+// InvoiceEventArgs implements river.JobArgs for outbox job serialization
+type PaymentEventArgs struct {
+	TenantID      uuid.UUID        `json:"tenant_id"`
+	AggregateID   string           `json:"aggregate_id"`
+	AggregateType string           `json:"aggregate_type"`
+	EventType     PaymentEventType `json:"event_type"`
+	Stream        string           `json:"stream"`
+	PaymentID     uuid.UUID        `json:"orderID"`
+	Payload       json.RawMessage  `json:"payload"`
+}
+
+func (PaymentEventArgs) Kind() string { return "payment.event" }
+
+// emit function for the services
+func (s *Service) emit(ctx context.Context, tx *sql.Tx, businessID uuid.UUID, paymentID uuid.UUID, eventType PaymentEventType, extra map[string]any) error {
+	if s.outbox == nil {
+		return fmt.Errorf("service outbox missing")
+	}
+	payload := map[string]any{"businessId": businessID}
+
+	maps.Copy(payload, extra)
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "[PAYMENTS]-failed to marshal payload telemetry", "err", err)
+		return err
+	}
+
+	_, err = s.outbox.InsertTx(ctx, tx, PaymentEventArgs{
+		TenantID:      businessID,
+		AggregateID:   paymentID.String(),
+		AggregateType: "payment",
+		PaymentID:     paymentID,
+		EventType:     eventType,
+		Stream:        "payments",
+		Payload:       raw,
+	}, nil)
+
+	if err != nil {
+		s.logger.ErrorContext(ctx, "[PAYMENTS]-error while submitting an outbox insert request via River", "err", err)
+		return err
+	}
+	return nil
+}
+
+// struct to represent the workers
+type orderWorker struct {
+	river.WorkerDefaults[PaymentEventArgs]
+	service *Service
+	logger  *slog.Logger
+}
+
+// execution and dispation of workers based on the event type.
+// for now the workers will not be majorly implemented since most of them rely on communication
+func (w *orderWorker) Work(ctx context.Context, job *river.Job[PaymentEventArgs]) error {
+
+	w.logger.InfoContext(ctx, "[PAYMENTS]-worker dispatched", "invoiceID", job.Args.PaymentID.String(), "businessID", job.Args.TenantID.String())
+
+	var globalErr error
+
+	switch job.Args.EventType {
+	}
+
+	return globalErr
+}

@@ -8,6 +8,8 @@ import (
 	"log/slog"
 	"maps"
 
+	"github.com/Codecx-Org/FinAI/backend/internal/payments"
+	"github.com/Codecx-Org/FinAI/backend/internal/shared/models"
 	"github.com/google/uuid"
 	"github.com/riverqueue/river"
 )
@@ -56,10 +58,15 @@ func (s *Service) emit(ctx context.Context, tx *sql.Tx, businessID uuid.UUID, or
 	return nil
 }
 
+type OrderPaymentInterface interface {
+	InitiateOrder(ctx context.Context, businessID uuid.UUID, req models.InitiateRequest) (error) 
+}
+
 // struct to represent the workers
 type orderWorker struct {
 	river.WorkerDefaults[OrderEventArgs]
 	service *Service
+	paymentService OrderPaymentInterface
 	logger  *slog.Logger
 }
 
@@ -68,10 +75,25 @@ type orderWorker struct {
 func (w *orderWorker) Work(ctx context.Context, job *river.Job[OrderEventArgs]) error {
 
 	w.logger.InfoContext(ctx, "[ORDERS]-worker dispatched", "invoiceID", job.Args.OrderID.String(), "businessID", job.Args.TenantID.String())
-
 	var globalErr error
 
 	switch job.Args.EventType {
+	case OrderPaymentInit:
+		var payload models.InitiateRequest
+		rawBytes, err := json.Marshal(job.Args.Payload)
+		if err != nil {
+			globalErr = err
+			return err
+		}
+		if err := json.Unmarshal(rawBytes, &payload); err != nil {
+			globalErr = err
+			return err
+		}
+		err = w.paymentService.InitiateOrder(ctx, job.Args.TenantID, payload)
+		if err != nil {
+			globalErr = err
+			return err
+		}
 	}
 
 	return globalErr

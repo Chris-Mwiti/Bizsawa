@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/Codecx-Org/FinAI/backend/internal/invoices"
-	"github.com/Codecx-Org/FinAI/backend/internal/payments"
 	"github.com/Codecx-Org/FinAI/backend/internal/sales"
 )
 
@@ -46,34 +45,30 @@ func buildInvoicePayload(order *Order) invoices.CreateInvoiceRequest {
 }
 
 // buildPaymentPayload maps the Order and Invoice into a payment InitiateRequest
-func buildPaymentPayload(order *Order, invoice *invoices.Invoice, customerPhone string) payments.InitiateRequest {
-	var commandType payments.CommandType
+func buildPaymentPayload(order *Order,customerPhone string) OrderPayInitReq{
+	var commandType CommandType
 	var provider string
 
 	// Map the business domain payment method to the technical payment provider/command
 	switch order.PaymentMethod {
 	case "cash":
-		commandType = payments.CommandCash
+		commandType = CommandCash
 		provider = "cash"
 	case "mpesa":
-		commandType = payments.CommandSTKPush
+		commandType = CommandSTKPush
 		provider = "mpesa"
 	default:
 		// Fallback for unknown/generic methods
-		commandType = payments.CommandType(order.PaymentMethod)
+		commandType = CommandType(order.PaymentMethod)
 		provider = order.PaymentMethod
 	}
 
-	// Create a local variable so we can safely take its memory address
-	invoiceID := invoice.ID
-
-	return payments.InitiateRequest{
+		return OrderPayInitReq{
 		Provider:         provider,
 		Type:             commandType,
 		AccountReference: fmt.Sprintf("OrderID:%s|IdempotencyKey:%s", order.ID.String(), order.IdempotencyKey),
-		InvoiceID:        &invoiceID,
-		Amount:           invoice.Total,
-		Currency:         invoice.Currency,
+		Amount:           order.Total,
+		Currency:         "KES",
 		Phone:            customerPhone,
 	}
 }

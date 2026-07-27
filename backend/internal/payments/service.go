@@ -3,17 +3,22 @@ package payments
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log/slog"
+	"maps"
 
+	"github.com/Codecx-Org/FinAI/backend/internal/invoices"
+	"github.com/Codecx-Org/FinAI/backend/internal/orders"
 	shareddb "github.com/Codecx-Org/FinAI/backend/internal/shared/db"
 	apperrors "github.com/Codecx-Org/FinAI/backend/internal/shared/errors"
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/middleware"
-	"github.com/Codecx-Org/FinAI/backend/internal/shared/outbox"
+	"github.com/Codecx-Org/FinAI/backend/internal/shared/models"
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/pagination"
 	"github.com/google/uuid"
-	"github.com/shopspring/decimal"
+	"github.com/riverqueue/river"
 	"gorm.io/gorm"
 )
 
@@ -29,24 +34,28 @@ const (
 	PaymentRetry      PaymentEventType = "payment.retry"
 )
 
+type InovicePayment interface {
+	RecordPayment(ctx context.Context, businessID, invoiceID uuid.UUID, req invoices.RecordPaymentRequest) (*invoices.Invoice, error) 
+
+	Send(ctx context.Context, businessID, invoiceID uuid.UUID, channel string) (*invoices.Invoice, error) 
+}
+
+type OrderPayment interface {
+	FindOrderByUpdate(ctx context.Context, businessID, orderID uuid.UUID) (*orders.Order, error) 
+	FulfillOrder(ctx context.Context, businessID, orderID, staffID uuid.UUID) (*orders.Order, error) 
+	Cancel(ctx context.Context, businessID, orderID uuid.UUID) error 
+}
+
 type Service struct {
 	repo   *Repository
-	outbox outbox.Repository
+	outbox *river.Client[*sql.Tx] 
+	logger *slog.Logger
 }
 
-func NewService(repo *Repository, outboxRepo outbox.Repository) *Service {
-	return &Service{repo: repo, outbox: outboxRepo}
+func NewService(repo *Repository, outboxRepo *river.Client[*sql.Tx], logger *slog.Logger) *Service {
+	return &Service{repo: repo, outbox: outboxRepo, logger: logger}
 }
 
-type InitiateRequest struct {
-	Type             CommandType     `json:"type"`
-	Amount           decimal.Decimal `json:"amount"`
-	Currency         string          `json:"currency"`
-	Phone            string          `json:"phone"`
-	AccountReference string          `json:"accountReference"`
-	Provider				 string           `json:"provider"`
-	Payload          map[string]any  `json:"payload"`
-}
 type ProviderResult struct {
 	RequestID string
 	Receipt   string
@@ -64,7 +73,7 @@ func (s *Service) WithTx(tx *gorm.DB) *Service {
 	}
 }
 
-func (s *Service) Initiate(ctx context.Context, businessID uuid.UUID, req InitiateRequest) (*PaymentCommand, error) {
+func (s *Service) Initiate(ctx context.Context, businessID uuid.UUID, req models.InitiateRequest) (*PaymentCommand, error) {
 	key, ok := middleware.IdempotencyKeyFromCtx(ctx)
 	if !ok {
 		return nil, errIdempotencyRequired()
@@ -77,20 +86,20 @@ func (s *Service) Initiate(ctx context.Context, businessID uuid.UUID, req Initia
 	}
 	
 	switch req.Type {
-	case CommandB2C:
-		req.Type = CommandB2C
+	case models.CommandB2C:
+		req.Type = models.CommandB2C
 		req.Provider = "mpesa"
-	case CommandC2B:
-		req.Type = CommandC2B
+	case models.CommandC2B:
+		req.Type = models.CommandC2B
 		req.Provider = "mpesa"
-	case CommandSTKPush:
-		req.Type = CommandSTKPush
+	case models.CommandSTKPush:
+		req.Type = models.CommandSTKPush
 		req.Provider = "mpesa"
-	case CommandCash:
-		req.Type = CommandCash
+	case models.CommandCash:
+		req.Type = models.CommandCash
 		req.Provider = "cash"
 	default:
-		req.Type = CommandCash
+		req.Type = models.CommandCash
 		req.Provider = "cash"
 	}
 
@@ -121,12 +130,20 @@ func (s *Service) Initiate(ctx context.Context, businessID uuid.UUID, req Initia
 	if len(payload) == 0 {
 		payload = []byte(`{}`)
 	}
+
+	//parse the orderID from the request payload
+	orderID, err := uuid.Parse(req.OrderID)
+	if err != nil {
+		return nil, err
+	}
+
 	cmd := &PaymentCommand{
 		BaseModel: shareddb.BaseModel{
 			TenantID: businessID,
 		}, 
 		BusinessID: businessID, 
-		Type: req.Type, 
+		OrderID: orderID,
+		Type: CommandType(req.Type), 
 		Status: StatusPending, 
 		IdempotencyKey: key, 
 		Amount: req.Amount, 
@@ -136,16 +153,132 @@ func (s *Service) Initiate(ctx context.Context, businessID uuid.UUID, req Initia
 		Provider: req.Provider, 
 		Payload: payload,
 	}
-	if err := s.repo.Create(ctx, cmd); err != nil {
-		return nil, err
-	}
 
-	err := s.emitCommand(ctx, cmd)
-	if err != nil {
-		return nil, err
-	}
+	err = s.repo.db.Transaction(func(tx *gorm.DB) error {
+		if err := s.WithTx(tx).repo.Create(ctx, cmd); err != nil {
+			s.logger.ErrorContext(ctx, "[PAYMENTS]-error while creating paymentCmd", "err", err.Error(), "cmdID", cmd.ID.String())
+			return err
+		}
+		sqlTx, ok := tx.Statement.ConnPool.(*sql.Tx)
+		if !ok {
+			return fmt.Errorf("error while asserting tx type")
+		}
+	
+		err = s.emitCommand(ctx, sqlTx, cmd, PaymentCreated, map[string]any{})
+		if err != nil {
+			s.logger.ErrorContext(ctx, "[PAYMENTS]-error while emmiting event creating paymentCmd", "err", err.Error(), "cmdID", cmd.ID.String())
+			return err
+		}
+
+		return nil
+	})
+
 	return cmd, nil
 }
+
+func (s *Service) InitiateOrder(ctx context.Context, businessID uuid.UUID, req models.InitiateRequest) (error) {
+	key, ok := middleware.IdempotencyKeyFromCtx(ctx)
+	if !ok {
+		return errIdempotencyRequired()
+	}
+	if _, err := s.repo.FindByIdempotency(ctx, businessID, key); err == nil {
+		return apperrors.ErrConflict.WithMessage("order request already initiated")
+	}
+	if !req.Amount.IsPositive() {
+		return apperrors.ErrUnprocessable.WithMessage("payment amount must be positive")
+	}
+	
+	switch req.Type {
+	case models.CommandB2C:
+		req.Type = models.CommandB2C
+		req.Provider = "mpesa"
+	case models.CommandC2B:
+		req.Type = models.CommandC2B
+		req.Provider = "mpesa"
+	case models.CommandSTKPush:
+		req.Type = models.CommandSTKPush
+		req.Provider = "mpesa"
+	case models.CommandCash:
+		req.Type = models.CommandCash
+		req.Provider = "cash"
+	default:
+		req.Type = models.CommandCash
+		req.Provider = "cash"
+	}
+
+	if len(req.Payload) > 0 {
+		if val, ok := req.Payload["invoiceID"].(string); ok {
+			req.AccountReference = val
+		}
+	} else {
+		//create an accountreference by hashing both the reqType+reqAmount+orderID
+		hash := sha256.New()
+
+		hash.Write([]byte(req.Type))
+		hash.Write([]byte(req.Amount.String()))
+		hash.Write([]byte(req.Provider))
+
+		result := hash.Sum(nil)
+
+		hexString := hex.EncodeToString(result)
+
+		req.AccountReference = hexString
+	}
+
+	currency := req.Currency
+	if currency == "" {
+		currency = "KES"
+	}
+	payload, _ := json.Marshal(req.Payload)
+	if len(payload) == 0 {
+		payload = []byte(`{}`)
+	}
+
+	//parse the orderID from the request payload
+	orderID, err := uuid.Parse(req.OrderID)
+	if err != nil {
+		return  err
+	}
+
+	cmd := &PaymentCommand{
+		BaseModel: shareddb.BaseModel{
+			TenantID: businessID,
+		}, 
+		BusinessID: businessID, 
+		OrderID: orderID,
+		Type: CommandType(req.Type), 
+		Status: StatusPending, 
+		IdempotencyKey: key, 
+		Amount: req.Amount, 
+		Currency: currency, 
+		Phone: req.Phone, 
+		AccountReference: req.AccountReference, 
+		Provider: req.Provider, 
+		Payload: payload,
+	}
+
+	err = s.repo.db.Transaction(func(tx *gorm.DB) error {
+		if err := s.WithTx(tx).repo.Create(ctx, cmd); err != nil {
+			s.logger.ErrorContext(ctx, "[PAYMENTS]-error while creating paymentCmd", "err", err.Error(), "cmdID", cmd.ID.String())
+			return err
+		}
+		sqlTx, ok := tx.Statement.ConnPool.(*sql.Tx)
+		if !ok {
+			return fmt.Errorf("error while asserting tx type")
+		}
+	
+		err = s.emitCommand(ctx, sqlTx, cmd, PaymentCreated, map[string]any{})
+		if err != nil {
+			s.logger.ErrorContext(ctx, "[PAYMENTS]-error while emmiting event creating paymentCmd", "err", err.Error(), "cmdID", cmd.ID.String())
+			return err
+		}
+
+		return nil
+	})
+
+	return nil
+}
+
 
 func (s *Service) Get(ctx context.Context, businessID, id uuid.UUID) (*PaymentCommand, error) {
 	return s.repo.Find(ctx, businessID, id)
@@ -162,6 +295,7 @@ func (s *Service) ClaimPayment(ctx context.Context, businessID, cmdId uuid.UUID)
 		paymentCmd, err := s.WithTx(tx).Get(ctx, businessID, cmdId);
 
 		if err != nil {
+			s.logger.ErrorContext(ctx, "[PAYMENTS]-error while fetching paymentCmd", "err", err.Error(), "cmdID", paymentCmd.ID.String())
 			return err
 		}
 		sm := s.buildPaymentMachine(businessID, paymentCmd)
@@ -173,11 +307,22 @@ func (s *Service) ClaimPayment(ctx context.Context, businessID, cmdId uuid.UUID)
 		err = s.WithTx(tx).repo.ClaimSinglePayment(ctx, paymentCmd)
 
 		if err != nil {
+			s.logger.ErrorContext(ctx, "[PAYMENTS]-error while claming paymentCmd", "err", err.Error(), "cmdID", paymentCmd.ID.String())
 			return err
 		}
-		
-		return s.emitProcessingCmd(ctx, paymentCmd)
 
+		sqlTx, ok := tx.Statement.ConnPool.(*sql.Tx)
+		if !ok {
+			return fmt.Errorf("error while asserting tx type")
+		}
+	
+		err = s.emitCommand(ctx, sqlTx, paymentCmd, PaymentProcessing, map[string]any{})
+		if err != nil {
+			s.logger.ErrorContext(ctx, "[PAYMENTS]-error while emmiting event marking success paymentCmd", "err", err.Error(), "cmdID", paymentCmd.ID.String())
+			return err
+		}
+	
+		return err
 	})
 
 	return err
@@ -193,172 +338,84 @@ func (s *Service) MarkSucceeded(ctx context.Context, cmd PaymentCommand, result 
 	if len(raw) == 0 {
 		raw, _ = json.Marshal(map[string]any{"requestId": result.RequestID, "receipt": result.Receipt})
 	}
-	if err := s.repo.MarkSucceeded(ctx, cmd.ID, result.RequestID, result.Receipt, raw); err != nil {
-		return err
-	}
 
-	err := s.emitResult(ctx, cmd, StatusSucceeded, result.RequestID, result.Receipt, "", "")
-	if err != nil {
+	err := s.repo.db.Transaction(func(tx *gorm.DB) error {
+
+		if err := s.WithTx(tx).repo.MarkSucceeded(ctx, cmd.ID, result.RequestID, result.Receipt, raw); err != nil {
+			s.logger.ErrorContext(ctx, "[PAYMENTS]-error while marking success paymentCmd", "err", err.Error(), "cmdID", cmd.ID.String())
+			return err
+		}
+
+		sqlTx, ok := tx.Statement.ConnPool.(*sql.Tx)
+		if !ok {
+			return fmt.Errorf("error while asserting tx type")
+		}
+		
+		err := s.emitCommand(ctx, sqlTx, &cmd, PaymentConfirmed, map[string]any{})
+		if err != nil {
+			s.logger.ErrorContext(ctx, "[PAYMENTS]-error while emmiting event marking success paymentCmd", "err", err.Error(), "cmdID", cmd.ID.String())
+			return err
+		}
+
 		return nil
-	}
 
-	return nil
+	})
+	
+
+	return err
 }
 
 func (s *Service) MarkFailed(ctx context.Context, cmd PaymentCommand, code, message string, raw []byte) error {
 	if len(raw) == 0 {
 		raw = []byte(fmt.Sprintf(`{"code":%q,"message":%q}`, code, message))
 	}
-	if err := s.repo.MarkFailed(ctx, cmd.ID, code, message, raw); err != nil {
-		return err
-	}
 
-	err := s.emitResult(ctx, cmd, StatusFailed, "", "", code, message)
-	if err != nil {
+	err := s.repo.db.Transaction(func(tx *gorm.DB) error {
+
+		if err := s.WithTx(tx).repo.MarkFailed(ctx, cmd.ID, code, message, raw); err != nil {
+			s.logger.ErrorContext(ctx, "[PAYMENTS]-error while marking failed paymentCmd", "err", err.Error(), "cmd", cmd.ID.String())
+			return err
+		}
+
+		sqlTx, ok := tx.Statement.ConnPool.(*sql.Tx)
+		if !ok {
+			return fmt.Errorf("error while asserting tx type")
+		}
+		
+		err := s.emitCommand(ctx, sqlTx, &cmd, PaymentFailed, map[string]any{})
+		if err != nil {
+			s.logger.ErrorContext(ctx, "[PAYMENTS]-error while emmiting event marking failed paymentCmd", "err", err.Error(), "cmdID", cmd.ID.String())
+
+			return err
+		}
+
 		return nil
-	}
 
-	return nil
+	})
+	
+	return err
 }
 
-func (s *Service) emitCommand(ctx context.Context, cmd *PaymentCommand) (error) {
+func (s *Service) emitCommand(ctx context.Context, tx *sql.Tx,cmd *PaymentCommand, eventType PaymentEventType, extras map[string]any) (error) {
 	if s.outbox == nil {
 		return apperrors.ErrInternal.WithMessage("service outbox not available")
 	}
-	raw, _ := json.Marshal(
-		map[string]any{
+	payload := map[string]any{
 		"paymentId": cmd.ID, 
 		"businessId": cmd.BusinessID, 
 		"type": cmd.Type, 
 		"amount": cmd.Amount.String(), 
 		"currency": cmd.Currency, 
 		"phone": cmd.Phone, 
-	})
-	err := s.outbox.Insert(ctx, &outbox.Event{
-		TenantID: cmd.BusinessID, 
-		AggregateID: cmd.ID.String(), 
-		AggregateType: "payment_command", 
-		EventType:  string(PaymentCreated), 
-		Stream: "payments.commands", 
-		Payload: raw,
-	})
+	}
 
+	maps.Copy(payload, extras)
+
+	err := s.emit(ctx, tx, cmd.BusinessID, cmd.ID, eventType, payload) 
 	if err != nil {
 		return apperrors.ErrInternal.WithMessage("error while emmiting command")
 	}
 	return nil
 }
 
-func (s *Service) emitProcessingCmd(ctx context.Context, cmd *PaymentCommand) (error) {
-	if s.outbox == nil {
-		return apperrors.ErrInternal.WithMessage("service outbox not available")
-	}
 
-	raw, _ := json.Marshal(map[string]any{
-		"paymentId": cmd.ID,
-		"businessId": cmd.BusinessID,
-		"amount": cmd.Amount.String(),
-		"currency": cmd.Currency,
-		"phone": cmd.Phone,
-	})
-
-	err := s.outbox.Insert(ctx, &outbox.Event{
-		TenantID: cmd.TenantID,
-		AggregateID: cmd.ID.String(),
-		AggregateType: "payment_command",
-		EventType: "payment.command.processing",
-		Stream: "payments.commands",
-		Payload: raw,
-	})
-
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (s *Service) emitRetryCommand(ctx context.Context, cmd *PaymentCommand) (error) {
-	if s.outbox == nil {
-		return apperrors.ErrInternal.WithMessage("service outbox not available")
-	}
-
-	raw, _ := json.Marshal(
-		map[string]any{
-			"paymentId": cmd.ID,
-			"businessId": cmd.BusinessID,
-			"amount": cmd.Amount.String(),
-			"currency": cmd.Currency,
-			"phone": cmd.Phone,
-	})
-
-	err := s.outbox.Insert(ctx, &outbox.Event{
-		TenantID: cmd.TenantID,
-		AggregateID: cmd.ID.String(),
-		AggregateType: "payment_command",
-		EventType: "payment.command.retry",
-		Stream: "payments.commands",
-		Payload: raw,
-	})
-
-	if err != nil {
-		return apperrors.ErrInternal.WithMessage("error while emmitting command")
-	}
-
-	return nil
-}
-
-func (s *Service) emitFail(ctx context.Context, cmd PaymentCommand) (error) {
-	if s.outbox == nil {
-		return apperrors.ErrInternal.WithMessage("service outbox not available")
-	}
-
-	raw, _ := json.Marshal(
-		map[string]any{
-			"paymentId": cmd.ID,
-			"businessId": cmd.BusinessID,
-			"amount": cmd.Amount.String(),
-			"currency": cmd.Currency,
-			"phone": cmd.Phone,
-	})
-
-	err := s.outbox.Insert(ctx, &outbox.Event{
-		TenantID: cmd.TenantID,
-		AggregateID: cmd.ID.String(),
-		AggregateType: "payment_command",
-		EventType: "payment.command.fail",
-		Stream: string(PaymentStream),
-		Payload: raw,
-	})
-
-	if err != nil {
-		return apperrors.ErrInternal.WithMessage("error while emmitting command")
-	}
-
-	return nil
-
-}
-
-func (s *Service) emitResult(ctx context.Context, cmd PaymentCommand, status Status, requestID, receipt, code, message string) (error){
-	if s.outbox == nil {
-		return nil
-	}
-	raw, _ := json.Marshal(
-		ResultEvent{
-			PaymentID: cmd.ID, 
-			BusinessID: cmd.BusinessID, 
-			Status: status, 
-			Provider: cmd.Provider, 
-			ProviderRequestID: requestID, 
-			ProviderReceipt: receipt, 
-			Amount: cmd.Amount, 
-			FailureCode: code, 
-			FailureMessage: message,
-		})
-		err := s.outbox.Insert(ctx, &outbox.Event{TenantID: cmd.BusinessID, AggregateID: cmd.ID.String(), AggregateType: "payment_command", EventType: "payment.result", Stream: "payments.results", Payload: raw})
-		if err != nil {
-			return apperrors.ErrInternal.WithMessage("error while emmiting result command")
-		}
-
-		return nil
-}
