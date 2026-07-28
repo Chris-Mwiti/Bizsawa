@@ -89,6 +89,10 @@ func NewRouter(deps Dependencies) http.Handler {
 			r.Route("/public", deps.Tenancy.RegisterPublicRoutes)
 		}
 
+		if deps.Payments != nil {
+			r.Route("/mpesa", deps.Payments.RegisterPublicRoutes)
+		}
+
 		r.Group(func(r chi.Router) {
 			if deps.Auth != nil {
 				r.Use(deps.Auth.Middleware)

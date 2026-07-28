@@ -60,14 +60,17 @@ type Service struct {
 	sales     *sales.Service
 	invoices *invoices.Service
 	customers *customers.Service
+	payments OrderPaymentInterface
 	logger 		*slog.Logger
 	outbox		*river.Client[*sql.Tx]    
 }
 
 
-func NewService(repo *Repository, inventory *inventory.Service, sales *sales.Service, outboxRepo *river.Client[*sql.Tx],logger *slog.Logger, invoices *invoices.Service, customers *customers.Service) *Service {
-	//@todo: here you will right instances of the order machine
-	return &Service{repo: repo, inventory: inventory, sales: sales, outbox: outboxRepo, invoices: invoices,  customers: customers, logger: logger}
+func NewService(repo *Repository, inventory *inventory.Service, sales *sales.Service, outboxRepo *river.Client[*sql.Tx], logger *slog.Logger, invoices *invoices.Service, customers *customers.Service, payments OrderPaymentInterface) *Service {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return &Service{repo: repo, inventory: inventory, sales: sales, outbox: outboxRepo, invoices: invoices, customers: customers, payments: payments, logger: logger}
 }
 
 type OrderLineRequest struct {
@@ -91,8 +94,14 @@ func (s *Service) WithTx(tx *gorm.DB) *Service {
 	}
 
 	return &Service{
-		repo: s.repo.WithTx(tx),
-		outbox: s.outbox,
+		repo:      s.repo.WithTx(tx),
+		inventory: s.inventory,
+		sales:     s.sales,
+		invoices:  s.invoices,
+		customers: s.customers,
+		payments:  s.payments,
+		outbox:    s.outbox,
+		logger:    s.logger,
 	}
 
 }

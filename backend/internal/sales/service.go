@@ -2,28 +2,36 @@ package sales
 
 import (
 	"context"
-	"encoding/json"
+	"database/sql"
+	"fmt"
 	shareddb "github.com/Codecx-Org/FinAI/backend/internal/shared/db"
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/middleware"
-	"github.com/Codecx-Org/FinAI/backend/internal/shared/outbox"
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/pagination"
+	"github.com/Codecx-Org/FinAI/backend/internal/taxes"
 	"github.com/google/uuid"
+	"github.com/riverqueue/river"
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
+	"log/slog"
 	"time"
 )
 
 type TaxRecorder interface {
 	RecordSaleTax(ctx context.Context, businessID, sourceID uuid.UUID, taxable decimal.Decimal) error
+	WithTx(tx *gorm.DB) *taxes.Service
 }
 type Service struct {
 	repo   *Repository
 	taxes  TaxRecorder
-	outbox outbox.Repository
+	outbox *river.Client[*sql.Tx]
+	logger *slog.Logger
 }
 
-func NewService(repo *Repository, taxes TaxRecorder, outboxRepo outbox.Repository) *Service {
-	return &Service{repo: repo, taxes: taxes, outbox: outboxRepo}
+func NewService(repo *Repository, taxes TaxRecorder, outboxRepo *river.Client[*sql.Tx], logger *slog.Logger) *Service {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return &Service{repo: repo, taxes: taxes, outbox: outboxRepo, logger: logger}
 }
 
 type SaleLineRequest struct {
@@ -49,11 +57,12 @@ func (s *Service) WithTx(tx *gorm.DB) *Service {
 	}
 
 	return &Service{
-		repo: s.repo.WithTx(tx),
+		repo:   s.repo.WithTx(tx),
+		taxes:  s.taxes,
+		outbox: s.outbox,
+		logger: s.logger,
 	}
 }
-
-
 
 func (s *Service) Create(ctx context.Context, businessID, staffID uuid.UUID, req CreateSaleRequest) (*Sale, error) {
 	key, _ := middleware.IdempotencyKeyFromCtx(ctx)
@@ -88,46 +97,55 @@ func (s *Service) create(ctx context.Context, businessID, staffID uuid.UUID, ord
 		lines = append(lines, SaleLine{
 			BaseModel: shareddb.BaseModel{
 				TenantID: businessID,
-			}, 
-			BusinessID: businessID, 
-			ProductID: in.ProductID, 
-			Quantity: in.Quantity, 
-			UnitPrice: in.UnitPrice, 
-			LineTotal: total,
+			},
+			BusinessID: businessID,
+			ProductID:  in.ProductID,
+			Quantity:   in.Quantity,
+			UnitPrice:  in.UnitPrice,
+			LineTotal:  total,
 		})
 	}
 	tax := subtotal.Mul(decimal.NewFromFloat(0.16)).Round(2)
 	sale := &Sale{
 		BaseModel: shareddb.BaseModel{
 			TenantID: businessID,
-		}, 
-		BusinessID: businessID, 
-		OrderID: orderID, 
-		CustomerID: customerID, 
-		ReceiptNumber: receipt, 
-		StaffID: staffID, 
-		PaymentMethod: paymentMethod, 
-		Subtotal: subtotal, 
-		TaxAmount: tax, 
-		Total: subtotal.Add(tax), 
-		Status: "completed", 
-		IdempotencyKey: key, 
-		SoldAt: time.Now().UTC(),
+		},
+		BusinessID:     businessID,
+		OrderID:        orderID,
+		CustomerID:     customerID,
+		ReceiptNumber:  receipt,
+		StaffID:        staffID,
+		PaymentMethod:  paymentMethod,
+		Subtotal:       subtotal,
+		TaxAmount:      tax,
+		Total:          subtotal.Add(tax),
+		Status:         "completed",
+		IdempotencyKey: key,
+		SoldAt:         time.Now().UTC(),
 	}
 
-	if err := s.repo.Create(ctx, sale, lines); err != nil {
+	if err := s.repo.db.Transaction(func(tx *gorm.DB) error {
+		txSvc := s.WithTx(tx)
+		if err := txSvc.repo.Create(ctx, sale, lines); err != nil {
+			s.logger.ErrorContext(ctx, "[SALES]-could not create sale", "businessID", businessID.String(), "err", err.Error())
+			return err
+		}
+		if s.taxes != nil {
+			if err := s.taxes.WithTx(tx).RecordSaleTax(ctx, businessID, sale.ID, subtotal); err != nil {
+				return err
+			}
+		}
+		sqlTx, ok := tx.Statement.ConnPool.(*sql.Tx)
+		if !ok {
+			return fmt.Errorf("sqlTx not available for sales event")
+		}
+		return txSvc.emit(ctx, sqlTx, businessID, sale.ID, SaleCreated, map[string]any{"total": sale.Total.String()})
+	}); err != nil {
 		return nil, err
 	}
-	if s.taxes != nil {
-		_ = s.taxes.RecordSaleTax(ctx, businessID, sale.ID, subtotal)
-	}
-	if s.outbox != nil {
-		payload, _ := json.Marshal(map[string]any{"saleId": sale.ID, "businessId": businessID})
-		_ = s.outbox.Insert(ctx, &outbox.Event{TenantID: businessID, AggregateID: sale.ID.String(), AggregateType: "sale", EventType: "sale.created", Stream: "sales", Payload: payload})
-	}
+	s.logger.InfoContext(ctx, "[SALES]-sale created", "saleID", sale.ID.String(), "businessID", businessID.String())
 	return s.repo.Find(ctx, businessID, sale.ID)
 }
-
 
 func (s *Service) List(ctx context.Context, businessID uuid.UUID, page pagination.Page) ([]Sale, error) {
 	return s.repo.List(ctx, businessID, page)
@@ -164,4 +182,3 @@ func toLineInputs(lines []SaleLineRequest) []OrderLineInput {
 	}
 	return out
 }
-
