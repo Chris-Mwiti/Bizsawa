@@ -1,11 +1,11 @@
 package config
 
 import (
+	"log"
 	"os"
 	"strconv"
 	"strings"
 	"time"
-	"log"
 
 	"github.com/joho/godotenv"
 )
@@ -20,6 +20,7 @@ type Config struct {
 	JWT             JWTConfig
 	WhatsApp        WhatsAppConfig
 	Crypto          CryptoConfig
+	Mpesa           MpesaConfig
 }
 
 type DatabaseConfig struct {
@@ -54,6 +55,21 @@ type CryptoConfig struct {
 	IndexSecret string
 }
 
+type MpesaConfig struct {
+	BaseURL                string
+	ConsumerKey            string
+	ConsumerSecret         string
+	Passkey                string
+	BusinessShortCode      string
+	InitiatorName          string
+	SecurityCredential     string
+	QueueTimeoutURL        string
+	ResultURL              string
+	STKCallbackURL         string
+	C2BConfirmationURL     string
+	C2BValidationURL       string
+	DefaultTransactionDesc string
+}
 
 func Load() Config {
 	return Config{
@@ -85,6 +101,21 @@ func Load() Config {
 		Crypto: CryptoConfig{
 			MasterKey:   env("CRYPTO_MASTER_KEY", "0123456789abcdef0123456789abcdef"),
 			IndexSecret: env("CRYPTO_INDEX_SECRET", "fedcba9876543210fedcba9876543210"),
+		},
+		Mpesa: MpesaConfig{
+			BaseURL:                env("MPESA_BASE_URL", "https://sandbox.safaricom.co.ke"),
+			ConsumerKey:            env("MPESA_CONSUMER_KEY", ""),
+			ConsumerSecret:         env("MPESA_CONSUMER_SECRET", ""),
+			Passkey:                env("MPESA_PASSKEY", ""),
+			BusinessShortCode:      env("MPESA_BUSINESS_SHORTCODE", ""),
+			InitiatorName:          env("MPESA_INITIATOR_NAME", ""),
+			SecurityCredential:     env("MPESA_SECURITY_CREDENTIAL", ""),
+			QueueTimeoutURL:        env("MPESA_QUEUE_TIMEOUT_URL", ""),
+			ResultURL:              env("MPESA_RESULT_URL", ""),
+			STKCallbackURL:         env("MPESA_STK_CALLBACK_URL", ""),
+			C2BConfirmationURL:     env("MPESA_C2B_CONFIRMATION_URL", ""),
+			C2BValidationURL:       env("MPESA_C2B_VALIDATION_URL", ""),
+			DefaultTransactionDesc: env("MPESA_DEFAULT_TRANSACTION_DESC", "BizSawa payment"),
 		},
 	}
 }

@@ -39,6 +39,30 @@ func (r *Repository) Create(ctx context.Context, cmd *PaymentCommand) error {
 	return r.db.WithContext(ctx).Create(cmd).Error
 }
 
+func (r *Repository) FindByProviderRequestID(ctx context.Context, requestID string) (*PaymentCommand, error) {
+	if requestID == "" {
+		return nil, gorm.ErrRecordNotFound
+	}
+	var cmd PaymentCommand
+	err := r.db.WithContext(ctx).Where("provider_request_id = ?", requestID).Order("created_at DESC").First(&cmd).Error
+	if err != nil {
+		return nil, err
+	}
+	return &cmd, nil
+}
+
+func (r *Repository) FindByAccountReference(ctx context.Context, accountReference string) (*PaymentCommand, error) {
+	if accountReference == "" {
+		return nil, gorm.ErrRecordNotFound
+	}
+	var cmd PaymentCommand
+	err := r.db.WithContext(ctx).Where("account_reference = ?", accountReference).Order("created_at DESC").First(&cmd).Error
+	if err != nil {
+		return nil, err
+	}
+	return &cmd, nil
+}
+
 func (r *Repository) Find(ctx context.Context, businessID, id uuid.UUID) (*PaymentCommand, error) {
 	var cmd PaymentCommand
 	err := r.db.WithContext(ctx).Scopes(shareddb.BusinessScope(businessID)).Where("id = ?", id).First(&cmd).Error
@@ -73,7 +97,7 @@ func (r *Repository) ClaimPending(ctx context.Context, limit int) ([]PaymentComm
 	return items, err
 }
 
-func (r *Repository) ClaimSinglePayment(ctx context.Context, command *PaymentCommand) (error) {
+func (r *Repository) ClaimSinglePayment(ctx context.Context, command *PaymentCommand) error {
 
 	command, err := r.Find(ctx, command.BusinessID, command.ID)
 
@@ -86,6 +110,17 @@ func (r *Repository) ClaimSinglePayment(ctx context.Context, command *PaymentCom
 	}
 
 	return nil
+}
+
+func (r *Repository) MarkProviderAccepted(ctx context.Context, businessID, id uuid.UUID, requestID, receipt string, raw []byte) error {
+	updates := map[string]any{"status": StatusProcessing, "result_payload": raw}
+	if requestID != "" {
+		updates["provider_request_id"] = requestID
+	}
+	if receipt != "" {
+		updates["provider_receipt"] = receipt
+	}
+	return r.db.WithContext(ctx).Scopes(shareddb.BusinessScope(businessID)).Model(&PaymentCommand{}).Where("id = ?", id).Updates(updates).Error
 }
 
 func (r *Repository) MarkSucceeded(ctx context.Context, id uuid.UUID, requestID, receipt string, raw []byte) error {

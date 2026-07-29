@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"strconv"
+	"strings"
 
 	"github.com/Codecx-Org/FinAI/backend/internal/invoices"
 	"github.com/Codecx-Org/FinAI/backend/internal/orders"
@@ -27,39 +29,48 @@ type PaymentEventType string
 const PaymentStream = "payments"
 
 const (
-	PaymentCreated   PaymentEventType = "payment.created"
-	PaymentConfirmed PaymentEventType = "payment.confirmed"
+	PaymentCreated    PaymentEventType = "payment.created"
+	PaymentConfirmed  PaymentEventType = "payment.confirmed"
 	PaymentProcessing PaymentEventType = "payment.processing"
-	PaymentFailed 		PaymentEventType = "payment.failed"
+	PaymentFailed     PaymentEventType = "payment.failed"
 	PaymentRetry      PaymentEventType = "payment.retry"
 )
 
 type InovicePayment interface {
-	RecordPayment(ctx context.Context, businessID, invoiceID uuid.UUID, req invoices.RecordPaymentRequest) (*invoices.Invoice, error) 
+	RecordPayment(ctx context.Context, businessID, invoiceID uuid.UUID, req invoices.RecordPaymentRequest) (*invoices.Invoice, error)
 
-	Send(ctx context.Context, businessID, invoiceID uuid.UUID, channel string) (*invoices.Invoice, error) 
+	Send(ctx context.Context, businessID, invoiceID uuid.UUID, channel string) (*invoices.Invoice, error)
 }
 
 type OrderPayment interface {
-	FindOrderByUpdate(ctx context.Context, businessID, orderID uuid.UUID) (*orders.Order, error) 
-	FulfillOrder(ctx context.Context, businessID, orderID, staffID uuid.UUID) (*orders.Order, error) 
-	Cancel(ctx context.Context, businessID, orderID uuid.UUID) error 
+	FindOrderByUpdate(ctx context.Context, businessID, orderID uuid.UUID) (*orders.Order, error)
+	FulfillOrder(ctx context.Context, businessID, orderID, staffID uuid.UUID) (*orders.Order, error)
+	Cancel(ctx context.Context, businessID, orderID uuid.UUID) error
+}
+
+type Provider interface {
+	ProcessPayment(ctx context.Context, cmd PaymentCommand) (ProviderResult, error)
 }
 
 type Service struct {
-	repo   *Repository
-	outbox *river.Client[*sql.Tx] 
-	logger *slog.Logger
+	repo     *Repository
+	outbox   *river.Client[*sql.Tx]
+	logger   *slog.Logger
+	provider Provider
 }
 
-func NewService(repo *Repository, outboxRepo *river.Client[*sql.Tx], logger *slog.Logger) *Service {
-	return &Service{repo: repo, outbox: outboxRepo, logger: logger}
+func NewService(repo *Repository, outboxRepo *river.Client[*sql.Tx], logger *slog.Logger, provider Provider) *Service {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return &Service{repo: repo, outbox: outboxRepo, logger: logger, provider: provider}
 }
 
 type ProviderResult struct {
 	RequestID string
 	Receipt   string
 	Raw       json.RawMessage
+	Status    Status
 }
 
 func (s *Service) WithTx(tx *gorm.DB) *Service {
@@ -68,8 +79,10 @@ func (s *Service) WithTx(tx *gorm.DB) *Service {
 	}
 
 	return &Service{
-		repo: s.repo.WithTx(tx),
-		outbox: s.outbox,
+		repo:     s.repo.WithTx(tx),
+		outbox:   s.outbox,
+		logger:   s.logger,
+		provider: s.provider,
 	}
 }
 
@@ -84,7 +97,7 @@ func (s *Service) Initiate(ctx context.Context, businessID uuid.UUID, req models
 	if !req.Amount.IsPositive() {
 		return nil, apperrors.ErrUnprocessable.WithMessage("payment amount must be positive")
 	}
-	
+
 	switch req.Type {
 	case models.CommandB2C:
 		req.Type = models.CommandB2C
@@ -140,18 +153,18 @@ func (s *Service) Initiate(ctx context.Context, businessID uuid.UUID, req models
 	cmd := &PaymentCommand{
 		BaseModel: shareddb.BaseModel{
 			TenantID: businessID,
-		}, 
-		BusinessID: businessID, 
-		OrderID: orderID,
-		Type: CommandType(req.Type), 
-		Status: StatusPending, 
-		IdempotencyKey: key, 
-		Amount: req.Amount, 
-		Currency: currency, 
-		Phone: req.Phone, 
-		AccountReference: req.AccountReference, 
-		Provider: req.Provider, 
-		Payload: payload,
+		},
+		BusinessID:       businessID,
+		OrderID:          orderID,
+		Type:             CommandType(req.Type),
+		Status:           StatusPending,
+		IdempotencyKey:   key,
+		Amount:           req.Amount,
+		Currency:         currency,
+		Phone:            req.Phone,
+		AccountReference: req.AccountReference,
+		Provider:         req.Provider,
+		Payload:          payload,
 	}
 
 	err = s.repo.db.Transaction(func(tx *gorm.DB) error {
@@ -163,7 +176,7 @@ func (s *Service) Initiate(ctx context.Context, businessID uuid.UUID, req models
 		if !ok {
 			return fmt.Errorf("error while asserting tx type")
 		}
-	
+
 		err = s.emitCommand(ctx, sqlTx, cmd, PaymentCreated, map[string]any{})
 		if err != nil {
 			s.logger.ErrorContext(ctx, "[PAYMENTS]-error while emmiting event creating paymentCmd", "err", err.Error(), "cmdID", cmd.ID.String())
@@ -176,7 +189,7 @@ func (s *Service) Initiate(ctx context.Context, businessID uuid.UUID, req models
 	return cmd, nil
 }
 
-func (s *Service) InitiateOrder(ctx context.Context, businessID uuid.UUID, req models.InitiateRequest) (error) {
+func (s *Service) InitiateOrder(ctx context.Context, businessID uuid.UUID, req models.InitiateRequest) error {
 	key, ok := middleware.IdempotencyKeyFromCtx(ctx)
 	if !ok {
 		return errIdempotencyRequired()
@@ -187,7 +200,7 @@ func (s *Service) InitiateOrder(ctx context.Context, businessID uuid.UUID, req m
 	if !req.Amount.IsPositive() {
 		return apperrors.ErrUnprocessable.WithMessage("payment amount must be positive")
 	}
-	
+
 	switch req.Type {
 	case models.CommandB2C:
 		req.Type = models.CommandB2C
@@ -237,24 +250,24 @@ func (s *Service) InitiateOrder(ctx context.Context, businessID uuid.UUID, req m
 	//parse the orderID from the request payload
 	orderID, err := uuid.Parse(req.OrderID)
 	if err != nil {
-		return  err
+		return err
 	}
 
 	cmd := &PaymentCommand{
 		BaseModel: shareddb.BaseModel{
 			TenantID: businessID,
-		}, 
-		BusinessID: businessID, 
-		OrderID: orderID,
-		Type: CommandType(req.Type), 
-		Status: StatusPending, 
-		IdempotencyKey: key, 
-		Amount: req.Amount, 
-		Currency: currency, 
-		Phone: req.Phone, 
-		AccountReference: req.AccountReference, 
-		Provider: req.Provider, 
-		Payload: payload,
+		},
+		BusinessID:       businessID,
+		OrderID:          orderID,
+		Type:             CommandType(req.Type),
+		Status:           StatusPending,
+		IdempotencyKey:   key,
+		Amount:           req.Amount,
+		Currency:         currency,
+		Phone:            req.Phone,
+		AccountReference: req.AccountReference,
+		Provider:         req.Provider,
+		Payload:          payload,
 	}
 
 	err = s.repo.db.Transaction(func(tx *gorm.DB) error {
@@ -266,7 +279,7 @@ func (s *Service) InitiateOrder(ctx context.Context, businessID uuid.UUID, req m
 		if !ok {
 			return fmt.Errorf("error while asserting tx type")
 		}
-	
+
 		err = s.emitCommand(ctx, sqlTx, cmd, PaymentCreated, map[string]any{})
 		if err != nil {
 			s.logger.ErrorContext(ctx, "[PAYMENTS]-error while emmiting event creating paymentCmd", "err", err.Error(), "cmdID", cmd.ID.String())
@@ -279,6 +292,42 @@ func (s *Service) InitiateOrder(ctx context.Context, businessID uuid.UUID, req m
 	return nil
 }
 
+func (s *Service) ExecuteProvider(ctx context.Context, businessID, cmdID uuid.UUID) error {
+	if s.provider == nil {
+		return apperrors.ErrInternal.WithMessage("payment provider not configured")
+	}
+	cmd, err := s.Get(ctx, businessID, cmdID)
+	if err != nil {
+		return err
+	}
+	if cmd.Status == StatusSucceeded || cmd.Status == StatusFailed {
+		s.logger.InfoContext(ctx, "[PAYMENTS]-payment already processed", "cmdID", cmd.ID.String(), "status", cmd.Status)
+		return nil
+	}
+	if cmd.Status == StatusPending {
+		if err := s.ClaimPayment(ctx, businessID, cmdID); err != nil {
+			return err
+		}
+		cmd, err = s.Get(ctx, businessID, cmdID)
+		if err != nil {
+			return err
+		}
+	}
+	result, err := s.provider.ProcessPayment(ctx, *cmd)
+	if err != nil {
+		raw, _ := json.Marshal(map[string]any{"error": err.Error()})
+		markErr := s.MarkFailed(ctx, *cmd, "provider_error", err.Error(), raw)
+		if markErr != nil {
+			s.logger.ErrorContext(ctx, "[PAYMENTS]-failed to mark provider error", "cmdID", cmd.ID.String(), "err", markErr.Error())
+		}
+		return err
+	}
+	s.logger.InfoContext(ctx, "[PAYMENTS]-provider request accepted", "cmdID", cmd.ID.String(), "providerRequestID", result.RequestID)
+	if result.Status == StatusSucceeded {
+		return s.MarkSucceeded(ctx, *cmd, result)
+	}
+	return s.MarkProviderAccepted(ctx, *cmd, result)
+}
 
 func (s *Service) Get(ctx context.Context, businessID, id uuid.UUID) (*PaymentCommand, error) {
 	return s.repo.Find(ctx, businessID, id)
@@ -288,11 +337,11 @@ func (s *Service) List(ctx context.Context, businessID uuid.UUID, page paginatio
 	return s.repo.List(ctx, businessID, page)
 }
 
-func (s *Service) ClaimPayment(ctx context.Context, businessID, cmdId uuid.UUID) (error) {
+func (s *Service) ClaimPayment(ctx context.Context, businessID, cmdId uuid.UUID) error {
 
 	err := s.repo.db.Transaction(func(tx *gorm.DB) error {
 
-		paymentCmd, err := s.WithTx(tx).Get(ctx, businessID, cmdId);
+		paymentCmd, err := s.WithTx(tx).Get(ctx, businessID, cmdId)
 
 		if err != nil {
 			s.logger.ErrorContext(ctx, "[PAYMENTS]-error while fetching paymentCmd", "err", err.Error(), "cmdID", paymentCmd.ID.String())
@@ -315,13 +364,13 @@ func (s *Service) ClaimPayment(ctx context.Context, businessID, cmdId uuid.UUID)
 		if !ok {
 			return fmt.Errorf("error while asserting tx type")
 		}
-	
+
 		err = s.emitCommand(ctx, sqlTx, paymentCmd, PaymentProcessing, map[string]any{})
 		if err != nil {
 			s.logger.ErrorContext(ctx, "[PAYMENTS]-error while emmiting event marking success paymentCmd", "err", err.Error(), "cmdID", paymentCmd.ID.String())
 			return err
 		}
-	
+
 		return err
 	})
 
@@ -331,6 +380,19 @@ func (s *Service) ClaimPayment(ctx context.Context, businessID, cmdId uuid.UUID)
 
 func (s *Service) ClaimPending(ctx context.Context, limit int) ([]PaymentCommand, error) {
 	return s.repo.ClaimPending(ctx, limit)
+}
+
+func (s *Service) MarkProviderAccepted(ctx context.Context, cmd PaymentCommand, result ProviderResult) error {
+	raw := result.Raw
+	if len(raw) == 0 {
+		raw, _ = json.Marshal(map[string]any{"requestId": result.RequestID, "receipt": result.Receipt})
+	}
+
+	if err := s.repo.MarkProviderAccepted(ctx, cmd.BusinessID, cmd.ID, result.RequestID, result.Receipt, raw); err != nil {
+		s.logger.ErrorContext(ctx, "[PAYMENTS]-error while marking provider accepted", "err", err.Error(), "cmdID", cmd.ID.String())
+		return err
+	}
+	return nil
 }
 
 func (s *Service) MarkSucceeded(ctx context.Context, cmd PaymentCommand, result ProviderResult) error {
@@ -350,7 +412,7 @@ func (s *Service) MarkSucceeded(ctx context.Context, cmd PaymentCommand, result 
 		if !ok {
 			return fmt.Errorf("error while asserting tx type")
 		}
-		
+
 		err := s.emitCommand(ctx, sqlTx, &cmd, PaymentConfirmed, map[string]any{})
 		if err != nil {
 			s.logger.ErrorContext(ctx, "[PAYMENTS]-error while emmiting event marking success paymentCmd", "err", err.Error(), "cmdID", cmd.ID.String())
@@ -360,7 +422,6 @@ func (s *Service) MarkSucceeded(ctx context.Context, cmd PaymentCommand, result 
 		return nil
 
 	})
-	
 
 	return err
 }
@@ -381,7 +442,7 @@ func (s *Service) MarkFailed(ctx context.Context, cmd PaymentCommand, code, mess
 		if !ok {
 			return fmt.Errorf("error while asserting tx type")
 		}
-		
+
 		err := s.emitCommand(ctx, sqlTx, &cmd, PaymentFailed, map[string]any{})
 		if err != nil {
 			s.logger.ErrorContext(ctx, "[PAYMENTS]-error while emmiting event marking failed paymentCmd", "err", err.Error(), "cmdID", cmd.ID.String())
@@ -392,30 +453,145 @@ func (s *Service) MarkFailed(ctx context.Context, cmd PaymentCommand, code, mess
 		return nil
 
 	})
-	
+
 	return err
 }
 
-func (s *Service) emitCommand(ctx context.Context, tx *sql.Tx,cmd *PaymentCommand, eventType PaymentEventType, extras map[string]any) (error) {
+func (s *Service) emitCommand(ctx context.Context, tx *sql.Tx, cmd *PaymentCommand, eventType PaymentEventType, extras map[string]any) error {
 	if s.outbox == nil {
 		return apperrors.ErrInternal.WithMessage("service outbox not available")
 	}
 	payload := map[string]any{
-		"paymentId": cmd.ID, 
-		"businessId": cmd.BusinessID, 
-		"type": cmd.Type, 
-		"amount": cmd.Amount.String(), 
-		"currency": cmd.Currency, 
-		"phone": cmd.Phone, 
+		"paymentId":  cmd.ID,
+		"businessId": cmd.BusinessID,
+		"type":       cmd.Type,
+		"amount":     cmd.Amount.String(),
+		"currency":   cmd.Currency,
+		"phone":      cmd.Phone,
 	}
 
 	maps.Copy(payload, extras)
 
-	err := s.emit(ctx, tx, cmd.BusinessID, cmd.ID, eventType, payload) 
+	err := s.emit(ctx, tx, cmd.BusinessID, cmd.ID, eventType, payload)
 	if err != nil {
 		return apperrors.ErrInternal.WithMessage("error while emmiting command")
 	}
 	return nil
 }
 
+type MpesaOperation interface {
+	RegisterC2BURLs(ctx context.Context, req C2BRegisterRequest) (ProviderResult, error)
+	TransactionStatus(ctx context.Context, req TransactionStatusRequest) (ProviderResult, error)
+}
 
+func (s *Service) RegisterMpesaC2BURLs(ctx context.Context, responseType string) (ProviderResult, error) {
+	mpesa, ok := s.provider.(MpesaOperation)
+	if !ok {
+		return ProviderResult{}, apperrors.ErrInternal.WithMessage("mpesa provider not configured")
+	}
+	result, err := mpesa.RegisterC2BURLs(ctx, C2BRegisterRequest{ResponseType: responseType})
+	if err != nil {
+		s.logger.ErrorContext(ctx, "[PAYMENTS/MPESA]-c2b url registration failed", "err", err.Error())
+		return ProviderResult{}, err
+	}
+	s.logger.InfoContext(ctx, "[PAYMENTS/MPESA]-c2b urls registered", "providerRequestID", result.RequestID)
+	return result, nil
+}
+
+func (s *Service) QueryMpesaTransactionStatus(ctx context.Context, req TransactionStatusRequest) (ProviderResult, error) {
+	mpesa, ok := s.provider.(MpesaOperation)
+	if !ok {
+		return ProviderResult{}, apperrors.ErrInternal.WithMessage("mpesa provider not configured")
+	}
+	result, err := mpesa.TransactionStatus(ctx, req)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "[PAYMENTS/MPESA]-transaction status query failed", "transactionID", req.TransactionID, "err", err.Error())
+		return ProviderResult{}, err
+	}
+	s.logger.InfoContext(ctx, "[PAYMENTS/MPESA]-transaction status query accepted", "transactionID", req.TransactionID, "providerRequestID", result.RequestID)
+	return result, nil
+}
+
+func (s *Service) HandleMpesaCallback(ctx context.Context, raw json.RawMessage) error {
+	var payload map[string]any
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return err
+	}
+	requestID := firstJSONString(payload, "Body.stkCallback.CheckoutRequestID", "Result.ConversationID", "Result.OriginatorConversationID", "CheckoutRequestID", "ConversationID", "OriginatorConversationID")
+	receipt := firstJSONString(payload, "Body.stkCallback.CallbackMetadata.Item[MpesaReceiptNumber]", "Result.ResultParameters.ResultParameter[TransactionReceipt]", "TransID", "MpesaReceiptNumber")
+	accountRef := firstJSONString(payload, "BillRefNumber", "Body.stkCallback.CallbackMetadata.Item[AccountReference]")
+	resultCode := firstJSONString(payload, "Body.stkCallback.ResultCode", "Result.ResultCode", "ResultCode")
+	resultDesc := firstJSONString(payload, "Body.stkCallback.ResultDesc", "Result.ResultDesc", "ResultDesc")
+
+	cmd, err := s.repo.FindByProviderRequestID(ctx, requestID)
+	if err != nil && accountRef != "" {
+		cmd, err = s.repo.FindByAccountReference(ctx, accountRef)
+	}
+	if err != nil {
+		s.logger.WarnContext(ctx, "[PAYMENTS/MPESA]-callback command not found", "providerRequestID", requestID, "accountReference", accountRef, "err", err.Error())
+		return nil
+	}
+
+	if resultCode == "" || resultCode == "0" {
+		return s.MarkSucceeded(ctx, *cmd, ProviderResult{RequestID: firstNonEmpty(requestID, cmd.ProviderRequestID), Receipt: firstNonEmpty(receipt, cmd.ProviderReceipt), Raw: raw, Status: StatusSucceeded})
+	}
+	return s.MarkFailed(ctx, *cmd, resultCode, firstNonEmpty(resultDesc, "mpesa payment failed"), raw)
+}
+
+func firstJSONString(payload map[string]any, paths ...string) string {
+	for _, path := range paths {
+		if value := lookupJSONValue(payload, path); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func lookupJSONValue(value any, path string) string {
+	if path == "" {
+		return ""
+	}
+	parts := strings.Split(path, ".")
+	current := value
+	for _, part := range parts {
+		if strings.Contains(part, "[") && strings.HasSuffix(part, "]") {
+			name := part[:strings.Index(part, "[")]
+			key := strings.TrimSuffix(part[strings.Index(part, "[")+1:], "]")
+			m, ok := current.(map[string]any)
+			if !ok {
+				return ""
+			}
+			items, ok := m[name].([]any)
+			if !ok {
+				return ""
+			}
+			current = ""
+			for _, item := range items {
+				im, ok := item.(map[string]any)
+				if !ok {
+					continue
+				}
+				if im["Name"] == key {
+					current = im["Value"]
+					break
+				}
+			}
+			continue
+		}
+		m, ok := current.(map[string]any)
+		if !ok {
+			return ""
+		}
+		current = m[part]
+	}
+	switch v := current.(type) {
+	case string:
+		return v
+	case float64:
+		return strconv.FormatInt(int64(v), 10)
+	case json.Number:
+		return v.String()
+	default:
+		return ""
+	}
+}

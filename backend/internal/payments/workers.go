@@ -19,7 +19,7 @@ type PaymentEventArgs struct {
 	AggregateType string           `json:"aggregate_type"`
 	EventType     PaymentEventType `json:"event_type"`
 	Stream        string           `json:"stream"`
-	PaymentID     uuid.UUID        `json:"orderID"`
+	PaymentID     uuid.UUID        `json:"paymentID"`
 	Payload       json.RawMessage  `json:"payload"`
 }
 
@@ -57,22 +57,27 @@ func (s *Service) emit(ctx context.Context, tx *sql.Tx, businessID uuid.UUID, pa
 }
 
 // struct to represent the workers
-type orderWorker struct {
+type paymentWorker struct {
 	river.WorkerDefaults[PaymentEventArgs]
 	service *Service
+	orderService OrderPayment
 	logger  *slog.Logger
 }
 
 // execution and dispation of workers based on the event type.
 // for now the workers will not be majorly implemented since most of them rely on communication
-func (w *orderWorker) Work(ctx context.Context, job *river.Job[PaymentEventArgs]) error {
+func (w *paymentWorker) Work(ctx context.Context, job *river.Job[PaymentEventArgs]) error {
 
-	w.logger.InfoContext(ctx, "[PAYMENTS]-worker dispatched", "invoiceID", job.Args.PaymentID.String(), "businessID", job.Args.TenantID.String())
-
-	var globalErr error
+	w.logger.InfoContext(ctx, "[PAYMENTS]-worker dispatched", "paymentID", job.Args.PaymentID.String(), "businessID", job.Args.TenantID.String(), "eventType", job.Args.EventType)
 
 	switch job.Args.EventType {
+	case PaymentCreated, PaymentRetry:
+		return w.service.ExecuteProvider(ctx, job.Args.TenantID, job.Args.PaymentID)
+	case PaymentProcessing, PaymentConfirmed, PaymentFailed:
+		w.logger.InfoContext(ctx, "[PAYMENTS]-worker observed state event", "paymentID", job.Args.PaymentID.String(), "eventType", job.Args.EventType)
+		return nil
+	default:
+		w.logger.InfoContext(ctx, "[PAYMENTS]-worker ignored unknown event", "paymentID", job.Args.PaymentID.String(), "eventType", job.Args.EventType)
+		return nil
 	}
-
-	return globalErr
 }

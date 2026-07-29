@@ -14,6 +14,13 @@ type Repository struct{ db *gorm.DB }
 
 func NewRepository(db *gorm.DB) *Repository { return &Repository{db: db} }
 
+func (r *Repository) WithTx(tx *gorm.DB) *Repository {
+	if tx == nil {
+		return r
+	}
+	return &Repository{db: tx}
+}
+
 func (r *Repository) CreateRule(ctx context.Context, rule *TaxRule) error {
 	return r.db.WithContext(ctx).Create(rule).Error
 }
