@@ -24,7 +24,7 @@ func New(db *gorm.DB, inventory *inventory.Service, sales *sales.Service, outbox
 		logger = slog.Default()
 	}
 	repo := NewRepository(db)
-	return &Module{repo: repo, svc: NewService(repo, inventory, sales, outboxRepo, logger, invoice, customers), logger: logger}
+	return &Module{repo: repo, svc: NewService(repo, inventory, sales, outboxRepo, logger, invoice, customers, payments), logger: logger}
 }
 func (m *Module) RegisterRoutes(r chi.Router) {
 	h := Handler{svc: m.svc}
