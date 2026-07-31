@@ -86,6 +86,8 @@ type C2BSimulateRequest struct {
 	BillRefNumber string
 }
 
+//dummy comment for the day
+
 type TransactionStatusRequest struct {
 	TransactionID string
 	Remarks       string
