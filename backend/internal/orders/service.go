@@ -212,16 +212,17 @@ func (s *Service) Confirm(ctx context.Context, businessID, orderID, key uuid.UUI
 	err := s.repo.db.Transaction(func(tx *gorm.DB) error {
 		//fetch the roder
 		var err error
-		order, err = s.repo.WithTx(tx).FindOrderByUpdate(ctx, businessID, orderID);
+		fetchedOrder, err := s.repo.WithTx(tx).FindOrderByUpdate(ctx, businessID, orderID);
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				s.logger.DebugContext(ctx, "[ORDERS]-order not found", "orderID", order.ID.String(), "businessID", order.BusinessID.String())
-				return err
+				return apperrors.ErrNotFound.WithMessage("order not found")
 			}
 			s.logger.ErrorContext(ctx, "[ORDERS]-could not fetch order", "err", err.Error(), "businessID", businessID.String())
 			return apperrors.ErrInternal.WithCause(err).WithMessage("err while processing order request")
 		}
 
+		order = fetchedOrder
 
 		if order.Status == StatusConfirmed || order.Status == StatusFulfilled {
 
@@ -250,7 +251,7 @@ func (s *Service) Confirm(ctx context.Context, businessID, orderID, key uuid.UUI
 			return err
 		}
 
-		invoice, err := s.invoices.WithTx(tx).CreateInvoice(ctx, businessID, buildInvoicePayload(order))
+		invoice, err := s.invoices.WithTx(tx).CreateInvoice(ctx, businessID, buildInvoicePayload(fetchedOrder))
 		if err != nil {
 			s.logger.ErrorContext(ctx, "[ORDER/INVOICES]-could not create invoice", "businessID", businessID.String, "orderID", orderID.String(), "err", err.Error())
 			return apperrors.ErrInternal.WithMessage("could not create invoice from order")

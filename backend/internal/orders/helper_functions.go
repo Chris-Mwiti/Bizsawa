@@ -2,6 +2,7 @@ package orders
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/Codecx-Org/FinAI/backend/internal/invoices"
 	"github.com/Codecx-Org/FinAI/backend/internal/sales"
@@ -30,9 +31,10 @@ func buildInvoicePayload(order *Order) invoices.CreateInvoiceRequest {
 		})
 	}
 
+
 	// Calculate due date (5 days from now). 
 	// Assuming order.ConfirmedAt was set right before calling this.
-	dueAt := order.ConfirmedAt.AddDate(0, 0, 5)
+	dueAt := time.Now().AddDate(0,0,5)
 	orderId := order.ID
 
 	return invoices.CreateInvoiceRequest{
