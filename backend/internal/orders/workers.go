@@ -85,6 +85,11 @@ func (w *orderWorker) Work(ctx context.Context, job *river.Job[OrderEventArgs]) 
 			w.logger.ErrorContext(ctx, "[ORDER_WORKER]-error while initiating payment request", "err", err.Error(), "businessID", job.Args.TenantID.String())
 			return err
 		}
+	default:
+		w.logger.WarnContext(ctx, "[ORDER_WORKER]-unhandled event type skipped execution", 
+			"eventType", string(job.Args.EventType),
+			"businessID", job.Args.TenantID.String(),
+		)
 	}
 
 	return nil
