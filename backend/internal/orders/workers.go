@@ -31,10 +31,8 @@ func (s *Service) emit(ctx context.Context, tx *sql.Tx, businessID uuid.UUID, or
 	if s.outbox == nil {
 		return fmt.Errorf("service outbox missing")
 	}
-	payload := map[string]any{"businessId": businessID}
 
-	maps.Copy(payload, extra)
-	raw, err := json.Marshal(payload)
+	raw, err := json.Marshal(extra)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "[ORDERS]-failed to marshal payload telemetry", "err", err)
 		return err
@@ -78,16 +76,11 @@ func (w *orderWorker) Work(ctx context.Context, job *river.Job[OrderEventArgs]) 
 	switch job.Args.EventType {
 	case OrderPaymentInit:
 		var payload models.InitiateRequest
-		rawBytes, err := json.Marshal(job.Args.Payload)
-		if err != nil {
-			w.logger.ErrorContext(ctx, "[ORDER_WORKER]-error while marshalling request", "err", err.Error(), "businessID", job.Args.TenantID.String())
-			return err
-		}
-		if err := json.Unmarshal(rawBytes, &payload); err != nil {
+		if err := json.Unmarshal(job.Args.Payload, &payload); err != nil {
 			w.logger.ErrorContext(ctx, "[ORDER_WORKER]-error while unmarshalling request", "err", err.Error(), "businessID", job.Args.TenantID.String())
 			return err
 		}
-		err = w.paymentService.InitiateOrder(ctx, job.Args.TenantID, payload)
+		err := w.paymentService.InitiateOrder(ctx, job.Args.TenantID, payload)
 		if err != nil {
 			w.logger.ErrorContext(ctx, "[ORDER_WORKER]-error while initiating payment request", "err", err.Error(), "businessID", job.Args.TenantID.String())
 			return err
