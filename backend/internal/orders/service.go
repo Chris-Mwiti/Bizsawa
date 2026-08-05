@@ -212,17 +212,17 @@ func (s *Service) Confirm(ctx context.Context, businessID, orderID, key uuid.UUI
 	err := s.repo.db.Transaction(func(tx *gorm.DB) error {
 		//fetch the roder
 		var err error
-		fetchedOrder, err := s.repo.WithTx(tx).FindOrderByUpdate(ctx, businessID, orderID);
+		order, err = s.repo.WithTx(tx).FindOrderByUpdate(ctx, businessID, orderID);
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				s.logger.DebugContext(ctx, "[ORDERS]-order not found", "orderID", order.ID.String(), "businessID", order.BusinessID.String())
 				return apperrors.ErrNotFound.WithMessage("order not found")
 			}
+
 			s.logger.ErrorContext(ctx, "[ORDERS]-could not fetch order", "err", err.Error(), "businessID", businessID.String())
 			return apperrors.ErrInternal.WithCause(err).WithMessage("err while processing order request")
 		}
 
-		order = fetchedOrder
 
 		if order.Status == StatusConfirmed || order.Status == StatusFulfilled {
 
@@ -251,9 +251,10 @@ func (s *Service) Confirm(ctx context.Context, businessID, orderID, key uuid.UUI
 			return err
 		}
 
-		invoice, err := s.invoices.WithTx(tx).CreateInvoice(ctx, businessID, buildInvoicePayload(fetchedOrder))
+		invoice, err := s.invoices.WithTx(tx).CreateInvoice(ctx, businessID, buildInvoicePayload(order))
 		if err != nil {
-			s.logger.ErrorContext(ctx, "[ORDER/INVOICES]-could not create invoice", "businessID", businessID.String, "orderID", orderID.String(), "err", err.Error())
+			s.logger.ErrorContext(ctx, "[ORDERS]-order", "order", order)
+			s.logger.ErrorContext(ctx, "[ORDER/INVOICES]-could not create invoice", "businessID", businessID.String(), "orderID", orderID.String(), "err", err.Error())
 			return apperrors.ErrInternal.WithMessage("could not create invoice from order")
 		}
 		s.logger.InfoContext(ctx, "[ORDER/INVOICES]-invoice created by orderID", "businessID", businessID.String(), "invoiceID", invoice.ID.String(), "orderID", order.ID.String())
@@ -275,7 +276,7 @@ func (s *Service) Confirm(ctx context.Context, businessID, orderID, key uuid.UUI
 		
 		sqlTx, ok := tx.Statement.ConnPool.(*sql.Tx)
 		if !ok {
-			s.logger.ErrorContext(ctx, "[ORDERS]-error while initializing sql tx conn pool", "businessID", businessID.String(), "orderID", orderID.String(), "err", err.Error())
+			s.logger.ErrorContext(ctx, "[ORDERS]-error while initializing sql tx conn pool", "businessID", businessID.String(), "orderID", orderID.String(), "err", errors.New("sqlTx initialization failed"))
 			return fmt.Errorf("sqlTx not acceptable: received of type: %v", sqlTx)
 		}
 
@@ -407,7 +408,7 @@ func (s *Service) Cancel(ctx context.Context, businessID, orderID uuid.UUID) err
 		sm := s.buildOrderMachine(businessID, order)
 
 		if err := sm.FireCtx(ctx, TriggerCancel); err != nil {
-			return err
+			return apperrors.ErrConflict.WithMessage("order state transition not supported")
 		}
 
 		//cancel the invoice of the order

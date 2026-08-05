@@ -73,27 +73,26 @@ type orderWorker struct {
 // for now the workers will not be majorly implemented since most of them rely on communication
 func (w *orderWorker) Work(ctx context.Context, job *river.Job[OrderEventArgs]) error {
 
-	w.logger.InfoContext(ctx, "[ORDERS]-worker dispatched", "invoiceID", job.Args.OrderID.String(), "businessID", job.Args.TenantID.String())
-	var globalErr error
+	w.logger.InfoContext(ctx, "[ORDERS]-worker dispatched", "orderID", job.Args.OrderID.String(), "businessID", job.Args.TenantID.String())
 
 	switch job.Args.EventType {
 	case OrderPaymentInit:
 		var payload models.InitiateRequest
 		rawBytes, err := json.Marshal(job.Args.Payload)
 		if err != nil {
-			globalErr = err
+			w.logger.ErrorContext(ctx, "[ORDER_WORKER]-error while marshalling request", "err", err.Error(), "businessID", job.Args.TenantID.String())
 			return err
 		}
 		if err := json.Unmarshal(rawBytes, &payload); err != nil {
-			globalErr = err
+			w.logger.ErrorContext(ctx, "[ORDER_WORKER]-error while unmarshalling request", "err", err.Error(), "businessID", job.Args.TenantID.String())
 			return err
 		}
 		err = w.paymentService.InitiateOrder(ctx, job.Args.TenantID, payload)
 		if err != nil {
-			globalErr = err
+			w.logger.ErrorContext(ctx, "[ORDER_WORKER]-error while initiating payment request", "err", err.Error(), "businessID", job.Args.TenantID.String())
 			return err
 		}
 	}
 
-	return globalErr
+	return nil
 }

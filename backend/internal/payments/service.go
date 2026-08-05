@@ -87,6 +87,7 @@ func (s *Service) WithTx(tx *gorm.DB) *Service {
 }
 
 func (s *Service) Initiate(ctx context.Context, businessID uuid.UUID, req models.InitiateRequest) (*PaymentCommand, error) {
+	s.logger.InfoContext(ctx, "[PAYMENTS]-initiating payments", "businessID", businessID.String(), "orderID", req.OrderID)
 	key, ok := middleware.IdempotencyKeyFromCtx(ctx)
 	if !ok {
 		return nil, errIdempotencyRequired()

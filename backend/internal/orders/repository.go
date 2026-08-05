@@ -56,7 +56,7 @@ func (r *Repository) FindOrderByUpdate(ctx context.Context, businessID, orderID 
 	err := r.db.WithContext(ctx).Scopes(shareddb.BusinessScope(businessID)).Transaction(func(tx *gorm.DB) error {
 
 		var err error
-		err = tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", orderID).First(&order).Error
+		err = tx.Clauses(clause.Locking{Strength: "UPDATE"}).Preload("Lines").Where("id = ?", orderID).First(&order).Error
 		if err != nil {
 			return err
 		}

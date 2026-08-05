@@ -85,7 +85,7 @@ func main() {
 
 	tenancyModule := tenancy.New(gormDB)
 	usersModule := users.New(gormDB)
-	authModule := auth.New(gormDB, auth.Config{SigningKey: cfg.JWT.SigningKey, Issuer: cfg.JWT.Issuer, AccessTTL: 15 * time.Minute, RefreshTTL: 30 * 24 * time.Hour}, auth.WithMembershipResolver(usersModule), auth.WithSubscriptionProvisioner(tenancyModule))
+	authModule := auth.New(gormDB, auth.Config{SigningKey: cfg.JWT.SigningKey, Issuer: cfg.JWT.Issuer, AccessTTL: 90 * time.Minute, RefreshTTL: 30 * 24 * time.Hour}, auth.WithMembershipResolver(usersModule), auth.WithSubscriptionProvisioner(tenancyModule))
 	businessModule := business.New(gormDB, tenancyModule, usersModule, cryptoManager)
 	productsModule := products.New(gormDB)
 	customersModule := customers.New(gormDB)

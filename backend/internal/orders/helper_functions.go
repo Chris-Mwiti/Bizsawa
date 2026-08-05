@@ -31,6 +31,8 @@ func buildInvoicePayload(order *Order) invoices.CreateInvoiceRequest {
 		})
 	}
 
+	fmt.Printf("invoice lines: %d", len(invoiceLines))
+
 
 	// Calculate due date (5 days from now). 
 	// Assuming order.ConfirmedAt was set right before calling this.
