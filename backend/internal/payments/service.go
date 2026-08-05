@@ -87,6 +87,7 @@ func (s *Service) WithTx(tx *gorm.DB) *Service {
 }
 
 func (s *Service) Initiate(ctx context.Context, businessID uuid.UUID, req models.InitiateRequest) (*PaymentCommand, error) {
+	s.logger.InfoContext(ctx, "[PAYMENTS]-initiating payments", "businessID", businessID.String(), "orderID", req.OrderID)
 	key, ok := middleware.IdempotencyKeyFromCtx(ctx)
 	if !ok {
 		return nil, errIdempotencyRequired()
@@ -189,11 +190,8 @@ func (s *Service) Initiate(ctx context.Context, businessID uuid.UUID, req models
 	return cmd, nil
 }
 
-func (s *Service) InitiateOrder(ctx context.Context, businessID uuid.UUID, req models.InitiateRequest) error {
-	key, ok := middleware.IdempotencyKeyFromCtx(ctx)
-	if !ok {
-		return errIdempotencyRequired()
-	}
+func (s *Service) InitiateOrder(ctx context.Context, businessID uuid.UUID, req models.InitiateRequest, key string) error {
+	s.logger.InfoContext(ctx, "[PAYMENTS]-initiating order request for order", "orderID", req.OrderID, "businessID", businessID.String())
 	if _, err := s.repo.FindByIdempotency(ctx, businessID, key); err == nil {
 		return apperrors.ErrConflict.WithMessage("order request already initiated")
 	}

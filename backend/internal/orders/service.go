@@ -216,8 +216,9 @@ func (s *Service) Confirm(ctx context.Context, businessID, orderID, key uuid.UUI
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				s.logger.DebugContext(ctx, "[ORDERS]-order not found", "orderID", order.ID.String(), "businessID", order.BusinessID.String())
-				return err
+				return apperrors.ErrNotFound.WithMessage("order not found")
 			}
+
 			s.logger.ErrorContext(ctx, "[ORDERS]-could not fetch order", "err", err.Error(), "businessID", businessID.String())
 			return apperrors.ErrInternal.WithCause(err).WithMessage("err while processing order request")
 		}
@@ -252,7 +253,8 @@ func (s *Service) Confirm(ctx context.Context, businessID, orderID, key uuid.UUI
 
 		invoice, err := s.invoices.WithTx(tx).CreateInvoice(ctx, businessID, buildInvoicePayload(order))
 		if err != nil {
-			s.logger.ErrorContext(ctx, "[ORDER/INVOICES]-could not create invoice", "businessID", businessID.String, "orderID", orderID.String(), "err", err.Error())
+			s.logger.ErrorContext(ctx, "[ORDERS]-order", "order", order)
+			s.logger.ErrorContext(ctx, "[ORDER/INVOICES]-could not create invoice", "businessID", businessID.String(), "orderID", orderID.String(), "err", err.Error())
 			return apperrors.ErrInternal.WithMessage("could not create invoice from order")
 		}
 		s.logger.InfoContext(ctx, "[ORDER/INVOICES]-invoice created by orderID", "businessID", businessID.String(), "invoiceID", invoice.ID.String(), "orderID", order.ID.String())
@@ -274,7 +276,7 @@ func (s *Service) Confirm(ctx context.Context, businessID, orderID, key uuid.UUI
 		
 		sqlTx, ok := tx.Statement.ConnPool.(*sql.Tx)
 		if !ok {
-			s.logger.ErrorContext(ctx, "[ORDERS]-error while initializing sql tx conn pool", "businessID", businessID.String(), "orderID", orderID.String(), "err", err.Error())
+			s.logger.ErrorContext(ctx, "[ORDERS]-error while initializing sql tx conn pool", "businessID", businessID.String(), "orderID", orderID.String(), "err", errors.New("sqlTx initialization failed"))
 			return fmt.Errorf("sqlTx not acceptable: received of type: %v", sqlTx)
 		}
 
@@ -293,13 +295,13 @@ func (s *Service) Confirm(ctx context.Context, businessID, orderID, key uuid.UUI
 
 
 		//emit an event that says the order has been confirmed
-		if err := s.emit(ctx, sqlTx,businessID, orderID, OrderPaymentInit, result); err != nil {
+		if err := s.emit(ctx, sqlTx,businessID, orderID, key,OrderPaymentInit, result); err != nil {
 			s.logger.ErrorContext(ctx, "[ORDER/OUTBOX]-could not emit order created event", "businessID", businessID.String(), "orderID", orderID.String(), "err", err.Error())
 			return apperrors.ErrInternal.WithMessage("error while emitting event")
 		} 	
 		
 		//emit an event that says the order has been confirmed
-		if err := s.emit(ctx, sqlTx,businessID, orderID, OrderConfirmed, map[string]any{"amount": order.Total, "invoiceID": invoice.ID.String()}); err != nil {
+		if err := s.emit(ctx, sqlTx,businessID, orderID, key,OrderConfirmed, map[string]any{"amount": order.Total, "invoiceID": invoice.ID.String()}); err != nil {
 			s.logger.ErrorContext(ctx, "[ORDER/OUTBOX]-could not emit order created event", "businessID", businessID.String(), "orderID", orderID.String(), "err", err.Error())
 			return apperrors.ErrInternal.WithMessage("error while emitting event")
 		} 	
@@ -317,6 +319,12 @@ func (s *Service) Confirm(ctx context.Context, businessID, orderID, key uuid.UUI
 // FulfillOrder processes the order fulfillment within a safe database transaction block
 func (s *Service) FulfillOrder(ctx context.Context, businessID, orderID, staffID uuid.UUID) (*Order, error) {
 	var order *Order
+
+	key, ok := middleware.IdempotencyKeyFromCtx(ctx)
+
+	if !ok {
+		return nil, apperrors.ErrConflict.WithMessage("IdempotencyKeyFromCtx is missing")
+	}
 
 	// 1. Wrap the entire workflow inside a single database transaction
 	err := s.repo.db.Transaction(func(tx *gorm.DB) error {
@@ -375,8 +383,13 @@ func (s *Service) FulfillOrder(ctx context.Context, businessID, orderID, staffID
 		}
 
 
+		parsedKey, err := uuid.Parse(key)
+		if err != nil {
+			return err
+		}
 
-		err = s.emit(ctx, sqlTx, businessID, orderID, OrderFulfilled, map[string]any{"amount": order.Total})
+
+		err = s.emit(ctx, sqlTx, businessID, orderID, parsedKey,OrderFulfilled, map[string]any{"amount": order.Total})
 
 		if err != nil {
 			return err
@@ -406,7 +419,7 @@ func (s *Service) Cancel(ctx context.Context, businessID, orderID uuid.UUID) err
 		sm := s.buildOrderMachine(businessID, order)
 
 		if err := sm.FireCtx(ctx, TriggerCancel); err != nil {
-			return err
+			return apperrors.ErrConflict.WithMessage("order state transition not supported")
 		}
 
 		//cancel the invoice of the order
