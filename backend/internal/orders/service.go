@@ -295,13 +295,13 @@ func (s *Service) Confirm(ctx context.Context, businessID, orderID, key uuid.UUI
 
 
 		//emit an event that says the order has been confirmed
-		if err := s.emit(ctx, sqlTx,businessID, orderID, OrderPaymentInit, result); err != nil {
+		if err := s.emit(ctx, sqlTx,businessID, orderID, key,OrderPaymentInit, result); err != nil {
 			s.logger.ErrorContext(ctx, "[ORDER/OUTBOX]-could not emit order created event", "businessID", businessID.String(), "orderID", orderID.String(), "err", err.Error())
 			return apperrors.ErrInternal.WithMessage("error while emitting event")
 		} 	
 		
 		//emit an event that says the order has been confirmed
-		if err := s.emit(ctx, sqlTx,businessID, orderID, OrderConfirmed, map[string]any{"amount": order.Total, "invoiceID": invoice.ID.String()}); err != nil {
+		if err := s.emit(ctx, sqlTx,businessID, orderID, key,OrderConfirmed, map[string]any{"amount": order.Total, "invoiceID": invoice.ID.String()}); err != nil {
 			s.logger.ErrorContext(ctx, "[ORDER/OUTBOX]-could not emit order created event", "businessID", businessID.String(), "orderID", orderID.String(), "err", err.Error())
 			return apperrors.ErrInternal.WithMessage("error while emitting event")
 		} 	
@@ -319,6 +319,12 @@ func (s *Service) Confirm(ctx context.Context, businessID, orderID, key uuid.UUI
 // FulfillOrder processes the order fulfillment within a safe database transaction block
 func (s *Service) FulfillOrder(ctx context.Context, businessID, orderID, staffID uuid.UUID) (*Order, error) {
 	var order *Order
+
+	key, ok := middleware.IdempotencyKeyFromCtx(ctx)
+
+	if !ok {
+		return nil, apperrors.ErrConflict.WithMessage("IdempotencyKeyFromCtx is missing")
+	}
 
 	// 1. Wrap the entire workflow inside a single database transaction
 	err := s.repo.db.Transaction(func(tx *gorm.DB) error {
@@ -377,8 +383,13 @@ func (s *Service) FulfillOrder(ctx context.Context, businessID, orderID, staffID
 		}
 
 
+		parsedKey, err := uuid.Parse(key)
+		if err != nil {
+			return err
+		}
 
-		err = s.emit(ctx, sqlTx, businessID, orderID, OrderFulfilled, map[string]any{"amount": order.Total})
+
+		err = s.emit(ctx, sqlTx, businessID, orderID, parsedKey,OrderFulfilled, map[string]any{"amount": order.Total})
 
 		if err != nil {
 			return err

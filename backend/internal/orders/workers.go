@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"maps"
 
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/models"
 	"github.com/google/uuid"
@@ -21,13 +20,14 @@ type OrderEventArgs struct {
 	EventType     OrderEventType `json:"event_type"`
 	Stream        string           `json:"stream"`
 	OrderID     uuid.UUID        `json:"orderID"`
+	Key 				uuid.UUID         `json:"key"`
 	Payload       json.RawMessage  `json:"payload"`
 }
 
 func (OrderEventArgs) Kind() string { return "order.event" }
 
 // emit function for the services
-func (s *Service) emit(ctx context.Context, tx *sql.Tx, businessID uuid.UUID, orderID uuid.UUID, eventType OrderEventType, extra map[string]any) error {
+func (s *Service) emit(ctx context.Context, tx *sql.Tx, businessID uuid.UUID, orderID uuid.UUID, key uuid.UUID,eventType OrderEventType, extra map[string]any) error {
 	if s.outbox == nil {
 		return fmt.Errorf("service outbox missing")
 	}
@@ -43,6 +43,7 @@ func (s *Service) emit(ctx context.Context, tx *sql.Tx, businessID uuid.UUID, or
 		AggregateID:   orderID.String(),
 		AggregateType: "order",
 		OrderID:     orderID,
+		Key: key,
 		EventType:     eventType,
 		Stream:        "orders",
 		Payload:       raw,
@@ -56,7 +57,7 @@ func (s *Service) emit(ctx context.Context, tx *sql.Tx, businessID uuid.UUID, or
 }
 
 type OrderPaymentInterface interface {
-	InitiateOrder(ctx context.Context, businessID uuid.UUID, req models.InitiateRequest) (error) 
+	InitiateOrder(ctx context.Context, businessID uuid.UUID, req models.InitiateRequest, key string) (error) 
 }
 
 // struct to represent the workers
@@ -75,12 +76,13 @@ func (w *orderWorker) Work(ctx context.Context, job *river.Job[OrderEventArgs]) 
 
 	switch job.Args.EventType {
 	case OrderPaymentInit:
+		w.logger.InfoContext(ctx, "[ORDER_WORKER]-initiating order payment worker", "orderID", job.Args.OrderID)
 		var payload models.InitiateRequest
 		if err := json.Unmarshal(job.Args.Payload, &payload); err != nil {
 			w.logger.ErrorContext(ctx, "[ORDER_WORKER]-error while unmarshalling request", "err", err.Error(), "businessID", job.Args.TenantID.String())
 			return err
 		}
-		err := w.paymentService.InitiateOrder(ctx, job.Args.TenantID, payload)
+		err := w.paymentService.InitiateOrder(ctx, job.Args.TenantID, payload, job.Args.Key.String())
 		if err != nil {
 			w.logger.ErrorContext(ctx, "[ORDER_WORKER]-error while initiating payment request", "err", err.Error(), "businessID", job.Args.TenantID.String())
 			return err

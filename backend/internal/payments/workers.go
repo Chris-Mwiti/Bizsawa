@@ -72,7 +72,11 @@ func (w *paymentWorker) Work(ctx context.Context, job *river.Job[PaymentEventArg
 
 	switch job.Args.EventType {
 	case PaymentCreated, PaymentRetry:
-		return w.service.ExecuteProvider(ctx, job.Args.TenantID, job.Args.PaymentID)
+		err := w.service.ExecuteProvider(ctx, job.Args.TenantID, job.Args.PaymentID)
+		if err != nil {
+			w.logger.ErrorContext(ctx, "[PAYMENTS_WORKER]-worker error", "err", err.Error(), "paymentID", job.Args.PaymentID.String())
+			return err
+		}
 	case PaymentProcessing, PaymentConfirmed, PaymentFailed:
 		w.logger.InfoContext(ctx, "[PAYMENTS]-worker observed state event", "paymentID", job.Args.PaymentID.String(), "eventType", job.Args.EventType)
 		return nil
@@ -80,4 +84,6 @@ func (w *paymentWorker) Work(ctx context.Context, job *river.Job[PaymentEventArg
 		w.logger.InfoContext(ctx, "[PAYMENTS]-worker ignored unknown event", "paymentID", job.Args.PaymentID.String(), "eventType", job.Args.EventType)
 		return nil
 	}
+
+	return nil
 }
