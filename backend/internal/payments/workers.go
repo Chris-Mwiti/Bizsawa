@@ -111,9 +111,16 @@ func (w *paymentWorker) Work(ctx context.Context, job *river.Job[PaymentEventArg
 				)
 				return err
 			}
-		}
 
-	case PaymentProcessing, PaymentFailed:
+
+		} else {
+			return fmt.Errorf("unsupported format or orderID")
+		}
+	
+	case PaymentFailed:
+
+
+	case PaymentProcessing:
 		w.logger.InfoContext(ctx, "[PAYMENTS_WORKER]-worker observed state event", "paymentID", job.Args.PaymentID.String(), "eventType", job.Args.EventType)
 		return nil
 	default:

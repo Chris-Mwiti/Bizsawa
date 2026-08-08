@@ -37,7 +37,7 @@ const (
 )
 
 type InovicePayment interface {
-	RecordPayment(ctx context.Context, businessID, invoiceID uuid.UUID, req invoices.RecordPaymentRequest) (*invoices.Invoice, error)
+	RecordPayment(ctx context.Context, businessID, orderID uuid.UUID, req invoices.RecordPaymentRequest) (error)
 
 	Send(ctx context.Context, businessID, invoiceID uuid.UUID, channel string) (*invoices.Invoice, error)
 }
