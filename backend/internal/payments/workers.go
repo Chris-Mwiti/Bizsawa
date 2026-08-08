@@ -68,7 +68,7 @@ type paymentWorker struct {
 // for now the workers will not be majorly implemented since most of them rely on communication
 func (w *paymentWorker) Work(ctx context.Context, job *river.Job[PaymentEventArgs]) error {
 
-	w.logger.InfoContext(ctx, "[PAYMENTS]-worker dispatched", "paymentID", job.Args.PaymentID.String(), "businessID", job.Args.TenantID.String(), "eventType", job.Args.EventType)
+	w.logger.InfoContext(ctx, "[PAYMENTS_WORKER]-worker dispatched", "paymentID", job.Args.PaymentID.String(), "businessID", job.Args.TenantID.String(), "eventType", job.Args.EventType)
 
 	switch job.Args.EventType {
 	case PaymentCreated, PaymentRetry:
@@ -78,10 +78,10 @@ func (w *paymentWorker) Work(ctx context.Context, job *river.Job[PaymentEventArg
 			return err
 		}
 	case PaymentProcessing, PaymentConfirmed, PaymentFailed:
-		w.logger.InfoContext(ctx, "[PAYMENTS]-worker observed state event", "paymentID", job.Args.PaymentID.String(), "eventType", job.Args.EventType)
+		w.logger.InfoContext(ctx, "[PAYMENTS_WORKER]-worker observed state event", "paymentID", job.Args.PaymentID.String(), "eventType", job.Args.EventType)
 		return nil
 	default:
-		w.logger.InfoContext(ctx, "[PAYMENTS]-worker ignored unknown event", "paymentID", job.Args.PaymentID.String(), "eventType", job.Args.EventType)
+		w.logger.InfoContext(ctx, "[PAYMENTS_WORKER]-worker ignored unknown event", "paymentID", job.Args.PaymentID.String(), "eventType", job.Args.EventType)
 		return nil
 	}
 

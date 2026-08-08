@@ -112,6 +112,7 @@ func (c *MpesaClient) STKPush(ctx context.Context, req STKPushRequest) (Provider
 	}
 	resp, err := c.post(ctx, "/mpesa/stkpush/v1/processrequest", payload)
 	if err != nil {
+		c.logger.ErrorContext(ctx, "[STK_PUSH]-stk push failed", "err", err)
 		return ProviderResult{}, err
 	}
 	return providerResult(resp), nil

@@ -294,37 +294,53 @@ func (s *Service) ExecuteProvider(ctx context.Context, businessID, cmdID uuid.UU
 	if s.provider == nil {
 		return apperrors.ErrInternal.WithMessage("payment provider not configured")
 	}
-	cmd, err := s.Get(ctx, businessID, cmdID)
-	if err != nil {
-		return err
-	}
-	if cmd.Status == StatusSucceeded || cmd.Status == StatusFailed {
-		s.logger.InfoContext(ctx, "[PAYMENTS]-payment already processed", "cmdID", cmd.ID.String(), "status", cmd.Status)
-		return nil
-	}
-	if cmd.Status == StatusPending {
-		if err := s.ClaimPayment(ctx, businessID, cmdID); err != nil {
-			return err
-		}
-		cmd, err = s.Get(ctx, businessID, cmdID)
+	err := s.repo.db.Transaction(func(tx *gorm.DB) error {
+		cmd, err := s.WithTx(tx).Get(ctx, businessID, cmdID)
 		if err != nil {
 			return err
 		}
-	}
-	result, err := s.provider.ProcessPayment(ctx, *cmd)
-	if err != nil {
-		raw, _ := json.Marshal(map[string]any{"error": err.Error()})
-		markErr := s.MarkFailed(ctx, *cmd, "provider_error", err.Error(), raw)
-		if markErr != nil {
-			s.logger.ErrorContext(ctx, "[PAYMENTS]-failed to mark provider error", "cmdID", cmd.ID.String(), "err", markErr.Error())
+		if cmd.Status == StatusSucceeded || cmd.Status == StatusFailed {
+			s.logger.InfoContext(ctx, "[PAYMENTS]-payment already processed", "cmdID", cmd.ID.String(), "status", cmd.Status)
+			return nil
 		}
-		return err
-	}
-	s.logger.InfoContext(ctx, "[PAYMENTS]-provider request accepted", "cmdID", cmd.ID.String(), "providerRequestID", result.RequestID)
-	if result.Status == StatusSucceeded {
-		return s.MarkSucceeded(ctx, *cmd, result)
-	}
-	return s.MarkProviderAccepted(ctx, *cmd, result)
+		if cmd.Status == StatusPending {
+			if err := s.WithTx(tx).ClaimPayment(ctx, businessID, cmdID); err != nil {
+				return err
+			}
+			//fetch the updated paymentcmd 
+			cmd, err = s.WithTx(tx).Get(ctx, businessID, cmdID)
+			if err != nil {
+				return err
+			}
+		}
+		result, err := s.WithTx(tx).provider.ProcessPayment(ctx, *cmd)
+		if err != nil {
+			raw, _ := json.Marshal(map[string]any{"error": err.Error()})
+			markErr := s.MarkFailed(ctx, *cmd, "provider_error", err.Error(), raw)
+			if markErr != nil {
+				s.logger.ErrorContext(ctx, "[PAYMENTS]-failed to mark provider error", "cmdID", cmd.ID.String(), "err", markErr.Error())
+			}
+			return err
+		}
+		s.logger.InfoContext(ctx, "[PAYMENTS]-provider request accepted", "cmdID", cmd.ID.String(), "providerRequestID", result.RequestID)
+		if result.Status == StatusSucceeded {
+
+			sqlTx, ok := tx.Statement.ConnPool.(*sql.Tx)
+			if !ok {
+				return fmt.Errorf("error while asserting tx statement")
+			}
+			err := s.WithTx(tx).emit(ctx, sqlTx, cmd.BusinessID, cmd.ID, PaymentConfirmed, map[string]any{})
+			if err != nil {
+				s.logger.ErrorContext(ctx, "[PAYMENTS]-error while emmiting payment confirmed", "cmdID", cmdID.String(), "err", err.Error())
+				return apperrors.ErrInternal.WithMessage("error while emmiting payment confirmed event")
+			}
+			return s.WithTx(tx).MarkSucceeded(ctx, *cmd, result)
+		}
+		return s.WithTx(tx).MarkProviderAccepted(ctx, *cmd, result)
+
+	})
+
+	return err
 }
 
 func (s *Service) Get(ctx context.Context, businessID, id uuid.UUID) (*PaymentCommand, error) {

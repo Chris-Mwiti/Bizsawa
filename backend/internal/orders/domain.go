@@ -17,6 +17,7 @@ const (
 	StatusCancelled Status = "cancelled"
 	StatusRefunded  Status = "refunded"
 	
+	PaymentConfirmed PaymentStatus = "confirmed"
 	PaymentPending	PaymentStatus = "pending"	
 	PaymentProcessing PaymentStatus = "processing"
 	PaymentFailed 		PaymentStatus = "failed"
