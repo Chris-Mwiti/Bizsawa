@@ -204,7 +204,7 @@ func (s *Service) FindOrderByUpdate(ctx context.Context, businessID, orderID uui
 
 }
 
-func (s *Service) PaymentConfirmed(ctx context.Context, businessID, orderID uuid.UUID) (error) {
+func (s *Service) PaymentUpdate(ctx context.Context, businessID, orderID uuid.UUID, status PaymentStatus) (error) {
 	err := s.repo.db.Transaction(func(tx *gorm.DB) error {
 		order, err := s.repo.WithTx(tx).FindOrderByUpdate(ctx, businessID, orderID);
 		if err != nil {
@@ -223,7 +223,7 @@ func (s *Service) PaymentConfirmed(ctx context.Context, businessID, orderID uuid
 			return apperrors.ErrConflict.WithMessage("this order has already been completed by another request")
 		}
 
-		order.PaymentStatus = PaymentConfirmed
+		order.PaymentStatus = status
 
 		//save the order
 		if err := s.repo.WithTx(tx).Update(ctx, order); err != nil {

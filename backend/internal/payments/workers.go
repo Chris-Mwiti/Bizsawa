@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"maps"
 
+	"github.com/Codecx-Org/FinAI/backend/internal/orders"
 	"github.com/google/uuid"
 	"github.com/riverqueue/river"
 )
@@ -98,7 +99,7 @@ func (w *paymentWorker) Work(ctx context.Context, job *river.Job[PaymentEventArg
 				return err
 			}
 
-			err = w.orderService.PaymentConfirmed(ctx, job.Args.TenantID, parsedID)
+			err = w.orderService.PaymentUpdate(ctx, job.Args.TenantID, parsedID, orders.PaymentConfirmed)
 			if err != nil {
 				w.logger.ErrorContext(
 					ctx,
@@ -108,7 +109,6 @@ func (w *paymentWorker) Work(ctx context.Context, job *river.Job[PaymentEventArg
 					"err",
 					err.Error(),
 				)
-
 				return err
 			}
 		}

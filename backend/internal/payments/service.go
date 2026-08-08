@@ -45,7 +45,7 @@ type InovicePayment interface {
 type OrderPayment interface {
 	FindOrderByUpdate(ctx context.Context, businessID, orderID uuid.UUID) (*orders.Order, error)
 	FulfillOrder(ctx context.Context, businessID, orderID, staffID uuid.UUID) (*orders.Order, error)
-	PaymentConfirmed(ctx context.Context, businessID, orderID uuid.UUID)(error)
+	PaymentUpdate(ctx context.Context, businessID, orderID uuid.UUID, status orders.PaymentStatus)(error)
 	Cancel(ctx context.Context, businessID, orderID uuid.UUID) error
 }
 
