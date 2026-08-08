@@ -204,6 +204,39 @@ func (s *Service) FindOrderByUpdate(ctx context.Context, businessID, orderID uui
 
 }
 
+func (s *Service) PaymentUpdate(ctx context.Context, businessID, orderID uuid.UUID, status PaymentStatus) (error) {
+	err := s.repo.db.Transaction(func(tx *gorm.DB) error {
+		order, err := s.repo.WithTx(tx).FindOrderByUpdate(ctx, businessID, orderID);
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				s.logger.DebugContext(ctx, "[ORDERS]-order not found", "orderID", order.ID.String(), "businessID", order.BusinessID.String())
+				return apperrors.ErrNotFound.WithMessage("order not found")
+			}
+
+			s.logger.ErrorContext(ctx, "[ORDERS]-could not fetch order", "err", err.Error(), "businessID", businessID.String())
+			return apperrors.ErrInternal.WithCause(err).WithMessage("err while processing order request")
+		}
+
+
+		if order.Status == StatusConfirmed || order.Status == StatusFulfilled {
+			s.logger.InfoContext(ctx, "[ORDERS]-order confirmation retry with diff IdempotencyKey", "businessID",businessID.String(), "orderID", orderID.String())
+			return apperrors.ErrConflict.WithMessage("this order has already been completed by another request")
+		}
+
+		order.PaymentStatus = status
+
+		//save the order
+		if err := s.repo.WithTx(tx).Update(ctx, order); err != nil {
+			s.logger.ErrorContext(ctx, "[ORDERS]-could not update order", "businessID", businessID.String(), "orderID", orderID.String())
+			return err
+		}
+	
+		return nil
+	})
+
+	return err
+}
+
 func (s *Service) Confirm(ctx context.Context, businessID, orderID, key uuid.UUID, customerPhone string) (*Order, error) {
 	
 	var order *Order

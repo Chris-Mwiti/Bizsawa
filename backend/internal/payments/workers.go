@@ -7,9 +7,13 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"time"
 
+	"github.com/Codecx-Org/FinAI/backend/internal/invoices"
+	"github.com/Codecx-Org/FinAI/backend/internal/orders"
 	"github.com/google/uuid"
 	"github.com/riverqueue/river"
+	"github.com/shopspring/decimal"
 )
 
 // InvoiceEventArgs implements river.JobArgs for outbox job serialization
@@ -61,6 +65,7 @@ type paymentWorker struct {
 	river.WorkerDefaults[PaymentEventArgs]
 	service *Service
 	orderService OrderPayment
+	invoiceService InovicePayment
 	logger  *slog.Logger
 }
 
@@ -68,7 +73,7 @@ type paymentWorker struct {
 // for now the workers will not be majorly implemented since most of them rely on communication
 func (w *paymentWorker) Work(ctx context.Context, job *river.Job[PaymentEventArgs]) error {
 
-	w.logger.InfoContext(ctx, "[PAYMENTS]-worker dispatched", "paymentID", job.Args.PaymentID.String(), "businessID", job.Args.TenantID.String(), "eventType", job.Args.EventType)
+	w.logger.InfoContext(ctx, "[PAYMENTS_WORKER]-worker dispatched", "paymentID", job.Args.PaymentID.String(), "businessID", job.Args.TenantID.String(), "eventType", job.Args.EventType)
 
 	switch job.Args.EventType {
 	case PaymentCreated, PaymentRetry:
@@ -77,11 +82,92 @@ func (w *paymentWorker) Work(ctx context.Context, job *river.Job[PaymentEventArg
 			w.logger.ErrorContext(ctx, "[PAYMENTS_WORKER]-worker error", "err", err.Error(), "paymentID", job.Args.PaymentID.String())
 			return err
 		}
-	case PaymentProcessing, PaymentConfirmed, PaymentFailed:
-		w.logger.InfoContext(ctx, "[PAYMENTS]-worker observed state event", "paymentID", job.Args.PaymentID.String(), "eventType", job.Args.EventType)
+
+	case PaymentConfirmed:
+
+		var payload map[string]any
+
+		if err := json.Unmarshal(job.Args.Payload, &payload); err != nil {
+			return fmt.Errorf("error while unmarshalling payload: %s", err.Error())
+		}
+
+		if orderID, ok := payload["orderID"].(string); ok {
+			parsedID, err := uuid.Parse(orderID)
+			if err != nil {
+				w.logger.ErrorContext(
+					ctx,
+					"[PAYMENTS_WORKER]-error while parsing orderID",
+					"err",
+					err.Error(),
+				)
+				return err
+			}
+
+			err = w.orderService.PaymentUpdate(ctx, job.Args.TenantID, parsedID, orders.PaymentConfirmed)
+			if err != nil {
+				w.logger.ErrorContext(
+					ctx,
+					"[PAYMENTS_WORKER]-error while confirming order",
+					"orderID",
+					orderID,
+					"err",
+					err.Error(),
+				)
+				return err
+			}
+
+			//record payment for the invoice associated with the order
+			paidAt := time.Now().UTC()
+			invoiceReq := invoices.RecordPaymentRequest{
+       Amount: payload["amount"].(decimal.Decimal),
+			 PaymentID: job.Args.PaymentID,
+			 PaidAt: &paidAt,
+			}
+			err = w.invoiceService.RecordPayment(ctx, job.Args.TenantID, parsedID, invoiceReq)
+
+		} else {
+			return fmt.Errorf("unsupported format or orderID")
+		}
+	
+	case PaymentFailed:
+		var payload map[string]any
+
+		if err := json.Unmarshal(job.Args.Payload, &payload); err != nil {
+			return fmt.Errorf("error while unmarshalling payload: %s", err.Error())
+		}
+
+		if orderID, ok := payload["orderID"].(string); ok {
+			parsedID, err := uuid.Parse(orderID)
+			if err != nil {
+				w.logger.ErrorContext(
+					ctx,
+					"[PAYMENTS_WORKER]-error while parsing orderID",
+					"err",
+					err.Error(),
+				)
+				return err
+			}
+
+			err = w.orderService.PaymentUpdate(ctx, job.Args.TenantID, parsedID, orders.PaymentFailed)
+			if err != nil {
+				w.logger.ErrorContext(
+					ctx,
+					"[PAYMENTS_WORKER]-error while confirming order",
+					"orderID",
+					orderID,
+					"err",
+					err.Error(),
+				)
+				return err
+			}
+		}
+
+
+		case PaymentProcessing:
+		w.logger.InfoContext(ctx, "[PAYMENTS_WORKER]-worker observed state event", "paymentID", job.Args.PaymentID.String(), "eventType", job.Args.EventType)
 		return nil
 	default:
-		w.logger.InfoContext(ctx, "[PAYMENTS]-worker ignored unknown event", "paymentID", job.Args.PaymentID.String(), "eventType", job.Args.EventType)
+		w.logger.InfoContext(ctx, "[PAYMENTS_WORKER]-worker ignored unknown event", "paymentID", job.Args.PaymentID.String(), "eventType", job.Args.EventType)
 		return nil
 	}
 

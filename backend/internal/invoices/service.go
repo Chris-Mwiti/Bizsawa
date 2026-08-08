@@ -57,7 +57,7 @@ type CreateInvoiceRequest struct {
 
 type RecordPaymentRequest struct {
 	Amount    decimal.Decimal `json:"amount"`
-	PaymentID *uuid.UUID      `json:"paymentId"`
+	PaymentID uuid.UUID      `json:"paymentId"`
 	PaidAt    *time.Time      `json:"paidAt"`
 }
 
@@ -205,12 +205,12 @@ func (s *Service) Send(ctx context.Context, businessID, invoiceID uuid.UUID, cha
 	return invoice, nil
 }
 
-func (s *Service) RecordPayment(ctx context.Context, businessID, invoiceID uuid.UUID, req RecordPaymentRequest) (*Invoice, error) {
-	var inv *Invoice
+func (s *Service) RecordPayment(ctx context.Context, businessID, orderID uuid.UUID, req RecordPaymentRequest) (error) {
+	var invoices []Invoice
 
 	err := s.repo.db.Transaction(func(tx *gorm.DB) error {
 		var err error
-		inv, err = s.WithTx(tx).repo.Find(ctx, businessID, invoiceID)
+		invoices, err = s.WithTx(tx).repo.FindByOrderId(ctx, businessID, orderID, pagination.Page{Limit: 10})
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return apperrors.ErrNotFound.WithMessage("invoice record not found")
@@ -220,6 +220,13 @@ func (s *Service) RecordPayment(ctx context.Context, businessID, invoiceID uuid.
 		if !req.Amount.IsPositive() {
 			return apperrors.ErrUnprocessable.WithMessage("payment amount must be positive")
 		}
+
+		if len(invoices) <= 0 {
+			return fmt.Errorf("no invoices found")
+		}
+		
+		inv := &invoices[0]
+
 		inv.AmountPaid = inv.AmountPaid.Add(req.Amount).Round(2)
 		inv.AmountDue = inv.Total.Sub(inv.AmountPaid).Round(2)
 		if inv.AmountDue.LessThanOrEqual(decimal.Zero) {
@@ -249,7 +256,7 @@ func (s *Service) RecordPayment(ctx context.Context, businessID, invoiceID uuid.
 	})
 
 
-	return inv, err
+	return err
 }
 
 func (s *Service) Cancel(ctx context.Context, businessID, invoiceID uuid.UUID) (*Invoice, error) {
