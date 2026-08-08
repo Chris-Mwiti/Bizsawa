@@ -45,6 +45,7 @@ type InovicePayment interface {
 type OrderPayment interface {
 	FindOrderByUpdate(ctx context.Context, businessID, orderID uuid.UUID) (*orders.Order, error)
 	FulfillOrder(ctx context.Context, businessID, orderID, staffID uuid.UUID) (*orders.Order, error)
+	PaymentConfirmed(ctx context.Context, businessID, orderID uuid.UUID)(error)
 	Cancel(ctx context.Context, businessID, orderID uuid.UUID) error
 }
 
@@ -324,16 +325,6 @@ func (s *Service) ExecuteProvider(ctx context.Context, businessID, cmdID uuid.UU
 		}
 		s.logger.InfoContext(ctx, "[PAYMENTS]-provider request accepted", "cmdID", cmd.ID.String(), "providerRequestID", result.RequestID)
 		if result.Status == StatusSucceeded {
-
-			sqlTx, ok := tx.Statement.ConnPool.(*sql.Tx)
-			if !ok {
-				return fmt.Errorf("error while asserting tx statement")
-			}
-			err := s.WithTx(tx).emit(ctx, sqlTx, cmd.BusinessID, cmd.ID, PaymentConfirmed, map[string]any{})
-			if err != nil {
-				s.logger.ErrorContext(ctx, "[PAYMENTS]-error while emmiting payment confirmed", "cmdID", cmdID.String(), "err", err.Error())
-				return apperrors.ErrInternal.WithMessage("error while emmiting payment confirmed event")
-			}
 			return s.WithTx(tx).MarkSucceeded(ctx, *cmd, result)
 		}
 		return s.WithTx(tx).MarkProviderAccepted(ctx, *cmd, result)
@@ -476,10 +467,11 @@ func (s *Service) emitCommand(ctx context.Context, tx *sql.Tx, cmd *PaymentComma
 		return apperrors.ErrInternal.WithMessage("service outbox not available")
 	}
 	payload := map[string]any{
-		"paymentId":  cmd.ID,
-		"businessId": cmd.BusinessID,
+		"paymentID":  cmd.ID.String(),
+		"businessID": cmd.BusinessID.String(),
+		"orderID": 		cmd.OrderID.String(),
 		"type":       cmd.Type,
-		"amount":     cmd.Amount.String(),
+		"amount":     cmd.Amount,
 		"currency":   cmd.Currency,
 		"phone":      cmd.Phone,
 	}

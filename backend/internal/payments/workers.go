@@ -77,7 +77,43 @@ func (w *paymentWorker) Work(ctx context.Context, job *river.Job[PaymentEventArg
 			w.logger.ErrorContext(ctx, "[PAYMENTS_WORKER]-worker error", "err", err.Error(), "paymentID", job.Args.PaymentID.String())
 			return err
 		}
-	case PaymentProcessing, PaymentConfirmed, PaymentFailed:
+
+	case PaymentConfirmed:
+
+		var payload map[string]any
+
+		if err := json.Unmarshal(job.Args.Payload, &payload); err != nil {
+			return fmt.Errorf("error while unmarshalling payload: %s", err.Error())
+		}
+
+		if orderID, ok := payload["orderID"].(string); ok {
+			parsedID, err := uuid.Parse(orderID)
+			if err != nil {
+				w.logger.ErrorContext(
+					ctx,
+					"[PAYMENTS_WORKER]-error while parsing orderID",
+					"err",
+					err.Error(),
+				)
+				return err
+			}
+
+			err = w.orderService.PaymentConfirmed(ctx, job.Args.TenantID, parsedID)
+			if err != nil {
+				w.logger.ErrorContext(
+					ctx,
+					"[PAYMENTS_WORKER]-error while confirming order",
+					"orderID",
+					orderID,
+					"err",
+					err.Error(),
+				)
+
+				return err
+			}
+		}
+
+	case PaymentProcessing, PaymentFailed:
 		w.logger.InfoContext(ctx, "[PAYMENTS_WORKER]-worker observed state event", "paymentID", job.Args.PaymentID.String(), "eventType", job.Args.EventType)
 		return nil
 	default:
