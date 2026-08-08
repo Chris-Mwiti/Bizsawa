@@ -57,7 +57,7 @@ type CreateInvoiceRequest struct {
 
 type RecordPaymentRequest struct {
 	Amount    decimal.Decimal `json:"amount"`
-	PaymentID *uuid.UUID      `json:"paymentId"`
+	PaymentID uuid.UUID      `json:"paymentId"`
 	PaidAt    *time.Time      `json:"paidAt"`
 }
 

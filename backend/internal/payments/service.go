@@ -418,7 +418,7 @@ func (s *Service) MarkSucceeded(ctx context.Context, cmd PaymentCommand, result 
 			return fmt.Errorf("error while asserting tx type")
 		}
 
-		err := s.emitCommand(ctx, sqlTx, &cmd, PaymentConfirmed, map[string]any{})
+		err := s.emitCommand(ctx, sqlTx, &cmd, PaymentConfirmed, map[string]any{"orderID": cmd.OrderID.String(), "amount": cmd.Amount})
 		if err != nil {
 			s.logger.ErrorContext(ctx, "[PAYMENTS]-error while emmiting event marking success paymentCmd", "err", err.Error(), "cmdID", cmd.ID.String())
 			return err
@@ -448,7 +448,7 @@ func (s *Service) MarkFailed(ctx context.Context, cmd PaymentCommand, code, mess
 			return fmt.Errorf("error while asserting tx type")
 		}
 
-		err := s.emitCommand(ctx, sqlTx, &cmd, PaymentFailed, map[string]any{})
+		err := s.emitCommand(ctx, sqlTx, &cmd, PaymentFailed, map[string]any{"orderID": cmd.OrderID.String()})
 		if err != nil {
 			s.logger.ErrorContext(ctx, "[PAYMENTS]-error while emmiting event marking failed paymentCmd", "err", err.Error(), "cmdID", cmd.ID.String())
 
