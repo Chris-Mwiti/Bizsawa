@@ -225,7 +225,7 @@ func (s *Service) RecordPayment(ctx context.Context, businessID, orderID uuid.UU
 			return fmt.Errorf("no invoices found")
 		}
 		
-		inv := invoices[0]
+		inv := &invoices[0]
 
 		inv.AmountPaid = inv.AmountPaid.Add(req.Amount).Round(2)
 		inv.AmountDue = inv.Total.Sub(inv.AmountPaid).Round(2)
@@ -240,7 +240,7 @@ func (s *Service) RecordPayment(ctx context.Context, businessID, orderID uuid.UU
 		} else {
 			inv.Status = StatusPartial
 		}
-		if err := s.WithTx(tx).repo.Update(ctx, &inv); err != nil {
+		if err := s.WithTx(tx).repo.Update(ctx, inv); err != nil {
 			return err
 		}
 
