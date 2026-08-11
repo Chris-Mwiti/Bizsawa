@@ -18,6 +18,7 @@ type Config struct {
 	Redis           RedisConfig
 	CORS            CORSConfig
 	JWT             JWTConfig
+	MCP             MCPConfig
 	WhatsApp        WhatsAppConfig
 	Crypto          CryptoConfig
 	Mpesa           MpesaConfig
@@ -42,6 +43,17 @@ type CORSConfig struct {
 type JWTConfig struct {
 	Issuer     string
 	SigningKey string
+}
+
+type MCPConfig struct {
+	Addr                  string
+	PublicURL             string
+	AuthIssuer            string
+	AuthAudience          string
+	ToolPayloadLimitBytes int64
+	EnableCustomerService bool
+	EnableBusinessOwner   bool
+	TelemetryEnabled      bool
 }
 
 type WhatsAppConfig struct {
@@ -93,6 +105,16 @@ func Load() Config {
 			Issuer:     env("JWT_ISSUER", "bizsawa"),
 			SigningKey: env("JWT_SIGNING_KEY", "change-me"),
 		},
+		MCP: MCPConfig{
+			Addr:                  env("MCP_ADDR", ":5574"),
+			PublicURL:             env("MCP_PUBLIC_URL", "http://localhost:5574"),
+			AuthIssuer:            env("MCP_AUTH_ISSUER", env("JWT_ISSUER", "bizsawa")),
+			AuthAudience:          env("MCP_AUTH_AUDIENCE", "bizsawa-mcp"),
+			ToolPayloadLimitBytes: int64Env("MCP_TOOL_PAYLOAD_LIMIT_BYTES", 64*1024),
+			EnableCustomerService: boolEnv("MCP_ENABLE_CUSTOMER_SERVICE", true),
+			EnableBusinessOwner:   boolEnv("MCP_ENABLE_BUSINESS_OWNER", true),
+			TelemetryEnabled:      boolEnv("MCP_TELEMETRY_ENABLED", true),
+		},
 		WhatsApp: WhatsAppConfig{
 			Driver:      env("WHATSAPP_DRIVER", "waha"),
 			WAHABase:    env("WAHA_BASE_URL", "http://localhost:3000"),
@@ -138,6 +160,30 @@ func intEnv(key string, fallback int) int {
 		return fallback
 	}
 	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return fallback
+	}
+	return parsed
+}
+
+func int64Env(key string, fallback int64) int64 {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return fallback
+	}
+	return parsed
+}
+
+func boolEnv(key string, fallback bool) bool {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.ParseBool(value)
 	if err != nil {
 		return fallback
 	}

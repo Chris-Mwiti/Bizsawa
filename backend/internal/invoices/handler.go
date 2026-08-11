@@ -94,12 +94,12 @@ func (h Handler) RecordPayment(w http.ResponseWriter, r *http.Request) {
 		sharedhttp.Error(w, err)
 		return
 	}
-	inv, err := h.svc.RecordPayment(r.Context(), bid, id, req)
+	err := h.svc.RecordPayment(r.Context(), bid, id, req)
 	if err != nil {
 		sharedhttp.Error(w, err)
 		return
 	}
-	sharedhttp.JSON(w, http.StatusOK, inv)
+	sharedhttp.JSON(w, http.StatusOK, "invoice payment done")
 }
 
 func (h Handler) PDF(w http.ResponseWriter, r *http.Request) {

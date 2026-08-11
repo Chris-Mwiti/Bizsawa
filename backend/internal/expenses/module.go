@@ -22,3 +22,5 @@ func (m *Module) RegisterRoutes(r chi.Router) {
 	r.Get("/{id}", h.Get)
 	r.Delete("/{id}", h.Delete)
 }
+
+func (m *Module) Service() *Service { return m.svc }
