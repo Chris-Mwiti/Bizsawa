@@ -43,7 +43,7 @@ Architecture target from `bizsawa_go_architecture_v2.png`:
 - Client apps call the Chi API gateway.
 - The API runs as a modular monolith.
 - Payments are isolated through a payment worker and event flow.
-- Redis Streams carries events/jobs.
+- Golang river carries events/jobs.
 - PostgreSQL stores tenant-scoped application data.
 - Redis cache supports insights, chart JSON, and idempotency.
 - External services include Mpesa Daraja, LLM API, WAHA/whatsmeow, email/SMS/PDF.
