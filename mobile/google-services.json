@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "183368725644",
+    "project_id": "project-199ca5e7-d341-4f17-bb7",
+    "storage_bucket": "project-199ca5e7-d341-4f17-bb7.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:183368725644:android:a8abcffd6395dd982db7a9",
+        "android_client_info": {
+          "package_name": "com.bizsawa.mobile"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "183368725644-ifji6d2vmf5f23iqq3sck5doiarp3p39.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCTBm3tfDNtX8S4TsdOUICHSxiEGo4keA0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "183368725644-ifji6d2vmf5f23iqq3sck5doiarp3p39.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "183368725644-1ag2dtvm5tdbl5goehru7bmdo64bc7jf.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.bizsawa.mobile"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
