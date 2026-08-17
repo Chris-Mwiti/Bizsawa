@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState, memo } from "react";
 import { ActivityIndicator, Alert, FlatList, Modal, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { Banknote, CheckCircle, CreditCard, Plus, Smartphone, Trash2 } from "lucide-react-native";
@@ -18,6 +18,73 @@ interface DraftLine {
   quantity: string;
   unitPrice: string;
 }
+
+// Extract & Memoize Order Item to prevent FlatList thread freezing
+const OrderItem = memo(({
+  order,
+  onUpdateStatus,
+  onInitiatePayment,
+  isInitiatingPayment,
+  formatCurrency,
+  formatDate,
+}: {
+  order: Order;
+  onUpdateStatus: (id: string, status: OrderStatus) => void;
+  onInitiatePayment: (id: string, amount: string) => void;
+  isInitiatingPayment: boolean;
+  formatCurrency: (amount: number) => string;
+  formatDate: (iso: string) => string;
+}) => {
+  return (
+    <Card className="mb-3">
+      <CardContent className="p-4">
+        <View className="flex-row justify-between mb-3">
+          <View className="flex-1 pr-3">
+            <Text className="font-bold text-gray-900">Order {order.id.slice(0, 8)}</Text>
+            <Text className="text-xs text-gray-500">{formatDate(order.createdAt)}</Text>
+          </View>
+          <View className="items-end">
+            <Text className="font-bold">{formatCurrency(toNumber(order.total))}</Text>
+            <Badge variant={order.status === "fulfilled" ? "secondary" : "destructive"}>{order.status}</Badge>
+          </View>
+        </View>
+        <View className="flex-row gap-2">
+          {order.status === "draft" && (
+            <TouchableOpacity
+              className="flex-1 bg-green-600 py-2 rounded-lg items-center"
+              onPress={() => onUpdateStatus(order.id, OrderStatus.confirmed)}
+            >
+              <Text className="text-white font-bold">Confirm</Text>
+            </TouchableOpacity>
+          )}
+          {order.status === "confirmed" && (
+            <TouchableOpacity
+              className="flex-1 bg-blue-600 py-2 rounded-lg items-center"
+              onPress={() => onUpdateStatus(order.id, OrderStatus.fulfilled)}
+            >
+              <Text className="text-white font-bold">Fulfill</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            className="px-3 py-2 rounded-lg bg-gray-100"
+            onPress={() => onInitiatePayment(order.id, order.total)}
+            disabled={isInitiatingPayment}
+          >
+            <Smartphone size={18} color="#006b5f" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            className="px-3 py-2 rounded-lg bg-red-50"
+            onPress={() => onUpdateStatus(order.id, OrderStatus.cancelled)}
+          >
+            <Trash2 size={18} color="#dc2626" />
+          </TouchableOpacity>
+        </View>
+      </CardContent>
+    </Card>
+  );
+});
+
+OrderItem.displayName = "OrderItem";
 
 export default function SalesTab() {
   const params = useLocalSearchParams<{ segment?: string; action?: string }>();
@@ -41,8 +108,8 @@ export default function SalesTab() {
   const { mutateAsync: initiatePayment, isPending: isInitiatingPayment } = useInitiatePayment();
   const paymentStatus = usePaymentStatus(paymentId || undefined, !!paymentId);
 
-  const formatCurrency = (amount: number) => `KES ${amount.toLocaleString("en-KE")}`;
-  const formatDate = (iso: string) => new Date(iso).toLocaleDateString("en-KE");
+  const formatCurrency = useCallback((amount: number) => `KES ${amount.toLocaleString("en-KE")}`, []);
+  const formatDate = useCallback((iso: string) => new Date(iso).toLocaleDateString("en-KE"), []);
 
   const selectedProduct = products.find((product) => product.id === selectedProductId);
   const total = draftLines.reduce((sum, line) => sum + toNumber(line.unitPrice) * toNumber(line.quantity), 0);
@@ -158,6 +225,14 @@ export default function SalesTab() {
     }
   };
 
+  // Status update handler wrapped in useCallback
+  const handleUpdateStatus = useCallback(
+    (id: string, status: OrderStatus) => {
+      updateOrder({ id, data: { status } });
+    },
+    [updateOrder],
+  );
+
   const handleInitiateOrderPayment = useCallback(
     async (orderId: string, amount: string) => {
       const customer = customerId ? customers.find((item) => item.id === customerId) : undefined;
@@ -179,40 +254,16 @@ export default function SalesTab() {
 
   const renderOrder = useCallback(
     ({ item: order }: { item: Order }) => (
-      <Card className="mb-3">
-        <CardContent className="p-4">
-          <View className="flex-row justify-between mb-3">
-            <View className="flex-1 pr-3">
-              <Text className="font-bold text-gray-900">Order {order.id.slice(0, 8)}</Text>
-              <Text className="text-xs text-gray-500">{formatDate(order.createdAt)}</Text>
-            </View>
-            <View className="items-end">
-              <Text className="font-bold">{formatCurrency(toNumber(order.total))}</Text>
-              <Badge variant={order.status === "fulfilled" ? "secondary" : "destructive"}>{order.status}</Badge>
-            </View>
-          </View>
-          <View className="flex-row gap-2">
-            {order.status === "draft" && (
-              <TouchableOpacity className="flex-1 bg-green-600 py-2 rounded-lg items-center" onPress={() => updateOrder({ id: order.id, data: { status: OrderStatus.confirmed } })}>
-                <Text className="text-white font-bold">Confirm</Text>
-              </TouchableOpacity>
-            )}
-            {order.status === "confirmed" && (
-              <TouchableOpacity className="flex-1 bg-blue-600 py-2 rounded-lg items-center" onPress={() => updateOrder({ id: order.id, data: { status: OrderStatus.fulfilled } })}>
-                <Text className="text-white font-bold">Fulfill</Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity className="px-3 py-2 rounded-lg bg-gray-100" onPress={() => handleInitiateOrderPayment(order.id, order.total)} disabled={isInitiatingPayment}>
-              <Smartphone size={18} color="#006b5f" />
-            </TouchableOpacity>
-            <TouchableOpacity className="px-3 py-2 rounded-lg bg-red-50" onPress={() => updateOrder({ id: order.id, data: { status: OrderStatus.cancelled } })}>
-              <Trash2 size={18} color="#dc2626" />
-            </TouchableOpacity>
-          </View>
-        </CardContent>
-      </Card>
+      <OrderItem
+        order={order}
+        onUpdateStatus={handleUpdateStatus}
+        onInitiatePayment={handleInitiateOrderPayment}
+        isInitiatingPayment={isInitiatingPayment}
+        formatCurrency={formatCurrency}
+        formatDate={formatDate}
+      />
     ),
-    [formatCurrency, formatDate, handleInitiateOrderPayment, isInitiatingPayment, updateOrder],
+    [handleUpdateStatus, handleInitiateOrderPayment, isInitiatingPayment, formatCurrency, formatDate],
   );
 
   if (productsLoading) {
@@ -233,10 +284,16 @@ export default function SalesTab() {
         </View>
 
         <View className="flex-row bg-gray-200 rounded-lg mb-2 max-w-sm self-center w-full">
-          <TouchableOpacity className={`flex-1 py-3 rounded-lg items-center ${activeTab === "sales" ? "bg-white shadow" : ""}`} onPress={() => setActiveTab("sales")}>
+          <TouchableOpacity
+            className={`flex-1 py-3 rounded-lg items-center ${activeTab === "sales" ? "bg-white shadow" : ""}`}
+            onPress={() => setActiveTab("sales")}
+          >
             <Text className={`font-medium ${activeTab === "sales" ? "text-gray-900" : "text-gray-500"}`}>Sales</Text>
           </TouchableOpacity>
-          <TouchableOpacity className={`flex-1 py-3 rounded-lg items-center ${activeTab === "orders" ? "bg-white shadow" : ""}`} onPress={() => setActiveTab("orders")}>
+          <TouchableOpacity
+            className={`flex-1 py-3 rounded-lg items-center ${activeTab === "orders" ? "bg-white shadow" : ""}`}
+            onPress={() => setActiveTab("orders")}
+          >
             <Text className={`font-medium ${activeTab === "orders" ? "text-gray-900" : "text-gray-500"}`}>Orders</Text>
           </TouchableOpacity>
         </View>
@@ -259,7 +316,10 @@ export default function SalesTab() {
                 </CardContent>
               </Card>
             </View>
-            <TouchableOpacity className="bg-gray-900 h-12 rounded-lg flex-row items-center justify-center mb-4" onPress={() => setShowSaleModal(true)}>
+            <TouchableOpacity
+              className="bg-gray-900 h-12 rounded-lg flex-row items-center justify-center mb-4"
+              onPress={() => setShowSaleModal(true)}
+            >
               <Plus size={18} color="white" />
               <Text className="text-white font-bold ml-2">Record Sale</Text>
             </TouchableOpacity>
@@ -293,11 +353,29 @@ export default function SalesTab() {
           ListHeaderComponent={
             <View>
               <View className="flex-row justify-between mb-4">
-                <Card className="w-[31%]"><CardContent className="p-3 items-center"><Text className="text-lg font-bold">{orderStats.open}</Text><Text className="text-xs text-gray-500">Open</Text></CardContent></Card>
-                <Card className="w-[31%]"><CardContent className="p-3 items-center"><Text className="text-lg font-bold">{orderStats.fulfilled}</Text><Text className="text-xs text-gray-500">Done</Text></CardContent></Card>
-                <Card className="w-[31%]"><CardContent className="p-3 items-center"><Text className="text-lg font-bold">{formatCurrency(orderStats.value)}</Text><Text className="text-xs text-gray-500">Value</Text></CardContent></Card>
+                <Card className="w-[31%]">
+                  <CardContent className="p-3 items-center">
+                    <Text className="text-lg font-bold">{orderStats.open}</Text>
+                    <Text className="text-xs text-gray-500">Open</Text>
+                  </CardContent>
+                </Card>
+                <Card className="w-[31%]">
+                  <CardContent className="p-3 items-center">
+                    <Text className="text-lg font-bold">{orderStats.fulfilled}</Text>
+                    <Text className="text-xs text-gray-500">Done</Text>
+                  </CardContent>
+                </Card>
+                <Card className="w-[31%]">
+                  <CardContent className="p-3 items-center">
+                    <Text className="text-lg font-bold">{formatCurrency(orderStats.value)}</Text>
+                    <Text className="text-xs text-gray-500">Value</Text>
+                  </CardContent>
+                </Card>
               </View>
-              <TouchableOpacity className="bg-gray-900 h-12 rounded-lg flex-row items-center justify-center mb-4" onPress={() => setShowOrderModal(true)}>
+              <TouchableOpacity
+                className="bg-gray-900 h-12 rounded-lg flex-row items-center justify-center mb-4"
+                onPress={() => setShowOrderModal(true)}
+              >
                 <Plus size={18} color="white" />
                 <Text className="text-white font-bold ml-2">Create Order</Text>
               </TouchableOpacity>
@@ -307,7 +385,9 @@ export default function SalesTab() {
             <Card>
               <CardContent className="p-4 items-center">
                 <Text className="font-bold text-gray-900">No orders yet</Text>
-                <Text className="text-sm text-gray-500 mt-1 text-center">Create an order to track fulfillment and payments.</Text>
+                <Text className="text-sm text-gray-500 mt-1 text-center">
+                  Create an order to track fulfillment and payments.
+                </Text>
               </CardContent>
             </Card>
           }
@@ -339,14 +419,37 @@ export default function SalesTab() {
         onSubmit={showSaleModal ? handleCreateSale : handleCreateOrder}
       />
 
-      <Modal visible={showCustomerModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowCustomerModal(false)}>
+      <Modal
+        visible={showCustomerModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowCustomerModal(false)}
+      >
         <View className="flex-1 bg-gray-50 p-4 justify-center">
           <Card>
-            <CardHeader><CardTitle><Text className="font-bold">New Customer</Text></CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle>
+                <Text className="font-bold">New Customer</Text>
+              </CardTitle>
+            </CardHeader>
             <CardContent>
-              <TextInput className="border border-gray-300 rounded-lg p-3 mb-3 bg-white" placeholder="Customer name" value={customerForm.name} onChangeText={(name) => setCustomerForm((prev) => ({ ...prev, name }))} />
-              <TextInput className="border border-gray-300 rounded-lg p-3 mb-4 bg-white" placeholder="Phone" keyboardType="phone-pad" value={customerForm.phone} onChangeText={(phone) => setCustomerForm((prev) => ({ ...prev, phone }))} />
-              <TouchableOpacity className="bg-gray-900 h-12 rounded-lg items-center justify-center" onPress={handleCreateCustomer}>
+              <TextInput
+                className="border border-gray-300 rounded-lg p-3 mb-3 bg-white"
+                placeholder="Customer name"
+                value={customerForm.name}
+                onChangeText={(name) => setCustomerForm((prev) => ({ ...prev, name }))}
+              />
+              <TextInput
+                className="border border-gray-300 rounded-lg p-3 mb-4 bg-white"
+                placeholder="Phone"
+                keyboardType="phone-pad"
+                value={customerForm.phone}
+                onChangeText={(phone) => setCustomerForm((prev) => ({ ...prev, phone }))}
+              />
+              <TouchableOpacity
+                className="bg-gray-900 h-12 rounded-lg items-center justify-center"
+                onPress={handleCreateCustomer}
+              >
                 <Text className="text-white font-bold">Save Customer</Text>
               </TouchableOpacity>
             </CardContent>
@@ -392,7 +495,9 @@ function EntryModal(props: {
       <View className="flex-1 bg-gray-50">
         <View className="flex-row justify-between items-center p-4 bg-white border-b border-gray-200">
           <Text className="text-lg font-bold">{props.title}</Text>
-          <TouchableOpacity onPress={props.onClose} className="p-2"><Text className="text-gray-500 font-bold text-lg">X</Text></TouchableOpacity>
+          <TouchableOpacity onPress={props.onClose} className="p-2">
+            <Text className="text-gray-500 font-bold text-lg">X</Text>
+          </TouchableOpacity>
         </View>
         <ScrollView contentContainerStyle={{ padding: 16 }}>
           <Text className="font-bold text-gray-900 mb-2">Customer</Text>
@@ -401,7 +506,11 @@ function EntryModal(props: {
               <Text className="text-green-700 font-bold">+ Add New Customer</Text>
             </TouchableOpacity>
             {props.customers.map((customer) => (
-              <TouchableOpacity key={customer.id} className={`p-3 border-b border-gray-100 ${props.customerId === customer.id ? "bg-green-50" : ""}`} onPress={() => props.setCustomerId(customer.id)}>
+              <TouchableOpacity
+                key={customer.id}
+                className={`p-3 border-b border-gray-100 ${props.customerId === customer.id ? "bg-green-50" : ""}`}
+                onPress={() => props.setCustomerId(customer.id)}
+              >
                 <Text className="font-medium">{customer.name}</Text>
                 {customer.phone ? <Text className="text-xs text-gray-500">{customer.phone}</Text> : null}
               </TouchableOpacity>
@@ -410,13 +519,25 @@ function EntryModal(props: {
 
           <Text className="font-bold text-gray-900 mb-2">Payment Method</Text>
           <View className="flex-row gap-2 mb-4">
-            {[{ id: "mpesa", label: "M-Pesa", icon: Smartphone }, { id: "cash", label: "Cash", icon: Banknote }, { id: "card", label: "Card", icon: CreditCard }].map((method) => {
+            {[
+              { id: "mpesa", label: "M-Pesa", icon: Smartphone },
+              { id: "cash", label: "Cash", icon: Banknote },
+              { id: "card", label: "Card", icon: CreditCard },
+            ].map((method) => {
               const Icon = method.icon;
               const active = props.paymentMethod === method.id;
               return (
-                <TouchableOpacity key={method.id} className={`flex-1 p-3 rounded-lg flex-row items-center justify-center border ${active ? "bg-green-50 border-green-500" : "bg-white border-gray-200"}`} onPress={() => props.setPaymentMethod(method.id)}>
+                <TouchableOpacity
+                  key={method.id}
+                  className={`flex-1 p-3 rounded-lg flex-row items-center justify-center border ${
+                    active ? "bg-green-50 border-green-500" : "bg-white border-gray-200"
+                  }`}
+                  onPress={() => props.setPaymentMethod(method.id)}
+                >
                   <Icon size={16} color={active ? "#16a34a" : "#6b7280"} />
-                  <Text className={`ml-2 font-medium ${active ? "text-green-700" : "text-gray-600"}`}>{method.label}</Text>
+                  <Text className={`ml-2 font-medium ${active ? "text-green-700" : "text-gray-600"}`}>
+                    {method.label}
+                  </Text>
                 </TouchableOpacity>
               );
             })}
@@ -426,23 +547,47 @@ function EntryModal(props: {
           <View className="bg-white border border-gray-200 rounded-lg mb-3 max-h-[180px]">
             <ScrollView nestedScrollEnabled>
               {props.products.map((product) => (
-                <TouchableOpacity key={product.id} className={`p-3 border-b border-gray-100 ${props.selectedProductId === product.id ? "bg-blue-50" : ""}`} onPress={() => props.setSelectedProductId(product.id)}>
+                <TouchableOpacity
+                  key={product.id}
+                  className={`p-3 border-b border-gray-100 ${
+                    props.selectedProductId === product.id ? "bg-blue-50" : ""
+                  }`}
+                  onPress={() => props.setSelectedProductId(product.id)}
+                >
                   <Text className="font-medium">{product.name}</Text>
-                  <Text className="text-xs text-gray-500">{formatCurrency(product.price)} • Stock: {product.stockQuantity}</Text>
+                  <Text className="text-xs text-gray-500">
+                    {formatCurrency(product.price)} • Stock: {product.stockQuantity}
+                  </Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
           </View>
           <View className="flex-row gap-2 mb-4">
-            <TextInput className="flex-1 bg-white border border-gray-300 rounded-lg p-3" placeholder="Qty" keyboardType="numeric" value={props.quantity} onChangeText={props.setQuantity} />
-            <TouchableOpacity className="w-14 bg-green-600 rounded-lg items-center justify-center" onPress={props.addLine} disabled={!selectedProduct}>
+            <TextInput
+              className="flex-1 bg-white border border-gray-300 rounded-lg p-3"
+              placeholder="Qty"
+              keyboardType="numeric"
+              value={props.quantity}
+              onChangeText={props.setQuantity}
+            />
+            <TouchableOpacity
+              className="w-14 bg-green-600 rounded-lg items-center justify-center"
+              onPress={props.addLine}
+              disabled={!selectedProduct}
+            >
               <Plus size={22} color="white" />
             </TouchableOpacity>
           </View>
 
           {props.draftLines.map((line, index) => (
-            <View key={`${line.productId}-${index}`} className="flex-row justify-between bg-white border border-gray-100 rounded-lg p-3 mb-2">
-              <View><Text className="font-medium">{line.productName}</Text><Text className="text-xs text-gray-500">Qty {line.quantity}</Text></View>
+            <View
+              key={`${line.productId}-${index}`}
+              className="flex-row justify-between bg-white border border-gray-100 rounded-lg p-3 mb-2"
+            >
+              <View>
+                <Text className="font-medium">{line.productName}</Text>
+                <Text className="text-xs text-gray-500">Qty {line.quantity}</Text>
+              </View>
               <Text className="font-bold">{formatCurrency(toNumber(line.unitPrice) * toNumber(line.quantity))}</Text>
             </View>
           ))}
@@ -450,8 +595,16 @@ function EntryModal(props: {
           <View className="bg-blue-50 p-4 rounded-xl border border-blue-100 my-4">
             <Text className="text-blue-900 font-bold text-center text-lg">Total: {formatCurrency(props.total)}</Text>
           </View>
-          <TouchableOpacity className="bg-gray-900 h-14 rounded-xl items-center justify-center" onPress={props.onSubmit} disabled={props.isSaving}>
-            {props.isSaving ? <ActivityIndicator color="white" /> : <Text className="text-white font-bold text-lg">Save</Text>}
+          <TouchableOpacity
+            className="bg-gray-900 h-14 rounded-xl items-center justify-center"
+            onPress={props.onSubmit}
+            disabled={props.isSaving}
+          >
+            {props.isSaving ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <Text className="text-white font-bold text-lg">Save</Text>
+            )}
           </TouchableOpacity>
         </ScrollView>
       </View>
