@@ -1,0 +1,223 @@
+# Design MCP tools
+
+<Callout title="Governing MCP across your organization?" type="info">
+  Speakeasy's [AI control plane](/product/ai-control-plane) connects, secures, and observes every agent and MCP server from one entry point — with SSO, RBAC, runtime guardrails, and a full audit trail.
+</Callout>
+
+After building, successfully deploying, and monitoring your MCP server, the natural next step is to optimize it. You can unlock substantial performance gains by focusing on strategic tool curation, selecting, refining, and organizing tools to reduce overhead and maximize server efficiency.
+
+This guide presents several tool curation principles for MCP server optimization.
+
+## What is tool curation?
+
+Tool curation involves choosing and organizing MCP tools to expose to LLM models. By carefully selecting, naming, and describing your tools for LLMs, you can manage context windows and prevent hallucinations. Tool curation combines technical optimization with prompt engineering and significantly impacts how well your MCP server performs in production.
+
+Tool curation matters because:
+
+- **LLMs break down with too many tools:** LLMs become unreliable when exposed to more than 30-40 tools. Beyond this threshold, they display tool hallucination (inventing non-existent tools) and perform irrelevant tool selections (using the wrong tools for tasks). These failed attempts and incorrect tool calls increase computational overhead and API costs.
+- **Tool descriptions have a greater impact than model choice:** Optimizing your tool descriptions and names can have a [bigger impact on the quality of your MCP server](https://www.speakeasy.com/blog/cost-aware-pass-rate) than the underlying LLM models your users choose. A well-curated toolset with clear descriptions will outperform a comprehensive but poorly organized toolset, even when using smaller, cheaper models.
+- **Every tool name and description becomes part of the prompt that guides LLM decision-making:** Tool curation works like prompt engineering for tools. Similar to crafting effective prompts, tool curation requires understanding how LLMs process information and make choices.
+
+### When do you need tool curation?
+
+Just like premature optimization in software, curating tools too early can be a waste of effort if you don't yet understand real user behavior. Instead, wait until clear warning signs emerge that indicate tool curation is needed, such as:
+
+- **Tool hallucination:** The LLM invents non-existent tools.
+- **Irrelevant tool selection:** The LLM uses tools that aren't suited to the current goal.
+- **Increased end-user costs:** MCP clients make many failed attempts and incorrect tool calls.
+- **Agent confusion:** Tasks that should be simple require multiple attempts.
+- **Context window exhaustion:** Tool definitions consume too much available context.
+
+## How to do tool curation effectively?
+
+The best place to begin tool curation depends on how you built your MCP server.
+
+If you generated your MCP server **from an API** (using a tool like FastMCP), start by editing your code directly. For example, you can add detailed docstrings or update function metadata.
+
+If you generated your MCP server **from an OpenAPI document** (using a tool like [Speakeasy](https://www.speakeasy.com/mcp)), rather start by editing the OpenAPI document itself. Use the following principles to edit OpenAPI documents for effective tool curation:
+
+### Group tools by workflow, not API structure
+
+**❌ Resource-based grouping:** API documentation often organizes endpoints by resource type, because it makes sense for developers reading technical documentation.
+
+```txt
+User Management Tools:
+- create_user
+- update_user
+- delete_user
+- get_user_by_id
+- list_all_users
+
+Ticket Management Tools:
+- create_ticket
+- update_ticket
+- delete_ticket
+- get_ticket_by_id
+- list_all_tickets
+```
+
+However, organizing API endpoints by resource type forces agents to jump between tool categories to complete simple workflows. For example, an agent trying to create a support ticket for a customer must search through the `User Management Tools`, then switch to the `Ticket Management Tools`, potentially missing the connection between related operations.
+
+**✅ Workflow-based grouping:** Because agents think in terms of tasks and workflows, rather organize the endpoints according to workflows. This lets agents complete entire tasks without switching contexts or hunting through unrelated tool categories. Each toolset represents a specific workflow.
+
+```txt
+Customer Support Workflow:
+- search_customer (find who needs help)
+- get_customer_tickets (see their history)
+- create_support_ticket (log the issue)
+- update_ticket_status (track progress)
+
+License Management Workflow:
+- lookup_customer_licenses (check current status)
+- validate_license_key (verify authenticity)
+- create_new_license (issue replacement)
+- send_license_notification (inform customer)
+```
+
+### Include dependency tools in each toolset
+
+**❌ Missing dependencies:** Many tools require information from other tools to function properly. If you indicate the required information, most developers know how to find it.
+
+```txt
+Quick License Creation Toolset:
+- create_license (requires user_id, product_id, license_type)
+```
+
+However, when you exclude prerequisite tools from a toolset, agents can get stuck with incomplete information and fail to complete workflows. For example, if an agent trying to create a license doesn't know how to find the required `user_id` or determine valid `license_type` values, the workflow breaks down immediately.
+
+**✅ Complete dependency chain:** Rather create a toolset that supports the complete workflow, from discovery through validation, ensuring agents have all the information they need to succeed.
+
+```txt
+License Management Toolset:
+- search_customers (get user_id by name/email)
+- list_products (see available product_id values)
+- get_license_types (understand valid license_type options)
+- create_license (complete the action with all required data)
+- validate_license (verify the creation worked)
+```
+
+### Use clear, consistent naming patterns
+
+**❌ Mixed conventions:** Using varying punctuation and synonyms doesn't impair most developers' understanding of tools.
+
+```txt
+Customer Tools:
+- searchCustomers
+- find_user_by_id
+- getUserDetails
+- lookup_customer_info
+- fetch_user_data
+```
+
+However, inconsistent tool names create cognitive overhead for agents. When agents learn patterns, they expect consistency. Mixed conventions force agents to memorize individual tool names rather than predicting them. For example, the above tools all retrieve customer information but the use of `camelCase`, `snake_case`, and different verbs makes it harder for LLMs to discover and remember them.
+
+**✅ Consistent patterns:** Rather use predictable naming patterns for related tools. For example, the consistent `search_*` and `get_*` patterns help agents predict tool names and understand the distinction between searching (finding multiple results) and getting (retrieving specific items) information.
+
+```txt
+Customer Tools:
+- search_customers
+- get_customer_by_id
+- get_customer_details
+- get_customer_tickets
+- get_customer_billing
+```
+
+### Write descriptions for agents, not humans
+
+**❌ Technical descriptions:** The descriptions in API documentation usually target developers who understand technical implementation details.
+
+```txt
+POST /api/v1/tickets
+Description: "Creates a new ticket resource in the database with the
+provided JSON payload. Returns a 201 status code with the created
+ticket object including auto-generated ID and timestamp fields."
+```
+
+However, agents need less technical information and instead require task-oriented descriptions that explain when and how to use tools within larger workflows. The example above describes the technical implementation but provides no guidance about when and how to use the tool.
+
+**✅ Task-oriented descriptions:** Rewrite the description for agents by specifying the scenarios when they should use the tool and any preparatory tasks they first need to perform. For example, the following description tells agents exactly when to use the tool, what preparation is needed, and how it fits into customer service workflows.
+
+```txt
+create_support_ticket
+Description: "Creates a new customer support ticket when a customer
+reports an issue. Use this when customers need help with technical
+problems, billing questions, or feature requests. Requires customer_id
+(use search_customers first) and issue description."
+```
+
+### Provide workflow context in descriptions
+
+**❌ Isolated descriptions:** Developers know that tools rarely exist in isolation, and intuitively understand the larger workflows they form a part of based on their descriptions.
+
+```bash
+create_license: "Creates a new license."
+search_customers: "Finds customers in the database."
+```
+
+However, these descriptions treat each tool as independent, providing no guidance about workflow relationships or sequencing.
+
+**✅ Workflow-aware descriptions:** Add workflow context to descriptions to help agents understand how tools connect and which actions come before or after each tool call. For example, the following descriptions help agents understand tool relationships and natural workflow sequences.
+
+```txt
+create_license: "Creates a new license for a customer. Use after
+search_customers to get the customer_id, and list_products to choose
+the right product_id. Always validate the created license afterward."
+
+search_customers: "Finds customers by name, email, or company. Use this
+first step before creating tickets, licenses, or accessing customer data.
+Returns customer_id needed for other customer operations."
+```
+
+### Avoid the "everything" toolset
+
+**❌ The giga-toolset:** You may be tempted to save time by including every available tool in a single toolset.
+
+```txt
+Complete Business Management:
+- 47 customer management tools
+- 23 inventory tools
+- 31 financial tools
+- 18 reporting tools
+- 12 user administration tools
+- 8 system configuration tools
+```
+
+However, this overwhelming collection forces agents to process irrelevant options for every task, slowing down decision-making and increasing error rates. One way you can prevent this decision paralysis is by organizing your toolsets according to user personas. For example, a customer service agent might only need the tools for listing tickets, listing customers, viewing customers, and adding internal notes.
+
+**✅ Focused toolsets:** Instead of exposing the agent to all the tools in your MCP server, create a focused toolset to prevent it from spending more time analyzing options than completing actual work. In the following example, each toolset has a clear purpose and contains only the tools relevant for that purpose, enabling faster agent decision-making with fewer errors.
+
+```txt
+Customer Service:
+- search_customers
+- get_customer_tickets
+- create_ticket
+- update_ticket_status
+- add_ticket_note
+
+Emergency Escalation:
+- search_priority_tickets
+- escalate_to_manager
+- notify_technical_team
+- create_incident_report
+```
+
+## Curating a focused toolset
+
+Once you've applied these principles, the practical step is to trim a broad, auto-generated toolset down to the ones a given workflow actually needs.
+
+Take an internal API that spans several domains — say customer service, marketing, and licensing. Generating an MCP server directly from its OpenAPI document produces one large toolset covering all of them. Used as-is for a single customer-service agent, that server still works, but the extra tools create ambiguity: when you ask the agent to perform an action that several tools could satisfy, it either pauses to ask for confirmation or picks the tool that looks most plausible, increasing the risk of a wrong call.
+
+A better approach is to build a workflow-specific toolset that exposes only the tools that workflow needs. For a customer-service agent, that might be just the tools to:
+
+- List tickets
+- Create and validate licenses
+- Retrieve user information
+
+This focused toolset reduces tool confusion and improves agent decision-making. From there, edit the individual tool names and descriptions to add clarity, applying the curation principles from the previous section.
+
+## Conclusion
+
+In this guide, you explored how to optimize your MCP server through tool curation. By narrowing your toolsets to only the essential tools, you not only improve the experience for both users and agents but also lower costs — since even smaller models with shorter context windows can perform effectively with a focused set of tools.
+
+MCP server optimization extends beyond tool curation. You can [monitor](/mcp/monitoring-mcp-servers) your MCP server to identify other optimization opportunities through data analysis.
+

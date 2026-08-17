@@ -13,7 +13,6 @@ go.sum
 *.dylib
 *.test
 *.out
-app
 server
 
 # --------------------------

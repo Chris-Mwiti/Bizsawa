@@ -57,7 +57,7 @@ type CreateInvoiceRequest struct {
 
 type RecordPaymentRequest struct {
 	Amount    decimal.Decimal `json:"amount"`
-	PaymentID uuid.UUID      `json:"paymentId"`
+	PaymentID uuid.UUID       `json:"paymentId"`
 	PaidAt    *time.Time      `json:"paidAt"`
 }
 
@@ -205,7 +205,7 @@ func (s *Service) Send(ctx context.Context, businessID, invoiceID uuid.UUID, cha
 	return invoice, nil
 }
 
-func (s *Service) RecordPayment(ctx context.Context, businessID, orderID uuid.UUID, req RecordPaymentRequest) (error) {
+func (s *Service) RecordPayment(ctx context.Context, businessID, orderID uuid.UUID, req RecordPaymentRequest) error {
 	var invoices []Invoice
 
 	err := s.repo.db.Transaction(func(tx *gorm.DB) error {
@@ -224,7 +224,7 @@ func (s *Service) RecordPayment(ctx context.Context, businessID, orderID uuid.UU
 		if len(invoices) <= 0 {
 			return fmt.Errorf("no invoices found")
 		}
-		
+
 		inv := &invoices[0]
 
 		inv.AmountPaid = inv.AmountPaid.Add(req.Amount).Round(2)
@@ -254,7 +254,6 @@ func (s *Service) RecordPayment(ctx context.Context, businessID, orderID uuid.UU
 
 		return nil
 	})
-
 
 	return err
 }
