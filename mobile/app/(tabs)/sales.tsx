@@ -13,6 +13,7 @@ import { useSales } from "../../hooks/api/useSales";
 import { Order, toNumber } from "../../lib/api-dtos";
 import { OrdersHeader } from "../../components/OrderHeader";
 import { OrdersEmptyState } from "../../components/OrderEmptyState";
+import { OrdersFooter } from "../../components/OrderFooter";
 
 interface DraftLine {
   productId: string;
@@ -107,7 +108,7 @@ export default function SalesTab() {
   const { products, isLoading: productsLoading } = useProducts();
   const { data: customers = [] } = useCustomers();
   const { mutateAsync: createCustomer } = useCreateCustomer();
-  const { orders, hasNextPage, hasPreviousPage, nextPage, previousPage, createOrder, updateOrder, isCreating: isCreatingOrder } = useOrders({ limit: 25 });
+  const { orders, hasNextPage, hasPreviousPage, nextPage, previousPage, createOrder, updateOrder, isCreating: isCreatingOrder, isFetching } = useOrders({ limit: 25 });
   const { sales, createSale, isCreating: isCreatingSale, refetch: refetchSales } = useSales();
   const { mutateAsync: initiatePayment, isPending: isInitiatingPayment } = useInitiatePayment();
   const paymentStatus = usePaymentStatus(paymentId || undefined, !!paymentId);
@@ -354,6 +355,12 @@ export default function SalesTab() {
           initialNumToRender={4}
           maxToRenderPerBatch={4}
           windowSize={7}
+          onEndReachedThreshold={0.4}
+          onEndReached={() => {
+            if (hasNextPage && !isFetching){
+              nextPage()     
+            }
+          }}
           ListHeaderComponent={
             <OrdersHeader
               stats={orderStats}
@@ -363,6 +370,10 @@ export default function SalesTab() {
           }
           ListEmptyComponent={
             <OrdersEmptyState />
+          }
+
+          ListFooterComponent={
+            <OrdersFooter visible={isFetching} />
           }
         />
       )}
