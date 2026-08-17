@@ -27,6 +27,7 @@ export interface CreateOrderInput {
 
 export interface UpdateOrderInput {
   status?: OrderStatus;
+  customerPhone?: string;
 }
 
 export interface UseOrdersOptions {
@@ -116,7 +117,11 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
             : status === OrderStatus.refunded
               ? "refund"
               : "cancel";
-      const response = await api.post<Order>(`/orders/${id}/${action}`);
+      const body =
+        action === "confirm"
+          ? { customerPhone: data.customerPhone?.trim() || "" }
+          : undefined;
+      const response = await api.post<Order>(`/orders/${id}/${action}`, body);
       return response.data;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["orders"] }),

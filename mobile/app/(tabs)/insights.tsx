@@ -4,6 +4,7 @@ import {
   View,
   Text,
   TouchableOpacity,
+  Pressable,
   Modal,
   TextInput,
   ActivityIndicator,
@@ -35,6 +36,7 @@ import { Progress } from "../../components/ui/Progress";
 import { useAnalytics } from "../../hooks/api/useAnalytics";
 import { useExpenses } from "../../hooks/api/useExpenses";
 import { TAB_BAR_SCROLL_PADDING } from "../../constants/tabBar";
+import { toNumber } from "../../lib/api-dtos";
 
 export default function InsightsTab() {
   const params = useLocalSearchParams<{ tab?: string; action?: string }>();
@@ -152,37 +154,23 @@ export default function InsightsTab() {
           </Text>
         </View>
 
-        <View className="flex-row bg-gray-200 rounded-lg mb-2 w-full">
-          <TouchableOpacity
-            className={`flex-1 py-3 rounded-lg items-center ${activeTab === "overview" ? "bg-white shadow" : ""}`}
-            onPress={() => setActiveTab("overview")}
-          >
-            <Text
-              className={`font-medium ${activeTab === "overview" ? "text-gray-900" : "text-gray-500"}`}
-            >
-              Overview
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            className={`flex-1 py-3 rounded-lg items-center ${activeTab === "analytics" ? "bg-white shadow" : ""}`}
-            onPress={() => setActiveTab("analytics")}
-          >
-            <Text
-              className={`font-medium ${activeTab === "analytics" ? "text-gray-900" : "text-gray-500"}`}
-            >
-              Analytics
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            className={`flex-1 py-3 rounded-lg items-center ${activeTab === "expenses" ? "bg-white shadow" : ""}`}
-            onPress={() => setActiveTab("expenses")}
-          >
-            <Text
-              className={`font-medium ${activeTab === "expenses" ? "text-gray-900" : "text-gray-500"}`}
-            >
-              Expenses
-            </Text>
-          </TouchableOpacity>
+        <View className="flex-row bg-gray-200 rounded-lg mb-2 w-full p-1">
+          {(["overview", "analytics", "expenses"] as const).map((tab) => {
+            const selected = activeTab === tab;
+            return (
+              <Pressable
+                key={tab}
+                accessibilityRole="tab"
+                accessibilityState={{ selected }}
+                className={`flex-1 py-3 rounded-lg items-center ${selected ? "bg-white shadow" : ""}`}
+                onPress={() => setActiveTab(tab)}
+              >
+                <Text className={`font-medium ${selected ? "text-gray-900" : "text-gray-500"}`}>
+                  {tab === "overview" ? "Overview" : tab === "analytics" ? "Analytics" : "Expenses"}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
       </View>
 
@@ -196,8 +184,7 @@ export default function InsightsTab() {
         keyboardShouldPersistTaps="handled"
         removeClippedSubviews={false}
       >
-        {activeTab === "overview" && (
-          <View>
+        <View style={{ display: activeTab === "overview" ? "flex" : "none" }} pointerEvents={activeTab === "overview" ? "auto" : "none"}>
             <Card className="mb-4">
               <CardHeader>
                 <CardTitle>
@@ -332,11 +319,9 @@ export default function InsightsTab() {
                 </View>
               </CardContent>
             </Card>
-          </View>
-        )}
+        </View>
 
-        {activeTab === "analytics" && (
-          <View>
+        <View style={{ display: activeTab === "analytics" ? "flex" : "none" }} pointerEvents={activeTab === "analytics" ? "auto" : "none"}>
             <Card className="mb-4">
               <CardHeader>
                 <CardTitle>
@@ -412,11 +397,9 @@ export default function InsightsTab() {
                 ))}
               </CardContent>
             </Card>
-          </View>
-        )}
+        </View>
 
-        {activeTab === "expenses" && (
-          <View>
+        <View style={{ display: activeTab === "expenses" ? "flex" : "none" }} pointerEvents={activeTab === "expenses" ? "auto" : "none"}>
             <Card className="mb-4">
               <CardContent className="p-8 items-center min-h-[160px] justify-center">
                 {expensesLoading ? (
@@ -465,7 +448,7 @@ export default function InsightsTab() {
                         </View>
                         <View className="items-end">
                           <Text className="font-bold text-gray-900">
-                            {formatCurrency(expense.amount)}
+                            {formatCurrency(toNumber(expense.amount))}
                           </Text>
                           <Text className="text-[10px] text-gray-500">
                             {new Date(expense.createdAt).toLocaleDateString()}
@@ -477,8 +460,7 @@ export default function InsightsTab() {
                 )}
               </CardContent>
             </Card>
-          </View>
-        )}
+        </View>
       </ScrollView>
 
       {/* Add expense */}
