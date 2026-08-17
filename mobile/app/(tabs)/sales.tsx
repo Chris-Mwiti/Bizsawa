@@ -107,7 +107,7 @@ export default function SalesTab() {
   const { products, isLoading: productsLoading } = useProducts();
   const { data: customers = [] } = useCustomers();
   const { mutateAsync: createCustomer } = useCreateCustomer();
-  const { orders, createOrder, updateOrder, isCreating: isCreatingOrder } = useOrders();
+  const { orders, hasNextPage, hasPreviousPage, nextPage, previousPage, createOrder, updateOrder, isCreating: isCreatingOrder } = useOrders({ limit: 25 });
   const { sales, createSale, isCreating: isCreatingSale, refetch: refetchSales } = useSales();
   const { mutateAsync: initiatePayment, isPending: isInitiatingPayment } = useInitiatePayment();
   const paymentStatus = usePaymentStatus(paymentId || undefined, !!paymentId);
