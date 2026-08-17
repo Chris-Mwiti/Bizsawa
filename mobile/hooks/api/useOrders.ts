@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { api } from "../../lib/api";
 import type { CreateOrderRequest, Order, UUID } from "../../lib/api-dtos";
 import { toDecimalString } from "../../lib/api-dtos";
@@ -28,6 +29,18 @@ export interface UpdateOrderInput {
   status?: OrderStatus;
 }
 
+export interface UseOrdersOptions {
+  limit?: number;
+  status?: OrderStatus[];
+}
+
+interface OrdersResponse {
+  orders: Order[];
+  total?: number;
+  limit?: number;
+  offset?: number;
+}
+
 function toCreateOrderRequest(data: CreateOrderInput): CreateOrderRequest {
   return {
     customerId: data.customerId || null,
@@ -42,23 +55,54 @@ function toCreateOrderRequest(data: CreateOrderInput): CreateOrderRequest {
   };
 }
 
-export const useOrders = () => {
+const DEFAULT_PAGE_SIZE = 25;
+
+export const useOrders = (options: UseOrdersOptions = {}) => {
   const queryClient = useQueryClient();
+  const limit = options.limit ?? DEFAULT_PAGE_SIZE;
+  const statusFilter = options.status;
+
+  const [offset, setOffset] = useState(0);
 
   const getOrders = useQuery({
-    queryKey: ["orders"],
+    queryKey: ["orders", { limit, offset, status: statusFilter }],
     queryFn: async () => {
-      const response = await api.get<{ orders: Order[] }>("/orders");
-      return response.data.orders || [];
+      const response = await api.get<OrdersResponse>("/orders", {
+        params: {
+          limit,
+          offset,
+          ...(statusFilter?.length ? { status: statusFilter.join(",") } : {}),
+        },
+      });
+      return response.data;
     },
+    placeholderData: (previousData) => previousData,
   });
+
+  const orders = getOrders.data?.orders ?? [];
+  const total = getOrders.data?.total ?? orders.length;
+  const hasNextPage = offset + orders.length < total;
+  const hasPreviousPage = offset > 0;
+
+  const nextPage = () => {
+    if (hasNextPage) setOffset((prev) => prev + limit);
+  };
+
+  const previousPage = () => {
+    setOffset((prev) => Math.max(0, prev - limit));
+  };
+
+  const resetPagination = () => setOffset(0);
 
   const createOrder = useMutation({
     mutationFn: async (data: CreateOrderInput) => {
       const response = await api.post<Order>("/orders", toCreateOrderRequest(data));
       return response.data;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["orders"] }),
+    onSuccess: () => {
+      resetPagination();
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+    },
   });
 
   const updateOrder = useMutation({
@@ -86,8 +130,17 @@ export const useOrders = () => {
   });
 
   return {
-    orders: getOrders.data || [],
+    orders,
+    total,
+    limit,
+    offset,
+    hasNextPage,
+    hasPreviousPage,
+    nextPage,
+    previousPage,
+    resetPagination,
     isLoading: getOrders.isLoading,
+    isFetching: getOrders.isFetching,
     error: getOrders.error,
     refetch: getOrders.refetch,
     createOrder: createOrder.mutateAsync,

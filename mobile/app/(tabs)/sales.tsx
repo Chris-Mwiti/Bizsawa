@@ -11,6 +11,8 @@ import { useInitiatePayment, usePaymentStatus } from "../../hooks/api/usePayment
 import { useProducts } from "../../hooks/api/useProducts";
 import { useSales } from "../../hooks/api/useSales";
 import { Order, toNumber } from "../../lib/api-dtos";
+import { OrdersHeader } from "../../components/OrderHeader";
+import { OrdersEmptyState } from "../../components/OrderEmptyState";
 
 interface DraftLine {
   productId: string;
@@ -99,6 +101,8 @@ export default function SalesTab() {
   const [selectedProductId, setSelectedProductId] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [paymentId, setPaymentId] = useState<string | null>(null);
+  
+  const handleOpenOrderModal = useCallback(() => setShowOrderModal(true), []);
 
   const { products, isLoading: productsLoading } = useProducts();
   const { data: customers = [] } = useCustomers();
@@ -347,49 +351,18 @@ export default function SalesTab() {
           keyExtractor={(order) => order.id}
           renderItem={renderOrder}
           contentContainerStyle={{ padding: 16, paddingBottom: TAB_BAR_SCROLL_PADDING }}
-          initialNumToRender={8}
-          maxToRenderPerBatch={8}
+          initialNumToRender={4}
+          maxToRenderPerBatch={4}
           windowSize={7}
           ListHeaderComponent={
-            <View>
-              <View className="flex-row justify-between mb-4">
-                <Card className="w-[31%]">
-                  <CardContent className="p-3 items-center">
-                    <Text className="text-lg font-bold">{orderStats.open}</Text>
-                    <Text className="text-xs text-gray-500">Open</Text>
-                  </CardContent>
-                </Card>
-                <Card className="w-[31%]">
-                  <CardContent className="p-3 items-center">
-                    <Text className="text-lg font-bold">{orderStats.fulfilled}</Text>
-                    <Text className="text-xs text-gray-500">Done</Text>
-                  </CardContent>
-                </Card>
-                <Card className="w-[31%]">
-                  <CardContent className="p-3 items-center">
-                    <Text className="text-lg font-bold">{formatCurrency(orderStats.value)}</Text>
-                    <Text className="text-xs text-gray-500">Value</Text>
-                  </CardContent>
-                </Card>
-              </View>
-              <TouchableOpacity
-                className="bg-gray-900 h-12 rounded-lg flex-row items-center justify-center mb-4"
-                onPress={() => setShowOrderModal(true)}
-              >
-                <Plus size={18} color="white" />
-                <Text className="text-white font-bold ml-2">Create Order</Text>
-              </TouchableOpacity>
-            </View>
+            <OrdersHeader
+              stats={orderStats}
+              formatCurrency={formatCurrency}
+              onCreateOrder={handleOpenOrderModal}
+            />
           }
           ListEmptyComponent={
-            <Card>
-              <CardContent className="p-4 items-center">
-                <Text className="font-bold text-gray-900">No orders yet</Text>
-                <Text className="text-sm text-gray-500 mt-1 text-center">
-                  Create an order to track fulfillment and payments.
-                </Text>
-              </CardContent>
-            </Card>
+            <OrdersEmptyState />
           }
         />
       )}
