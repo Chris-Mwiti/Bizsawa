@@ -127,6 +127,7 @@ export default function SalesTab() {
           <Text className="text-sm text-gray-500">Today's sales & orders</Text>
         </View>
 
+        {/* Tab switcher: Sales is active, Orders navigates to screen route */}
         <View className="flex-row bg-gray-200 rounded-lg mb-2 max-w-sm self-center w-full p-1">
           <View className="flex-1 py-3 rounded-lg items-center bg-white shadow">
             <Text className="font-medium text-gray-900">Sales</Text>
