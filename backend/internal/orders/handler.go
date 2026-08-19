@@ -112,12 +112,12 @@ func (h Handler) Fulfill(w http.ResponseWriter, r *http.Request) {
 		sharedhttp.Error(w, errUnauthorized())
 		return
 	}
-	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	orderID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		sharedhttp.Error(w, err)
 		return
 	}
-	order, err := h.svc.FulfillOrder(r.Context(), bid, uid, id)
+	order, err := h.svc.FulfillOrder(r.Context(), bid, orderID, uid)
 	if err != nil {
 		sharedhttp.Error(w, err)
 		return

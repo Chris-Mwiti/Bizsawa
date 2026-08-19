@@ -180,13 +180,23 @@ export default function OrdersScreen() {
   };
 
   const handleUpdateStatus = useCallback(
-    (order: Order, status: OrderStatus) => {
+    async (order: Order, status: OrderStatus) => {
       const customer = order.customerId ? customers.find((item) => item.id === order.customerId) : undefined;
-      if (status === OrderStatus.confirmed && !customer?.phone) {
-        Alert.alert("Missing phone", "This order needs a customer phone number before it can be confirmed.");
+      if (status === OrderStatus.confirmed && order.paymentMethod == "mpesa" && customer?.phone) {
+        try {
+          await updateOrder({ id: order.id, data: { status, customerPhone: customer?.phone } });
+        } catch(error) {
+          //@TODO; Will try to improve error handling for the client side
+          Alert.alert("ERROR WHILE UPDATING ORDER", "error while updating order please try again later")
+        }
         return;
       }
-      updateOrder({ id: order.id, data: { status, customerPhone: customer?.phone } });
+      try {
+        await updateOrder({ id: order.id, data: { status } })
+      } catch(error) {
+        //@TODO: Will try improve error handling for the client side
+        Alert.alert("ERROR WHILE UPDATING ORDER", "error while updating order please try again later")
+      }
     },
     [customers, updateOrder],
   );

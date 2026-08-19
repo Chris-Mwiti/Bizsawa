@@ -152,7 +152,7 @@ func (w *paymentWorker) Work(ctx context.Context, job *river.Job[PaymentEventArg
 			if err != nil {
 				w.logger.ErrorContext(
 					ctx,
-					"[PAYMENTS_WORKER]-error while confirming order",
+					"[PAYMENTS_WORKER]-error while cancelling order",
 					"orderID",
 					orderID,
 					"err",

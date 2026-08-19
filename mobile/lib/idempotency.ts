@@ -22,7 +22,7 @@ export async function getPaymentIdempotencyKey(operationId: string): Promise<str
   if (existing) return existing;
   const key = createIdempotencyKey("payment");
   await AsyncStorage.setItem(storageKey, key);
-  return key;
+  return key.split(":")[0];
 }
 
 export async function clearPaymentIdempotencyKey(operationId: string): Promise<void> {
