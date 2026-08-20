@@ -366,6 +366,9 @@ func (s *Service) FulfillOrder(ctx context.Context, businessID, orderID, staffID
 		// 2. Fetch the order attached to the current transaction context
 		order, err = s.repo.WithTx(tx).FindOrderByUpdate(ctx, businessID, orderID)
 		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound){
+				return apperrors.ErrNotFound.WithMessage("order record not found")
+			}
 			return err
 		}
 
