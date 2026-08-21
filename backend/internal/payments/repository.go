@@ -2,6 +2,7 @@ package payments
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	shareddb "github.com/Codecx-Org/FinAI/backend/internal/shared/db"
@@ -28,6 +29,12 @@ func (r *Repository) WithTx(tx *gorm.DB) *Repository {
 
 func (r *Repository) FindByIdempotency(ctx context.Context, businessID uuid.UUID, key string) (*PaymentCommand, error) {
 	var cmd PaymentCommand
+
+	//parse the key to find out if its valid
+	if _,err := uuid.Parse(key); err != nil {
+		return nil, fmt.Errorf("idempotency_key uuid is not valid")
+	}
+
 	err := r.db.WithContext(ctx).Scopes(shareddb.BusinessScope(businessID)).Where("idempotency_key = ?", key).First(&cmd).Error
 	if err != nil {
 		return nil, err

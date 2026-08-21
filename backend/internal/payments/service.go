@@ -93,9 +93,17 @@ func (s *Service) Initiate(ctx context.Context, businessID uuid.UUID, req models
 	if !ok {
 		return nil, errIdempotencyRequired()
 	}
-	if existing, err := s.repo.FindByIdempotency(ctx, businessID, key); err == nil {
+
+	existing, err := s.repo.FindByIdempotency(ctx, businessID, key)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "[PAYMENTS]-Idemptency key not valid", "err", err.Error())
+		return nil, err
+	}
+
+	if existing != nil  {
 		return existing, nil
 	}
+	
 	if !req.Amount.IsPositive() {
 		return nil, apperrors.ErrUnprocessable.WithMessage("payment amount must be positive")
 	}
@@ -193,9 +201,13 @@ func (s *Service) Initiate(ctx context.Context, businessID uuid.UUID, req models
 
 func (s *Service) InitiateOrder(ctx context.Context, businessID uuid.UUID, req models.InitiateRequest, key string) error {
 	s.logger.InfoContext(ctx, "[PAYMENTS]-initiating order request for order", "orderID", req.OrderID, "businessID", businessID.String())
-	if _, err := s.repo.FindByIdempotency(ctx, businessID, key); err == nil {
-		return apperrors.ErrConflict.WithMessage("order request already initiated")
+
+	_, err := s.repo.FindByIdempotency(ctx, businessID, key)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "[PAYMENTS]-error while finding by idempotency key", "err", err.Error())
+		return err
 	}
+	
 	if !req.Amount.IsPositive() {
 		return apperrors.ErrUnprocessable.WithMessage("payment amount must be positive")
 	}
@@ -297,6 +309,7 @@ func (s *Service) ExecuteProvider(ctx context.Context, businessID, cmdID uuid.UU
 	}
 	err := s.repo.db.Transaction(func(tx *gorm.DB) error {
 		cmd, err := s.WithTx(tx).Get(ctx, businessID, cmdID)
+		s.logger.InfoContext(ctx, "command", "cmd", cmd)
 		if err != nil {
 			return err
 		}
@@ -315,6 +328,8 @@ func (s *Service) ExecuteProvider(ctx context.Context, businessID, cmdID uuid.UU
 			}
 		}
 		result, err := s.WithTx(tx).provider.ProcessPayment(ctx, *cmd)
+		//debuggger
+		s.logger.InfoContext(ctx, "checkpoint")
 		if err != nil {
 			raw, _ := json.Marshal(map[string]any{"error": err.Error()})
 			markErr := s.MarkFailed(ctx, *cmd, "provider_error", err.Error(), raw)
