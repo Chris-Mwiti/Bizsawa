@@ -31,7 +31,9 @@ export const useInitiatePayment = () => {
   return useMutation({
     mutationFn: async (data: PaymentInitiationRequest) => {
       const operationId = data.invoiceId || data.orderId || `${data.phone}:${data.amount}`;
+      await clearPaymentIdempotencyKey(operationId)
       const idempotencyKey = await getPaymentIdempotencyKey(operationId);
+      console.log(idempotencyKey)
       const response = await api.post<PaymentCommand>("/payments", toInitiateRequest(data), {
         headers: { "X-Idempotency-Key": idempotencyKey },
       });

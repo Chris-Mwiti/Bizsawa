@@ -13,7 +13,7 @@ function fallbackUUID(): string {
 export function createIdempotencyKey(scope = "mobile"): string {
   const randomUUID = globalThis.crypto?.randomUUID;
   const key = typeof randomUUID === "function" ? randomUUID.call(globalThis.crypto) : fallbackUUID();
-  return `${scope}:${key}`;
+  return key;
 }
 
 export async function getPaymentIdempotencyKey(operationId: string): Promise<string> {
@@ -22,7 +22,7 @@ export async function getPaymentIdempotencyKey(operationId: string): Promise<str
   if (existing) return existing;
   const key = createIdempotencyKey("payment");
   await AsyncStorage.setItem(storageKey, key);
-  return key.split(":")[0];
+  return key;
 }
 
 export async function clearPaymentIdempotencyKey(operationId: string): Promise<void> {
