@@ -121,7 +121,7 @@ api.interceptors.request.use(
     if (token) config.headers.Authorization = `Bearer ${token}`;
     if (businessId) config.headers["X-Business-ID"] = businessId;
     if (isMutatingMethod(config.method) && !config.headers["X-Idempotency-Key"]) {
-      config.headers["X-Idempotency-Key"] = createIdempotencyKey(config.method).split(":")[1];
+      config.headers["X-Idempotency-Key"] = createIdempotencyKey(config.method);
     }
 
     console.debug("API Request:", config.method?.toUpperCase(), config.url, config.baseURL);
