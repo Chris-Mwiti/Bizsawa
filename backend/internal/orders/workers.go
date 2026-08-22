@@ -27,7 +27,7 @@ type OrderEventArgs struct {
 func (OrderEventArgs) Kind() string { return "order.event" }
 
 // emit function for the services
-func (s *Service) emit(ctx context.Context, tx *sql.Tx, businessID uuid.UUID, orderID uuid.UUID, key uuid.UUID,eventType OrderEventType, extra map[string]any) error {
+func (s *Service) emit(ctx context.Context, tx *sql.Tx, businessID uuid.UUID, orderID uuid.UUID, key uuid.UUID,eventType OrderEventType, extra map[string]any, opts *river.InsertOpts) error {
 	if s.outbox == nil {
 		return fmt.Errorf("service outbox missing")
 	}
@@ -47,7 +47,7 @@ func (s *Service) emit(ctx context.Context, tx *sql.Tx, businessID uuid.UUID, or
 		EventType:     eventType,
 		Stream:        "orders",
 		Payload:       raw,
-	}, nil)
+	}, opts)
 
 	if err != nil {
 		s.logger.ErrorContext(ctx, "[ORDERS]-error while submitting an outbox insert request via River", "err", err)

@@ -28,6 +28,10 @@ type PaymentEventArgs struct {
 
 func (PaymentEventArgs) Kind() string { return "payment.event" }
 
+func (PaymentEventArgs) InsertOpts() river.InsertOpts {
+	return river.InsertOpts{MaxAttempts: 3}
+}
+
 // emit function for the services
 func (s *Service) emit(ctx context.Context, tx *sql.Tx, businessID uuid.UUID, paymentID uuid.UUID, eventType PaymentEventType, extra map[string]any) error {
 	if s.outbox == nil {
