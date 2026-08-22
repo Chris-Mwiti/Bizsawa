@@ -114,7 +114,7 @@ func (s *Service) Create(ctx context.Context, businessID uuid.UUID, req CreateOr
 		}
 	} else {
 		s.logger.DebugContext(ctx, "[ORDERS]-request without IdempotencyKey", "businessID", businessID.String())
-		return nil, apperrors.ErrForbidden.WithCause(errors.New("IdempotencyKey not provided"))
+		return nil, apperrors.ErrForbidden.WithMessage("IdempotencyKey required")
 	}
 	if len(req.Lines) == 0 {
 		return nil, apperrors.ErrUnprocessable.WithMessage("order requires at least one line")

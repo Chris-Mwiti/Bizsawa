@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"maps"
 	"time"
 
 	"github.com/Codecx-Org/FinAI/backend/internal/invoices"
@@ -34,10 +33,8 @@ func (s *Service) emit(ctx context.Context, tx *sql.Tx, businessID uuid.UUID, pa
 	if s.outbox == nil {
 		return fmt.Errorf("service outbox missing")
 	}
-	payload := map[string]any{"businessId": businessID}
 
-	maps.Copy(payload, extra)
-	raw, err := json.Marshal(payload)
+	raw, err := json.Marshal(extra)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "[PAYMENTS]-failed to marshal payload telemetry", "err", err)
 		return err
