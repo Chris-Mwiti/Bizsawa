@@ -294,6 +294,7 @@ export interface PaymentCommand {
 
 export interface InitiatePaymentRequest {
   type?: "stk_push" | "b2c" | "c2b";
+  orderID?: UUID | null;
   invoiceId?: UUID | null;
   amount: DecimalString;
   currency?: string;
