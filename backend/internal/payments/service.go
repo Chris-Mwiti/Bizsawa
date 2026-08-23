@@ -97,11 +97,13 @@ func (s *Service) Initiate(ctx context.Context, businessID uuid.UUID, req models
 
 	existing, err := s.repo.FindByIdempotency(ctx, businessID, key)
 	if err != nil {
-		s.logger.ErrorContext(ctx, "[PAYMENTS]-Idemptency key not valid", "err", err.Error())
-		return nil, err
+		s.logger.InfoContext(ctx, "[PAYMENTS]-error while finding by idempotency key", "err", err.Error())
+		if !errors.Is(err, gorm.ErrRecordNotFound){
+			s.logger.ErrorContext(ctx, "[PAYMENTS]-error(this is not a gorm record not found error)", "err", err.Error())
+			return nil,err
+		}
 	}
-
-	if existing != nil  {
+		if existing != nil  {
 		return existing, nil
 	}
 	
@@ -207,7 +209,7 @@ func (s *Service) InitiateOrder(ctx context.Context, businessID uuid.UUID, req m
 	if err != nil {
 		s.logger.InfoContext(ctx, "[PAYMENTS]-error while finding by idempotency key", "err", err.Error())
 		if !errors.Is(err, gorm.ErrRecordNotFound){
-			s.logger.ErrorContext(ctx, "[PAYMENTS]-error while finding by idempotency key", "err", err.Error())
+			s.logger.ErrorContext(ctx, "[PAYMENTS]-error(this is not a gorm record not found error)", "err", err.Error())
 			return err
 		}
 	}
