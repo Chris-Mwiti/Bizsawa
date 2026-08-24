@@ -14,6 +14,8 @@ import {
   Search,
   AlertTriangle,
   TrendingUp,
+  Edit,
+  Trash2,
 } from "lucide-react-native";
 import {
   Card,
@@ -25,9 +27,11 @@ import { Badge } from "../../components/ui/Badge";
 import { Progress } from "../../components/ui/Progress";
 import { TAB_BAR_SCROLL_PADDING } from "../../constants/tabBar";
 import { useProducts } from "../../hooks/api/useProducts";
+import { useInventory } from "../../hooks/api/useInventory";
 
 interface InventoryItem {
   id: string;
+  productId: string;
   name: string;
   category: string;
   currentStock: number;
@@ -39,12 +43,28 @@ interface InventoryItem {
 }
 
 export default function StockTab() {
-  const { products, isLoading, createProduct, updateProduct } = useProducts();
+  const {
+    products,
+    isLoading: isLoadingProducts,
+    createProduct,
+    updateProduct,
+    deleteProduct,
+    isDeleting,
+  } = useProducts();
+
+  const {
+    inventory: inventoryData,
+    isLoadingInventory,
+    adjustStock,
+    isAdjustingStock,
+  } = useInventory();
+
   const [searchTerm, setSearchTerm] = useState("");
-  const [showAddItem, setShowAddItem] = useState(false);
+  const [showItemModal, setShowItemModal] = useState(false);
+  const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [showCategorySelect, setShowCategorySelect] = useState(false);
 
-  const [newItem, setNewItem] = useState({
+  const [formState, setFormState] = useState({
     name: "",
     category: "",
     currentStock: "0",
@@ -54,21 +74,27 @@ export default function StockTab() {
     supplier: "",
   });
 
-  // Map products to inventory items (DB-backed fields with sensible fallbacks)
-  const inventory: InventoryItem[] = products.map((p) => {
+  // Map products alongside their corresponding inventory item from useInventory
+  const combinedInventory: InventoryItem[] = products.map((p) => {
+    const invItem = inventoryData.find((inv) => inv.productId === p.id);
+    const stockQty = invItem ? invItem.quantity : p.stockQuantity || 0;
+    const minThreshold = invItem ? invItem.lowStockThreshold : p.minStockLevel || 0;
+
     const minT =
-      p.minStockLevel != null && p.minStockLevel >= 0
-        ? p.minStockLevel
-        : Math.max(1, Math.floor(p.stockQuantity * 0.2));
+      minThreshold > 0
+        ? minThreshold
+        : Math.max(1, Math.floor(stockQty * 0.2));
     const maxCap =
       p.maxStockLevel != null && p.maxStockLevel > 0
         ? p.maxStockLevel
-        : Math.max(p.stockQuantity * 2, 1);
+        : Math.max(stockQty * 2, 1);
+
     return {
       id: p.id.toString(),
+      productId: p.id.toString(),
       name: p.name,
       category: p.category || "Uncategorized",
-      currentStock: p.stockQuantity,
+      currentStock: stockQty,
       minimumThreshold: minT,
       maximumCapacity: maxCap,
       unitPrice: p.price,
@@ -109,71 +135,154 @@ export default function StockTab() {
     };
   };
 
-  const filteredInventory = inventory.filter(
+  const filteredInventory = combinedInventory.filter(
     (item) =>
       item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.category.toLowerCase().includes(searchTerm.toLowerCase()),
+      item.category.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const lowStockItems = inventory.filter(
-    (item) => item.currentStock <= item.minimumThreshold,
+  const lowStockItems = combinedInventory.filter(
+    (item) => item.currentStock <= item.minimumThreshold
   );
-  const totalValue = inventory.reduce(
+  const totalValue = combinedInventory.reduce(
     (sum, item) => sum + item.currentStock * item.unitPrice,
-    0,
+    0
   );
-  const totalItems = inventory.reduce(
+  const totalItems = combinedInventory.reduce(
     (sum, item) => sum + item.currentStock,
-    0,
+    0
   );
 
-  const handleAddItem = async () => {
-    if (!newItem.name || !newItem.category || !newItem.supplier) return;
+  const handleOpenAddModal = () => {
+    setEditingItem(null);
+    setFormState({
+      name: "",
+      category: "",
+      currentStock: "0",
+      minimumThreshold: "0",
+      maximumCapacity: "0",
+      unitPrice: "0",
+      supplier: "",
+    });
+    setShowItemModal(true);
+  };
 
-    const stock = parseInt(newItem.currentStock) || 0;
-    const min = parseInt(newItem.minimumThreshold) || 0;
-    const max = parseInt(newItem.maximumCapacity) || 0;
-    const price = parseFloat(newItem.unitPrice) || 0;
+  const handleOpenEditModal = (item: InventoryItem) => {
+    setEditingItem(item);
+    setFormState({
+      name: item.name,
+      category: item.category,
+      currentStock: item.currentStock.toString(),
+      minimumThreshold: item.minimumThreshold.toString(),
+      maximumCapacity: item.maximumCapacity.toString(),
+      unitPrice: item.unitPrice.toString(),
+      supplier: item.supplier === "—" ? "" : item.supplier,
+    });
+    setShowItemModal(true);
+  };
+
+  const handleSaveItem = async () => {
+    if (!formState.name || !formState.category || !formState.supplier) {
+      Alert.alert("Validation Error", "Please fill in all required fields.");
+      return;
+    }
+
+    const stock = parseInt(formState.currentStock) || 0;
+    const min = parseInt(formState.minimumThreshold) || 0;
+    const max = parseInt(formState.maximumCapacity) || 0;
+    const price = parseFloat(formState.unitPrice) || 0;
 
     try {
-      await createProduct({
-        name: newItem.name,
-        category: newItem.category,
-        stockQuantity: stock,
-        price: price,
-        buyingPrice: Math.round(price * 0.7 * 100) / 100,
-        supplier: newItem.supplier.trim(),
-        minStockLevel: min,
-        maxStockLevel: max > 0 ? max : null,
-        lastRestockedAt: new Date().toISOString(),
-      });
-      setNewItem({
-        name: "",
-        category: "",
-        currentStock: "0",
-        minimumThreshold: "0",
-        maximumCapacity: "0",
-        unitPrice: "0",
-        supplier: "",
-      });
-      setShowAddItem(false);
-      Alert.alert("Success", "Product added successfully");
+      if (editingItem) {
+        // 1. Update product metadata via useProducts
+        await updateProduct({
+          id: editingItem.productId,
+          data: {
+            name: formState.name,
+            category: formState.category,
+            price: price,
+            buyingPrice: Math.round(price * 0.7 * 100) / 100,
+            supplier: formState.supplier.trim(),
+            maxStockLevel: max > 0 ? max : null,
+          },
+        });
+
+        // 2. Compute stock delta and update inventory context via useInventory
+        const quantityDelta = stock - editingItem.currentStock;
+        await adjustStock({
+          productId: editingItem.productId,
+          quantityDelta: quantityDelta,
+          lowStockThreshold: min,
+          notes: "Manual inventory adjustment from stock manager",
+        });
+
+        Alert.alert("Success", "Product and stock updated successfully");
+      } else {
+        // Create product and initialize baseline stock
+        const createdProduct = await createProduct({
+          name: formState.name,
+          category: formState.category,
+          price: price,
+          buyingPrice: Math.round(price * 0.7 * 100) / 100,
+          supplier: formState.supplier.trim(),
+          maxStockLevel: max > 0 ? max : null,
+        });
+
+        if (createdProduct && createdProduct.id) {
+          await adjustStock({
+            productId: createdProduct.id,
+            quantityDelta: stock,
+            lowStockThreshold: min,
+            notes: "Initial inventory adjustment",
+          });
+        }
+
+        Alert.alert("Success", "Product added successfully");
+      }
+      setShowItemModal(false);
     } catch (error: any) {
-      Alert.alert("Error", error.message || "Failed to add product");
+      Alert.alert("Error", error.message || "Failed to save product/inventory");
     }
   };
 
-  if (isLoading) {
+  const handleDeleteItem = (item: InventoryItem) => {
+    Alert.alert(
+      "Delete Product",
+      `Are you sure you want to delete "${item.name}"?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteProduct(item.productId);
+              Alert.alert("Deleted", "Product removed successfully");
+            } catch (error: any) {
+              Alert.alert("Error", error.message || "Failed to delete product");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  if (isLoadingProducts || isLoadingInventory) {
     return (
       <View className="flex-1 items-center justify-center bg-white">
-        <Text className="text-gray-500">Loading inventory...</Text>
+        <Text className="text-gray-500">Loading inventory context...</Text>
       </View>
     );
   }
 
   return (
     <View className="flex-1 bg-gray-50">
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: TAB_BAR_SCROLL_PADDING }}>
+      <ScrollView
+        contentContainerStyle={{
+          padding: 16,
+          paddingBottom: TAB_BAR_SCROLL_PADDING,
+        }}
+      >
         <View className="flex-row justify-between items-center mb-4">
           <View>
             <Text className="text-xl font-bold text-gray-900">
@@ -185,7 +294,7 @@ export default function StockTab() {
           </View>
           <TouchableOpacity
             className="flex-row items-center bg-gray-900 px-3 py-2 rounded-lg"
-            onPress={() => setShowAddItem(true)}
+            onPress={handleOpenAddModal}
           >
             <View className="mr-1">
               <Plus size={16} color="white" />
@@ -194,6 +303,7 @@ export default function StockTab() {
           </TouchableOpacity>
         </View>
 
+        {/* Dynamic Metric Cards */}
         <View className="flex-row justify-between mb-4">
           <Card className="w-[31%]">
             <CardContent className="p-3 items-center">
@@ -236,6 +346,7 @@ export default function StockTab() {
           </Card>
         </View>
 
+        {/* Search Input */}
         <View className="relative flex-row items-center bg-white border border-gray-300 rounded-lg mb-6 shadow-sm">
           <View className="pl-3">
             <Search size={16} color="#9ca3af" />
@@ -248,6 +359,7 @@ export default function StockTab() {
           />
         </View>
 
+        {/* Low Stock Banner */}
         {lowStockItems.length > 0 && (
           <Card className="mb-4 bg-red-50 border-red-200">
             <CardHeader className="pb-2">
@@ -285,6 +397,7 @@ export default function StockTab() {
           </Card>
         )}
 
+        {/* Product Cards List */}
         <View className="space-y-4">
           {filteredInventory.map((item) => {
             const stockStatus = getStockStatus(item);
@@ -349,10 +462,27 @@ export default function StockTab() {
                     </View>
                   </View>
 
-                  <View className="mt-3 p-2 bg-blue-50 rounded-lg">
-                    <Text className="text-xs text-blue-700">
-                      Set min threshold and max capacity when adding items for accurate stock alerts.
-                    </Text>
+                  {/* Actions Bar */}
+                  <View className="flex-row justify-end items-center mt-3 pt-2 border-t border-gray-100 space-x-3">
+                    <TouchableOpacity
+                      onPress={() => handleOpenEditModal(item)}
+                      className="flex-row items-center px-2 py-1 rounded bg-gray-100 mr-2"
+                    >
+                      <Edit size={14} color="#374151" />
+                      <Text className="text-xs font-medium text-gray-700 ml-1">
+                        Edit
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => handleDeleteItem(item)}
+                      disabled={isDeleting}
+                      className="flex-row items-center px-2 py-1 rounded bg-red-50"
+                    >
+                      <Trash2 size={14} color="#dc2626" />
+                      <Text className="text-xs font-medium text-red-600 ml-1">
+                        Delete
+                      </Text>
+                    </TouchableOpacity>
                   </View>
                 </CardContent>
               </Card>
@@ -373,18 +503,18 @@ export default function StockTab() {
         </View>
       </ScrollView>
 
-      {/* Add Item Modal */}
+      {/* Add / Edit Item Modal */}
       <Modal
-        visible={showAddItem}
+        visible={showItemModal}
         animationType="slide"
         presentationStyle="pageSheet"
       >
         <View className="flex-1 bg-gray-50">
           <View className="flex-row justify-between items-center p-4 bg-white border-b border-gray-200 shadow-sm">
             <Text className="text-lg font-bold text-gray-900">
-              Add Inventory Item
+              {editingItem ? "Edit Inventory Item" : "Add Inventory Item"}
             </Text>
-            <TouchableOpacity onPress={() => setShowAddItem(false)}>
+            <TouchableOpacity onPress={() => setShowItemModal(false)}>
               <Text className="text-gray-500 font-bold text-lg">X</Text>
             </TouchableOpacity>
           </View>
@@ -393,8 +523,8 @@ export default function StockTab() {
             <TextInput
               className="bg-white border border-gray-300 p-3 rounded-lg mb-4"
               placeholder="e.g., Dairy Meal 50kg"
-              value={newItem.name}
-              onChangeText={(t) => setNewItem({ ...newItem, name: t })}
+              value={formState.name}
+              onChangeText={(t) => setFormState({ ...formState, name: t })}
             />
 
             <Text className="font-bold text-gray-700 mb-1">Category *</Text>
@@ -403,9 +533,11 @@ export default function StockTab() {
               className="bg-white border border-gray-300 p-3 rounded-lg mb-4 flex-row justify-between"
             >
               <Text
-                className={newItem.category ? "text-gray-900" : "text-gray-400"}
+                className={
+                  formState.category ? "text-gray-900" : "text-gray-400"
+                }
               >
-                {newItem.category || "Select category"}
+                {formState.category || "Select category"}
               </Text>
               <Text className="text-gray-400">▼</Text>
             </TouchableOpacity>
@@ -423,7 +555,7 @@ export default function StockTab() {
                     key={cat}
                     className="p-3 border-b border-gray-100"
                     onPress={() => {
-                      setNewItem({ ...newItem, category: cat });
+                      setFormState({ ...formState, category: cat });
                       setShowCategorySelect(false);
                     }}
                   >
@@ -441,9 +573,9 @@ export default function StockTab() {
                 <TextInput
                   className="bg-white border border-gray-300 p-3 rounded-lg"
                   keyboardType="numeric"
-                  value={newItem.currentStock}
+                  value={formState.currentStock}
                   onChangeText={(t) =>
-                    setNewItem({ ...newItem, currentStock: t })
+                    setFormState({ ...formState, currentStock: t })
                   }
                 />
               </View>
@@ -452,8 +584,10 @@ export default function StockTab() {
                 <TextInput
                   className="bg-white border border-gray-300 p-3 rounded-lg"
                   keyboardType="numeric"
-                  value={newItem.unitPrice}
-                  onChangeText={(t) => setNewItem({ ...newItem, unitPrice: t })}
+                  value={formState.unitPrice}
+                  onChangeText={(t) =>
+                    setFormState({ ...formState, unitPrice: t })
+                  }
                 />
               </View>
             </View>
@@ -466,9 +600,9 @@ export default function StockTab() {
                 <TextInput
                   className="bg-white border border-gray-300 p-3 rounded-lg"
                   keyboardType="numeric"
-                  value={newItem.minimumThreshold}
+                  value={formState.minimumThreshold}
                   onChangeText={(t) =>
-                    setNewItem({ ...newItem, minimumThreshold: t })
+                    setFormState({ ...formState, minimumThreshold: t })
                   }
                 />
               </View>
@@ -479,9 +613,9 @@ export default function StockTab() {
                 <TextInput
                   className="bg-white border border-gray-300 p-3 rounded-lg"
                   keyboardType="numeric"
-                  value={newItem.maximumCapacity}
+                  value={formState.maximumCapacity}
                   onChangeText={(t) =>
-                    setNewItem({ ...newItem, maximumCapacity: t })
+                    setFormState({ ...formState, maximumCapacity: t })
                   }
                 />
               </View>
@@ -491,18 +625,21 @@ export default function StockTab() {
             <TextInput
               className="bg-white border border-gray-300 p-3 rounded-lg mb-6"
               placeholder="e.g., Kenchic Ltd"
-              value={newItem.supplier}
-              onChangeText={(t) => setNewItem({ ...newItem, supplier: t })}
+              value={formState.supplier}
+              onChangeText={(t) => setFormState({ ...formState, supplier: t })}
             />
 
             <TouchableOpacity
-              onPress={handleAddItem}
+              onPress={handleSaveItem}
+              disabled={isAdjustingStock}
               className="bg-gray-900 py-4 rounded-xl items-center flex-row justify-center"
             >
               <View className="mr-2">
                 <Plus size={20} color="white" />
               </View>
-              <Text className="text-white font-bold text-lg">Save Item</Text>
+              <Text className="text-white font-bold text-lg">
+                {editingItem ? "Update Product" : "Save Item"}
+              </Text>
             </TouchableOpacity>
           </ScrollView>
         </View>

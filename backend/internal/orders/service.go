@@ -218,7 +218,7 @@ func (s *Service) PaymentUpdate(ctx context.Context, businessID, orderID uuid.UU
 		}
 
 
-		if order.Status == StatusConfirmed || order.Status == StatusFulfilled {
+		if (order.Status == StatusConfirmed || order.Status == StatusFulfilled) && order.PaymentStatus == PaymentConfirmed {
 			s.logger.InfoContext(ctx, "[ORDERS]-order confirmation retry with diff IdempotencyKey", "businessID",businessID.String(), "orderID", orderID.String())
 			return apperrors.ErrConflict.WithMessage("this order has already been completed by another request")
 		}

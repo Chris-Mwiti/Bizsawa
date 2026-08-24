@@ -43,7 +43,7 @@ function metadataLocation(metadata: unknown): string | null {
 export default function ProfileTab() {
   const router = useRouter();
   const { userData, logout } = useAuth();
-  const { data: business, isLoading, isError, refetch } = useBusiness(userData?.id);
+  const { data: business, isLoading, isError, refetch } = useBusiness(null);
 
   const ownerParts = useMemo(() => {
     const name = business?.ownerName || userData?.ownerName || "";
