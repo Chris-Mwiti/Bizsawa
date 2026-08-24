@@ -1,6 +1,7 @@
 package business
 
 import (
+	"fmt"
 	"net/http"
 
 	sharedhttp "github.com/Codecx-Org/FinAI/backend/internal/shared/http"
@@ -46,6 +47,8 @@ func (h Handler) ListBusinesses(w http.ResponseWriter, r *http.Request) {
 
 func (h Handler) GetBusiness(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromCtx(r.Context())
+
+	fmt.Printf("user id: %s \n", userID)
 	if !ok {
 		sharedhttp.Error(w, errUnauthorized())
 		return
