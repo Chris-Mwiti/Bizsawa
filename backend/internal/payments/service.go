@@ -568,6 +568,10 @@ func (s *Service) HandleMpesaCallback(ctx context.Context, raw json.RawMessage) 
 	if err != nil && accountRef != "" {
 		cmd, err = s.repo.FindByAccountReference(ctx, accountRef)
 	}
+
+	if cmd == nil {
+		return apperrors.ErrNotFound.WithMessage("command not found")
+	}
 	if err != nil {
 		s.logger.WarnContext(ctx, "[PAYMENTS/MPESA]-callback command not found", "providerRequestID", requestID, "accountReference", accountRef, "err", err.Error())
 		return nil

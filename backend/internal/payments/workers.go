@@ -92,8 +92,8 @@ func (w *paymentWorker) Work(ctx context.Context, job *river.Job[PaymentEventArg
 			return fmt.Errorf("error while unmarshalling payload: %s", err.Error())
 		}
 
-		if orderID, ok := payload["orderID"].(string); ok {
-			parsedID, err := uuid.Parse(orderID)
+		if orderID, ok := payload["orderID"]; ok {
+			parsedID, err := uuid.Parse(orderID.(string))
 			if err != nil {
 				w.logger.ErrorContext(
 					ctx,
@@ -137,8 +137,8 @@ func (w *paymentWorker) Work(ctx context.Context, job *river.Job[PaymentEventArg
 			return fmt.Errorf("error while unmarshalling payload: %s", err.Error())
 		}
 
-		if orderID, ok := payload["orderID"].(string); ok {
-			parsedID, err := uuid.Parse(orderID)
+		if orderID, ok := payload["orderID"]; ok {
+			parsedID, err := uuid.Parse(orderID.(string))
 			if err != nil {
 				w.logger.ErrorContext(
 					ctx,
