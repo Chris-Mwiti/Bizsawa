@@ -10,17 +10,25 @@ import (
 )
 
 type Module struct {
-	repo   *Repository
-	svc    *Service
-	logger *slog.Logger
+	repo           *Repository
+	svc            *Service
+	logger         *slog.Logger
+	orderService   OrderPayment
+	invoiceService InvoicePayment
 }
 
-func New(db *gorm.DB, outboxRepo *river.Client[*sql.Tx], logger *slog.Logger, provider Provider) *Module {
+func New(db *gorm.DB, outboxRepo *river.Client[*sql.Tx], logger *slog.Logger, provider Provider, orderService OrderPayment, invoiceService InvoicePayment) *Module {
 	if logger == nil {
 		logger = slog.Default()
 	}
 	repo := NewRepository(db)
-	return &Module{repo: repo, svc: NewService(repo, outboxRepo, logger, provider), logger: logger}
+	return &Module{
+		repo:           repo,
+		svc:            NewService(repo, outboxRepo, logger, provider),
+		logger:         logger,
+		orderService:   orderService,
+		invoiceService: invoiceService,
+	}
 }
 
 func (m *Module) RegisterRoutes(r chi.Router) {
@@ -42,7 +50,7 @@ func (m *Module) RegisterPublicRoutes(r chi.Router) {
 }
 
 func (m *Module) RegisterWorkers(workers *river.Workers) {
-	river.AddWorker(workers, &paymentWorker{service: m.svc, logger: m.logger})
+	river.AddWorker(workers, &paymentWorker{service: m.svc, orderService: m.orderService, invoiceService: m.invoiceService, logger: m.logger})
 }
 
 func (m *Module) Service() *Service { return m.svc }

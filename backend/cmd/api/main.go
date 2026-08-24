@@ -94,8 +94,10 @@ func main() {
 	salesModule := sales.New(gormDB, taxesModule.Service(), riverIngester, logger)
 	expensesModule := expenses.New(gormDB, taxesModule.Service())
 	invoicesModule := invoices.New(gormDB, riverIngester, logger)
-	paymentsModule := payments.New(gormDB, riverIngester, logger, payments.NewMpesaClient(cfg.Mpesa, logger))
-	ordersModule := orders.New(gormDB, inventoryModule.Service(), salesModule.Service(), riverIngester, customersModule.Service(), invoicesModule.Service(), paymentsModule.Service(), logger)
+	ordersModule := orders.New(gormDB, inventoryModule.Service(), salesModule.Service(), riverIngester, customersModule.Service(), invoicesModule.Service(), nil, logger)
+	paymentsModule := payments.New(gormDB, riverIngester, logger, payments.NewMpesaClient(cfg.Mpesa, logger), ordersModule.Service(), invoicesModule.Service())
+	// Update orders module with payments service
+	ordersModule = orders.New(gormDB, inventoryModule.Service(), salesModule.Service(), riverIngester, customersModule.Service(), invoicesModule.Service(), paymentsModule.Service(), logger)
 	authzEnforcer := authz.NewEnforcer(usersModule)
 
 	workers := river.NewWorkers()

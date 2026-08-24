@@ -64,10 +64,10 @@ func (s *Service) emit(ctx context.Context, tx *sql.Tx, businessID uuid.UUID, pa
 // struct to represent the workers
 type paymentWorker struct {
 	river.WorkerDefaults[PaymentEventArgs]
-	service *Service
-	orderService OrderPayment
-	invoiceService InovicePayment
-	logger  *slog.Logger
+	service        *Service
+	orderService   OrderPayment
+	invoiceService InvoicePayment
+	logger         *slog.Logger
 }
 
 // execution and dispation of workers based on the event type.
@@ -119,14 +119,31 @@ func (w *paymentWorker) Work(ctx context.Context, job *river.Job[PaymentEventArg
 
 			//record payment for the invoice associated with the order
 			paidAt := time.Now().UTC()
-			invoiceReq := invoices.RecordPaymentRequest{
-       Amount: payload["amount"].(decimal.Decimal),
-			 PaymentID: job.Args.PaymentID,
-			 PaidAt: &paidAt,
+			
+			// JSON unmarshal produces float64 for numbers, convert to decimal.Decimal
+			var amount decimal.Decimal
+			if amt, ok := payload["amount"].(float64); ok {
+				amount = decimal.NewFromFloat(amt)
+			} else if amtStr, ok := payload["amount"].(string); ok {
+				var err error
+				amount, err = decimal.NewFromString(amtStr)
+				if err != nil {
+					w.logger.ErrorContext(ctx, "[PAYMENTS_WORKER]-invalid amount format", "err", err.Error())
+					return fmt.Errorf("invalid amount format: %w", err)
+				}
+			} else {
+				return fmt.Errorf("missing or invalid amount in payload")
 			}
-			err = w.invoiceService.RecordPayment(ctx, job.Args.TenantID, parsedID, invoiceReq)
 
-		} else {
+			invoiceReq := invoices.RecordPaymentRequest{
+				Amount:    amount,
+				PaymentID: job.Args.PaymentID,
+				PaidAt:    &paidAt,
+			}
+			if err := w.invoiceService.RecordPayment(ctx, job.Args.TenantID, parsedID, invoiceReq); err != nil {
+				w.logger.ErrorContext(ctx, "[PAYMENTS_WORKER]-error while recording payment for invoice", "orderID", parsedID, "err", err.Error())
+				return err
+			}
 			return fmt.Errorf("unsupported format or orderID")
 		}
 	
