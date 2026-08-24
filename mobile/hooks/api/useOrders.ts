@@ -3,6 +3,7 @@ import { useState } from "react";
 import { api } from "../../lib/api";
 import type { CreateOrderRequest, Order, UUID } from "../../lib/api-dtos";
 import { toDecimalString } from "../../lib/api-dtos";
+import { generateIdempotencyKey, clearIdempotencyKey, OperationId, createDraftHash } from "../../lib/idempotency";
 
 export enum OrderStatus {
   draft = "draft",
@@ -97,8 +98,30 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
 
   const createOrder = useMutation({
     mutationFn: async (data: CreateOrderInput) => {
-      const response = await api.post<Order>("/orders", toCreateOrderRequest(data));
-      return response.data;
+      // Generate idempotency key based on draft content
+      const draftHash = createDraftHash({
+        customerId: data.customerId,
+        paymentMethod: data.paymentMethod,
+        lines: toCreateOrderRequest(data).lines,
+      });
+      const operationId = OperationId.createOrder(draftHash);
+      const idempotencyKey = await generateIdempotencyKey(operationId);
+      
+      try {
+        const response = await api.post<Order>("/orders", toCreateOrderRequest(data), {
+          headers: { "X-Idempotency-Key": idempotencyKey },
+        });
+        
+        // Clear key only on successful HTTP response (2xx)
+        await clearIdempotencyKey(operationId);
+        
+        return response.data;
+      } catch (error: any) {
+        // Don't clear key on error - allow retry with same key
+        // 4xx = client error (don't retry same request)
+        // 5xx = server error (can retry with same key)
+        throw error;
+      }
     },
     onSuccess: () => {
       resetPagination();
@@ -121,15 +144,44 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
         action === "confirm"
           ? { customerPhone: data.customerPhone?.trim() || "" }
           : undefined;
-      const response = await api.post<Order>(`/orders/${id}/${action}`, body);
-      return response.data;
+      
+      // Generate idempotency key for state transitions
+      const operationId = OperationId[action === "confirm" ? "confirmOrder" : action === "fulfill" ? "fulfillOrder" : "cancelOrder"](id);
+      const idempotencyKey = await generateIdempotencyKey(operationId);
+      
+      try {
+        const response = await api.post<Order>(`/orders/${id}/${action}`, body, {
+          headers: { "X-Idempotency-Key": idempotencyKey },
+        });
+        
+        // Clear key only on successful HTTP response (2xx)
+        await clearIdempotencyKey(operationId);
+        
+        return response.data;
+      } catch (error: any) {
+        // Don't clear key on error - allow retry with same key
+        throw error;
+      }
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["orders"] }),
   });
 
   const deleteOrder = useMutation({
     mutationFn: async (id: UUID) => {
-      await api.post(`/orders/${id}/cancel`);
+      const operationId = OperationId.cancelOrder(id);
+      const idempotencyKey = await generateIdempotencyKey(operationId);
+      
+      try {
+        await api.post(`/orders/${id}/cancel`, undefined, {
+          headers: { "X-Idempotency-Key": idempotencyKey },
+        });
+        
+        // Clear key only on successful HTTP response (2xx)
+        await clearIdempotencyKey(operationId);
+      } catch (error: any) {
+        // Don't clear key on error - allow retry with same key
+        throw error;
+      }
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["orders"] }),
   });

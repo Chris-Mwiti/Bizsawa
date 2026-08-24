@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"maps"
 	"time"
 
 	"github.com/Codecx-Org/FinAI/backend/internal/invoices"
@@ -29,15 +28,17 @@ type PaymentEventArgs struct {
 
 func (PaymentEventArgs) Kind() string { return "payment.event" }
 
+func (PaymentEventArgs) InsertOpts() river.InsertOpts {
+	return river.InsertOpts{MaxAttempts: 3}
+}
+
 // emit function for the services
 func (s *Service) emit(ctx context.Context, tx *sql.Tx, businessID uuid.UUID, paymentID uuid.UUID, eventType PaymentEventType, extra map[string]any) error {
 	if s.outbox == nil {
 		return fmt.Errorf("service outbox missing")
 	}
-	payload := map[string]any{"businessId": businessID}
 
-	maps.Copy(payload, extra)
-	raw, err := json.Marshal(payload)
+	raw, err := json.Marshal(extra)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "[PAYMENTS]-failed to marshal payload telemetry", "err", err)
 		return err
@@ -91,8 +92,8 @@ func (w *paymentWorker) Work(ctx context.Context, job *river.Job[PaymentEventArg
 			return fmt.Errorf("error while unmarshalling payload: %s", err.Error())
 		}
 
-		if orderID, ok := payload["orderID"].(string); ok {
-			parsedID, err := uuid.Parse(orderID)
+		if orderID, ok := payload["orderID"]; ok {
+			parsedID, err := uuid.Parse(orderID.(string))
 			if err != nil {
 				w.logger.ErrorContext(
 					ctx,
@@ -136,8 +137,8 @@ func (w *paymentWorker) Work(ctx context.Context, job *river.Job[PaymentEventArg
 			return fmt.Errorf("error while unmarshalling payload: %s", err.Error())
 		}
 
-		if orderID, ok := payload["orderID"].(string); ok {
-			parsedID, err := uuid.Parse(orderID)
+		if orderID, ok := payload["orderID"]; ok {
+			parsedID, err := uuid.Parse(orderID.(string))
 			if err != nil {
 				w.logger.ErrorContext(
 					ctx,

@@ -114,7 +114,7 @@ func (s *Service) Create(ctx context.Context, businessID uuid.UUID, req CreateOr
 		}
 	} else {
 		s.logger.DebugContext(ctx, "[ORDERS]-request without IdempotencyKey", "businessID", businessID.String())
-		return nil, apperrors.ErrForbidden.WithCause(errors.New("IdempotencyKey not provided"))
+		return nil, apperrors.ErrForbidden.WithMessage("IdempotencyKey required")
 	}
 	if len(req.Lines) == 0 {
 		return nil, apperrors.ErrUnprocessable.WithMessage("order requires at least one line")
@@ -328,13 +328,13 @@ func (s *Service) Confirm(ctx context.Context, businessID, orderID, key uuid.UUI
 
 
 		//emit an event that says the order has been confirmed
-		if err := s.emit(ctx, sqlTx,businessID, orderID, key,OrderPaymentInit, result); err != nil {
+		if err := s.emit(ctx, sqlTx,businessID, orderID, key,OrderPaymentInit, result, &river.InsertOpts{MaxAttempts: 3}); err != nil {
 			s.logger.ErrorContext(ctx, "[ORDER/OUTBOX]-could not emit order created event", "businessID", businessID.String(), "orderID", orderID.String(), "err", err.Error())
 			return apperrors.ErrInternal.WithMessage("error while emitting event")
 		} 	
 		
 		//emit an event that says the order has been confirmed
-		if err := s.emit(ctx, sqlTx,businessID, orderID, key,OrderConfirmed, map[string]any{"amount": order.Total, "invoiceID": invoice.ID.String()}); err != nil {
+		if err := s.emit(ctx, sqlTx,businessID, orderID, key,OrderConfirmed, map[string]any{"amount": order.Total, "invoiceID": invoice.ID.String()}, &river.InsertOpts{MaxAttempts: 5}); err != nil {
 			s.logger.ErrorContext(ctx, "[ORDER/OUTBOX]-could not emit order created event", "businessID", businessID.String(), "orderID", orderID.String(), "err", err.Error())
 			return apperrors.ErrInternal.WithMessage("error while emitting event")
 		} 	
@@ -425,7 +425,7 @@ func (s *Service) FulfillOrder(ctx context.Context, businessID, orderID, staffID
 		}
 
 
-		err = s.emit(ctx, sqlTx, businessID, orderID, parsedKey,OrderFulfilled, map[string]any{"amount": order.Total})
+		err = s.emit(ctx, sqlTx, businessID, orderID, parsedKey,OrderFulfilled, map[string]any{"amount": order.Total}, &river.InsertOpts{MaxAttempts: 5})
 
 		if err != nil {
 			return err

@@ -120,9 +120,9 @@ api.interceptors.request.use(
     config.headers = config.headers || {};
     if (token) config.headers.Authorization = `Bearer ${token}`;
     if (businessId) config.headers["X-Business-ID"] = businessId;
-    if (isMutatingMethod(config.method) && !config.headers["X-Idempotency-Key"]) {
-      config.headers["X-Idempotency-Key"] = createIdempotencyKey(config.method).split(":")[1];
-    }
+    // Idempotency keys should be explicitly set by the caller via generateIdempotencyKey()
+    // The interceptor only attaches keys that were already set on the request config
+    // This prevents generating new keys on every retry attempt
 
     console.debug("API Request:", config.method?.toUpperCase(), config.url, config.baseURL);
     return config;

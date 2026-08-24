@@ -56,27 +56,153 @@ type InvoicesService interface {
 func DefaultTools(services Services) []Tool {
 	tools := []Tool{}
 	businessOwner := []Tool{
-		readTool(ProfileBusinessOwner, "summarize_sales", "Use when the business owner asks for revenue, tax, and sales totals over a bounded period. Requires authenticated business context; follow up with sales breakdown tools when the owner asks why totals changed.", "sales", summarizeSales(services.Sales), periodSchema()),
-		readTool(ProfileBusinessOwner, "list_sales_by_product", "Use to identify products contributing to sales totals. Requires business-owner profile and active business context; returns compact aggregate rows.", "sales", listSalesByProduct(services.Sales), limitSchema()),
-		readTool(ProfileBusinessOwner, "list_sales_by_payment_method", "Use to compare sales totals by payment method for reconciliation questions. Requires business-owner profile and active business context.", "sales", listSalesByPaymentMethod(services.Sales), limitSchema()),
-		readTool(ProfileBusinessOwner, "list_sales_by_staff", "Use to compare sales totals by staff member. Requires business-owner profile and active business context; IDs should be resolved by the client if names are needed.", "sales", listSalesByStaff(services.Sales), limitSchema()),
-		readTool(ProfileBusinessOwner, "list_low_stock_items", "Use when the owner asks what inventory needs restocking. Requires active business context and returns product IDs, quantity, and threshold only.", "inventory", listLowStock(services.Inventory), limitSchema()),
-		readTool(ProfileBusinessOwner, "get_inventory_valuation", "Use for current inventory quantity valuation inputs. Requires active business context; returns product IDs and quantities without cost or margin fields.", "inventory", inventoryValuation(services.Inventory), limitSchema()),
-		readTool(ProfileBusinessOwner, "list_stock_movements", "Use to inspect recent stock movement history. Requires active business context; always pass a bounded limit and optional offset.", "inventory", stockMovements(services.Inventory), pageSchema()),
-		readTool(ProfileBusinessOwner, "summarize_expenses_by_category", "Use when the owner asks for expense totals by category over a bounded period. Requires business-owner profile and active business context.", "expenses", expenseSummary(services.Expenses), periodSchema()),
-		readTool(ProfileBusinessOwner, "search_customers", "Use to find customer candidates before getting purchase history or invoices. Requires at least a short query when possible; returns minimal disambiguation fields.", "customers", searchCustomers(services.Customers), searchSchema()),
-		readTool(ProfileBusinessOwner, "get_customer_purchase_history", "Use after a customer is selected to summarize that customer's purchase history. Requires a validated customer_id from search_customers or prior context.", "customers", purchaseHistory(services.Customers), idSchema("customer_id")),
-		readTool(ProfileBusinessOwner, "list_invoices", "Use to list recent invoices for follow-up questions. Requires active business context and bounded pagination.", "invoices", listInvoices(services.Invoices), pageSchema()),
-		readTool(ProfileBusinessOwner, "get_invoice", "Use after an invoice has been selected to inspect compact invoice details. Requires a validated invoice_id.", "invoices", getInvoice(services.Invoices), idSchema("invoice_id")),
-		readTool(ProfileBusinessOwner, "search_business_knowledge", "Use for BizSawa business-owner help, workflow guidance, and policy questions. Initial implementation returns a stable empty result until the knowledge index is configured.", "ai", knowledgeSearch("business"), knowledgeSchema()),
+		readTool(
+			ProfileBusinessOwner, 
+			"summarize_sales", 
+			"Use when the business owner asks for revenue, tax, and sales totals over a bounded period. Requires authenticated business context; follow up with sales breakdown tools when the owner asks why totals changed.", 
+			"sales", 
+			summarizeSales(services.Sales), 
+			periodSchema()),
+
+		readTool(
+			ProfileBusinessOwner, 
+			"list_sales_by_product", 
+			"Use to identify products contributing to sales totals. Requires business-owner profile and active business context; returns compact aggregate rows.", 
+			"sales", 
+			listSalesByProduct(services.Sales), 
+			limitSchema()),
+
+		readTool(
+			ProfileBusinessOwner, 
+			"list_sales_by_payment_method", 
+			"Use to compare sales totals by payment method for reconciliation questions. Requires business-owner profile and active business context.", "sales", 
+			listSalesByPaymentMethod(services.Sales), 
+			limitSchema()),
+
+		readTool(
+			ProfileBusinessOwner, 
+			"list_sales_by_staff", 
+			"Use to compare sales totals by staff member. Requires business-owner profile and active business context; IDs should be resolved by the client if names are needed.", 
+			"sales", 
+			listSalesByStaff(services.Sales), 
+			limitSchema()),
+
+		readTool(
+			ProfileBusinessOwner, 
+			"list_low_stock_items", 
+			"Use when the owner asks what inventory needs restocking. Requires active business context and returns product IDs, quantity, and threshold only.", 
+			"inventory", 
+			listLowStock(services.Inventory), 
+			limitSchema()),
+
+		readTool(
+			ProfileBusinessOwner, 
+			"get_inventory_valuation", 
+			"Use for current inventory quantity valuation inputs. Requires active business context; returns product IDs and quantities without cost or margin fields.", 
+			"inventory", 
+			inventoryValuation(services.Inventory), 
+			limitSchema()),
+
+		readTool(
+			ProfileBusinessOwner, 
+			"list_stock_movements", 
+			"Use to inspect recent stock movement history. Requires active business context; always pass a bounded limit and optional offset.", 
+			"inventory", 
+			stockMovements(services.Inventory), 
+			pageSchema()),
+
+		readTool(
+			ProfileBusinessOwner, 
+			"summarize_expenses_by_category", 
+			"Use when the owner asks for expense totals by category over a bounded period. Requires business-owner profile and active business context.", 
+			"expenses", 
+			expenseSummary(services.Expenses), periodSchema()),
+		
+		readTool(
+			ProfileBusinessOwner, 
+			"search_customers", 
+			"Use to find customer candidates before getting purchase history or invoices. Requires at least a short query when possible; returns minimal disambiguation fields.", 
+			"customers", 
+			searchCustomers(services.Customers), searchSchema()),
+		
+		readTool(
+			ProfileBusinessOwner, 
+			"get_customer_purchase_history", 
+			"Use after a customer is selected to summarize that customer's purchase history. Requires a validated customer_id from search_customers or prior context.", 
+			"customers", 
+			purchaseHistory(services.Customers), 
+			idSchema("customer_id")),
+
+		readTool(
+			ProfileBusinessOwner, 
+			"list_invoices", 
+			"Use to list recent invoices for follow-up questions. Requires active business context and bounded pagination.", "invoices", 
+			listInvoices(services.Invoices), 
+			pageSchema()),
+
+		readTool(
+			ProfileBusinessOwner, 
+			"get_invoice", 
+			"Use after an invoice has been selected to inspect compact invoice details. Requires a validated invoice_id.", "invoices", 
+			getInvoice(services.Invoices), 
+			idSchema("invoice_id")),
+
+		readTool(
+			ProfileBusinessOwner, 
+			"search_business_knowledge", 
+			"Use for BizSawa business-owner help, workflow guidance, and policy questions. Initial implementation returns a stable empty result until the knowledge index is configured.", 
+			"ai", 
+			knowledgeSearch("business"), 
+			knowledgeSchema()),
 	}
+
 	customerService := []Tool{
-		readTool(ProfileCustomerService, "search_customers", "Use to find customer candidates before looking up orders, invoices, payments, or purchase history. Returns minimal fields for disambiguation only.", "customers", searchCustomers(services.Customers), searchSchema()),
-		readTool(ProfileCustomerService, "get_customer", "Use after a customer is selected to view support-safe customer details. Requires a validated customer_id from search_customers.", "customers", getCustomer(services.Customers), idSchema("customer_id")),
-		readTool(ProfileCustomerService, "get_customer_purchase_history", "Use to answer customer support questions about a selected customer's purchase history. Requires a validated customer_id.", "customers", purchaseHistory(services.Customers), idSchema("customer_id")),
-		readTool(ProfileCustomerService, "list_customer_invoices", "Use to find invoices for a selected customer. Requires a validated customer_id; returns compact invoice rows.", "invoices", listCustomerInvoices(services.Invoices), customerPageSchema()),
-		readTool(ProfileCustomerService, "get_invoice", "Use after an invoice has been selected to inspect support-safe invoice details. Requires a validated invoice_id.", "invoices", getInvoice(services.Invoices), idSchema("invoice_id")),
-		readTool(ProfileCustomerService, "search_support_knowledge", "Use for support scripts, FAQs, and customer-service policy questions. Initial implementation returns a stable empty result until the knowledge index is configured.", "ai", knowledgeSearch("support"), knowledgeSchema()),
+		readTool(
+			ProfileCustomerService, 
+			"search_customers", 
+			"Use to find customer candidates before looking up orders, invoices, payments, or purchase history. Returns minimal fields for disambiguation only.", 
+			"customers", 
+			searchCustomers(services.Customers), searchSchema()),
+
+		readTool(
+			ProfileCustomerService, 
+			"get_customer", 
+			"Use after a customer is selected to view support-safe customer details. Requires a validated customer_id from search_customers.", 
+			"customers", 
+			getCustomer(services.Customers), 
+			idSchema("customer_id")),
+
+		readTool(
+			ProfileCustomerService, 
+			"get_customer_purchase_history", 
+			"Use to answer customer support questions about a selected customer's purchase history. Requires a validated customer_id.", 
+			"customers", 
+			purchaseHistory(services.Customers), 
+			idSchema("customer_id")),
+
+		readTool(
+			ProfileCustomerService, 
+			"list_customer_invoices", 
+			"Use to find invoices for a selected customer. Requires a validated customer_id; returns compact invoice rows.", 
+			"invoices", 
+			listCustomerInvoices(services.Invoices), 
+			customerPageSchema()),
+
+		readTool(
+			ProfileCustomerService, 
+			"get_invoice", 
+			"Use after an invoice has been selected to inspect support-safe invoice details. Requires a validated invoice_id.", "invoices", 
+			getInvoice(services.Invoices), 
+			idSchema("invoice_id")),
+
+		readTool(
+			ProfileCustomerService, 
+			"search_support_knowledge", 
+			"Use for support scripts, FAQs, and customer-service policy questions. Initial implementation returns a stable empty result until the knowledge index is configured.", 
+			"ai", 
+			knowledgeSearch("support"), 
+			knowledgeSchema()),
+
 	}
 	tools = append(tools, businessOwner...)
 	tools = append(tools, customerService...)
