@@ -37,7 +37,7 @@ const (
 	PaymentRetry      PaymentEventType = "payment.retry"
 )
 
-type InovicePayment interface {
+type InvoicePayment interface {
 	RecordPayment(ctx context.Context, businessID, orderID uuid.UUID, req invoices.RecordPaymentRequest) (error)
 
 	Send(ctx context.Context, businessID, invoiceID uuid.UUID, channel string) (*invoices.Invoice, error)

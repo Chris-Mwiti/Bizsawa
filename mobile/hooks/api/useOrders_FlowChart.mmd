@@ -1,0 +1,41 @@
+---
+references:
+  - "File: /mobile/hooks/api/useOrders.ts"
+generationTime: 2026-08-23T15:03:12.691Z
+---
+flowchart TD
+    A["useOrders(options)"] --> B["Initialize query client, page size, status filter, and offset"]
+    B --> C["Fetch orders with React Query"]
+    C --> D["Call GET /orders with limit, offset, and status"]
+    D --> E{"Request succeeds?"}
+    E -->|Yes| F["Set orders, total, and pagination state"]
+    E -->|No| G["Expose query error"]
+
+    F --> H{"Pagination action?"}
+    H -->|Next page and hasNextPage| I["Increase offset by limit"]
+    H -->|Previous page| J["Decrease offset, minimum zero"]
+    H -->|Reset| K["Set offset to zero"]
+    I --> C
+    J --> C
+    K --> C
+
+    F --> L{"Mutation requested?"}
+    L -->|Create order| M["Convert input to CreateOrderRequest"]
+    M --> N["Create draft hash and idempotency key"]
+    N --> O["POST /orders"]
+    O --> P{"HTTP response succeeds?"}
+    P -->|Yes| Q["Clear idempotency key and invalidate orders"]
+    P -->|No| R["Keep key for retry and expose error"]
+
+    L -->|Update order| S["Map status to confirm, fulfill, refund, or cancel"]
+    S --> T["Create transition idempotency key"]
+    T --> U["POST /orders/id/action"]
+    U --> V{"HTTP response succeeds?"}
+    V -->|Yes| W["Clear key and invalidate orders"]
+    V -->|No| X["Keep key for retry and expose error"]
+
+    L -->|Delete order| Y["Create cancel idempotency key"]
+    Y --> Z["POST /orders/id/cancel"]
+    Z --> AA{"HTTP response succeeds?"}
+    AA -->|Yes| AB["Clear key and invalidate orders"]
+    AA -->|No| AC["Keep key for retry and expose error"]
