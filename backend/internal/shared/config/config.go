@@ -60,6 +60,7 @@ type WhatsAppConfig struct {
 	Driver      string
 	WAHABase    string
 	WAHASession string
+	WAHAAPIKey  string
 }
 
 type CryptoConfig struct {
@@ -119,6 +120,7 @@ func Load() Config {
 			Driver:      env("WHATSAPP_DRIVER", "waha"),
 			WAHABase:    env("WAHA_BASE_URL", "http://localhost:3000"),
 			WAHASession: env("WAHA_SESSION_ID", "bizsawa-dev"),
+			WAHAAPIKey:  env("WAHA_API_KEY", ""),
 		},
 		Crypto: CryptoConfig{
 			MasterKey:   env("CRYPTO_MASTER_KEY", "0123456789abcdef0123456789abcdef"),

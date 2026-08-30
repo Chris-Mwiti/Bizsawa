@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Codecx-Org/FinAI/backend/internal/auth"
+	"github.com/Codecx-Org/FinAI/backend/internal/analytics"
 	"github.com/Codecx-Org/FinAI/backend/internal/business"
 	"github.com/Codecx-Org/FinAI/backend/internal/customers"
 	"github.com/Codecx-Org/FinAI/backend/internal/expenses"
@@ -28,6 +29,7 @@ import (
 	"github.com/Codecx-Org/FinAI/backend/internal/taxes"
 	"github.com/Codecx-Org/FinAI/backend/internal/tenancy"
 	"github.com/Codecx-Org/FinAI/backend/internal/users"
+	"github.com/Codecx-Org/FinAI/backend/internal/waha"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverdatabasesql"
@@ -99,12 +101,15 @@ func main() {
 	// Update orders module with payments service
 	ordersModule = orders.New(gormDB, inventoryModule.Service(), salesModule.Service(), riverIngester, customersModule.Service(), invoicesModule.Service(), paymentsModule.Service(), logger)
 	authzEnforcer := authz.NewEnforcer(usersModule)
+	analyticsModule := analytics.New(gormDB, riverIngester, logger)
+	wahaModule := waha.New(cfg.WhatsApp.WAHABase, cfg.WhatsApp.WAHASession, cfg.WhatsApp.WAHAAPIKey, logger)
 
 	workers := river.NewWorkers()
 	salesModule.RegisterWorkers(workers)
 	invoicesModule.RegisterWorkers(workers)
 	paymentsModule.RegisterWorkers(workers)
 	ordersModule.RegisterWorkers(workers)
+	analyticsModule.RegisterWorkers(workers)
 
 	riverWorkerEngine, err := river.NewClient(riverpgxv5.New(pgxPool), &river.Config{
 		Workers: workers,
@@ -140,6 +145,8 @@ func main() {
 			Expenses:  expensesModule,
 			Invoices:  invoicesModule,
 			Payments:  paymentsModule,
+			Analytics: analyticsModule,
+			WAHA:      wahaModule,
 			Authz:     authzEnforcer,
 		}),
 	}
