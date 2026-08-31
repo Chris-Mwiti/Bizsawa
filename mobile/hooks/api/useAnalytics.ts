@@ -144,7 +144,7 @@ export const useAnalytics = () => {
       queryKey: ["analytics", "sales", timeframe],
       queryFn: async () => {
         const response = await api.get<SalesSummary>("/sales/summary", { params: dateRangeFor(timeframe) });
-        return [{ date: new Date().toISOString(), amount: toNumber(response.data.total) }];
+        return [{ date: new Date().toISOString(), amount: toNumber(response.data.total), revenue: toNumber(response.data.total) }];
       },
     });
 
@@ -154,7 +154,7 @@ export const useAnalytics = () => {
       queryFn: async () => {
         const response = await api.get<{ summary: CategorySummary[] }>("/expenses/summary", { params: dateRangeFor(timeframe) });
         const amount = (response.data.summary || []).reduce((sum, item) => sum + toNumber(item.amount), 0);
-        return [{ date: new Date().toISOString(), amount }];
+        return [{ date: new Date().toISOString(), amount, revenue: amount }];
       },
     });
 

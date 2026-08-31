@@ -37,7 +37,7 @@ export default function InsightsLayout() {
           title: "Analytics",
           tabBarIcon: ({ focused }) => (
             <MaterialCommunityIcons
-              name={focused ? "chart-line" : "chart-line-outline"}
+              name={focused ? "chart-line" : "chart-line"}
               size={24}
               color={focused ? "#006b5f" : "#555f6d"}
             />
@@ -50,7 +50,7 @@ export default function InsightsLayout() {
           title: "Expenses",
           tabBarIcon: ({ focused }) => (
             <MaterialCommunityIcons
-              name={focused ? "cash-minus" : "cash-minus-outline"}
+              name={focused ? "cash-multiple" : "cash-multiple"}
               size={24}
               color={focused ? "#006b5f" : "#555f6d"}
             />
