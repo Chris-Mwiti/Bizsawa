@@ -1,12 +1,12 @@
 import React, { useState } from "react";
 import { ScrollView, View, Text, TouchableOpacity, ActivityIndicator, Alert, Modal, TextInput } from "react-native";
-import { useLocalSearchParams } from "expo-router";
-import { Send, MessageSquare, Download, ChevronRight, CreditCard, CheckCircle, AlertCircle, XCircle, Clock } from "lucide-react-native";
-import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui/Card";
-import { useInvoices } from "../../../hooks/api/useInvoices";
-import { useCustomers } from "../../../hooks/api/useCustomers";
-import { TAB_BAR_SCROLL_PADDING } from "../../../constants/tabBar";
-import { toNumber } from "../../../lib/api-dtos";
+import { useLocalSearchParams, router } from "expo-router";
+import { Send, MessageSquare, Download, ChevronLeft, ChevronRight, CreditCard, CheckCircle, AlertCircle, XCircle, Clock } from "lucide-react-native";
+import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/Card";
+import { useInvoices } from "../../hooks/api/useInvoices";
+import { useCustomers } from "../../hooks/api/useCustomers";
+import { TAB_BAR_SCROLL_PADDING } from "../../constants/tabBar";
+import { toNumber } from "../../lib/api-dtos";
 function formatDate(iso: string) {
   const d = new Date(iso);
   return `${d.getDate().toString().padStart(2, "0")} ${d.toLocaleString("en-KE", { month: "short" })} ${d.getFullYear()}`;
@@ -37,7 +37,6 @@ export default function InvoiceDetail() {
   const isLoading = query.isLoading;
 
   const formatCurrency = (amount: string | number) => `KES ${toNumber(amount).toLocaleString("en-KE")}`;
-  const formatDate = (iso: string) => format(new Date(iso), "dd MMM yyyy");
 
   const handleSend = async () => {
     try { await sendInvoice(id); Alert.alert("Sent", "Invoice sent via email"); query.refetch(); } catch (e: any) { Alert.alert("Error", e.friendlyMessage || "Failed to send"); }
@@ -71,6 +70,18 @@ export default function InvoiceDetail() {
 
   return (
     <View className="flex-1 bg-gray-50">
+      <View className="px-4 pt-12 pb-3 bg-white border-b border-gray-200">
+        <View className="flex-row items-center">
+          <TouchableOpacity onPress={() => router.back()} className="mr-3 p-1">
+            <ChevronLeft size={24} color="#374151" />
+          </TouchableOpacity>
+          <View className="flex-1">
+            <Text className="text-xl font-bold text-gray-900" numberOfLines={1}>{invoice.invoiceNumber}</Text>
+            <Text className="text-xs text-gray-500">Due {formatDate(invoice.dueAt)} • {invoice.status.toUpperCase()}</Text>
+          </View>
+          <Text className="text-lg font-bold text-primary-700">{formatCurrency(invoice.total)}</Text>
+        </View>
+      </View>
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: TAB_BAR_SCROLL_PADDING + 20 }} showsVerticalScrollIndicator={false}>
         <Card className="mb-4"><CardContent className="py-3">
           <View className="flex-row justify-between items-start">

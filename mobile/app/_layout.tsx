@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Stack } from "expo-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Toast from "react-native-toast-message";
-import "../global.css";
 import { AuthProvider } from "../contexts/AuthContext";
 import { BusinessProvider } from "../contexts/BusinessContext";
 

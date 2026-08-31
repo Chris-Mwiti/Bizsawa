@@ -24,7 +24,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (credentials: LoginRequest) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
-  register: (data: RegisterRequest & Record<string, unknown>) => Promise<AuthResponse>;
+  register: (data: Partial<RegisterRequest> & Record<string, unknown>) => Promise<AuthResponse>;
   setSelectedBusinessAuth: (business: Business, role?: string | null) => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -103,7 +103,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     throw new Error("Google login is not available until the backend exposes /auth/google.");
   };
 
-  const register = async (data: RegisterRequest & Record<string, unknown>) => {
+  const register = async (data: Partial<RegisterRequest> & Record<string, unknown>) => {
     try {
       const payload: RegisterRequest = {
         email: String(data.email ?? data.ownerEmail ?? ""),

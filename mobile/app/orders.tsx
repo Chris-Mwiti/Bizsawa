@@ -262,6 +262,9 @@ export default function OrdersScreen() {
           <View className="flex-1 py-3 rounded-lg items-center bg-white shadow">
             <Text className="font-medium text-gray-900">Orders</Text>
           </View>
+          <Pressable className="flex-1 py-3 rounded-lg items-center" onPress={() => router.replace("/invoices") }>
+            <Text className="font-medium text-gray-500">Invoices</Text>
+          </Pressable>
         </View>
       </View>
 
