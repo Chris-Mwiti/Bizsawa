@@ -314,3 +314,88 @@ export function toNumber(value: DecimalString | number | null | undefined): numb
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
 }
+
+// ===== Analytics Types =====
+
+export type AnalyticsTimeframe = "day" | "week" | "month" | "year" | "custom";
+
+export interface RevenueAnalytics {
+  timeframe: AnalyticsTimeframe;
+  data: Array<{ date: string; revenue: number; transactions: number }>;
+  totalRevenue: number;
+  growthRate: number;
+}
+
+export interface ProfitAnalytics {
+  timeframe: AnalyticsTimeframe;
+  data: Array<{ date: string; revenue: number; expenses: number; profit: number; margin: number }>;
+  totalProfit: number;
+  avgMargin: number;
+}
+
+export interface CategoryAnalytics {
+  timeframe: AnalyticsTimeframe;
+  categories: Array<{ name: string; revenue: number; percentage: number; trend: "up" | "down" | "stable" }>;
+}
+
+export interface CustomerSegmentAnalytics {
+  timeframe: AnalyticsTimeframe;
+  segments: Array<{ segment: string; count: number; growth: number; avgOrderValue: number }>;
+}
+
+export interface AnalyticsSummary {
+  revenue: RevenueAnalytics;
+  profit: ProfitAnalytics;
+  categories: CategoryAnalytics;
+  customers: CustomerSegmentAnalytics;
+  generatedAt: ISODateTime;
+  timeframe: AnalyticsTimeframe;
+}
+
+// ===== Invoice Types =====
+
+export interface InvoiceListItem {
+  id: UUID;
+  invoiceNumber: string;
+  customerName: string;
+  customerPhone?: string;
+  status: "draft" | "sent" | "viewed" | "partial" | "paid" | "overdue" | "cancelled";
+  total: DecimalString;
+  amountDue: DecimalString;
+  currency: string;
+  dueAt: ISODateTime;
+  createdAt: ISODateTime;
+  sentAt?: ISODateTime;
+}
+
+export interface InvoiceDetail extends InvoiceListItem {
+  lines: Array<{
+    id: UUID;
+    description: string;
+    quantity: DecimalString;
+    unitPrice: DecimalString;
+    lineTotal: DecimalString;
+  }>;
+  subtotal: DecimalString;
+  taxAmount: DecimalString;
+  amountPaid: DecimalString;
+  notes?: string;
+  payments: Array<{ id: UUID; amount: DecimalString; paidAt: ISODateTime; method: string }>;
+}
+
+// ===== WAHA Notification Types =====
+
+export interface WAHAMessageRequest {
+  phone: string;
+  message: string;
+  mediaUrl?: string;
+  mediaType?: "image" | "document" | "video";
+}
+
+export interface WAHANotificationPayload {
+  type: "invoice" | "order_status" | "payment_reminder" | "marketing";
+  recipientPhone: string;
+  templateData: Record<string, any>;
+  invoiceId?: UUID;
+  orderId?: UUID;
+}

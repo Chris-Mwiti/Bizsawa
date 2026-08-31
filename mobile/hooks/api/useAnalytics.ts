@@ -1,9 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { api, ApiError } from "../../lib/api";
-import type { Breakdown, CategorySummary, SalesSummary } from "../../lib/api-dtos";
+import type { Breakdown, CategorySummary, SalesSummary, RevenueAnalytics, ProfitAnalytics, CategoryAnalytics, CustomerSegmentAnalytics, AnalyticsSummary, AnalyticsTimeframe } from "../../lib/api-dtos";
 import { toNumber } from "../../lib/api-dtos";
+import { useBusinessContext } from "../../contexts/BusinessContext";
 
-export type Timeframe = "week" | "month" | "year" | "all";
+export type Timeframe = "day" | "week" | "month" | "year" | "all" | "custom";
 
 export interface WeeklyOverview {
   day: string;
@@ -21,7 +22,7 @@ export interface CategoryPerformance {
   expenses: Array<{ name: string; value: number; type: string }>;
 }
 
-export interface ProfitAnalytics {
+export interface ProfitAnalyticsDataPoint {
   date: string;
   revenue: number;
   expense: number;
@@ -39,23 +40,112 @@ function dateRangeFor(timeframe: Timeframe): { from?: string; to?: string } {
   if (timeframe === "all") return {};
   const to = new Date();
   const from = new Date(to);
+  if (timeframe === "day") from.setDate(to.getDate() - 1);
   if (timeframe === "week") from.setDate(to.getDate() - 7);
   if (timeframe === "month") from.setMonth(to.getMonth() - 1);
   if (timeframe === "year") from.setFullYear(to.getFullYear() - 1);
   return { from: from.toISOString(), to: to.toISOString() };
 }
 
+// Backend expects "day" | "week" | "month" | "year" - map "all" to "year" and "custom" to "month" as fallback
+function backendTimeframe(tf: Timeframe): "day" | "week" | "month" | "year" {
+  if (tf === "day") return "day";
+  if (tf === "week") return "week";
+  if (tf === "month") return "month";
+  if (tf === "year") return "year";
+  if (tf === "all") return "year";
+  return "month"; // custom
+}
+
 export const useAnalytics = () => {
+  // Gate all analytics on active business — prevents 403 "business context is required" on cold start
+  let activeBusinessId: string | null = null;
+  let businessLoading = false;
+  try {
+    const biz = useBusinessContext();
+    activeBusinessId = biz.activeBusinessId;
+    businessLoading = biz.isLoading;
+  } catch {
+    // outside provider (tests) — allow queries
+    activeBusinessId = "test";
+  }
+  const hasBusiness = !!activeBusinessId;
+  const enabled = hasBusiness && !businessLoading;
+
+  // Pre-computed analytics summary endpoint (new backend endpoint)
+  const getAnalyticsSummary = (timeframe: Timeframe = "week") =>
+    useQuery<AnalyticsSummary>({
+      queryKey: ["analytics", "summary", timeframe, activeBusinessId],
+      queryFn: async () => {
+        const response = await api.get<AnalyticsSummary>("/analytics/summary", { params: { timeframe: backendTimeframe(timeframe) } });
+        return response.data;
+      },
+      enabled,
+      staleTime: 5 * 60 * 1000,
+      retry: (count, err: any) => (err?.response?.status === 403 ? false : count < 2),
+    });
+
+  const getRevenueAnalytics = (timeframe: Timeframe = "week") =>
+    useQuery<RevenueAnalytics>({
+      queryKey: ["analytics", "revenue", timeframe, activeBusinessId],
+      queryFn: async () => {
+        const response = await api.get<RevenueAnalytics>("/analytics/revenue", { params: { timeframe: backendTimeframe(timeframe) } });
+        return response.data;
+      },
+      enabled,
+      staleTime: 5 * 60 * 1000,
+      retry: (count, err: any) => (err?.response?.status === 403 ? false : count < 2),
+    });
+
+  const getProfitAnalytics = (timeframe: Timeframe = "week") =>
+    useQuery<ProfitAnalytics>({
+      queryKey: ["analytics", "profit", timeframe, activeBusinessId],
+      queryFn: async () => {
+        const response = await api.get<ProfitAnalytics>("/analytics/profit", { params: { timeframe: backendTimeframe(timeframe) } });
+        return response.data;
+      },
+      enabled,
+      staleTime: 5 * 60 * 1000,
+      retry: (count, err: any) => (err?.response?.status === 403 ? false : count < 2),
+    });
+
+  const getCategoryAnalytics = (timeframe: Timeframe = "week") =>
+    useQuery<CategoryAnalytics>({
+      queryKey: ["analytics", "categories", timeframe, activeBusinessId],
+      queryFn: async () => {
+        const response = await api.get<CategoryAnalytics>("/analytics/categories", { params: { timeframe: backendTimeframe(timeframe) } });
+        return response.data;
+      },
+      enabled,
+      staleTime: 5 * 60 * 1000,
+      retry: (count, err: any) => (err?.response?.status === 403 ? false : count < 2),
+    });
+
+  const getCustomerAnalytics = (timeframe: Timeframe = "week") =>
+    useQuery<CustomerSegmentAnalytics>({
+      queryKey: ["analytics", "customers", timeframe],
+      queryFn: async () => {
+        const response = await api.get<CustomerSegmentAnalytics>("/analytics/customers", { params: { timeframe: backendTimeframe(timeframe) } });
+        return response.data;
+      },
+      enabled,
+      staleTime: 5 * 60 * 1000,
+      retry: (count, err: any) => (err?.response?.status === 403 ? false : count < 2),
+    });
+
+  // Legacy queries — also gated
   const getSalesSummary = useQuery({
-    queryKey: ["analytics", "sales-summary"],
+    queryKey: ["analytics", "sales-summary", activeBusinessId],
     queryFn: async () => {
       const response = await api.get<SalesSummary>("/sales/summary", { params: dateRangeFor("week") });
       return response.data;
     },
+    enabled,
+    retry: (count, err: any) => (err?.response?.status === 403 ? false : count < 2),
   });
 
   const getCategoryPerformance = useQuery({
-    queryKey: ["analytics", "categories"],
+    queryKey: ["analytics", "categories-legacy", activeBusinessId],
     queryFn: async () => {
       const [salesByProduct, expenseSummary] = await Promise.all([
         api.get<{ items: Breakdown[] }>("/sales/by-product"),
@@ -74,25 +164,31 @@ export const useAnalytics = () => {
         })),
       } satisfies CategoryPerformance;
     },
+    enabled,
+    retry: (count, err: any) => (err?.response?.status === 403 ? false : count < 2),
   });
 
   const getSalesAnalytics = (timeframe: Timeframe = "week") =>
     useQuery({
-      queryKey: ["analytics", "sales", timeframe],
+      queryKey: ["analytics", "sales", timeframe, activeBusinessId],
       queryFn: async () => {
         const response = await api.get<SalesSummary>("/sales/summary", { params: dateRangeFor(timeframe) });
-        return [{ date: new Date().toISOString(), amount: toNumber(response.data.total) }];
+        return [{ date: new Date().toISOString(), amount: toNumber(response.data.total), revenue: toNumber(response.data.total) }];
       },
+      enabled,
+      retry: (count, err: any) => (err?.response?.status === 403 ? false : count < 2),
     });
 
   const getExpenseAnalytics = (timeframe: Timeframe = "week") =>
     useQuery({
-      queryKey: ["analytics", "expenses", timeframe],
+      queryKey: ["analytics", "expenses", timeframe, activeBusinessId],
       queryFn: async () => {
         const response = await api.get<{ summary: CategorySummary[] }>("/expenses/summary", { params: dateRangeFor(timeframe) });
         const amount = (response.data.summary || []).reduce((sum, item) => sum + toNumber(item.amount), 0);
-        return [{ date: new Date().toISOString(), amount }];
+        return [{ date: new Date().toISOString(), amount, revenue: amount }];
       },
+      enabled,
+      retry: (count, err: any) => (err?.response?.status === 403 ? false : count < 2),
     });
 
   const getAIInsights = useQuery<AIInsights>({
@@ -105,7 +201,19 @@ export const useAnalytics = () => {
     staleTime: Infinity,
   });
 
+  const defaultTimeframe: Timeframe = "week";
+
   return {
+    analyticsSummary: getAnalyticsSummary(defaultTimeframe),
+    revenueAnalytics: getRevenueAnalytics(defaultTimeframe),
+    profitAnalyticsData: getProfitAnalytics(defaultTimeframe),
+    categoryAnalytics: getCategoryAnalytics(defaultTimeframe),
+    customerAnalytics: getCustomerAnalytics(defaultTimeframe),
+    getAnalyticsSummary,
+    getRevenueAnalytics,
+    getProfitAnalytics,
+    getCategoryAnalytics,
+    getCustomerAnalytics,
     weeklyOverview: [
       {
         day: "This week",
@@ -113,8 +221,10 @@ export const useAnalytics = () => {
         fullDate: new Date().toISOString(),
       },
     ],
-    isOverviewLoading: getSalesSummary.isLoading,
+    isOverviewLoading: businessLoading || getSalesSummary.isLoading,
     overviewError: (getSalesSummary.error as ApiError)?.friendlyMessage || null,
+    hasBusiness,
+    isBusinessLoading: businessLoading,
     salesAnalytics: getSalesAnalytics,
     expenseAnalytics: getExpenseAnalytics,
     profitAnalytics: getSalesAnalytics,

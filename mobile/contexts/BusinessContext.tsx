@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState, ReactNode } fr
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { api, AUTH_STORAGE_KEYS } from "../lib/api";
 import type { Business, BusinessMember, CreateBusinessRequest, Role, UUID } from "../lib/api-dtos";
-import { useAuth } from "./AuthContext.tsx";
+import { useAuth } from "./AuthContext";
 import { canRole } from "../lib/permissions";
 
 interface BusinessContextType {

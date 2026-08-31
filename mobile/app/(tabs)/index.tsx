@@ -355,8 +355,8 @@ export default function Dashboard() {
                 <Text className="text-[10px] text-blue-700 font-bold uppercase tracking-wider">
                   {aiInsights.trends?.length || 0} Trends Detected
                 </Text>
-                <TouchableOpacity onPress={() => router.push("/(tabs)/insights?tab=overview")}>
-                  <Text className="text-blue-600 text-xs font-bold underline">View All</Text>
+                <TouchableOpacity onPress={() => router.push("/(tabs)/insights/analytics")}>
+                  <Text className="text-blue-600 text-xs font-bold underline">View Analytics</Text>
                 </TouchableOpacity>
               </View>
             </View>

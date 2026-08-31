@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/Codecx-Org/FinAI/backend/internal/auth"
+	"github.com/Codecx-Org/FinAI/backend/internal/analytics"
 	"github.com/Codecx-Org/FinAI/backend/internal/business"
 	"github.com/Codecx-Org/FinAI/backend/internal/customers"
 	"github.com/Codecx-Org/FinAI/backend/internal/expenses"
@@ -21,6 +22,7 @@ import (
 	"github.com/Codecx-Org/FinAI/backend/internal/taxes"
 	"github.com/Codecx-Org/FinAI/backend/internal/tenancy"
 	"github.com/Codecx-Org/FinAI/backend/internal/users"
+	"github.com/Codecx-Org/FinAI/backend/internal/waha"
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
@@ -42,6 +44,8 @@ type Dependencies struct {
 	Expenses  *expenses.Module
 	Invoices  *invoices.Module
 	Payments  *payments.Module
+	Analytics *analytics.Module
+	WAHA      *waha.Module
 	Authz     *authz.Enforcer
 }
 
@@ -144,6 +148,12 @@ func NewRouter(deps Dependencies) http.Handler {
 			}
 			if deps.Payments != nil {
 				r.Route("/payments", deps.Payments.RegisterRoutes)
+			}
+			if deps.Analytics != nil {
+				r.Route("/analytics", deps.Analytics.RegisterRoutes)
+			}
+			if deps.WAHA != nil {
+				r.Route("/waha", deps.WAHA.RegisterRoutes)
 			}
 		})
 	})
