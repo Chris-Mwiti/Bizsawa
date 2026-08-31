@@ -16,6 +16,15 @@ func TenantResolution(next http.Handler) http.Handler {
 		if businessID == "" {
 			businessID = r.Header.Get("X-Business-ID")
 		}
+		if businessID == "" {
+			businessID = r.Header.Get("x-business-id")
+		}
+		if businessID == "" {
+			businessID = r.URL.Query().Get("businessId")
+		}
+		if businessID == "" {
+			businessID = r.URL.Query().Get("business_id")
+		}
 
 		ctx := r.Context()
 		if parsed, err := uuid.Parse(businessID); err == nil {

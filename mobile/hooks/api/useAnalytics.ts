@@ -57,6 +57,46 @@ function backendTimeframe(tf: Timeframe): "day" | "week" | "month" | "year" {
   return "month"; // custom
 }
 
+// Backend Snapshot shape — single endpoint GET /analytics?timeframe=...
+// Decimal fields arrive as strings from shopspring/decimal
+interface BackendSnapshot {
+  businessId: string;
+  timeframe: AnalyticsTimeframe;
+  revenue?: { data: Array<{ date: string; revenue: any; transactions: number }>; totalRevenue: any; growthRate: number; transactions: number };
+  profit?: { data: Array<{ date: string; revenue: any; expense: any; profit: any; margin: number }>; totalProfit: any; avgMargin: number };
+  categories?: Array<{ name: string; revenue: any; percentage: number; trend: string }>;
+  customers?: { segments: Array<{ segment: string; count: number; growth: number; avgOrderValue: any; totalSpend?: any }>; ltv: any };
+  generatedAt: string;
+}
+
+function mapSnapshotToAnalytics(snap: BackendSnapshot, tf: Timeframe): AnalyticsSummary {
+  const bt = backendTimeframe(tf) as AnalyticsTimeframe;
+  return {
+    timeframe: bt,
+    generatedAt: snap.generatedAt,
+    revenue: {
+      timeframe: bt,
+      data: (snap.revenue?.data || []).map((d) => ({ date: d.date, revenue: toNumber(d.revenue), transactions: d.transactions })),
+      totalRevenue: toNumber(snap.revenue?.totalRevenue),
+      growthRate: Number(snap.revenue?.growthRate ?? 0),
+    },
+    profit: {
+      timeframe: bt,
+      data: (snap.profit?.data || []).map((d) => ({ date: d.date, revenue: toNumber(d.revenue), expenses: toNumber(d.expense), profit: toNumber(d.profit), margin: Number(d.margin ?? 0) })),
+      totalProfit: toNumber(snap.profit?.totalProfit),
+      avgMargin: Number(snap.profit?.avgMargin ?? 0),
+    },
+    categories: {
+      timeframe: bt,
+      categories: (snap.categories || []).map((c) => ({ name: c.name, revenue: toNumber(c.revenue), percentage: Number(c.percentage ?? 0), trend: (c.trend as any) || "stable" })),
+    },
+    customers: {
+      timeframe: bt,
+      segments: (snap.customers?.segments || []).map((s) => ({ segment: s.segment, count: s.count, growth: Number(s.growth ?? 0), avgOrderValue: toNumber(s.avgOrderValue) })),
+    },
+  };
+}
+
 export const useAnalytics = () => {
   // Gate all analytics on active business — prevents 403 "business context is required" on cold start
   let activeBusinessId: string | null = null;
@@ -72,13 +112,20 @@ export const useAnalytics = () => {
   const hasBusiness = !!activeBusinessId;
   const enabled = hasBusiness && !businessLoading;
 
-  // Pre-computed analytics summary endpoint (new backend endpoint)
+  const fetchSnapshot = async (tf: Timeframe): Promise<BackendSnapshot> => {
+    // Single canonical endpoint — backend/internal/analytics/module.go:51 r.Get("/", h.Get)
+    // GET /api/v1/analytics?timeframe=week  with X-Business-ID header + ?businessId= fallback
+    const response = await api.get<BackendSnapshot>("/analytics", { params: { timeframe: backendTimeframe(tf) } });
+    return response.data;
+  };
+
+  // Pre-computed analytics summary endpoint — now backed by Snapshot
   const getAnalyticsSummary = (timeframe: Timeframe = "week") =>
     useQuery<AnalyticsSummary>({
-      queryKey: ["analytics", "summary", timeframe, activeBusinessId],
+      queryKey: ["analytics", "snapshot", timeframe, activeBusinessId],
       queryFn: async () => {
-        const response = await api.get<AnalyticsSummary>("/analytics/summary", { params: { timeframe: backendTimeframe(timeframe) } });
-        return response.data;
+        const snap = await fetchSnapshot(timeframe);
+        return mapSnapshotToAnalytics(snap, timeframe);
       },
       enabled,
       staleTime: 5 * 60 * 1000,
@@ -89,8 +136,8 @@ export const useAnalytics = () => {
     useQuery<RevenueAnalytics>({
       queryKey: ["analytics", "revenue", timeframe, activeBusinessId],
       queryFn: async () => {
-        const response = await api.get<RevenueAnalytics>("/analytics/revenue", { params: { timeframe: backendTimeframe(timeframe) } });
-        return response.data;
+        const snap = await fetchSnapshot(timeframe);
+        return mapSnapshotToAnalytics(snap, timeframe).revenue;
       },
       enabled,
       staleTime: 5 * 60 * 1000,
@@ -101,8 +148,8 @@ export const useAnalytics = () => {
     useQuery<ProfitAnalytics>({
       queryKey: ["analytics", "profit", timeframe, activeBusinessId],
       queryFn: async () => {
-        const response = await api.get<ProfitAnalytics>("/analytics/profit", { params: { timeframe: backendTimeframe(timeframe) } });
-        return response.data;
+        const snap = await fetchSnapshot(timeframe);
+        return mapSnapshotToAnalytics(snap, timeframe).profit;
       },
       enabled,
       staleTime: 5 * 60 * 1000,
@@ -113,8 +160,8 @@ export const useAnalytics = () => {
     useQuery<CategoryAnalytics>({
       queryKey: ["analytics", "categories", timeframe, activeBusinessId],
       queryFn: async () => {
-        const response = await api.get<CategoryAnalytics>("/analytics/categories", { params: { timeframe: backendTimeframe(timeframe) } });
-        return response.data;
+        const snap = await fetchSnapshot(timeframe);
+        return mapSnapshotToAnalytics(snap, timeframe).categories;
       },
       enabled,
       staleTime: 5 * 60 * 1000,
@@ -123,10 +170,10 @@ export const useAnalytics = () => {
 
   const getCustomerAnalytics = (timeframe: Timeframe = "week") =>
     useQuery<CustomerSegmentAnalytics>({
-      queryKey: ["analytics", "customers", timeframe],
+      queryKey: ["analytics", "customers", timeframe, activeBusinessId],
       queryFn: async () => {
-        const response = await api.get<CustomerSegmentAnalytics>("/analytics/customers", { params: { timeframe: backendTimeframe(timeframe) } });
-        return response.data;
+        const snap = await fetchSnapshot(timeframe);
+        return mapSnapshotToAnalytics(snap, timeframe).customers;
       },
       enabled,
       staleTime: 5 * 60 * 1000,

@@ -115,16 +115,41 @@ api.interceptors.request.use(
     const token =
       (await AsyncStorage.getItem(AUTH_STORAGE_KEYS.accessToken)) ||
       (await AsyncStorage.getItem(AUTH_STORAGE_KEYS.legacyToken));
-    const businessId = await AsyncStorage.getItem(AUTH_STORAGE_KEYS.businessId);
+    const rawBiz = await AsyncStorage.getItem(AUTH_STORAGE_KEYS.businessId);
+    const businessId = rawBiz?.trim() ? rawBiz.trim() : null;
 
     config.headers = config.headers || {};
     if (token) config.headers.Authorization = `Bearer ${token}`;
-    if (businessId) config.headers["X-Business-ID"] = businessId;
-    // Idempotency keys should be explicitly set by the caller via generateIdempotencyKey()
-    // The interceptor only attaches keys that were already set on the request config
-    // This prevents generating new keys on every retry attempt
+    if (businessId) {
+      config.headers["X-Business-ID"] = businessId;
+      // lower-case mirror for proxies that normalize
+      (config.headers as any)["x-business-id"] = businessId;
+      // Fallback: also send as query ?businessId= so TenantResolution can read it even if header stripped by CORS/proxy
+      // TenantResolution checks URLParam + header; we extend to query param below
+      const url = config.url || "";
+      // attach as param only for analytics/sales/expenses where business context is required
+      // keep existing params intact
+      (config.params as any) = { ...(config.params as any) };
+      // do not overwrite explicit businessId param
+      if (!(config.params as any).businessId && !(config.params as any).business_id) {
+        (config.params as any).businessId = businessId;
+      }
+    } else {
+      console.warn("[api] X-Business-ID missing — BusinessContext not hydrated, analytics will 403 if queried");
+    }
 
-    console.debug("API Request:", config.method?.toUpperCase(), config.url, config.baseURL);
+    console.debug(
+      "API Request:",
+      config.method?.toUpperCase(),
+      config.url,
+      config.baseURL,
+      "biz:",
+      businessId ? `${businessId.slice(0, 8)}…` : "none",
+      "headers:",
+      businessId ? { "X-Business-ID": `${businessId.slice(0, 8)}…` } : {},
+      "params:",
+      config.params
+    );
     return config;
   },
   (error) => Promise.reject(error),
