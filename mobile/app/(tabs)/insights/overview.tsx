@@ -3,8 +3,6 @@ import { ScrollView, View, Text, TouchableOpacity, Modal, TextInput, ActivityInd
 import { useLocalSearchParams } from "expo-router";
 import { TrendingUp, Target, Lightbulb, Receipt, DollarSign } from "lucide-react-native";
 import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui/Card";
-import { Badge } from "../../../components/ui/Badge";
-import { Progress } from "../../../components/ui/Progress";
 import { useAnalytics } from "../../../hooks/api/useAnalytics";
 import { useExpenses } from "../../../hooks/api/useExpenses";
 import { TAB_BAR_SCROLL_PADDING } from "../../../constants/tabBar";
