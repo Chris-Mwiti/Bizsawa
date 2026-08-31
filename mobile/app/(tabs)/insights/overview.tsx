@@ -21,7 +21,7 @@ export default function InsightsOverview() {
     if (params.action === "new-expense") setShowExpenseModal(true);
   }, [params.action]);
 
-  const { weeklyOverview, isOverviewLoading, categoryPerformance, isCategoriesLoading, aiInsights, fetchAIInsights, isAIInsightsLoading, aiInsightsError } = useAnalytics();
+  const { weeklyOverview, isOverviewLoading, isBusinessLoading, hasBusiness, categoryPerformance, isCategoriesLoading, aiInsights, fetchAIInsights, isAIInsightsLoading, aiInsightsError } = useAnalytics();
   const { expenses, isLoading: expensesLoading, createExpense, isCreating: isCreatingExpense } = useExpenses();
 
   const weeklyRevenue = weeklyOverview.reduce((sum, day) => sum + day.sales, 0);
@@ -42,6 +42,13 @@ export default function InsightsOverview() {
       setShowExpenseModal(false); setExpenseType(""); setExpenseDescription(""); setExpenseAmount("");
     } catch (e: any) { Alert.alert("Error", e.friendlyMessage || "Failed to create expense"); }
   };
+
+  if (isBusinessLoading) {
+    return <View className="flex-1 bg-gray-50 items-center justify-center px-6"><ActivityIndicator size="large" color="#111827" /><Text className="text-sm text-gray-500 mt-3">Loading business context…</Text></View>;
+  }
+  if (!hasBusiness) {
+    return <View className="flex-1 bg-gray-50 items-center justify-center px-6"><View className="w-14 h-14 rounded-full bg-amber-100 items-center justify-center mb-3"><Receipt size={22} color="#b45309" /></View><Text className="font-bold text-gray-900 text-center">No business selected</Text><Text className="text-sm text-gray-500 text-center mt-1">Create or select a business to view insights. This avoids the 403.</Text></View>;
+  }
 
   return (
     <View className="flex-1 bg-gray-50">

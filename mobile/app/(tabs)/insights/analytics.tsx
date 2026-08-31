@@ -11,7 +11,7 @@ const LABELS: Record<Timeframe, string> = { day: "Day", week: "Week", month: "Mo
 
 export default function InsightsAnalytics() {
   const [timeframe, setTimeframe] = useState<Timeframe>("week");
-  const { getRevenueAnalytics, getProfitAnalytics, getCategoryAnalytics, getCustomerAnalytics } = useAnalytics();
+  const { getRevenueAnalytics, getProfitAnalytics, getCategoryAnalytics, getCustomerAnalytics, hasBusiness, isBusinessLoading } = useAnalytics();
   const revenueQuery = getRevenueAnalytics(timeframe);
   const profitQuery = getProfitAnalytics(timeframe);
   const categoryQuery = getCategoryAnalytics(timeframe);
@@ -21,6 +21,26 @@ export default function InsightsAnalytics() {
   const Loading = () => (
     <View className="items-center py-8"><ActivityIndicator size="small" color="#006b5f" /><Text className="text-gray-500 mt-2">Loading...</Text></View>
   );
+
+  if (isBusinessLoading) {
+    return (
+      <View className="flex-1 bg-gray-50 items-center justify-center px-6">
+        <ActivityIndicator size="large" color="#111827" />
+        <Text className="text-sm text-gray-500 mt-3">Loading business context…</Text>
+      </View>
+    );
+  }
+  if (!hasBusiness) {
+    return (
+      <View className="flex-1 bg-gray-50 items-center justify-center px-6">
+        <View className="w-14 h-14 rounded-full bg-amber-100 items-center justify-center mb-3">
+          <PieChart size={22} color="#b45309" />
+        </View>
+        <Text className="font-bold text-gray-900 text-center">No business selected</Text>
+        <Text className="text-sm text-gray-500 text-center mt-1">Create or select a business to view analytics. This fixes the 403 — business context is required.</Text>
+      </View>
+    );
+  }
 
   return (
     <View className="flex-1 bg-gray-50">
