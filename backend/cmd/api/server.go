@@ -7,6 +7,7 @@ import (
 	"github.com/Codecx-Org/FinAI/backend/internal/auth"
 	"github.com/Codecx-Org/FinAI/backend/internal/analytics"
 	"github.com/Codecx-Org/FinAI/backend/internal/business"
+	"github.com/Codecx-Org/FinAI/backend/internal/chat"
 	"github.com/Codecx-Org/FinAI/backend/internal/customers"
 	"github.com/Codecx-Org/FinAI/backend/internal/expenses"
 	"github.com/Codecx-Org/FinAI/backend/internal/inventory"
@@ -47,6 +48,7 @@ type Dependencies struct {
 	Analytics *analytics.Module
 	WAHA      *waha.Module
 	Authz     *authz.Enforcer
+	Chat      *chat.Module
 }
 
 func NewRouter(deps Dependencies) http.Handler {
@@ -154,6 +156,15 @@ func NewRouter(deps Dependencies) http.Handler {
 			}
 			if deps.WAHA != nil {
 				r.Route("/waha", deps.WAHA.RegisterRoutes)
+			}
+			if deps.Chat != nil {
+				// Mobile expects POST /api/v1/chatbot/chat (see mobile/hooks/api/useChat.ts) and we also expose /chat/business-owner
+				r.Route("/chatbot", func(r chi.Router) {
+					r.Post("/chat", deps.Chat.Handler().Chat)
+				})
+				r.Route("/chat", func(r chi.Router) {
+					r.Post("/business-owner", deps.Chat.Handler().Chat)
+				})
 			}
 		})
 	})

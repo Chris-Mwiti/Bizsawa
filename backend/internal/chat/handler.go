@@ -1,0 +1,81 @@
+package chat
+
+import (
+	"encoding/json"
+	"net/http"
+
+	sharedhttp "github.com/Codecx-Org/FinAI/backend/internal/shared/http"
+	"github.com/Codecx-Org/FinAI/backend/internal/shared/middleware"
+	"github.com/Codecx-Org/FinAI/backend/internal/mcp"
+	apperrors "github.com/Codecx-Org/FinAI/backend/internal/shared/errors"
+	"github.com/google/uuid"
+)
+
+type Handler struct {
+	svc      *Service
+	registry *mcp.Registry
+}
+
+func NewHandler(svc *Service, registry *mcp.Registry) *Handler {
+	return &Handler{svc: svc, registry: registry}
+}
+
+type ChatHTTPRequest struct {
+	Message  string        `json:"message"`
+	History  []ChatMessage `json:"history"`
+	Language string        `json:"language"`
+}
+
+// Chat handles POST /api/v1/chatbot/chat and POST /api/v1/chat/business-owner
+// Auth + BusinessID required (like other handlers). Supports mobile useChat hook.
+func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
+	uid, ok := middleware.UserIDFromCtx(r.Context())
+	if !ok {
+		sharedhttp.Error(w, apperrors.ErrUnauthorized.WithMessage("unauthorized — missing user"))
+		return
+	}
+	bid, ok := middleware.BusinessIDFromCtx(r.Context())
+	if !ok || bid == uuid.Nil {
+		sharedhttp.Error(w, apperrors.ErrForbidden.WithMessage("business context is required — select a business (X-Business-ID)"))
+		return
+	}
+	// role resolution — if registry has enforcer, let it gate per tool; here we just need session for tool calls
+	// Try to get role from header? fallback OWNER for business owner chat
+	role := r.Header.Get("X-Role")
+	if role == "" {
+		role = "OWNER"
+	}
+	// Business owner profile
+	session := mcp.Session{
+		UserID:     uid,
+		BusinessID: bid,
+		Role:       role,
+		Profile:    mcp.ProfileBusinessOwner,
+		RequestID:  r.Header.Get("X-Request-ID"),
+	}
+	// TenantID mirrors BusinessID (TenantResolution does this)
+	if tid, ok := middleware.TenantIDFromCtx(r.Context()); ok {
+		session.TenantID = tid
+	} else {
+		session.TenantID = bid
+	}
+
+	var req ChatHTTPRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sharedhttp.Error(w, apperrors.ErrUnprocessable.WithMessage("invalid JSON"))
+		return
+	}
+	// normalize language
+	if req.Language != "sw" {
+		req.Language = "en"
+	}
+
+	resp, err := h.svc.Chat(r.Context(), session, ChatRequest{Message: req.Message, History: req.History, Language: req.Language})
+	if err != nil {
+		sharedhttp.Error(w, err)
+		return
+	}
+	sharedhttp.JSON(w, http.StatusOK, resp)
+}
+
+

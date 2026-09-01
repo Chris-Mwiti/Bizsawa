@@ -13,10 +13,12 @@ import (
 	"github.com/Codecx-Org/FinAI/backend/internal/auth"
 	"github.com/Codecx-Org/FinAI/backend/internal/analytics"
 	"github.com/Codecx-Org/FinAI/backend/internal/business"
+	"github.com/Codecx-Org/FinAI/backend/internal/chat"
 	"github.com/Codecx-Org/FinAI/backend/internal/customers"
 	"github.com/Codecx-Org/FinAI/backend/internal/expenses"
 	"github.com/Codecx-Org/FinAI/backend/internal/inventory"
 	"github.com/Codecx-Org/FinAI/backend/internal/invoices"
+	"github.com/Codecx-Org/FinAI/backend/internal/mcp"
 	"github.com/Codecx-Org/FinAI/backend/internal/orders"
 	"github.com/Codecx-Org/FinAI/backend/internal/payments"
 	"github.com/Codecx-Org/FinAI/backend/internal/products"
@@ -103,6 +105,15 @@ func main() {
 	authzEnforcer := authz.NewEnforcer(usersModule)
 	analyticsModule := analytics.New(gormDB, riverIngester, logger)
 	wahaModule := waha.New(cfg.WhatsApp.WAHABase, cfg.WhatsApp.WAHASession, cfg.WhatsApp.WAHAAPIKey, logger)
+	// MCP registry for chat (curated business-owner, same as mcp-server) — Why Less Is More: 13 tools
+	chatRegistry := mcp.NewDefaultRegistry(authzEnforcer, mcp.Services{
+		Sales:     salesModule.Service(),
+		Inventory: inventoryModule.Service(),
+		Customers: customersModule.Service(),
+		Expenses:  expensesModule.Service(),
+		Invoices:  invoicesModule.Service(),
+	})
+	chatModule := chat.NewModule(chatRegistry)
 
 	workers := river.NewWorkers()
 	salesModule.RegisterWorkers(workers)
@@ -148,6 +159,7 @@ func main() {
 			Analytics: analyticsModule,
 			WAHA:      wahaModule,
 			Authz:     authzEnforcer,
+			Chat:      chatModule,
 		}),
 	}
 
