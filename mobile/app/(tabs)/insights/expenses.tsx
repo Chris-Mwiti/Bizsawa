@@ -6,6 +6,7 @@ import { Badge } from "../../../components/ui/Badge";
 import { useExpenses } from "../../../hooks/api/useExpenses";
 import { TAB_BAR_SCROLL_PADDING } from "../../../constants/tabBar";
 import { toNumber } from "../../../lib/api-dtos";
+import { shortId } from "../../../lib/ids";
 
 export default function InsightsExpenses() {
   const [showModal, setShowModal] = useState(false);
@@ -128,6 +129,9 @@ export default function InsightsExpenses() {
                     <View className="flex-row items-start justify-between gap-3">
                       <View className="flex-1 gap-1.5">
                         <View className="flex-row items-center gap-2 flex-wrap">
+                          <View className="px-2 py-0.5 rounded-full bg-white border border-gray-200">
+                            <Text className="text-[9px] font-bold tracking-widest text-gray-500">EXP-{shortId(e.id, 6)}</Text>
+                          </View>
                           <View className="px-2.5 py-1 rounded-full bg-slate-100 border border-slate-200">
                             <Text className="text-[11px] font-bold tracking-widest text-slate-700">{e.category.toUpperCase()}</Text>
                           </View>
