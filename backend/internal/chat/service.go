@@ -74,7 +74,6 @@ func NewService(registry *mcp.Registry) *Service {
 // Chat orchestrates single-agent tool-using loop (Architecture.md:46) with MCP registry.
 // If OPENAI_API_KEY missing, falls back to heuristic router that still exercises MCP tools, filter, and monitoring.
 func (s *Service) Chat(ctx context.Context, session mcp.Session, req ChatRequest) (ChatResponse, error) {
-	// sanitize
 	msg := strings.TrimSpace(req.Message)
 	if msg == "" {
 		return ChatResponse{}, fmt.Errorf("message is required")
@@ -84,32 +83,76 @@ func (s *Service) Chat(ctx context.Context, session mcp.Session, req ChatRequest
 		lang = "en"
 	}
 
-	// 1. Build history + system
 	history := append([]ChatMessage{}, req.History...)
 	messages := []ChatMessage{{Role: "system", Content: systemPrompt(lang)}}
 	messages = append(messages, history...)
 	messages = append(messages, ChatMessage{Role: "user", Content: msg})
 
-	// 2. List curated tools for this profile (<15, Why_Less_Is_More) — dynamic discovery
 	descriptors := s.registry.List(session)
-	// Filter to isError safe?
 
-	// If no LLM key — heuristic path that still proves MCP wiring, filtering, and monitoring
 	if s.openAIKey == "" {
 		return s.heuristicChat(ctx, session, msg, messages, descriptors, lang)
 	}
 
-	// 3. LLM loop — up to 5 tool calls (single-agent planning)
+	// Hybrid: heuristic decides tools (reliable), LLM synthesizes (prevents "I should call X" without calling)
+	// This fixes free models (e.g. ling-3.0-flash) that narrate tool calls instead of emitting tool_calls.
+	if needsTool(msg) {
+		hr := s.execHeuristicTools(ctx, session, msg)
+		if len(hr.called) > 0 {
+			for i, name := range hr.called {
+				messages = append(messages, ChatMessage{Role: "tool", Content: fmt.Sprintf("Tool %s result: %s", name, truncate(hr.results[i], 5000))})
+			}
+			// Try LLM synthesis with tool results (no tools needed, just generation)
+			if synth, err := s.callLLMSynthesis(ctx, messages); err == nil && strings.TrimSpace(synth) != "" {
+				// ensure we don't just echo tool mention without data
+				if !isToolMentionOnly(synth) {
+					history = append(history, ChatMessage{Role: "user", Content: msg}, ChatMessage{Role: "assistant", Content: synth})
+					return ChatResponse{Response: synth, History: history, Success: true, BusinessID: session.BusinessID.String()}, nil
+				}
+			}
+			// LLM synthesis failed or still just mentions tool → return heuristic formatted answer (guaranteed to contain actual data)
+			return s.heuristicChat(ctx, session, msg, messages, descriptors, lang)
+		}
+	}
+
 	const maxIters = 5
 	var toolCallsLog []string
 	for i := 0; i < maxIters; i++ {
 		resp, err := s.callLLM(ctx, messages, descriptors)
 		if err != nil {
-			// fallback to heuristic on LLM failure
 			return s.heuristicChat(ctx, session, msg, messages, descriptors, lang)
 		}
 		if resp.ToolCall == nil {
-			// final answer
+			// Detect model narrating tool call instead of emitting structured tool_calls
+			if mentioned := extractToolMention(resp.Content, descriptors); mentioned != "" && len(toolCallsLog) == 0 && needsTool(msg) {
+				args := inferArgs(mentioned, msg)
+				env, err := s.registry.Call(session, mentioned, args)
+				var resultStr string
+				if err != nil {
+					b, _ := json.Marshal(map[string]any{"error": err.Error()})
+					resultStr = string(b)
+				} else {
+					b, _ := json.Marshal(env)
+					resultStr = string(b)
+				}
+				toolCallsLog = append(toolCallsLog, mentioned)
+				messages = append(messages, ChatMessage{Role: "assistant", Content: resp.Content}, ChatMessage{Role: "tool", Content: fmt.Sprintf("Tool %s result: %s", mentioned, truncate(resultStr, 6000))})
+				continue
+			}
+			// Also if query clearly needs data but LLM gave generic answer without tool, force heuristic tools
+			if len(toolCallsLog) == 0 && needsTool(msg) {
+				hr := s.execHeuristicTools(ctx, session, msg)
+				if len(hr.called) > 0 {
+					for i, name := range hr.called {
+						messages = append(messages, ChatMessage{Role: "tool", Content: fmt.Sprintf("Tool %s result: %s", name, truncate(hr.results[i], 5000))})
+					}
+					// one more LLM synthesis attempt
+					if synth, err := s.callLLMSynthesis(ctx, messages); err == nil && synth != "" && !isToolMentionOnly(synth) {
+						history = append(history, ChatMessage{Role: "user", Content: msg}, ChatMessage{Role: "assistant", Content: synth})
+						return ChatResponse{Response: synth, History: history, Success: true, BusinessID: session.BusinessID.String()}, nil
+					}
+				}
+			}
 			final := resp.Content
 			if final == "" {
 				final = s.fallbackAnswer(session, msg, lang, toolCallsLog)
@@ -117,11 +160,9 @@ func (s *Service) Chat(ctx context.Context, session mcp.Session, req ChatRequest
 			history = append(history, ChatMessage{Role: "user", Content: msg}, ChatMessage{Role: "assistant", Content: final})
 			return ChatResponse{Response: final, History: history, Success: true, BusinessID: session.BusinessID.String()}, nil
 		}
-		// tool call
 		name := resp.ToolCall.Name
 		args := resp.ToolCall.Arguments
 		toolCallsLog = append(toolCallsLog, name)
-		// Dynamic optional jq_filter injection (Filtering_tool.md) — LLM may pass jq_filter, registry supports limit
 		envelope, err := s.registry.Call(session, name, args)
 		var resultStr string
 		if err != nil {
@@ -131,11 +172,8 @@ func (s *Service) Chat(ctx context.Context, session mcp.Session, req ChatRequest
 			b, _ := json.Marshal(envelope)
 			resultStr = string(b)
 		}
-		// append tool result as tool role for LLM
 		messages = append(messages, ChatMessage{Role: "assistant", Content: resp.Content}, ChatMessage{Role: "tool", Content: fmt.Sprintf("Tool %s result: %s", name, truncate(resultStr, 6000))})
-		// continue loop
 	}
-	// max iters reached
 	return ChatResponse{Response: s.fallbackAnswer(session, msg, lang, toolCallsLog), History: history, Success: true, BusinessID: session.BusinessID.String()}, nil
 }
 
@@ -232,6 +270,158 @@ func langMsg(lang, key string) string {
 		return sw[key]
 	}
 	return en[key]
+}
+
+func needsTool(msg string) bool {
+	lower := strings.ToLower(msg)
+	return containsAny(lower, "sales", "revenue", "mauzo", "stock", "inventory", "hifadhi", "low", "expense", "gharama", "matumizi", "customer", "mteja", "wateja", "invoice", "ankara", "deni", "product", "bidhaa", "profit", "margin", "customer", "order")
+}
+
+func extractToolMention(content string, descriptors []mcp.ToolDescriptor) string {
+	lower := strings.ToLower(content)
+	for _, d := range descriptors {
+		if strings.Contains(lower, strings.ToLower(d.Name)) {
+			return d.Name
+		}
+	}
+	// also check narration patterns
+	if strings.Contains(lower, "summarize_sales") {
+		return "summarize_sales"
+	}
+	if strings.Contains(lower, "list_low_stock") {
+		return "list_low_stock_items"
+	}
+	return ""
+}
+
+func inferArgs(toolName, msg string) json.RawMessage {
+	lower := strings.ToLower(msg)
+	switch toolName {
+	case "summarize_sales", "summarize_expenses_by_category":
+		from := time.Now().AddDate(0, -1, 0).Format(time.RFC3339)
+		to := time.Now().Format(time.RFC3339)
+		return json.RawMessage(fmt.Sprintf(`{"from":"%s","to":"%s"}`, from, to))
+	case "list_sales_by_product", "list_sales_by_payment_method", "list_sales_by_staff", "list_low_stock_items", "get_inventory_valuation", "list_invoices":
+		return json.RawMessage(`{"limit":5}`)
+	case "search_customers":
+		q := extractQuery(msg)
+		if q == "" {
+			q = "a"
+		}
+		return json.RawMessage(fmt.Sprintf(`{"query":%q,"limit":5}`, q))
+	default:
+		if strings.Contains(lower, "customer") {
+			q := extractQuery(msg)
+			return json.RawMessage(fmt.Sprintf(`{"query":%q,"limit":5}`, q))
+		}
+		return json.RawMessage(`{"limit":5}`)
+	}
+}
+
+type heuristicResult struct {
+	called  []string
+	results []string
+}
+
+func (s *Service) execHeuristicTools(ctx context.Context, session mcp.Session, msg string) heuristicResult {
+	lower := strings.ToLower(msg)
+	var called []string
+	var results []string
+	call := func(name string, args json.RawMessage) {
+		env, err := s.registry.Call(session, name, args)
+		called = append(called, name)
+		if err != nil {
+			b, _ := json.Marshal(map[string]any{"error": err.Error()})
+			results = append(results, string(b))
+			return
+		}
+		b, _ := json.Marshal(env)
+		results = append(results, string(b))
+	}
+	switch {
+	case containsAny(lower, "sales", "revenue", "mauzo"):
+		from := time.Now().AddDate(0, -1, 0).Format(time.RFC3339)
+		to := time.Now().Format(time.RFC3339)
+		call("summarize_sales", json.RawMessage(fmt.Sprintf(`{"from":"%s","to":"%s"}`, from, to)))
+		if containsAny(lower, "product", "bidhaa") {
+			call("list_sales_by_product", json.RawMessage(`{"limit":5}`))
+		}
+	case containsAny(lower, "stock", "inventory", "hifadhi", "low"):
+		call("list_low_stock_items", json.RawMessage(`{"limit":8}`))
+		call("get_inventory_valuation", json.RawMessage(`{"limit":5}`))
+	case containsAny(lower, "expense", "gharama", "matumizi"):
+		from := time.Now().AddDate(0, -1, 0).Format(time.RFC3339)
+		to := time.Now().Format(time.RFC3339)
+		call("summarize_expenses_by_category", json.RawMessage(fmt.Sprintf(`{"from":"%s","to":"%s"}`, from, to)))
+	case containsAny(lower, "customer", "mteja", "wateja"):
+		q := extractQuery(msg)
+		if q == "" {
+			q = "a"
+		}
+		call("search_customers", json.RawMessage(fmt.Sprintf(`{"query":%q,"limit":5}`, q)))
+	case containsAny(lower, "invoice", "ankara", "deni"):
+		call("list_invoices", json.RawMessage(`{"limit":5}`))
+	default:
+		// no heuristic match
+	}
+	return heuristicResult{called: called, results: results}
+}
+
+func (s *Service) callLLMSynthesis(ctx context.Context, messages []ChatMessage) (string, error) {
+	// Synthesis without tools — just generate natural language from tool results already in messages
+	type oaMsg struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	}
+	var oaMsgs []oaMsg
+	for _, m := range messages {
+		oaMsgs = append(oaMsgs, oaMsg{Role: m.Role, Content: m.Content})
+	}
+	body := map[string]any{
+		"model":       s.model,
+		"messages":    oaMsgs,
+		"temperature": 0.2,
+	}
+	b, _ := json.Marshal(body)
+	req, _ := http.NewRequestWithContext(ctx, "POST", s.openAIBase+"/chat/completions", bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+s.openAIKey)
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 300 {
+		return "", fmt.Errorf("llm %d: %s", resp.StatusCode, truncate(string(raw), 400))
+	}
+	var parsed struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return "", err
+	}
+	if len(parsed.Choices) == 0 {
+		return "", fmt.Errorf("empty LLM choices")
+	}
+	return strings.TrimSpace(parsed.Choices[0].Message.Content), nil
+}
+
+func isToolMentionOnly(s string) bool {
+	lower := strings.ToLower(s)
+	// if it mentions tool name but contains no numbers or KES, likely just narration
+	if containsAny(lower, "summarize_sales", "list_low_stock", "should call", "i will call", "need to call") {
+		// check if it actually contains data (numbers, JSON, KES)
+		if strings.Contains(s, "KES") || strings.Contains(s, "\"total\"") || strings.Contains(s, "\"count\"") {
+			return false
+		}
+		return true
+	}
+	return false
 }
 
 func (s *Service) fallbackAnswer(session mcp.Session, msg, lang string, calls []string) string {
