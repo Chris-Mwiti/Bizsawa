@@ -1,11 +1,12 @@
 import React, { useState } from "react";
-import { ScrollView, View, Text, TouchableOpacity, ActivityIndicator, Pressable } from "react-native";
+import { ScrollView, View, Text, ActivityIndicator } from "react-native";
 import { TrendingUp, DollarSign, PieChart, Users, BarChart3 } from "lucide-react-native";
 import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui/Card";
 import { useAnalytics } from "../../../hooks/api/useAnalytics";
 import { TAB_BAR_SCROLL_PADDING } from "../../../constants/tabBar";
 import type { Timeframe } from "../../../hooks/api/useAnalytics";
 import { BarChart, SwitchableLineCard, PieChart as Pie } from "../../../components/charts/AnalyticsCharts";
+import { Tabs } from "tamagui";
 
 const TIMEFRAMES: Timeframe[] = ["day", "week", "month", "year"];
 const LABELS: Record<Timeframe, string> = { day: "Day", week: "Week", month: "Month", year: "Year", all: "All", custom: "Custom" };
@@ -29,18 +30,62 @@ export default function InsightsAnalytics() {
   return (
     <View className="flex-1 bg-gray-50">
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: TAB_BAR_SCROLL_PADDING + 24, gap: 14 }} showsVerticalScrollIndicator={false}>
-        {/* Timeframe — pill */}
+        {/* Timeframe — Tamagui Tabs (impeccable pill, no overflow) */}
         <Card className="border border-gray-200">
           <CardContent className="py-3">
-            <View className="flex-row items-center justify-between">
-              <Text className="text-sm font-semibold text-gray-700">Timeframe</Text>
-              <View className="flex-row gap-1.5 bg-gray-100 rounded-full p-1">
-                {TIMEFRAMES.map((tf) => (
-                  <Pressable key={tf} onPress={() => setTimeframe(tf)} className={`px-3 py-1.5 rounded-full ${timeframe === tf ? "bg-white border border-gray-200 shadow-sm" : ""}`}>
-                    <Text className={`text-xs font-bold ${timeframe === tf ? "text-gray-900" : "text-gray-500"}`}>{LABELS[tf]}</Text>
-                  </Pressable>
-                ))}
+            <View className="gap-3">
+              <View className="flex-row items-center justify-between">
+                <Text className="text-sm font-semibold text-gray-700">Timeframe</Text>
+                <Text className="text-[11px] font-bold tracking-widest text-gray-400 uppercase">{timeframe}</Text>
               </View>
+              <Tabs
+                value={timeframe}
+                onValueChange={(v) => setTimeframe(v as Timeframe)}
+                orientation="horizontal"
+                defaultValue="week"
+                activationMode="manual"
+              >
+                <Tabs.List
+                  backgroundColor="$background"
+                  borderRadius={999}
+                  padding={4}
+                  gap={4}
+                  style={{ backgroundColor: "#f3f4f6", borderRadius: 999, padding: 4, width: "100%" }}
+                  flexDirection="row"
+                >
+                  {TIMEFRAMES.map((tf) => (
+                    <Tabs.Tab
+                      key={tf}
+                      value={tf}
+                      flex={1}
+                      justifyContent="center"
+                      alignItems="center"
+                      paddingHorizontal={10}
+                      paddingVertical={7}
+                      borderRadius={999}
+                      backgroundColor={timeframe === tf ? "white" : "transparent"}
+                      borderWidth={timeframe === tf ? 1 : 0}
+                      borderColor={timeframe === tf ? "#e5e7eb" : "transparent"}
+                      pressStyle={{ opacity: 0.85 }}
+                      style={{
+                        flex: 1,
+                        backgroundColor: timeframe === tf ? "white" : "transparent",
+                        borderRadius: 999,
+                        borderWidth: timeframe === tf ? 1 : 0,
+                        borderColor: timeframe === tf ? "#e5e7eb" : "transparent",
+                        minWidth: 0,
+                      }}
+                    >
+                      <Text
+                        numberOfLines={1}
+                        style={{ fontSize: 12, fontWeight: "700", color: timeframe === tf ? "#111827" : "#6b7280", textAlign: "center" }}
+                      >
+                        {LABELS[tf]}
+                      </Text>
+                    </Tabs.Tab>
+                  ))}
+                </Tabs.List>
+              </Tabs>
             </View>
           </CardContent>
         </Card>

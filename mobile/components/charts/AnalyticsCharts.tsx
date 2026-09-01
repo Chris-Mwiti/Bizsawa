@@ -1,6 +1,7 @@
-import React, { useMemo } from "react";
-import { View, Text, Pressable } from "react-native";
+import React from "react";
+import { View, Text } from "react-native";
 import Svg, { Path, Circle, Line, G, Text as SvgText } from "react-native-svg";
+import { Tabs } from "tamagui";
 
 // ---------- Bar Chart (day sales / revenue / profit) ----------
 export function BarChart({
@@ -116,19 +117,52 @@ export function SwitchableLineCard({
 
   return (
     <View className="gap-3">
-      <View className="flex-row bg-gray-100 rounded-full p-1 self-start">
-        {(["sales", "revenue", "profit"] as const).map((m) => (
-          <Pressable key={m} onPress={() => setMetric(m)} className={`px-3.5 py-1.5 rounded-full ${metric === m ? "bg-white border border-gray-200 shadow-sm" : ""}`}>
-            <Text className={`text-xs font-bold capitalize ${metric === m ? "text-gray-900" : "text-gray-500"}`}>{m}</Text>
-          </Pressable>
-        ))}
-      </View>
+      <Tabs
+        value={metric}
+        onValueChange={(v) => setMetric(v as any)}
+        orientation="horizontal"
+        defaultValue="revenue"
+        activationMode="manual"
+        style={{ width: "100%" }}
+      >
+        <Tabs.List
+          style={{ backgroundColor: "#f3f4f6", borderRadius: 999, padding: 4, gap: 4, width: "100%", flexDirection: "row" }}
+        >
+          {(["sales", "revenue", "profit"] as const).map((m) => (
+            <Tabs.Tab
+              key={m}
+              value={m}
+              flex={1}
+              justifyContent="center"
+              alignItems="center"
+              paddingHorizontal={10}
+              paddingVertical={7}
+              borderRadius={999}
+              backgroundColor={metric === m ? "white" : "transparent"}
+              borderWidth={metric === m ? 1 : 0}
+              borderColor={metric === m ? "#e5e7eb" : "transparent"}
+              style={{
+                flex: 1,
+                backgroundColor: metric === m ? "white" : "transparent",
+                borderRadius: 999,
+                borderWidth: metric === m ? 1 : 0,
+                borderColor: metric === m ? "#e5e7eb" : "transparent",
+                minWidth: 0,
+              }}
+            >
+              <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: "700", textTransform: "capitalize", color: metric === m ? "#111827" : "#6b7280", textAlign: "center" }}>
+                {m}
+              </Text>
+            </Tabs.Tab>
+          ))}
+        </Tabs.List>
+      </Tabs>
       <View className="bg-white rounded-xl border border-gray-200 p-2">
         <View className="flex-row justify-between items-center px-2 py-1">
           <Text className="text-xs font-bold tracking-widest text-gray-400 uppercase">{label} • week</Text>
-          <Text className="text-xs font-bold text-gray-900">KES {Math.max(...data.map((d) => d.value)).toLocaleString("en-KE")}</Text>
+          <Text className="text-xs font-bold text-gray-900">KES {Math.max(...data.map((d) => d.value), 0).toLocaleString("en-KE")}</Text>
         </View>
-        <LineChart data={data} color={color} />
+        <LineChart data={data.length ? data : [{ label: "—", value: 0 }]} color={color} />
       </View>
     </View>
   );
