@@ -5,6 +5,7 @@ import { Badge } from "../components/ui/Badge";
 import { Smartphone, Trash2 } from "lucide-react-native";
 import { Order, toNumber } from "../lib/api-dtos";
 import { OrderStatus } from "../hooks/api/useOrders";
+import { shortId } from "../lib/ids";
 
 interface OrderItemProps {
   order: Order;
@@ -28,7 +29,7 @@ export const OrderItem = memo(({
       <CardContent className="p-4">
         <View className="flex-row justify-between mb-3">
           <View className="flex-1 pr-3">
-            <Text className="font-bold text-gray-900">Order {order.id.slice(0, 8)}</Text>
+            <Text className="font-bold text-gray-900">Order {shortId(order.id, 6)}</Text>
             <Text className="text-xs text-gray-500">{formatDate(order.createdAt)}</Text>
           </View>
           <View className="items-end">

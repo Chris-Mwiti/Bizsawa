@@ -1,7 +1,9 @@
 import React from "react";
-import { View, Text, Pressable } from "react-native";
+import { View, Text } from "react-native";
 import { Slot, usePathname, useRouter } from "expo-router";
 import { useBusinessContext } from "../../../contexts/BusinessContext";
+import { Tabs } from "tamagui";
+import { BarChart3 } from "lucide-react-native";
 
 type TabKey = "overview" | "analytics" | "expenses";
 
@@ -24,39 +26,79 @@ export default function InsightsLayout() {
 
   return (
     <View className="flex-1 bg-gray-50">
-      {/* Header — impeccable style matching Invoices / Orders */}
-      <View className="px-4 pt-12 pb-4 bg-white border-b border-gray-200">
-        <View className="mb-4">
-          <Text className="text-[11px] font-bold tracking-widest text-gray-400 uppercase">Insights</Text>
-          <Text className="text-xl font-bold text-gray-900 -mt-0.5">
-            {active === "analytics" ? "Analytics" : active === "expenses" ? "Expenses" : "Overview"}
-          </Text>
-          <Text className="text-xs text-gray-500" numberOfLines={1}>
-            {activeBusiness?.name ? `${activeBusiness.name} • ` : ""}
-            {active === "analytics" ? "Revenue, profit & segments" : active === "expenses" ? "Spend by category" : "Weekly growth & cash flow"}
-          </Text>
+      {/* AppBar — impeccable: ink header, subtle hairline, business pill, Tamagui Tabs */}
+      <View className="bg-white border-b border-gray-200">
+        <View className="px-4 pt-12 pb-3">
+          <View className="flex-row items-start justify-between gap-3">
+            <View className="flex-1">
+              <View className="flex-row items-center gap-2">
+                <View className="w-7 h-7 rounded-lg bg-gray-900 items-center justify-center">
+                  <BarChart3 size={14} color="white" />
+                </View>
+                <Text className="text-[11px] font-bold tracking-widest text-gray-400 uppercase">Insights</Text>
+                {activeBusiness?.name ? (
+                  <View className="ml-1 px-2 py-0.5 rounded-full bg-gray-50 border border-gray-200">
+                    <Text className="text-[10px] font-bold text-gray-600" numberOfLines={1}>{activeBusiness.name.slice(0, 18)}</Text>
+                  </View>
+                ) : null}
+              </View>
+              <Text className="text-[20px] font-bold tracking-tight text-gray-900 mt-1">
+                {active === "analytics" ? "Analytics" : active === "expenses" ? "Expenses" : "Overview"}
+              </Text>
+              <Text className="text-xs leading-4 text-gray-500" numberOfLines={1}>
+                {active === "analytics" ? "Revenue, profit & segments • tap timeframe to filter" : active === "expenses" ? "Spend by category • add & delete" : "Weekly growth & cash flow • at a glance"}
+              </Text>
+            </View>
+          </View>
         </View>
 
-        {/* Segmented control — Sales-style pill (not bottom nav) */}
-        <View className="flex-row bg-gray-100 rounded-full p-1">
-          {TABS.map((t) => {
-            const isActive = t.key === active;
-            return isActive ? (
-              <View key={t.key} className="flex-1 py-2.5 rounded-full items-center bg-white shadow-sm border border-gray-200">
-                <Text className="font-bold text-gray-900 text-sm">{t.label}</Text>
-              </View>
-            ) : (
-              <Pressable
-                key={t.key}
-                className="flex-1 py-2.5 rounded-full items-center active:bg-gray-200/60"
-                onPress={() => router.replace(t.href as any)}
-                accessibilityRole="button"
-                accessibilityState={{ selected: false }}
-              >
-                <Text className="font-medium text-gray-500 text-sm">{t.label}</Text>
-              </Pressable>
-            );
-          })}
+        {/* Tamagui Tabs — battle-tested, no Pressable hang, impeccable pill */}
+        <View className="px-4 pb-3">
+          <Tabs
+            value={active}
+            onValueChange={(v) => router.replace((TABS.find((t) => t.key === v)?.href as any) || "/(tabs)/insights/overview")}
+            orientation="horizontal"
+            defaultValue="overview"
+            activationMode="manual"
+          >
+            <Tabs.List
+              style={{
+                backgroundColor: "#f3f4f6",
+                borderRadius: 999,
+                padding: 4,
+                gap: 6,
+                flexDirection: "row",
+              }}
+            >
+              {TABS.map((t) => (
+                <Tabs.Tab
+                  key={t.key}
+                  value={t.key}
+                  flex={1}
+                  justifyContent="center"
+                  alignItems="center"
+                  paddingVertical={10}
+                  borderRadius={999}
+                  backgroundColor={active === t.key ? "white" : "transparent"}
+                  borderWidth={active === t.key ? 1 : 0}
+                  borderColor={active === t.key ? "#e5e7eb" : "transparent"}
+                  style={{
+                    flex: 1,
+                    backgroundColor: active === t.key ? "white" : "transparent",
+                    borderRadius: 999,
+                    borderWidth: active === t.key ? 1 : 0,
+                    borderColor: active === t.key ? "#e5e7eb" : "transparent",
+                    shadowColor: active === t.key ? "#000" : "transparent",
+                    shadowOpacity: active === t.key ? 0.06 : 0,
+                    shadowRadius: 4,
+                    elevation: active === t.key ? 1 : 0,
+                  }}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: active === t.key ? "700" : "500", color: active === t.key ? "#111827" : "#6b7280" }}>{t.label}</Text>
+                </Tabs.Tab>
+              ))}
+            </Tabs.List>
+          </Tabs>
         </View>
       </View>
 

@@ -15,7 +15,7 @@ export interface ChatRequest {
 export interface ChatResponse {
   response: string;
   history: ChatMessage[];
-  businessId?: number;
+  businessId?: string;
   success: boolean;
 }
 

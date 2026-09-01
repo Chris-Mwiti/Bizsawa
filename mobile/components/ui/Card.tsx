@@ -16,9 +16,9 @@ export function CardHeader({ className, ...props }: ViewProps) {
 
 export function CardTitle({ className, children, ...props }: ViewProps & { children: React.ReactNode }) {
   return (
-    <View className={`flex-row items-center justify-between ${className || ''}`} {...props}>
+    <Text className={`flex-row items-center justify-between ${className || ''}`} {...props}>
       {children}
-    </View>
+    </Text>
   );
 }
 
