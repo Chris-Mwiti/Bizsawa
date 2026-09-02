@@ -10,7 +10,9 @@
     "postinstall": "patch-package"
   },
   "dependencies": {
+    "@nozbe/watermelondb": "^0.28.0",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-community/netinfo": "^12.0.1",
     "@react-native-firebase/app": "^24.0.0",
     "@react-native-google-signin/google-signin": "^16.1.2",
     "@tamagui/config": "^2.7.7",
@@ -40,7 +42,9 @@
     "tamagui": "^2.7.7"
   },
   "devDependencies": {
+    "@babel/plugin-proposal-decorators": "^8.0.2",
     "@types/react": "~19.1.0",
+    "@types/uuid": "^10.0.0",
     "patch-package": "^8.0.1",
     "postcss": "^8.5.12",
     "prettier-plugin-tailwindcss": "^0.8.0",

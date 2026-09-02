@@ -6,6 +6,7 @@ import { TamaguiProvider } from "tamagui";
 import tamaguiConfig from "../tamagui.config";
 import { AuthProvider } from "../contexts/AuthContext";
 import { BusinessProvider } from "../contexts/BusinessContext";
+import { SyncProvider } from "../sync/SyncProvider";
 
 export default function RootLayout() {
   const [queryClient] = useState(
@@ -24,22 +25,25 @@ export default function RootLayout() {
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <BusinessProvider>
-            <Stack screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="auth/login" options={{ headerShown: false }} />
-              <Stack.Screen name="auth/register" options={{ headerShown: false }} />
-              <Stack.Screen name="(tabs)" />
-              <Stack.Screen
-                name="credit-preview"
-                options={{
-                  title: "Credit",
-                  presentation: "card",
-                  headerShown: true,
-                }}
-              />
-              <Stack.Screen name="coach" options={{ presentation: "modal" }} />
-              <Stack.Screen name="social" options={{ presentation: "modal" }} />
-            </Stack>
-            <Toast />
+            <SyncProvider>
+              <Stack screenOptions={{ headerShown: false }}>
+                <Stack.Screen name="auth/login" options={{ headerShown: false }} />
+                <Stack.Screen name="auth/register" options={{ headerShown: false }} />
+                <Stack.Screen name="(tabs)" />
+                <Stack.Screen
+                  name="credit-preview"
+                  options={{
+                    title: "Credit",
+                    presentation: "card",
+                    headerShown: true,
+                  }}
+                />
+                <Stack.Screen name="coach" options={{ presentation: "modal" }} />
+                <Stack.Screen name="social" options={{ presentation: "modal" }} />
+                <Stack.Screen name="sync-conflicts" options={{ presentation: "card", headerShown: true, title: "Sync Conflicts" }} />
+              </Stack>
+              <Toast />
+            </SyncProvider>
           </BusinessProvider>
         </AuthProvider>
       </QueryClientProvider>

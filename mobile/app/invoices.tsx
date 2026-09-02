@@ -6,6 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/Card"
 import { useInvoices } from "../hooks/api/useInvoices";
 import { TAB_BAR_SCROLL_PADDING } from "../constants/tabBar";
 import { toNumber } from "../lib/api-dtos";
+import { SyncStatusBadge } from "../components/SyncStatusBadge";
+import { useSyncStatus } from "../hooks/useSyncStatus";
+import { manualSync } from "../sync/client";
 
 function formatDate(iso: string) {
   const d = new Date(iso);
@@ -30,8 +33,14 @@ export default function Invoices() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
+    try { await manualSync(); } catch {}
     await refetch();
     setRefreshing(false);
+  };
+
+  const InvoiceSyncBadge = ({ id }: { id: string }) => {
+    const s = useSyncStatus("invoices", id);
+    return <SyncStatusBadge status={s} />;
   };
 
   const handleCreatePress = () => {
@@ -120,6 +129,7 @@ export default function Invoices() {
                             <Icon size={11} color={s.text.includes("emerald") ? "#047857" : s.text.includes("red") ? "#b91c1c" : s.text.includes("sky") ? "#0369a1" : "#475569"} />
                             <Text className={`text-[10px] font-bold tracking-widest ${s.text}`}>{inv.status.toUpperCase()}</Text>
                           </View>
+                          <InvoiceSyncBadge id={inv.id} />
                           <Text className="text-xs text-gray-400">•</Text>
                           <Text className="text-xs text-gray-500" numberOfLines={1}>{inv.customerName}</Text>
                         </View>
