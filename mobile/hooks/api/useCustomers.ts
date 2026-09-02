@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from "uuid";
 import { Q } from "@nozbe/watermelondb";
 import { useEffect, useState } from "react";
 import { useBusinessContext } from "../../contexts/BusinessContext";
+import { toISO } from "../../lib/syncDates";
 
 export interface Customer extends BackendCustomer {}
 export interface CreateCustomerRequest extends CustomerRequest { businessId?: UUID; }
@@ -23,9 +24,9 @@ function mapRawToCustomer(raw: any): Customer {
     notes: raw.notes,
     loyaltyPoints: raw.loyalty_points ?? 0,
     totalSpend: raw.total_spend ?? "0",
-    lastPurchaseAt: raw.last_purchase_at ? new Date(raw.last_purchase_at * 1000).toISOString() : null,
-    createdAt: new Date(raw.created_at * 1000).toISOString(),
-    updatedAt: new Date(raw.updated_at * 1000).toISOString(),
+    lastPurchaseAt: raw.last_purchase_at ? toISO(raw.last_purchase_at) : null,
+    createdAt: toISO(raw.created_at),
+    updatedAt: toISO(raw.updated_at),
   } as any;
 }
 
