@@ -2,139 +2,127 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "../../lib/api";
 import type { UUID } from "../../lib/api-dtos";
 import { toNumber, toDecimalString } from "../../lib/api-dtos";
+import { database } from "../../db/database";
+import { Q } from "@nozbe/watermelondb";
+import { useEffect, useState } from "react";
+import { useBusinessContext } from "../../contexts/BusinessContext";
+import { v4 as uuidv4 } from "uuid";
 
-export interface InventoryItem {
-  id: UUID;
-  businessId: UUID;
-  productId: UUID;
-  quantity: number;
-  lowStockThreshold: number;
-  createdAt?: string;
-  updatedAt?: string;
-}
+export interface InventoryItem { id: UUID; businessId: UUID; productId: UUID; quantity: number; lowStockThreshold: number; createdAt?: string; updatedAt?: string; }
+export interface StockMovement { id: UUID; businessId: UUID; productId: UUID; quantityDelta: number; movementType: string; referenceType?: string | null; referenceId?: UUID | null; notes?: string; occurredAt: string; }
+export interface InventoryValuation { productId: UUID; quantity: number; }
+export interface AdjustStockInput { productId: UUID; quantityDelta: number | string; lowStockThreshold?: number | string; notes?: string; }
 
-export interface StockMovement {
-  id: UUID;
-  businessId: UUID;
-  productId: UUID;
-  quantityDelta: number;
-  movementType: string;
-  referenceType?: string | null;
-  referenceId?: UUID | null;
-  notes?: string;
-  occurredAt: string;
-}
-
-export interface InventoryValuation {
-  productId: UUID;
-  quantity: number;
-}
-
-export interface AdjustStockInput {
-  productId: UUID;
-  quantityDelta: number | string;
-  lowStockThreshold?: number | string;
-  notes?: string;
-}
-
-// Helper to safely parse decimal API fields to JS numbers
-function mapInventoryItem(item: any): InventoryItem {
-  return {
-    ...item,
-    quantity: toNumber(item.quantity),
-    lowStockThreshold: toNumber(item.lowStockThreshold),
-  };
-}
-
-function mapStockMovement(mv: any): StockMovement {
-  return {
-    ...mv,
-    quantityDelta: toNumber(mv.quantityDelta),
-  };
-}
-
-function mapValuation(v: any): InventoryValuation {
-  return {
-    ...v,
-    quantity: toNumber(v.quantity),
-  };
-}
+function mapRawItem(raw: any): InventoryItem { return { id: raw.id, businessId: raw.business_id, productId: raw.product_id, quantity: toNumber(raw.quantity), lowStockThreshold: toNumber(raw.low_stock_threshold) } as any; }
+function mapRawMovement(raw: any): StockMovement { return { id: raw.id, businessId: raw.business_id, productId: raw.product_id, quantityDelta: toNumber(raw.quantity_delta), movementType: raw.movement_type, notes: raw.notes, occurredAt: new Date(raw.occurred_at * 1000).toISOString() } as any; }
 
 export const useInventory = () => {
   const queryClient = useQueryClient();
+  const { activeBusinessId } = (() => { try { return useBusinessContext() as any; } catch { return { activeBusinessId: null }; } })();
+  const bid = activeBusinessId || "";
+  const [localInv, setLocalInv] = useState<InventoryItem[]>([]);
+  const [localMov, setLocalMov] = useState<StockMovement[]>([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    if (!bid) { setLocalInv([]); setLoading(false); return; }
+    const col: any = (database as any).get("inventory_items");
+    const sub = col.query(Q.where("business_id", bid)).observe().subscribe((rows: any[]) => {
+      setLocalInv(rows.map(mapRawItem));
+      setLoading(false);
+    });
+    return () => sub.unsubscribe();
+  }, [bid]);
+  useEffect(() => {
+    if (!bid) return;
+    const col: any = (database as any).get("stock_movements");
+    const sub = col.query(Q.where("business_id", bid)).observe().subscribe((rows: any[]) => setLocalMov(rows.map(mapRawMovement)));
+    return () => sub.unsubscribe();
+  }, [bid]);
 
-  // GET /inventory - Fetch full inventory list
   const getInventory = useQuery({
-    queryKey: ["inventory"],
+    queryKey: ["inventory", bid],
     queryFn: async () => {
-      const response = await api.get<{ inventory: any[] }>("/inventory");
-      return (response.data.inventory || []).map(mapInventoryItem);
+      if (localInv.length) return localInv;
+      const res = await api.get<{ inventory: any[] }>("/inventory");
+      return (res.data.inventory || []).map((r: any) => ({ id: r.id, businessId: r.businessId, productId: r.productId, quantity: toNumber(r.quantity), lowStockThreshold: toNumber(r.lowStockThreshold) })) as any;
     },
+    enabled: !!bid,
   });
-
-  // GET /inventory/low-stock - Fetch items below threshold
   const getLowStockItems = useQuery({
-    queryKey: ["inventory", "low-stock"],
+    queryKey: ["inventory", "low-stock", bid],
     queryFn: async () => {
-      const response = await api.get<{ items: any[] }>("/inventory/low-stock");
-      return (response.data.items || []).map(mapInventoryItem);
+      const res = await api.get<{ items: any[] }>("/inventory/low-stock");
+      return (res.data.items || []).map((r: any) => ({ ...r, quantity: toNumber(r.quantity) }));
     },
+    enabled: false,
   });
-
-  // GET /inventory/movements - Fetch stock movement history
   const getStockMovements = useQuery({
-    queryKey: ["inventory", "movements"],
+    queryKey: ["inventory", "movements", bid],
     queryFn: async () => {
-      const response = await api.get<{ movements: any[] }>("/inventory/movements");
-      return (response.data.movements || []).map(mapStockMovement);
+      if (localMov.length) return localMov;
+      const res = await api.get<{ movements: any[] }>("/inventory/movements");
+      return (res.data.movements || []).map(mapRawMovement);
     },
+    enabled: !!bid,
   });
+  const getValuation = useQuery({ queryKey: ["inventory", "valuation", bid], queryFn: async () => [] as any, enabled: false });
 
-  // GET /inventory/valuation - Fetch inventory valuations
-  const getValuation = useQuery({
-    queryKey: ["inventory", "valuation"],
-    queryFn: async () => {
-      const response = await api.get<{ valuation: any[] }>("/inventory/valuation");
-      return (response.data.valuation || []).map(mapValuation);
-    },
-  });
-
-  // POST /inventory/adjustments - Record stock movements / threshold changes
   const adjustStock = useMutation({
     mutationFn: async (input: AdjustStockInput) => {
-      const payload = {
-        productId: input.productId,
-        quantityDelta: toDecimalString(input.quantityDelta),
-        lowStockThreshold: toDecimalString(input.lowStockThreshold ?? 0),
-        notes: input.notes || "",
-      };
-      const response = await api.post<any>("/inventory/adjustments", payload);
-      return mapStockMovement(response.data);
-    },
-    onSuccess: () => {
-      // Refresh inventory, low stock, movements, and product queries across the UI
+      const delta = toDecimalString(input.quantityDelta);
+      const now = Date.now() / 1000;
+      await (database as any).write(async () => {
+        // upsert inventory_items
+        const col: any = (database as any).get("inventory_items");
+        const existing = await col.query(Q.where("product_id", input.productId), Q.where("business_id", bid)).fetch() as any[];
+        if (existing.length) {
+          const rec: any = existing[0];
+          await rec.update((r: any) => {
+            const newQty = toNumber(r.quantity) + toNumber(delta);
+            r.quantity = String(newQty);
+            if (input.lowStockThreshold !== undefined) r.lowStockThreshold = toDecimalString(input.lowStockThreshold);
+            r.syncVersion = (r.syncVersion || 1) + 1;
+          });
+        } else {
+          await col.create((rec: any) => {
+            rec._raw.id = uuidv4();
+            rec.businessId = bid;
+            rec.productId = input.productId;
+            rec.quantity = delta;
+            rec.lowStockThreshold = toDecimalString(input.lowStockThreshold ?? 0);
+            rec.syncVersion = 1;
+          });
+        }
+        const movCol: any = (database as any).get("stock_movements");
+        await movCol.create((rec: any) => {
+          rec._raw.id = uuidv4();
+          rec.businessId = bid;
+          rec.productId = input.productId;
+          rec.quantityDelta = delta;
+          rec.movementType = toNumber(delta) >= 0 ? "in" : "out";
+          rec.notes = input.notes || "";
+          rec.occurredAt = now;
+          rec.syncVersion = 1;
+        });
+      });
+      import("../../sync/client").then(m => m.syncNow().catch(()=>{}));
       queryClient.invalidateQueries({ queryKey: ["inventory"] });
-      queryClient.invalidateQueries({ queryKey: ["products"] });
+      return { productId: input.productId, quantityDelta: toNumber(delta) } as any;
     },
   });
 
   return {
-    inventory: getInventory.data || [],
-    isLoadingInventory: getInventory.isLoading,
+    inventory: localInv.length ? localInv : (getInventory.data || []),
+    isLoadingInventory: loading || (getInventory.isLoading as any),
     inventoryError: (getInventory.error as ApiError)?.friendlyMessage || null,
-
-    lowStockItems: getLowStockItems.data || [],
-    isLoadingLowStock: getLowStockItems.isLoading,
-
-    movements: getStockMovements.data || [],
-    isLoadingMovements: getStockMovements.isLoading,
-
-    valuation: getValuation.data || [],
-    isLoadingValuation: getValuation.isLoading,
-
+    lowStockItems: [] as any,
+    isLoadingLowStock: false,
+    movements: localMov.length ? localMov : (getStockMovements.data || []),
+    isLoadingMovements: false,
+    valuation: [] as any,
+    isLoadingValuation: false,
     adjustStock: adjustStock.mutateAsync,
     isAdjustingStock: adjustStock.isPending,
-
     refetchInventory: getInventory.refetch,
   };
 };

@@ -113,10 +113,10 @@ func (e *Enforcer) allow(role Role, resource string, actions ...string) {
 }
 
 func (e *Enforcer) seedDefaults() {
-	for _, resource := range []string{"businesses", "members", "products", "customers", "orders", "sales", "inventory", "expenses", "taxes", "invoices", "payments", "reports", "visualizations", "insights", "analytics", "chatbot", "chat", "ai", "whatsapp"} {
+	for _, resource := range []string{"businesses", "members", "products", "customers", "orders", "sales", "inventory", "expenses", "taxes", "invoices", "payments", "reports", "visualizations", "insights", "analytics", "chatbot", "chat", "sync", "ai", "whatsapp"} {
 		e.allow(RoleOwner, resource, "read", "write", "delete", "generate", "configure")
 	}
-	for _, resource := range []string{"businesses", "members", "products", "customers", "orders", "sales", "inventory", "expenses", "taxes", "invoices", "reports", "visualizations", "insights", "analytics", "chatbot", "chat", "ai", "whatsapp"} {
+	for _, resource := range []string{"businesses", "members", "products", "customers", "orders", "sales", "inventory", "expenses", "taxes", "invoices", "reports", "visualizations", "insights", "analytics", "chatbot", "chat", "sync", "ai", "whatsapp"} {
 		e.allow(RoleManager, resource, "read", "write", "generate", "configure")
 	}
 	e.allow(RoleCashier, "products", "read")
@@ -130,8 +130,9 @@ func (e *Enforcer) seedDefaults() {
 	e.allow(RoleCashier, "analytics", "read")
 	e.allow(RoleCashier, "chatbot", "read", "write")
 	e.allow(RoleCashier, "chat", "read", "write")
+	e.allow(RoleCashier, "sync", "read", "write")
 	e.allow(RoleCashier, "visualizations", "read")
-	for _, resource := range []string{"products", "customers", "orders", "sales", "inventory", "reports", "visualizations", "insights", "analytics", "chatbot", "chat"} {
+	for _, resource := range []string{"products", "customers", "orders", "sales", "inventory", "reports", "visualizations", "insights", "analytics", "chatbot", "chat", "sync"} {
 		e.allow(RoleViewer, resource, "read")
 	}
 }

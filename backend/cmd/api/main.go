@@ -15,6 +15,7 @@ import (
 	"github.com/Codecx-Org/FinAI/backend/internal/business"
 	"github.com/Codecx-Org/FinAI/backend/internal/chat"
 	"github.com/Codecx-Org/FinAI/backend/internal/customers"
+	"github.com/Codecx-Org/FinAI/backend/internal/sync"
 	"github.com/Codecx-Org/FinAI/backend/internal/expenses"
 	"github.com/Codecx-Org/FinAI/backend/internal/inventory"
 	"github.com/Codecx-Org/FinAI/backend/internal/invoices"
@@ -114,6 +115,7 @@ func main() {
 		Invoices:  invoicesModule.Service(),
 	})
 	chatModule := chat.NewModule(chatRegistry)
+	syncModule := sync.New(gormDB)
 
 	workers := river.NewWorkers()
 	salesModule.RegisterWorkers(workers)
@@ -160,6 +162,7 @@ func main() {
 			WAHA:      wahaModule,
 			Authz:     authzEnforcer,
 			Chat:      chatModule,
+			Sync:      syncModule,
 		}),
 	}
 

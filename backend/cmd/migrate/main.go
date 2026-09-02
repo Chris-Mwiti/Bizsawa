@@ -10,15 +10,20 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
+	"github.com/joho/godotenv"
 )
-
 func main() {
+	// Load .env.development if present (so `go run ./cmd/migrate up` works without manual export)
+	_ = godotenv.Load(".env.development")
+	_ = godotenv.Load(".env")
+
 	// 1. Parse command-line flags/arguments
 	flag.Parse()
 	args := flag.Args()
 	if len(args) < 1 {
 		log.Fatal("Expected at least one command: 'up', 'down', or 'version'")
 	}
+
 	command := args[0]
 
 	// 2. Grab the DSN from the environment
