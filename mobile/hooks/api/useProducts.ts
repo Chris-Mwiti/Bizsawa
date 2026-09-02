@@ -6,6 +6,7 @@ import { database } from "../../db/database";
 import { v4 as uuidv4 } from "uuid";
 import { useBusinessContext } from "../../contexts/BusinessContext";
 import { Q } from "@nozbe/watermelondb";
+import { toISO, toMillis, nowMillis } from "../../lib/syncDates"; 
 import { useEffect, useState } from "react";
 
 // Offline-first wrapper — Phase 2.2 (§3.6): all local writes go through WatermelonDB writers
@@ -118,7 +119,7 @@ export const useProducts = () => {
     mutationFn: async (id: UUID) => {
       await (database as any).write(async () => {
         const rec: any = await (database as any).get("products").find(id);
-        await rec.update((r: any) => { r.deletedAt = Date.now(); });
+        await rec.update((r: any) => { r.deletedAt = nowMillis(); });
         await rec.markAsDeleted();
       });
       import("../../sync/client").then((m) => m.syncNow().catch(() => {}));

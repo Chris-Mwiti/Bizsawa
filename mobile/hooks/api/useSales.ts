@@ -8,6 +8,7 @@ import { Q } from "@nozbe/watermelondb";
 import { useEffect, useState } from "react";
 import { useBusinessContext } from "../../contexts/BusinessContext";
 import { shortId } from "../../lib/ids";
+import { toISO, nowMillis } from "../../lib/syncDates";
 
 export interface CreateSaleInput { orderId?: UUID | null; customerId?: UUID | null; paymentMethod?: string; productId?: UUID; quantity?: number | string; totalAmount?: number | string; lines?: CreateSaleRequest["lines"]; }
 function toCreateSaleRequest(data: CreateSaleInput): CreateSaleRequest {
@@ -31,9 +32,9 @@ function mapRaw(raw: any): Sale {
     taxAmount: raw.tax_amount,
     total: raw.total,
     status: raw.status,
-    soldAt: new Date(raw.sold_at * 1000).toISOString(),
-    createdAt: new Date(raw.created_at * 1000).toISOString(),
-    updatedAt: new Date(raw.updated_at * 1000).toISOString(),
+    soldAt: toISO(raw.sold_at ?? raw.soldAt),
+    createdAt: toISO(raw.created_at ?? raw.createdAt),
+    updatedAt: toISO(raw.updated_at ?? raw.updatedAt),
   } as any;
 }
 
@@ -70,7 +71,7 @@ export const useSales = () => {
       const id = uuidv4();
       const receipt = `RCPT-${shortId(id, 6)}`;
       const total = req.lines.reduce((s, l) => s + toNumber(l.unitPrice) * toNumber(l.quantity), 0);
-      const now = Date.now() / 1000;
+      const now = nowMillis();
       await (database as any).write(async () => {
         const col: any = (database as any).get("sales");
         await col.create((rec: any) => {
@@ -112,7 +113,7 @@ export const useSales = () => {
     mutationFn: async (id: UUID) => {
       await (database as any).write(async () => {
         const rec: any = await (database as any).get("sales").find(id);
-        await rec.update((r: any) => { r.deletedAt = Date.now() / 1000; });
+        await rec.update((r: any) => { r.deletedAt = nowMillis(); });
         await rec.markAsDeleted();
       });
       import("../../sync/client").then(m => m.syncNow().catch(()=>{}));

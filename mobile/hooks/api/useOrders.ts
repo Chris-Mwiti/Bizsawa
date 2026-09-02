@@ -7,6 +7,7 @@ import { database } from "../../db/database";
 import { v4 as uuidv4 } from "uuid";
 import { Q } from "@nozbe/watermelondb";
 import { useBusinessContext } from "../../contexts/BusinessContext";
+import { toISO, nowMillis } from "../../lib/syncDates";
 
 export enum OrderStatus { draft = "draft", confirmed = "confirmed", fulfilled = "fulfilled", cancelled = "cancelled", refunded = "refunded", drafted = "draft", created = "confirmed", pending = "draft", paid = "fulfilled", canceled = "cancelled", failed = "cancelled" }
 export interface CreateOrderInput { customerId?: UUID | null; paymentMethod?: string; orderItems?: { productId: UUID; quantity: number | string; unitPrice?: number | string }[]; lines?: CreateOrderRequest["lines"]; }
@@ -17,7 +18,7 @@ function toCreateOrderRequest(data: CreateOrderInput): CreateOrderRequest {
   return { customerId: data.customerId || null, paymentMethod: data.paymentMethod, lines: data.lines || (data.orderItems || []).map((item) => ({ productId: item.productId, quantity: toDecimalString(item.quantity), unitPrice: toDecimalString(item.unitPrice) })) };
 }
 function mapRaw(raw: any): Order {
-  return { id: raw.id, businessId: raw.business_id, customerId: raw.customer_id, status: raw.status, subtotal: raw.subtotal, taxAmount: raw.tax_amount, total: raw.total, paymentMethod: raw.payment_method, createdAt: new Date(raw.created_at * 1000).toISOString(), updatedAt: new Date(raw.updated_at * 1000).toISOString() } as any;
+  return { id: raw.id, businessId: raw.business_id, customerId: raw.customer_id, status: raw.status, subtotal: raw.subtotal, taxAmount: raw.tax_amount, total: raw.total, paymentMethod: raw.payment_method, createdAt: toISO(raw.created_at), updatedAt: toISO(raw.updated_at) } as any;
 }
 
 export const useOrders = (options: UseOrdersOptions = {}) => {
@@ -62,7 +63,7 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
       const req = toCreateOrderRequest(data);
       const id = uuidv4();
       const total = req.lines.reduce((s, l) => s + toNumber(l.unitPrice) * toNumber(l.quantity), 0);
-      const now = Date.now() / 1000;
+      const now = nowMillis();
       await (database as any).write(async () => {
         const col: any = (database as any).get("orders");
         await col.create((rec: any) => {
@@ -115,7 +116,7 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
     mutationFn: async (id: UUID) => {
       await (database as any).write(async () => {
         const rec: any = await (database as any).get("orders").find(id);
-        await rec.update((r: any) => { r.deletedAt = Date.now() / 1000; });
+        await rec.update((r: any) => { r.deletedAt = nowMillis(); });
         await rec.markAsDeleted();
       });
       import("../../sync/client").then(m => m.syncNow().catch(()=>{}));

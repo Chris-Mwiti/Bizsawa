@@ -7,6 +7,8 @@ import { Q } from "@nozbe/watermelondb";
 import { useEffect, useState } from "react";
 import { useBusinessContext } from "../../contexts/BusinessContext";
 import { v4 as uuidv4 } from "uuid";
+import { toISO, nowMillis } from "../../lib/syncDates";
+
 
 export interface InventoryItem { id: UUID; businessId: UUID; productId: UUID; quantity: number; lowStockThreshold: number; createdAt?: string; updatedAt?: string; }
 export interface StockMovement { id: UUID; businessId: UUID; productId: UUID; quantityDelta: number; movementType: string; referenceType?: string | null; referenceId?: UUID | null; notes?: string; occurredAt: string; }
@@ -14,7 +16,7 @@ export interface InventoryValuation { productId: UUID; quantity: number; }
 export interface AdjustStockInput { productId: UUID; quantityDelta: number | string; lowStockThreshold?: number | string; notes?: string; }
 
 function mapRawItem(raw: any): InventoryItem { return { id: raw.id, businessId: raw.business_id, productId: raw.product_id, quantity: toNumber(raw.quantity), lowStockThreshold: toNumber(raw.low_stock_threshold) } as any; }
-function mapRawMovement(raw: any): StockMovement { return { id: raw.id, businessId: raw.business_id, productId: raw.product_id, quantityDelta: toNumber(raw.quantity_delta), movementType: raw.movement_type, notes: raw.notes, occurredAt: new Date(raw.occurred_at * 1000).toISOString() } as any; }
+function mapRawMovement(raw: any): StockMovement { return { id: raw.id, businessId: raw.business_id, productId: raw.product_id, quantityDelta: toNumber(raw.quantity_delta), movementType: raw.movement_type, notes: raw.notes, occurredAt: toISO(raw.occurred_at) } as any; }
 
 export const useInventory = () => {
   const queryClient = useQueryClient();
@@ -70,7 +72,7 @@ export const useInventory = () => {
   const adjustStock = useMutation({
     mutationFn: async (input: AdjustStockInput) => {
       const delta = toDecimalString(input.quantityDelta);
-      const now = Date.now() / 1000;
+      const now = nowMillis();
       await (database as any).write(async () => {
         // upsert inventory_items
         const col: any = (database as any).get("inventory_items");

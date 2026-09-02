@@ -7,13 +7,14 @@ import { v4 as uuidv4 } from "uuid";
 import { Q } from "@nozbe/watermelondb";
 import { useEffect, useState } from "react";
 import { useBusinessContext } from "../../contexts/BusinessContext";
+import { toISO, nowMillis, toMillis } from "../../lib/syncDates";
 
 export interface CreateInvoiceInput { customerId: UUID; dueAt: string; lines: Array<{ description: string; quantity: number | string; unitPrice: number | string; taxRuleId?: UUID | null }>; notes?: string; }
 function toInvoiceRequest(input: CreateInvoiceInput) {
   return { customerId: input.customerId, dueAt: input.dueAt, lines: input.lines.map((l) => ({ description: l.description, quantity: toDecimalString(l.quantity), unitPrice: toDecimalString(l.unitPrice), taxRuleId: l.taxRuleId })), notes: input.notes };
 }
 function mapRaw(raw: any): InvoiceListItem {
-  return { id: raw.id, invoiceNumber: raw.invoice_number, customerName: raw.customer_id || "Customer", status: raw.status, total: raw.total, amountDue: raw.amount_due, currency: raw.currency, dueAt: raw.due_at ? new Date(raw.due_at * 1000).toISOString() : new Date().toISOString(), createdAt: new Date(raw.created_at * 1000).toISOString() } as any;
+  return { id: raw.id, invoiceNumber: raw.invoice_number, customerName: raw.customer_id || "Customer", status: raw.status, total: raw.total, amountDue: raw.amount_due, currency: raw.currency, dueAt: raw.due_at ? toISO(raw.due_at) : new Date().toISOString(), createdAt: toISO(raw.created_at) } as any;
 }
 
 export const useInvoices = () => {
@@ -63,8 +64,8 @@ export const useInvoices = () => {
             amountPaid: raw.amount_paid,
             amountDue: raw.amount_due,
             currency: raw.currency,
-            dueAt: raw.due_at ? new Date(raw.due_at * 1000).toISOString() : new Date().toISOString(),
-            createdAt: new Date(raw.created_at * 1000).toISOString(),
+            dueAt: raw.due_at ? toISO(raw.due_at) : new Date().toISOString(),
+            createdAt: toISO(raw.created_at),
             lines: lines.map((l: any) => ({ id: l.id, description: l.description, quantity: l.quantity, unitPrice: l.unitPrice, lineTotal: l.lineTotal })),
             payments: [],
           } as any;
@@ -82,8 +83,8 @@ export const useInvoices = () => {
       const number = `INV-${id.slice(0, 6).toUpperCase()}`;
       const subtotal = data.lines.reduce((s, l) => s + toNumber(l.unitPrice) * toNumber(l.quantity), 0);
       const total = subtotal;
-      const now = Date.now() / 1000;
-      const dueAt = data.dueAt ? new Date(data.dueAt).getTime() / 1000 : now + 7 * 86400;
+      const now = nowMillis();
+      const dueAt = data.dueAt ? toMillis(data.dueAt) : nowMillis() + 7 * 86400000;
       await (database as any).write(async () => {
         const col: any = (database as any).get("invoices");
         await col.create((rec: any) => {
