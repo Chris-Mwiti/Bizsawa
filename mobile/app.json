@@ -15,6 +15,7 @@
     "ios": {
       "bundleIdentifier": "com.bizsawa.mobile",
       "supportsTablet": true,
+      "deploymentTarget": "16.4",
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "NSAppTransportSecurity": {
@@ -42,7 +43,38 @@
         {
           "backgroundColor": "#F4F9F7"
         }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "kotlinVersion": "1.8.10",
+            "compileSdkVersion": 34,
+            "targetSdkVersion": 34,
+            "packagingOptions": {
+              "pickFirst": [
+                "**/libc++_shared.so",
+                "**/libfbjni.so"
+              ]
+            }
+          },
+          "ios": {
+            "deploymentTarget": "16.4"
+          }
+        }
+      ],
+      [
+        "@morrowdigital/watermelondb-expo-plugin",
+        {
+          "disableJsi": false
+        }
       ]
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "875b82a6-0306-4849-949b-b55ac683eb92"
+      }
+    }
   }
 }

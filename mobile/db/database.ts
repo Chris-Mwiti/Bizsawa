@@ -15,15 +15,23 @@ import StockMovement from './models/StockMovement'
 import Payment from './models/Payment'
 import Conflict from './models/Conflict'
 
-// SQLiteAdapter with JSI enabled (required for Turbo Login §11, and sync perf)
-// Uses expo-sqlite under the hood when running in Expo Go / dev-client
-const adapter = new SQLiteAdapter({
-  schema,
-  // Enable JSI for sync perf — fallback to async if JSI unavailable (web/debug)
-  jsi: true,
-  onSetUpError: (error) => console.error('[WatermelonDB] setup failed', error),
-  // Optional migration placeholder — bump schema version + add migrations.ts when adding columns
-})
+// SQLiteAdapter via @morrowdigital/watermelondb-expo-plugin (disableJsi:false) → JSI in dev-client
+// Expo Go has no native module — must use dev-client build (see guide below)
+let adapter: any
+try {
+  adapter = new SQLiteAdapter({
+    schema,
+    jsi: true, // now linked via plugin — 3x faster, Turbo Login §11
+    onSetUpError: (error) => console.error('[WatermelonDB] setup failed', error),
+  })
+} catch (e: any) {
+  console.warn('[WatermelonDB] JSI init failed, falling back to async', e?.message)
+  adapter = new SQLiteAdapter({
+    schema,
+    jsi: false,
+    onSetUpError: (error) => console.error('[WatermelonDB] fallback setup failed', error),
+  })
+}
 
 export const database = new Database({
   adapter,

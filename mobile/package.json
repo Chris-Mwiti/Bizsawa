@@ -10,6 +10,7 @@
     "postinstall": "patch-package"
   },
   "dependencies": {
+    "@morrowdigital/watermelondb-expo-plugin": "^2.4.0-beta.0",
     "@nozbe/watermelondb": "^0.28.0",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/netinfo": "^12.0.1",
@@ -20,11 +21,13 @@
     "@tanstack/react-query": "^5.90.21",
     "axios": "^1.13.6",
     "expo": "~54.0.33",
+    "expo-build-properties": "^57.0.16",
     "expo-constants": "~18.0.13",
     "expo-dev-client": "~6.0.21",
     "expo-device": "~8.0.10",
     "expo-linking": "~8.0.12",
     "expo-router": "~6.0.23",
+    "expo-sqlite": "^57.0.2",
     "expo-status-bar": "~3.0.9",
     "expo-system-ui": "~6.0.9",
     "lottie-react-native": "~7.3.1",
@@ -39,6 +42,7 @@
     "react-native-screens": "~4.16.0",
     "react-native-svg": "15.12.1",
     "react-native-toast-message": "^2.2.0",
+    "react-native-worklets": "^0.12.1",
     "tamagui": "^2.7.7"
   },
   "devDependencies": {
@@ -54,7 +58,8 @@
   "overrides": {
     "react": "19.1.0",
     "react-dom": "19.1.0",
-    "@types/react": "~19.1.0"
+    "@types/react": "~19.1.0",
+    "@nozbe/with-observables": "^1.6.0"
   },
   "private": true
 }
