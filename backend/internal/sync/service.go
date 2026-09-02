@@ -23,7 +23,7 @@ var syncableTables = []string{
 	"expenses",
 	"invoices",
 	"invoice_lines",
-	"payments",
+	"payment_commands",
 	"tax_rules",
 }
 
@@ -91,28 +91,37 @@ func (s *Service) Pull(ctx context.Context, businessID uuid.UUID, since time.Tim
 
 func (s *Service) pullTable(ctx context.Context, businessID uuid.UUID, table string, since time.Time) (TableChanges, error) {
 	var tc TableChanges
-	// Note: business_id column exists on all syncable tables per migrations
-	// Use raw query to avoid needing Go struct per table; return map
 	rows := []map[string]any{}
-	// Query non-deleted changed rows
 	q := fmt.Sprintf(`SELECT * FROM %s WHERE business_id = ? AND updated_at > ? AND deleted_at IS NULL`, table)
 	if err := s.db.WithContext(ctx).Raw(q, businessID, since).Scan(&rows).Error; err != nil {
+		// Don't log as ERROR for missing table — syncableTables is now correct, but keep graceful
 		return tc, err
 	}
 	for _, row := range rows {
-		// normalize sync_version handling: Watermelon expects id, _status, _changed columns, but we map raw
-		// Determine created vs updated by created_at
-		createdAt, _ := row["created_at"].(time.Time)
+		// Convert all time.Time values to Unix milliseconds for Watermelon/RN (Watermelon schema uses number for dates)
+		// Watermelon expects numbers, not RFC3339 strings — prevents "date value out of bounds" on reload
+		for k, v := range row {
+			if t, ok := v.(time.Time); ok {
+				row[k] = t.UnixMilli()
+			}
+		}
+		// Determine created vs updated by created_at (now number)
+		var createdAt time.Time
+		if v, ok := row["created_at"]; ok {
+			if ms, ok := v.(int64); ok {
+				createdAt = time.UnixMilli(ms)
+			} else if t, ok := v.(time.Time); ok {
+				createdAt = t
+			}
+		}
 		if createdAt.After(since) {
 			tc.Created = append(tc.Created, row)
 		} else {
 			tc.Updated = append(tc.Updated, row)
 		}
 	}
-	// Deleted ids
 	var deleted []string
 	qdel := fmt.Sprintf(`SELECT id::text FROM %s WHERE business_id = ? AND deleted_at IS NOT NULL AND deleted_at > ?`, table)
-	// also handle case where table has no deleted_at? but all do
 	if err := s.db.WithContext(ctx).Raw(qdel, businessID, since).Scan(&deleted).Error; err == nil {
 		tc.Deleted = deleted
 	}
@@ -264,8 +273,62 @@ func intFromAny(v any) int {
 	}
 }
 
+func isTimestampColumn(k string) bool {
+	// All timestamp columns in syncable tables end with _at or are created_at/updated_at/deleted_at
+	return k == "created_at" || k == "updated_at" || k == "deleted_at" || k == "spent_at" || k == "sold_at" || k == "due_at" || k == "sent_at" || k == "viewed_at" || k == "paid_at" || k == "occurred_at" || k == "last_purchase_at" || k == "confirmed_at" || k == "fulfilled_at" || k == "last_restocked_at"
+}
+
+func asTime(v any) *time.Time {
+	if v == nil {
+		return nil
+	}
+	switch x := v.(type) {
+	case time.Time:
+		return &x
+	case float64:
+		// Watermelon sends ms; handle both ms and seconds (seconds < 1e12)
+		if x > 1e12 {
+			t := time.UnixMilli(int64(x))
+			return &t
+		}
+		if x > 1e10 {
+			t := time.Unix(int64(x), 0)
+			return &t
+		}
+		if x == 0 {
+			return nil
+		}
+		t := time.UnixMilli(int64(x))
+		return &t
+	case int64:
+		if x > 1e12 {
+			t := time.UnixMilli(x)
+			return &t
+		}
+		t := time.Unix(x, 0)
+		return &t
+	case int:
+		return asTime(float64(x))
+	case string:
+		if x == "" {
+			return nil
+		}
+		// Try RFC3339 first, then ms string, then seconds string
+		if t, err := time.Parse(time.RFC3339, x); err == nil {
+			return &t
+		}
+		if t, err := time.Parse(time.RFC3339Nano, x); err == nil {
+			return &t
+		}
+		var ms int64
+		if _, err := fmt.Sscan(x, &ms); err == nil {
+			return asTime(float64(ms))
+		}
+	}
+	return nil
+}
+
 func (s *Service) insertRecord(tx *gorm.DB, businessID uuid.UUID, table string, rec map[string]any) error {
-	// Ensure business_id and tenant_id, sync_version, timestamps
 	if _, ok := rec["business_id"]; !ok {
 		rec["business_id"] = businessID.String()
 	}
@@ -273,17 +336,33 @@ func (s *Service) insertRecord(tx *gorm.DB, businessID uuid.UUID, table string, 
 		rec["tenant_id"] = businessID.String()
 	}
 	rec["sync_version"] = 1
-	// Use jsonb insert via raw: build columns
-	// Simplify: use gorm map creation
+	// Normalize timestamp fields from Watermelon (numbers ms) to Go time.Time for Postgres timestamptz
+	// Watermelon sends dates as numbers (ms since epoch), backend expects time.Time
+	for k, v := range rec {
+		if isTimestampColumn(k) {
+			if t := asTime(v); t != nil {
+				rec[k] = *t
+			} else if v == nil {
+				delete(rec, k) // let DB default handle null
+			}
+		}
+	}
 	return tx.Table(table).Create(rec).Error
 }
 
 func (s *Service) updateRecord(tx *gorm.DB, businessID uuid.UUID, table string, rec map[string]any) error {
 	id, _ := rec["id"].(string)
-	// remove id, sync_version, business_id from update payload
 	update := map[string]any{}
 	for k, v := range rec {
 		if k == "id" || k == "sync_version" || k == "syncVersion" || k == "_status" || k == "_changed" {
+			continue
+		}
+		if isTimestampColumn(k) {
+			if t := asTime(v); t != nil {
+				update[k] = *t
+			} else if v != nil {
+				update[k] = v
+			}
 			continue
 		}
 		update[k] = v
