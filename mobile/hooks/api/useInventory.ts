@@ -7,8 +7,8 @@ import { Q } from "@nozbe/watermelondb";
 import { useEffect, useState } from "react";
 import { useBusinessContext } from "../../contexts/BusinessContext";
 import { v4 as uuidv4 } from "uuid";
+import { toISO, nowMillis } from "../../lib/syncDates";
 
-import { toISO } from "../../lib/syncDates";
 
 export interface InventoryItem { id: UUID; businessId: UUID; productId: UUID; quantity: number; lowStockThreshold: number; createdAt?: string; updatedAt?: string; }
 export interface StockMovement { id: UUID; businessId: UUID; productId: UUID; quantityDelta: number; movementType: string; referenceType?: string | null; referenceId?: UUID | null; notes?: string; occurredAt: string; }
@@ -72,7 +72,7 @@ export const useInventory = () => {
   const adjustStock = useMutation({
     mutationFn: async (input: AdjustStockInput) => {
       const delta = toDecimalString(input.quantityDelta);
-      const now = Date.now() / 1000;
+      const now = nowMillis();
       await (database as any).write(async () => {
         // upsert inventory_items
         const col: any = (database as any).get("inventory_items");
