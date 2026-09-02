@@ -9,6 +9,7 @@ import (
 	"github.com/Codecx-Org/FinAI/backend/internal/business"
 	"github.com/Codecx-Org/FinAI/backend/internal/chat"
 	"github.com/Codecx-Org/FinAI/backend/internal/customers"
+	"github.com/Codecx-Org/FinAI/backend/internal/sync"
 	"github.com/Codecx-Org/FinAI/backend/internal/expenses"
 	"github.com/Codecx-Org/FinAI/backend/internal/inventory"
 	"github.com/Codecx-Org/FinAI/backend/internal/invoices"
@@ -49,6 +50,7 @@ type Dependencies struct {
 	WAHA      *waha.Module
 	Authz     *authz.Enforcer
 	Chat      *chat.Module
+	Sync      *sync.Module
 }
 
 func NewRouter(deps Dependencies) http.Handler {
@@ -165,6 +167,9 @@ func NewRouter(deps Dependencies) http.Handler {
 				r.Route("/chat", func(r chi.Router) {
 					r.Post("/business-owner", deps.Chat.Handler().Chat)
 				})
+			}
+			if deps.Sync != nil {
+				r.Route("/sync", deps.Sync.RegisterRoutes)
 			}
 		})
 	})
