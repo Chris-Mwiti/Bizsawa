@@ -45,10 +45,18 @@ export async function syncNow() {
 }
 
 // NetInfo + interval triggers per Brief §3.4 (reconnect + periodic 5-10min + manual pull-to-refresh)
+// Plus initial hydration: if already online at startup, populate local DB immediately so offline works after
 let intervalId: ReturnType<typeof setInterval> | null = null
 
 export function startSyncEngine() {
-  // Immediate on reconnect
+  // Initial hydration on startup if already online — populates local storage for offline resume
+  NetInfo.fetch().then((s) => {
+    if (s.isConnected) {
+      syncNow().catch((e) => console.warn('[Sync] initial hydration failed', e?.message))
+    }
+  })
+
+  // On reconnect — immediate sync
   const unsub = NetInfo.addEventListener((state) => {
     if (state.isConnected) {
       syncNow().catch((e) => console.warn('[Sync] reconnect sync failed', e?.message))
