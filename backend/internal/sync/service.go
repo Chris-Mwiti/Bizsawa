@@ -105,6 +105,15 @@ func (s *Service) pullTable(ctx context.Context, businessID uuid.UUID, table str
 				row[k] = string(b)
 				v = string(b)
 			}
+			// Normalize numeric columns to string for Watermelon (schema type string) — prevents NaN/0 float issues
+			if isNumericColumn(k) {
+				if sanitized, ok := sanitizeNumeric(v); ok {
+					row[k] = sanitized
+				} else {
+					row[k] = "0"
+				}
+				continue
+			}
 			if t, ok := v.(time.Time); ok {
 				row[k] = t.UnixMilli()
 				continue
@@ -302,6 +311,49 @@ func isTimestampColumn(k string) bool {
 	return k == "created_at" || k == "updated_at" || k == "deleted_at" || k == "spent_at" || k == "sold_at" || k == "due_at" || k == "sent_at" || k == "viewed_at" || k == "paid_at" || k == "occurred_at" || k == "last_purchase_at" || k == "confirmed_at" || k == "fulfilled_at" || k == "last_restocked_at"
 }
 
+func isNumericColumn(k string) bool {
+	switch k {
+	case "price", "cost", "quantity", "low_stock_threshold", "quantity_delta", "subtotal", "tax_amount", "total", "amount", "amount_paid", "amount_due", "line_total", "unit_price", "total_spend", "rate":
+		return true
+	}
+	return false
+}
+
+func sanitizeNumeric(v any) (string, bool) {
+	if v == nil {
+		return "", false
+	}
+	switch x := v.(type) {
+	case []uint8:
+		s := strings.TrimSpace(string(x))
+		if s == "" || strings.EqualFold(s, "nan") || strings.EqualFold(s, "local") {
+			return "", false
+		}
+		if _, err := fmt.Sscanf(s, "%f", new(float64)); err == nil {
+			return s, true
+		}
+		return s, true
+	case string:
+		s := strings.TrimSpace(x)
+		if s == "" || strings.EqualFold(s, "nan") || strings.EqualFold(s, "local") {
+			return "", false
+		}
+		return s, true
+	case float64:
+		if x != x || x == 0 && fmt.Sprint(x) == "NaN" { // NaN check
+			return "", false
+		}
+		return fmt.Sprintf("%v", x), true
+	case int, int64, int32:
+		return fmt.Sprintf("%v", x), true
+	}
+	s := strings.TrimSpace(fmt.Sprint(v))
+	if s == "" || strings.EqualFold(s, "nan") || strings.EqualFold(s, "local") {
+		return "", false
+	}
+	return s, true
+}
+
 func asTime(v any) *time.Time {
 	if v == nil {
 		return nil
@@ -460,6 +512,14 @@ func (s *Service) insertRecord(tx *gorm.DB, businessID uuid.UUID, userID uuid.UU
 			} else {
 				delete(rec, k)
 			}
+			continue
+		}
+		if isNumericColumn(k) {
+			if sanitized, ok := sanitizeNumeric(v); ok {
+				rec[k] = sanitized
+			} else {
+				rec[k] = "0"
+			}
 		}
 	}
 	return tx.Table(table).Create(rec).Error
@@ -477,6 +537,14 @@ func (s *Service) updateRecord(tx *gorm.DB, businessID uuid.UUID, table string, 
 				update[k] = *t
 			} else if v != nil {
 				update[k] = v
+			}
+			continue
+		}
+		if isNumericColumn(k) {
+			if sanitized, ok := sanitizeNumeric(v); ok {
+				update[k] = sanitized
+			} else {
+				continue // skip NaN/local — don't overwrite good server value with 0
 			}
 			continue
 		}
