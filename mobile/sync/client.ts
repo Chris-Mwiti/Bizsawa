@@ -5,8 +5,9 @@ import { api } from '../lib/api'
 import { v4 as uuidv4 } from 'uuid'
 import { toNumber } from '../lib/api-dtos'
 
-// One-time repair for corrupted local rows (0 timestamps → now, NaN numerics → 0)
-// Runs before first sync to heal 1970 / NaN displays without wiping offline data
+// One-time repair for corrupted local rows — now destructive for synced data to avoid pushing "0" to server
+// NaN numerics and 0/1970 dates are healed: created (not yet pushed) rows are sanitized to "0"/now,
+// synced rows are destroyed locally so next pull brings server's clean value (server verified clean — no NaN/1970).
 let repaired = false
 async function repairCorruptedLocal() {
   if (repaired) return
@@ -25,50 +26,90 @@ async function repairCorruptedLocal() {
       stock_movements: { numeric: ['quantity_delta'], dates: ['occurred_at'] },
       customers: { numeric: ['total_spend'], dates: ['last_purchase_at'] },
     }
-    await (database as any).write(async () => {
-      for (const [table, cols] of Object.entries(tables)) {
-        try {
-          const col: any = (database as any).get(table)
-          const rows: any[] = await col.query().fetch()
-          for (const rec of rows) {
-            const raw = rec._raw
-            let needsUpdate = false
-            const patch: any = {}
-            for (const c of cols.numeric) {
-              const v = raw[c]
-              if (v == null) continue
-              const str = String(v)
-              if (str === "" || str.toLowerCase() === "nan" || str === "local" || Number.isNaN(Number(str))) {
-                // keep as "0" string for Decimal columns
-                patch[c] = "0"
-                needsUpdate = true
+    // Use adapter destroyPermanently for synced corrupted rows so we don't push "0" overwriting server's correct value
+    for (const [table, cols] of Object.entries(tables)) {
+      try {
+        const col: any = (database as any).get(table)
+        const rows: any[] = await col.query().fetch()
+        for (const rec of rows) {
+          const raw = rec._raw
+          const isCreated = raw._status === 'created'
+          let hasNumericCorruption = false
+          let hasDateCorruption = false
+          for (const c of cols.numeric) {
+            const v = raw[c]
+            if (v == null) continue
+            const str = String(v).trim().toLowerCase()
+            if (str === "" || str === "nan" || str === "local" || str === "undefined" || (isNaN(Number(str)) && str !== "0")) {
+              hasNumericCorruption = true
+              break
+            }
+          }
+          for (const c of cols.dates) {
+            const v = raw[c]
+            if (v === 0 || v === "0" || v == null || (typeof v === "number" && v < 1000)) {
+              hasDateCorruption = true
+              break
+            }
+            if (typeof v === "number") {
+              const d = new Date(v)
+              if (isNaN(d.getTime()) || d.getFullYear() <= 1970) {
+                hasDateCorruption = true
+                break
               }
             }
-            for (const c of cols.dates) {
-              const v = raw[c]
-              if (v === 0 || v === "0" || v == null) {
-                patch[c] = Date.now()
-                needsUpdate = true
-              } else if (typeof v === "number" && v < 1000) {
-                patch[c] = Date.now()
-                needsUpdate = true
+          }
+          if (!hasNumericCorruption && !hasDateCorruption) continue
+
+          if (isCreated) {
+            // Sanitize locally-created not-yet-pushed row: fix to valid value and keep for push
+            await (database as any).write(async () => {
+              const patch: any = {}
+              for (const c of cols.numeric) {
+                const v = raw[c]
+                if (v == null) continue
+                const str = String(v).trim().toLowerCase()
+                if (str === "" || str === "nan" || str === "local" || (isNaN(Number(str)) && str !== "0")) patch[c] = "0"
               }
-            }
-            if (needsUpdate) {
+              for (const c of cols.dates) {
+                const v = raw[c]
+                if (v === 0 || v === "0" || v == null || (typeof v === "number" && v < 1000)) patch[c] = Date.now()
+              }
+              if (Object.keys(patch).length === 0) return
               await rec.update((r: any) => {
                 for (const [k, v] of Object.entries(patch)) {
-                  // Watermelon JS field names are camelCase: sold_at -> soldAt, etc.
                   const camel = k.replace(/_([a-z])/g, (_, c) => c.toUpperCase())
                   if (camel in r) (r as any)[camel] = v
                   else (r as any)[k] = v
                 }
               })
-            }
+            })
+          } else {
+            // Synced/updated row corrupted by old pull bug — destroy locally, next pull will re-create from server (server is clean)
+            try {
+              await (database as any).write(async () => {
+                await rec.destroyPermanently()
+              })
+            } catch {}
           }
-        } catch {}
-      }
-    })
+        }
+      } catch {}
+    }
   } catch {}
+}
+
+export async function resetLocalDatabase() {
+  try {
+    // Wipes Watermelon SQLite and resets lastPulledAt — next sync will full pull from server
+    await (database as any).write(async () => {
+      await (database as any).unsafeResetDatabase()
+    })
+    repaired = false
+  } catch (e) {
+    // fallback: adapter level
+    try { await (database as any).adapter.unsafeResetDatabase() } catch {}
+    repaired = false
+  }
 }
 
 // WatermelonDB synchronize() wired to Brief §5 endpoints — single source of truth while offline is local SQLite

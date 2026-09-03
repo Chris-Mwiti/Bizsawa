@@ -52,7 +52,6 @@ export const useExpenses = () => {
   const getExpenses = useQuery({
     queryKey: ["expenses", bid],
     queryFn: async () => {
-      if (local.length) return local;
       const res = await api.get<{ expenses: BackendExpense[] }>("/expenses");
       return (res.data.expenses || []).map(mapExpense);
     },
@@ -99,11 +98,19 @@ export const useExpenses = () => {
     },
   });
 
-  const expenses = local.length ? local : (getExpenses.data || []);
+  // Offline-first merge: server clean, but pending local expenses must appear immediately
+  const expenses = (() => {
+    const server = getExpenses.data as any[] | undefined;
+    if (server === undefined) return local;
+    if (!local.length) return server;
+    const serverIds = new Set(server.map((s: any) => s.id));
+    const pending = local.filter((l: any) => !serverIds.has(l.id));
+    return pending.length ? [...server, ...pending] : server;
+  })();
   return {
     expenses,
     totalExpenseAmount: expenses.reduce((s: number, e: any) => s + toNumber(e.amount), 0),
-    isLoading: isLocalLoading || getExpenses.isLoading,
+    isLoading: getExpenses.isLoading && !local.length && expenses.length === 0,
     error: (getExpenses.error as ApiError)?.friendlyMessage || null,
     refetch: getExpenses.refetch,
     createExpense: createExpense.mutateAsync,

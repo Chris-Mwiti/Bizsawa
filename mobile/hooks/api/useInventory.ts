@@ -44,7 +44,6 @@ export const useInventory = () => {
   const getInventory = useQuery({
     queryKey: ["inventory", bid],
     queryFn: async () => {
-      if (localInv.length) return localInv;
       const res = await api.get<{ inventory: any[] }>("/inventory");
       return (res.data.inventory || []).map((r: any) => ({ id: r.id, businessId: r.businessId, productId: r.productId, quantity: toNumber(r.quantity), lowStockThreshold: toNumber(r.lowStockThreshold) })) as any;
     },
@@ -61,7 +60,6 @@ export const useInventory = () => {
   const getStockMovements = useQuery({
     queryKey: ["inventory", "movements", bid],
     queryFn: async () => {
-      if (localMov.length) return localMov;
       const res = await api.get<{ movements: any[] }>("/inventory/movements");
       return (res.data.movements || []).map(mapRawMovement);
     },
@@ -113,13 +111,30 @@ export const useInventory = () => {
     },
   });
 
+  // Merge pending local inventory (not yet on server) with server data — ensures new stock adjustments appear immediately
+  const inventoryMerged = (() => {
+    const server = getInventory.data as any[] | undefined;
+    if (server === undefined) return localInv;
+    if (!localInv.length) return server;
+    const ids = new Set(server.map((s: any) => s.id));
+    const pending = localInv.filter((l: any) => !ids.has(l.id));
+    return pending.length ? [...server, ...pending] : server;
+  })();
+  const movementsMerged = (() => {
+    const server = getStockMovements.data as any[] | undefined;
+    if (server === undefined) return localMov;
+    if (!localMov.length) return server;
+    const ids = new Set(server.map((s: any) => s.id));
+    const pending = localMov.filter((l: any) => !ids.has(l.id));
+    return pending.length ? [...server, ...pending] : server;
+  })();
   return {
-    inventory: localInv.length ? localInv : (getInventory.data || []),
-    isLoadingInventory: loading || (getInventory.isLoading as any),
+    inventory: inventoryMerged,
+    isLoadingInventory: (getInventory.isLoading as any) && !localInv.length && inventoryMerged.length === 0,
     inventoryError: (getInventory.error as ApiError)?.friendlyMessage || null,
     lowStockItems: [] as any,
     isLoadingLowStock: false,
-    movements: localMov.length ? localMov : (getStockMovements.data || []),
+    movements: movementsMerged,
     isLoadingMovements: false,
     valuation: [] as any,
     isLoadingValuation: false,
