@@ -337,6 +337,15 @@ func asTime(v any) *time.Time {
 }
 
 func (s *Service) insertRecord(tx *gorm.DB, businessID uuid.UUID, table string, rec map[string]any) error {
+	// Strip Watermelon internal fields that are not DB columns — they cause "column _changed does not exist"
+	clean := map[string]any{}
+	for k, v := range rec {
+		if len(k) > 0 && k[0] == '_' {
+			continue
+		}
+		clean[k] = v
+	}
+	rec = clean
 	if _, ok := rec["business_id"]; !ok {
 		rec["business_id"] = businessID.String()
 	}
@@ -344,14 +353,12 @@ func (s *Service) insertRecord(tx *gorm.DB, businessID uuid.UUID, table string, 
 		rec["tenant_id"] = businessID.String()
 	}
 	rec["sync_version"] = 1
-	// Normalize timestamp fields from Watermelon (numbers ms) to Go time.Time for Postgres timestamptz
-	// Watermelon sends dates as numbers (ms since epoch), backend expects time.Time
 	for k, v := range rec {
 		if isTimestampColumn(k) {
 			if t := asTime(v); t != nil {
 				rec[k] = *t
 			} else if v == nil {
-				delete(rec, k) // let DB default handle null
+				delete(rec, k)
 			}
 		}
 	}
@@ -362,7 +369,7 @@ func (s *Service) updateRecord(tx *gorm.DB, businessID uuid.UUID, table string, 
 	id, _ := rec["id"].(string)
 	update := map[string]any{}
 	for k, v := range rec {
-		if k == "id" || k == "sync_version" || k == "syncVersion" || k == "_status" || k == "_changed" {
+		if k == "id" || k == "sync_version" || k == "syncVersion" || (len(k) > 0 && k[0] == '_') {
 			continue
 		}
 		if isTimestampColumn(k) {
@@ -384,7 +391,7 @@ func (s *Service) ForceApplyClientPayload(ctx context.Context, businessID uuid.U
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		update := map[string]any{}
 		for k, v := range payload {
-			if k == "id" || k == "sync_version" || k == "syncVersion" || k == "_status" || k == "_changed" || k == "business_id" || k == "tenant_id" {
+			if k == "id" || k == "sync_version" || k == "syncVersion" || k == "business_id" || k == "tenant_id" || (len(k) > 0 && k[0] == '_') {
 				continue
 			}
 			if isTimestampColumn(k) {
