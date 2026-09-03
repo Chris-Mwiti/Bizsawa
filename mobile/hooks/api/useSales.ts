@@ -7,6 +7,7 @@ import { v4 as uuidv4 } from "uuid";
 import { Q } from "@nozbe/watermelondb";
 import { useEffect, useState } from "react";
 import { useBusinessContext } from "../../contexts/BusinessContext";
+import { useAuth } from "../../contexts/AuthContext";
 import { shortId } from "../../lib/ids";
 import { toISO, nowMillis } from "../../lib/syncDates";
 
@@ -26,7 +27,7 @@ function mapRaw(raw: any): Sale {
     orderId: raw.order_id,
     customerId: raw.customer_id,
     receiptNumber: raw.receipt_number,
-    staffId: raw.staff_id || "local",
+    staffId: raw.staff_id || raw.staffId || null,
     paymentMethod: raw.payment_method,
     subtotal: raw.subtotal,
     taxAmount: raw.tax_amount,
@@ -41,6 +42,7 @@ function mapRaw(raw: any): Sale {
 export const useSales = () => {
   const queryClient = useQueryClient();
   const { activeBusinessId } = (() => { try { return useBusinessContext() as any; } catch { return { activeBusinessId: null }; } })();
+  const { userId } = (() => { try { return useAuth() as any; } catch { return { userId: null }; } })();
   const bid = activeBusinessId || "";
   const [local, setLocal] = useState<Sale[]>([]);
   const [isLocalLoading, setIsLocalLoading] = useState(true);
@@ -66,8 +68,10 @@ export const useSales = () => {
 
   const createSale = useMutation({
     mutationFn: async (data: CreateSaleInput) => {
+      if (!bid) throw new Error("Select a business first");
       const req = toCreateSaleRequest(data);
       if (!req.lines?.length) throw new Error("Add at least one product");
+      if (!userId) throw new Error("Not authenticated");
       const id = uuidv4();
       const receipt = `RCPT-${shortId(id, 6)}`;
       const total = req.lines.reduce((s, l) => s + toNumber(l.unitPrice) * toNumber(l.quantity), 0);
@@ -80,7 +84,7 @@ export const useSales = () => {
           rec.orderId = req.orderId || null;
           rec.customerId = req.customerId || null;
           rec.receiptNumber = receipt;
-          rec.staffId = "local";
+          rec.staffId = userId;
           rec.paymentMethod = req.paymentMethod || "cash";
           rec.subtotal = toDecimalString(total);
           rec.taxAmount = toDecimalString(0);

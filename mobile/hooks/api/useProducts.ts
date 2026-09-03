@@ -48,14 +48,13 @@ function toProductRequest(input: CreateProductInput | UpdateProductInput): Produ
 export const useProducts = () => {
   const queryClient = useQueryClient();
   const { activeBusinessId } = (() => { try { return useBusinessContext() as any; } catch { return { activeBusinessId: null }; } })();
-  const bid = activeBusinessId || "local";
+  const bid = activeBusinessId || "";
 
-  // Local observe fallback — example for offline-first reads (kept alongside API for migration)
   const [localProducts, setLocalProducts] = useState<Product[]>([]);
   useEffect(() => {
+    if (!bid) { setLocalProducts([]); return; }
     const col: any = (database as any).get("products");
     const sub = col.query(Q.where("business_id", bid)).observe().subscribe((rows: any[]) => {
-      // map raw Watermelon rows to Product shape
       setLocalProducts(rows.map((r: any) => ({ id: r.id, businessId: r.businessId, name: r.name, category: r.category, price: Number(r.price), cost: Number(r.cost) } as any)));
     });
     return () => sub.unsubscribe();
@@ -73,7 +72,7 @@ export const useProducts = () => {
 
   const createProduct = useMutation({
     mutationFn: async (data: CreateProductInput) => {
-      // §3.6: never call API directly — write to Watermelon first, sync pushes
+      if (!bid) throw new Error("Select a business first");
       const id = uuidv4();
       await (database as any).write(async () => {
         const col: any = (database as any).get("products");
