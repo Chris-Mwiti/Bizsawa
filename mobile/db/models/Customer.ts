@@ -1,5 +1,11 @@
 import { Model } from '@nozbe/watermelondb'
-import { field, text, date, readonly, writer } from '@nozbe/watermelondb/decorators'
+import {
+  field,
+  text,
+  date,
+  readonly,
+  writer,
+} from '@nozbe/watermelondb/decorators'
 
 export default class Customer extends Model {
   static table = 'customers'
@@ -21,7 +27,9 @@ export default class Customer extends Model {
   @readonly @date('updated_at') updatedAt!: Date
 
   @writer async markDeletedLocal() {
-    await this.update((r: any) => { r.deletedAt = Date.now() })
+    await this.update((r: any) => {
+      r.deletedAt = Date.now()
+    })
     await this.markAsDeleted()
   }
 }

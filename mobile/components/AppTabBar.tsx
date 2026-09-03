@@ -1,70 +1,70 @@
-import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import type { BottomTabBarProps } from '@react-navigation/bottom-tabs'
+import { MaterialCommunityIcons } from '@expo/vector-icons'
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 const COLORS = {
-  surface: "#f8f9fa",
-  secondary: "#555f6d",
-  primary: "#630ed4",
-  homeActiveBg: "#006b5f",
-  homeIdleBg: "#e7e8e9",
-  onPrimary: "#ffffff",
-  borderCutout: "#f8f9fa",
-} as const;
+  surface: '#f8f9fa',
+  secondary: '#555f6d',
+  primary: '#630ed4',
+  homeActiveBg: '#006b5f',
+  homeIdleBg: '#e7e8e9',
+  onPrimary: '#ffffff',
+  borderCutout: '#f8f9fa',
+} as const
 
-const ICON_SIZE = 24;
-const LABEL_SIZE = 12;
-const HOME_CIRCLE = 56;
-const HOME_LIFT = -28;
+const ICON_SIZE = 24
+const LABEL_SIZE = 12
+const HOME_CIRCLE = 56
+const HOME_LIFT = -28
 
-type RouteName = "sales" | "stock" | "index" | "insights" | "profile";
+type RouteName = 'sales' | 'stock' | 'index' | 'insights' | 'profile'
 
 function TabIcon({
   routeName,
   focused,
 }: {
-  routeName: RouteName;
-  focused: boolean;
+  routeName: RouteName
+  focused: boolean
 }) {
-  const inactiveColor = COLORS.secondary;
-  const activeColor = COLORS.primary;
+  const inactiveColor = COLORS.secondary
+  const activeColor = COLORS.primary
 
   switch (routeName) {
-    case "sales":
+    case 'sales':
       return (
         <MaterialCommunityIcons
-          name={focused ? "cash-register" : "cash-register"}
+          name={focused ? 'cash-register' : 'cash-register'}
           size={ICON_SIZE}
           color={focused ? activeColor : inactiveColor}
         />
-      );
-    case "stock":
+      )
+    case 'stock':
       return (
         <MaterialCommunityIcons
-          name={focused ? "package-variant" : "package-variant"}
+          name={focused ? 'package-variant' : 'package-variant'}
           size={ICON_SIZE}
           color={focused ? activeColor : inactiveColor}
         />
-      );
-    case "insights":
+      )
+    case 'insights':
       return (
         <MaterialCommunityIcons
-          name={focused ? "chart-line" : "chart-line"}
+          name={focused ? 'chart-line' : 'chart-line'}
           size={ICON_SIZE}
           color={focused ? activeColor : inactiveColor}
         />
-      );
-    case "profile":
+      )
+    case 'profile':
       return (
         <MaterialCommunityIcons
-          name={focused ? "account" : "account-outline"}
+          name={focused ? 'account' : 'account-outline'}
           size={ICON_SIZE}
           color={focused ? activeColor : inactiveColor}
         />
-      );
+      )
     default:
-      return null;
+      return null
   }
 }
 
@@ -73,9 +73,9 @@ export function AppTabBar({
   descriptors,
   navigation,
 }: BottomTabBarProps) {
-  const insets = useSafeAreaInsets();
+  const insets = useSafeAreaInsets()
   /** Safe area + breathing room above system home indicator */
-  const bottomPad = Math.max(insets.bottom, 12) + 10;
+  const bottomPad = Math.max(insets.bottom, 12) + 10
 
   return (
     <View
@@ -88,48 +88,48 @@ export function AppTabBar({
     >
       <View style={styles.row}>
         {state.routes.map((route, index) => {
-          const { options } = descriptors[route.key];
-          const routeName = route.name as RouteName;
-          const isFocused = state.index === index;
+          const { options } = descriptors[route.key]
+          const routeName = route.name as RouteName
+          const isFocused = state.index === index
           const label =
-            typeof options.title === "string"
+            typeof options.title === 'string'
               ? options.title
-              : route.name === "index"
-                ? ""
-                : route.name;
+              : route.name === 'index'
+                ? ''
+                : route.name
 
           const onPress = () => {
             const event = navigation.emit({
-              type: "tabPress",
+              type: 'tabPress',
               target: route.key,
               canPreventDefault: true,
-            });
+            })
             if (!isFocused && !event.defaultPrevented) {
-              navigation.navigate(route.name, route.params);
+              navigation.navigate(route.name, route.params)
             }
-          };
+          }
 
           const onLongPress = () => {
             navigation.emit({
-              type: "tabLongPress",
+              type: 'tabLongPress',
               target: route.key,
-            });
-          };
+            })
+          }
 
-          if (routeName === "index") {
-            const homeFocused = isFocused;
+          if (routeName === 'index') {
+            const homeFocused = isFocused
             return (
               <View key={route.key} style={styles.homeSlot}>
                 <Pressable
-                  accessibilityRole="button"
+                  accessibilityRole='button'
                   accessibilityState={{ selected: homeFocused }}
-                  accessibilityLabel={options.title ?? "Home"}
+                  accessibilityLabel={options.title ?? 'Home'}
                   onPress={onPress}
                   onLongPress={onLongPress}
                   android_ripple={
                     homeFocused
-                      ? { color: "rgba(255,255,255,0.22)", foreground: true }
-                      : { color: "rgba(0,0,0,0.08)", foreground: true }
+                      ? { color: 'rgba(255,255,255,0.22)', foreground: true }
+                      : { color: 'rgba(0,0,0,0.08)', foreground: true }
                   }
                   style={styles.homePressable}
                 >
@@ -144,22 +144,24 @@ export function AppTabBar({
                       ]}
                     >
                       <MaterialCommunityIcons
-                        name="home"
+                        name='home'
                         size={26}
-                        color={homeFocused ? COLORS.onPrimary : COLORS.secondary}
+                        color={
+                          homeFocused ? COLORS.onPrimary : COLORS.secondary
+                        }
                       />
                     </View>
                   )}
                 </Pressable>
               </View>
-            );
+            )
           }
 
-          const secondaryFocused = isFocused;
+          const secondaryFocused = isFocused
           return (
             <Pressable
               key={route.key}
-              accessibilityRole="button"
+              accessibilityRole='button'
               accessibilityState={{ selected: secondaryFocused }}
               accessibilityLabel={options.title}
               onPress={onPress}
@@ -178,7 +180,9 @@ export function AppTabBar({
                 <Text
                   style={[
                     styles.label,
-                    secondaryFocused ? styles.labelActive : styles.labelInactive,
+                    secondaryFocused
+                      ? styles.labelActive
+                      : styles.labelInactive,
                   ]}
                   numberOfLines={1}
                 >
@@ -186,23 +190,23 @@ export function AppTabBar({
                 </Text>
               </View>
             </Pressable>
-          );
+          )
         })}
       </View>
     </View>
-  );
+  )
 }
 
 const styles = StyleSheet.create({
   outer: {
-    overflow: "visible",
+    overflow: 'visible',
     backgroundColor: COLORS.surface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingTop: 8,
     ...Platform.select({
       ios: {
-        shadowColor: "#000",
+        shadowColor: '#000',
         shadowOffset: { width: 0, height: -4 },
         shadowOpacity: 0.08,
         shadowRadius: 16,
@@ -213,18 +217,18 @@ const styles = StyleSheet.create({
     }),
   },
   row: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    alignItems: "flex-end",
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'flex-end',
     paddingHorizontal: 12,
     paddingBottom: 4,
     minHeight: 56,
-    overflow: "visible",
+    overflow: 'visible',
   },
   sideTab: {
     flex: 1,
-    alignItems: "center",
-    justifyContent: "flex-end",
+    alignItems: 'center',
+    justifyContent: 'flex-end',
     paddingVertical: 8,
     paddingHorizontal: 4,
     maxWidth: 88,
@@ -236,22 +240,22 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   sideTabContent: {
-    width: "100%",
-    alignItems: "center",
-    justifyContent: "flex-end",
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
   },
   iconWrap: {
     marginBottom: 4,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   label: {
     fontSize: LABEL_SIZE,
     lineHeight: 16,
     letterSpacing: 0.2,
-    fontWeight: "500",
-    textAlign: "center",
-    alignSelf: "stretch",
+    fontWeight: '500',
+    textAlign: 'center',
+    alignSelf: 'stretch',
   },
   labelActive: {
     color: COLORS.primary,
@@ -261,27 +265,27 @@ const styles = StyleSheet.create({
   },
   homeSlot: {
     flex: 1,
-    alignItems: "center",
-    justifyContent: "flex-end",
+    alignItems: 'center',
+    justifyContent: 'flex-end',
     marginTop: HOME_LIFT,
     maxWidth: 88,
-    overflow: "visible",
+    overflow: 'visible',
   },
   homePressable: {
     borderRadius: HOME_CIRCLE / 2 + 4,
-    overflow: "visible",
+    overflow: 'visible',
   },
   homeCircle: {
     width: HOME_CIRCLE,
     height: HOME_CIRCLE,
     borderRadius: HOME_CIRCLE / 2,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 4,
     borderColor: COLORS.borderCutout,
     ...Platform.select({
       ios: {
-        shadowColor: "#000",
+        shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.12,
         shadowRadius: 8,
@@ -303,4 +307,4 @@ const styles = StyleSheet.create({
   pressedDim: {
     opacity: 0.92,
   },
-});
+})

@@ -23,7 +23,9 @@ export default class Sale extends Model {
   @readonly @date('updated_at') updatedAt!: Date
 
   @writer async markDeletedLocal() {
-    await this.update((r: any) => { r.deletedAt = Date.now() })
+    await this.update((r: any) => {
+      r.deletedAt = Date.now()
+    })
     await this.markAsDeleted()
   }
 }

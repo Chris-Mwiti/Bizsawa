@@ -1,4 +1,4 @@
-import '../polyfills';
+import '../polyfills'
 import { Database } from '@nozbe/watermelondb'
 import SQLiteAdapter from '@nozbe/watermelondb/adapters/sqlite'
 import { schema } from './schema'
@@ -23,14 +23,19 @@ try {
   adapter = new SQLiteAdapter({
     schema,
     jsi: true, // now linked via plugin — 3x faster, Turbo Login §11
-    onSetUpError: (error) => console.error('[WatermelonDB] setup failed', error),
+    onSetUpError: (error) =>
+      console.error('[WatermelonDB] setup failed', error),
   })
 } catch (e: any) {
-  console.warn('[WatermelonDB] JSI init failed, falling back to async', e?.message)
+  console.warn(
+    '[WatermelonDB] JSI init failed, falling back to async',
+    e?.message,
+  )
   adapter = new SQLiteAdapter({
     schema,
     jsi: false,
-    onSetUpError: (error) => console.error('[WatermelonDB] fallback setup failed', error),
+    onSetUpError: (error) =>
+      console.error('[WatermelonDB] fallback setup failed', error),
   })
 }
 

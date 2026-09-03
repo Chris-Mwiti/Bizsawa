@@ -49,10 +49,7 @@
         {
           "android": {
             "packagingOptions": {
-              "pickFirst": [
-                "**/libc++_shared.so",
-                "**/libfbjni.so"
-              ]
+              "pickFirst": ["**/libc++_shared.so", "**/libfbjni.so"]
             }
           },
           "ios": {
