@@ -22,43 +22,58 @@ const statusPill = (s: string) => {
   return "bg-amber-50 border-amber-100 text-amber-700";
 };
 
-const OrderItem = memo(({ order, onUpdateStatus, onInitiatePayment, isInitiatingPayment, formatCurrency, formatDate }: { order: Order; onUpdateStatus: (order: Order, status: OrderStatus) => void; onInitiatePayment: (order: Order) => void; isInitiatingPayment: boolean; formatCurrency: (amount: number) => string; formatDate: (iso: string) => string; }) => {
+const OrderItem = memo(({ order, onPress, onUpdateStatus, onInitiatePayment, isInitiatingPayment, formatCurrency, formatDate }: { order: Order; onPress: (order: Order) => void; onUpdateStatus: (order: Order, status: OrderStatus) => void; onInitiatePayment: (order: Order) => void; isInitiatingPayment: boolean; formatCurrency: (amount: number) => string; formatDate: (iso: string) => string; }) => {
+  const s = String(order.status);
+  const isFulfilled = s === "fulfilled" || s === "paid";
+  const isCancelled = s === "cancelled" || s === "failed";
+  const showMpesa = !isFulfilled && !isCancelled;
   return (
-    <Card className="border border-gray-200">
-      <CardContent className="p-4">
-        <View className="flex-row justify-between gap-3 mb-3">
-          <View className="flex-1">
-            <Text className="text-sm font-bold tracking-tight text-gray-900" numberOfLines={1}>Order • {shortId(order.id, 6)}</Text>
-            <Text className="text-xs text-gray-500 mt-1">{formatDate(order.createdAt)} • {order.paymentMethod}</Text>
-          </View>
-          <View className="items-end gap-1">
-            <Text className="text-sm font-bold tracking-tight text-gray-900">{formatCurrency(toNumber(order.total))}</Text>
-            <View className={`px-2 py-0.5 rounded-full border ${statusPill(order.status)}`}>
-              <Text className="text-[11px] font-bold tracking-widest">{order.status.toUpperCase()}</Text>
+    <Pressable onPress={() => onPress(order)} style={({ pressed }) => ({ opacity: pressed ? 0.96 : 1 })}>
+      <Card className="border border-gray-200">
+        <CardContent className="p-4">
+          <View className="flex-row justify-between gap-3 mb-3">
+            <View className="flex-1">
+              <Text className="text-sm font-bold tracking-tight text-gray-900" numberOfLines={1}>Order • {shortId(order.id, 6)}</Text>
+              <Text className="text-xs text-gray-500 mt-1">{formatDate(order.createdAt)} • {order.paymentMethod}</Text>
+            </View>
+            <View className="items-end gap-1">
+              <Text className="text-sm font-bold tracking-tight text-gray-900">{formatCurrency(toNumber(order.total))}</Text>
+              <View className={`px-2 py-0.5 rounded-full border ${statusPill(order.status)}`}>
+                <Text className="text-[11px] font-bold tracking-widest">{order.status.toUpperCase()}</Text>
+              </View>
             </View>
           </View>
-        </View>
 
-        <View className="flex-row gap-2">
-          {order.status === "draft" && (
-            <TouchableOpacity className="flex-1 bg-gray-900 py-2.5 rounded-xl items-center" onPress={() => onUpdateStatus(order, OrderStatus.confirmed)}>
-              <Text className="text-white font-bold text-sm">Confirm</Text>
-            </TouchableOpacity>
-          )}
-          {order.status === "confirmed" && (
-            <TouchableOpacity className="flex-1 bg-gray-900 py-2.5 rounded-xl items-center" onPress={() => onUpdateStatus(order, OrderStatus.fulfilled)}>
-              <Text className="text-white font-bold text-sm">Fulfill</Text>
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity className="w-11 h-11 rounded-xl bg-white border border-gray-200 items-center justify-center" onPress={() => onInitiatePayment(order)} disabled={isInitiatingPayment}>
-            <Smartphone size={16} color="#111827" />
-          </TouchableOpacity>
-          <TouchableOpacity className="w-11 h-11 rounded-xl bg-white border border-red-200 items-center justify-center" onPress={() => onUpdateStatus(order, OrderStatus.cancelled)}>
-            <Trash2 size={16} color="#dc2626" />
-          </TouchableOpacity>
-        </View>
-      </CardContent>
-    </Card>
+          <View className="flex-row gap-2">
+            {order.status === "draft" && (
+              <TouchableOpacity className="flex-1 bg-gray-900 py-2.5 rounded-xl items-center" onPress={(e) => { e.stopPropagation(); onUpdateStatus(order, OrderStatus.confirmed); }}>
+                <Text className="text-white font-bold text-sm">Confirm</Text>
+              </TouchableOpacity>
+            )}
+            {order.status === "confirmed" && (
+              <TouchableOpacity className="flex-1 bg-gray-900 py-2.5 rounded-xl items-center" onPress={(e) => { e.stopPropagation(); onUpdateStatus(order, OrderStatus.fulfilled); }}>
+                <Text className="text-white font-bold text-sm">Fulfill</Text>
+              </TouchableOpacity>
+            )}
+            {showMpesa ? (
+              <TouchableOpacity className="w-11 h-11 rounded-xl bg-white border border-gray-200 items-center justify-center" onPress={(e) => { e.stopPropagation(); onInitiatePayment(order); }} disabled={isInitiatingPayment}>
+                <Smartphone size={16} color="#111827" />
+              </TouchableOpacity>
+            ) : (
+              <View className="w-11 h-11 rounded-xl bg-gray-100 border border-gray-200 items-center justify-center opacity-50">
+                <Smartphone size={16} color="#9ca3af" />
+              </View>
+            )}
+            {!isFulfilled && !isCancelled && (
+              <TouchableOpacity className="w-11 h-11 rounded-xl bg-white border border-red-200 items-center justify-center" onPress={(e) => { e.stopPropagation(); onUpdateStatus(order, OrderStatus.cancelled); }}>
+                <Trash2 size={16} color="#dc2626" />
+              </TouchableOpacity>
+            )}
+          </View>
+          {isFulfilled && <Text className="text-[11px] text-gray-400 mt-2 text-center">Fulfilled — M-Pesa disabled</Text>}
+        </CardContent>
+      </Card>
+    </Pressable>
   );
 });
 OrderItem.displayName = "OrderItem";
@@ -128,7 +143,8 @@ export default function OrdersScreen() {
     setPaymentId(payment.id); Alert.alert("Payment sent", "M-Pesa request sent.");
   }, [customers, initiatePayment]);
 
-  const renderOrder = useCallback(({ item: order }: { item: Order }) => <OrderItem order={order} onUpdateStatus={handleUpdateStatus} onInitiatePayment={handleInitiateOrderPayment} isInitiatingPayment={isInitiatingPayment} formatCurrency={formatCurrency} formatDate={formatDate} />, [handleUpdateStatus, handleInitiateOrderPayment, isInitiatingPayment, formatCurrency, formatDate]);
+  const handlePressOrder = useCallback((order: Order) => router.push(`/orders/${order.id}` as any), [router]);
+  const renderOrder = useCallback(({ item: order }: { item: Order }) => <OrderItem order={order} onPress={handlePressOrder} onUpdateStatus={handleUpdateStatus} onInitiatePayment={handleInitiateOrderPayment} isInitiatingPayment={isInitiatingPayment} formatCurrency={formatCurrency} formatDate={formatDate} />, [handlePressOrder, handleUpdateStatus, handleInitiateOrderPayment, isInitiatingPayment, formatCurrency, formatDate]);
 
   if (productsLoading) return <View className="flex-1 bg-gray-50 items-center justify-center px-6"><ActivityIndicator color="#111827" /><Text className="text-sm text-gray-500 mt-2">Loading orders…</Text></View>;
 
