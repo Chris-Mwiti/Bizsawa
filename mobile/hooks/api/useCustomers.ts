@@ -52,16 +52,23 @@ export const useCustomers = () => {
   const getCustomers = useQuery({
     queryKey: ["customers", bid],
     queryFn: async () => {
-      if (local.length) return local;
       const res = await api.get<{ customers: Customer[] }>("/customers");
       return res.data.customers || [];
     },
     enabled: !!bid,
   });
 
+  // Merge server + pending local (offline creates must appear immediately)
   return useQuery({
     queryKey: ["customers", bid, "offline"],
-    queryFn: async () => local.length ? local : (getCustomers.data as any || []),
+    queryFn: async () => {
+      const server = getCustomers.data as any[] | undefined;
+      if (server === undefined) return local;
+      if (!local.length) return server;
+      const ids = new Set(server.map((s: any) => s.id));
+      const pending = local.filter((l: any) => !ids.has(l.id));
+      return pending.length ? [...server, ...pending] : server;
+    },
     enabled: !isLocalLoading,
   }) as any as { data: Customer[] };
 };
@@ -85,13 +92,21 @@ export const useCustomersQuery = () => {
   const q = useQuery({
     queryKey: ["customers", bid],
     queryFn: async () => {
-      if (local.length) return local;
       const res = await api.get<{ customers: Customer[] }>("/customers");
       return res.data.customers || [];
     },
     enabled: !!bid,
   });
-  return { data: local.length ? local : (q.data || []), isLoading: loading || q.isLoading, refetch: q.refetch, error: q.error } as any;
+  // Merge server + pending
+  const merged = (() => {
+    const server = q.data as any[] | undefined;
+    if (server === undefined) return local;
+    if (!local.length) return server;
+    const ids = new Set(server.map((s: any) => s.id));
+    const pending = local.filter((l: any) => !ids.has(l.id));
+    return pending.length ? [...server, ...pending] : server;
+  })();
+  return { data: merged, isLoading: q.isLoading && !local.length && merged.length === 0 ? true : loading && !q.data ? true : false, refetch: q.refetch, error: q.error } as any;
 };
 
 // Re-export for callers that do `const { data: customers } = useCustomers()` — keep Query shape
