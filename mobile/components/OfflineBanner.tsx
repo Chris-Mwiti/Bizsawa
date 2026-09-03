@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, Pressable, Animated } from 'react-native';
+import { View, Text, Pressable, Animated, Alert } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
-import { WifiOff, Wifi, CloudOff, CheckCircle2, X } from 'lucide-react-native';
+import { WifiOff, Wifi, CloudOff, CheckCircle2, X, RefreshCw, Trash2 } from 'lucide-react-native';
 import { useSync } from '../sync/SyncProvider';
+import { resetLocalDatabase, syncNow } from '../sync/client';
 
 export function OfflineBanner() {
   const [isConnected, setIsConnected] = useState<boolean | null>(true);
@@ -82,6 +83,32 @@ export function OfflineBanner() {
               <View className="flex-row items-center gap-1.5 mt-1">
                 <Wifi size={12} color="#047857" />
                 <Text className="text-[11px] font-bold tracking-widest text-emerald-600 uppercase">Back online • Synced</Text>
+              </View>
+              {/* One-tap heal for 0/NaN corruption — local was poisoned by old pull bug, server is clean */}
+              <View className="flex-row gap-2 mt-2">
+                <Pressable
+                  onPress={async () => {
+                    try { await syncNow(); Alert.alert('Synced', 'Offline data refreshed from server'); } catch (e: any) { Alert.alert('Sync failed', e?.message || 'Try again'); }
+                  }}
+                  className="px-3 py-1.5 rounded-full bg-emerald-600 flex-row items-center gap-1.5"
+                >
+                  <RefreshCw size={12} color="#fff" />
+                  <Text className="text-[11px] font-bold text-white">Refresh</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    Alert.alert('Reset offline data?', 'This clears corrupted local data (0/NaN) and re-pulls from server. Offline changes not yet synced will be lost.', [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Reset', style: 'destructive', onPress: async () => {
+                        try { await resetLocalDatabase(); await syncNow(); Alert.alert('Done', 'Local data cleared — display should now show correct values'); } catch (e: any) { Alert.alert('Failed', e?.message); }
+                      }},
+                    ]);
+                  }}
+                  className="px-3 py-1.5 rounded-full bg-white border border-emerald-200 flex-row items-center gap-1.5"
+                >
+                  <Trash2 size={12} color="#047857" />
+                  <Text className="text-[11px] font-bold text-emerald-700">Reset local</Text>
+                </Pressable>
               </View>
             </>
           )}
