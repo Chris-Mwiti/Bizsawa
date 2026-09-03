@@ -100,6 +100,11 @@ func (s *Service) pullTable(ctx context.Context, businessID uuid.UUID, table str
 	}
 	for _, row := range rows {
 		for k, v := range row {
+			// Handle []uint8 from pg driver (numeric/uuid as bytes) -> string
+			if b, ok := v.([]uint8); ok {
+				row[k] = string(b)
+				v = string(b)
+			}
 			if t, ok := v.(time.Time); ok {
 				row[k] = t.UnixMilli()
 				continue
@@ -111,7 +116,15 @@ func (s *Service) pullTable(ctx context.Context, businessID uuid.UUID, table str
 					row[k] = t.UnixMilli()
 				} else if ms, err := time.Parse("2006-01-02 15:04:05.999999999 -0700 MST", s); err == nil {
 					row[k] = ms.UnixMilli()
+				} else if s == "" || s == "0" {
+					row[k] = time.Now().UnixMilli()
 				}
+				continue
+			}
+			// Ensure Decimal numerics that arrived as []uint8 are now strings for Watermelon (which expects string for price/total)
+			if vStr, ok := row[k].(string); ok {
+				// keep as string for Watermelon string columns (amount/total/price)
+				row[k] = vStr
 			}
 		}
 		// Determine created vs updated by created_at (now number)
@@ -295,9 +308,14 @@ func asTime(v any) *time.Time {
 	}
 	switch x := v.(type) {
 	case time.Time:
+		if x.UnixMilli() == 0 {
+			return nil
+		}
 		return &x
 	case float64:
-		// Watermelon sends ms; handle both ms and seconds (seconds < 1e12)
+		if x == 0 || x == 1 {
+			return nil
+		}
 		if x > 1e12 {
 			t := time.UnixMilli(int64(x))
 			return &t
@@ -309,30 +327,57 @@ func asTime(v any) *time.Time {
 		if x == 0 {
 			return nil
 		}
+		if x < 1000 {
+			return nil
+		}
 		t := time.UnixMilli(int64(x))
+		if t.UnixMilli() == 0 {
+			return nil
+		}
 		return &t
 	case int64:
+		if x == 0 || x == 1 {
+			return nil
+		}
 		if x > 1e12 {
 			t := time.UnixMilli(x)
 			return &t
 		}
-		t := time.Unix(x, 0)
-		return &t
-	case int:
-		return asTime(float64(x))
-	case string:
-		if x == "" {
+		if x < 1000 {
 			return nil
 		}
-		// Try RFC3339 first, then ms string, then seconds string
-		if t, err := time.Parse(time.RFC3339, x); err == nil {
-			return &t
+		t := time.Unix(x, 0)
+		if t.UnixMilli() == 0 {
+			return nil
 		}
-		if t, err := time.Parse(time.RFC3339Nano, x); err == nil {
-			return &t
+		return &t
+	case int:
+		if x == 0 {
+			return nil
+		}
+		return asTime(float64(x))
+	case string:
+		trimmed := strings.TrimSpace(x)
+		if trimmed == "" || trimmed == "0" || trimmed == "local" || strings.ToLower(trimmed) == "nan" {
+			return nil
+		}
+		if t, err := time.Parse(time.RFC3339, trimmed); err == nil {
+			if t.UnixMilli() != 0 {
+				return &t
+			}
+			return nil
+		}
+		if t, err := time.Parse(time.RFC3339Nano, trimmed); err == nil {
+			if t.UnixMilli() != 0 {
+				return &t
+			}
+			return nil
 		}
 		var ms int64
-		if _, err := fmt.Sscan(x, &ms); err == nil {
+		if _, err := fmt.Sscan(trimmed, &ms); err == nil {
+			if ms == 0 {
+				return nil
+			}
 			return asTime(float64(ms))
 		}
 	}
@@ -412,7 +457,7 @@ func (s *Service) insertRecord(tx *gorm.DB, businessID uuid.UUID, userID uuid.UU
 		if isTimestampColumn(k) {
 			if t := asTime(v); t != nil {
 				rec[k] = *t
-			} else if v == nil {
+			} else {
 				delete(rec, k)
 			}
 		}
