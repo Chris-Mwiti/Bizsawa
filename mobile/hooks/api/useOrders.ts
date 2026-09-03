@@ -10,6 +10,7 @@ import { useBusinessContext } from "../../contexts/BusinessContext";
 import { toISO, nowMillis } from "../../lib/syncDates";
 
 export enum OrderStatus { draft = "draft", confirmed = "confirmed", fulfilled = "fulfilled", cancelled = "cancelled", refunded = "refunded", drafted = "draft", created = "confirmed", pending = "draft", paid = "fulfilled", canceled = "cancelled", failed = "cancelled" }
+
 export interface CreateOrderInput { customerId?: UUID | null; paymentMethod?: string; orderItems?: { productId: UUID; quantity: number | string; unitPrice?: number | string }[]; lines?: CreateOrderRequest["lines"]; }
 export interface UpdateOrderInput { status?: OrderStatus; customerPhone?: string; }
 export interface UseOrdersOptions { limit?: number; status?: OrderStatus[]; }
