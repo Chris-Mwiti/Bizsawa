@@ -6,7 +6,6 @@ import { database } from "../../db/database";
 import { v4 as uuidv4 } from "uuid";
 import { useBusinessContext } from "../../contexts/BusinessContext";
 import { Q } from "@nozbe/watermelondb";
-import { nowMillis } from "../../lib/syncDates";
 import { useEffect, useState } from "react";
 
 // Offline-first wrapper — Phase 2.2 (§3.6): all local writes go through WatermelonDB writers
@@ -50,11 +49,13 @@ export const useProducts = () => {
   const { activeBusinessId } = (() => { try { return useBusinessContext() as any; } catch { return { activeBusinessId: null }; } })();
   const bid = activeBusinessId || "";
 
+  // Local observe fallback — example for offline-first reads (kept alongside API for migration)
   const [localProducts, setLocalProducts] = useState<Product[]>([]);
   useEffect(() => {
     if (!bid) { setLocalProducts([]); return; }
     const col: any = (database as any).get("products");
     const sub = col.query(Q.where("business_id", bid)).observe().subscribe((rows: any[]) => {
+      // map raw Watermelon rows to Product shape
       setLocalProducts(rows.map((r: any) => ({ id: r.id, businessId: r.businessId, name: r.name, category: r.category, price: Number(r.price), cost: Number(r.cost) } as any)));
     });
     return () => sub.unsubscribe();
@@ -68,11 +69,13 @@ export const useProducts = () => {
       const res = await api.get<{ products: BackendProduct[] }>("/products");
       return (res.data.products || []).map(mapProduct);
     },
+    enabled: !!bid,
   });
 
   const createProduct = useMutation({
     mutationFn: async (data: CreateProductInput) => {
       if (!bid) throw new Error("Select a business first");
+      // §3.6: never call API directly — write to Watermelon first, sync pushes
       const id = uuidv4();
       await (database as any).write(async () => {
         const col: any = (database as any).get("products");
@@ -118,7 +121,7 @@ export const useProducts = () => {
     mutationFn: async (id: UUID) => {
       await (database as any).write(async () => {
         const rec: any = await (database as any).get("products").find(id);
-        await rec.update((r: any) => { r.deletedAt = nowMillis(); });
+        await rec.update((r: any) => { r.deletedAt = Date.now(); });
         await rec.markAsDeleted();
       });
       import("../../sync/client").then((m) => m.syncNow().catch(() => {}));

@@ -3,43 +3,9 @@ import NetInfo from '@react-native-community/netinfo'
 import { database } from '../db/database'
 import { api } from '../lib/api'
 import { v4 as uuidv4 } from 'uuid'
-import AsyncStorage from '@react-native-async-storage/async-storage'
-import { AUTH_STORAGE_KEYS } from '../lib/api'
-
-// One-time repair for legacy local records that were created with placeholder "local" (pre-fix)
-async function repairLocalPlaceholders() {
-  try {
-    const bid = await AsyncStorage.getItem(AUTH_STORAGE_KEYS.businessId)
-    const uid = await AsyncStorage.getItem(AUTH_STORAGE_KEYS.userId)
-    if (!bid) return
-    // Tables that may contain placeholder business_id / staff_id
-    const tables = ['sales', 'sale_lines', 'products', 'customers', 'orders', 'order_lines', 'expenses', 'invoices', 'invoice_lines', 'inventory_items', 'stock_movements']
-    await (database as any).write(async () => {
-      for (const tbl of tables) {
-        try {
-          const col: any = (database as any).get(tbl)
-          const bad = await col.query().fetch() as any[]
-          for (const rec of bad) {
-            const raw = rec._raw as any
-            let needs = false
-            if (raw.business_id === 'local' || raw.business_id === '' || raw.tenant_id === 'local') needs = true
-            if (raw.staff_id === 'local') needs = true
-            if (!needs) continue
-            await rec.update((r: any) => {
-              if (r.businessId === 'local' || r.businessId === '') r.businessId = bid
-              if ('tenantId' in r && (r.tenantId === 'local' || r.tenantId === '')) (r as any).tenantId = bid
-              if ('staffId' in r && r.staffId === 'local' && uid) r.staffId = uid
-            })
-          }
-        } catch {}
-      }
-    })
-  } catch {}
-}
 
 // WatermelonDB synchronize() wired to Brief §5 endpoints — single source of truth while offline is local SQLite
 export async function syncNow() {
-  await repairLocalPlaceholders()
   await synchronize({
     database: database as any,
     pullChanges: async ({ lastPulledAt, schemaVersion, migration }) => {
