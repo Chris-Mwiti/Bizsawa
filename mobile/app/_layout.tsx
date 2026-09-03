@@ -8,6 +8,7 @@ import tamaguiConfig from "../tamagui.config";
 import { AuthProvider } from "../contexts/AuthContext";
 import { BusinessProvider } from "../contexts/BusinessContext";
 import { SyncProvider } from "../sync/SyncProvider";
+import { OfflineBanner } from "../components/OfflineBanner";
 
 export default function RootLayout() {
   const [queryClient] = useState(
@@ -27,6 +28,7 @@ export default function RootLayout() {
         <AuthProvider>
           <BusinessProvider>
             <SyncProvider>
+              <OfflineBanner />
               <Stack screenOptions={{ headerShown: false }}>
                 <Stack.Screen name="auth/login" options={{ headerShown: false }} />
                 <Stack.Screen name="auth/register" options={{ headerShown: false }} />

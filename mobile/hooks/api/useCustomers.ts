@@ -20,7 +20,7 @@ function mapRawToCustomer(raw: any): Customer {
     phone: raw.phone,
     email: raw.email,
     address: raw.address,
-    tags: raw.tags ? JSON.parse(raw.tags) : [],
+    tags: raw.tags ? (typeof raw.tags === "string" ? JSON.parse(raw.tags) : raw.tags) : [],
     notes: raw.notes,
     loyaltyPoints: raw.loyalty_points ?? 0,
     totalSpend: raw.total_spend ?? "0",
@@ -37,7 +37,10 @@ export const useCustomers = () => {
   const [isLocalLoading, setIsLocalLoading] = useState(true);
 
   useEffect(() => {
-    if (!bid) { setLocal([]); setIsLocalLoading(false); return; }
+    if (!bid) { 
+      setLocal([]); 
+      setIsLocalLoading(false); return; 
+    }
     const col: any = (database as any).get("customers");
     const sub = col.query(Q.where("business_id", bid)).observe().subscribe((rows: any[]) => {
       setLocal(rows.map(mapRawToCustomer));
@@ -96,9 +99,10 @@ export const useCustomersQuery = () => {
 export const useCreateCustomer = () => {
   const queryClient = useQueryClient();
   const { activeBusinessId } = (() => { try { return useBusinessContext() as any; } catch { return { activeBusinessId: null }; } })();
-  const bid = activeBusinessId || "local";
+  const bid = activeBusinessId || "";
   return useMutation({
     mutationFn: async (data: CreateCustomerRequest) => {
+      if (!bid) throw new Error("Select a business first");
       const id = uuidv4();
       await (database as any).write(async () => {
         const col: any = (database as any).get("customers");
@@ -106,7 +110,7 @@ export const useCreateCustomer = () => {
           rec._raw.id = id;
           rec.businessId = bid;
           rec.name = data.name.trim();
-          rec.phone = data.phone?.trim() || null;
+          rec.phone = (data as any).phone?.trim() || null;
           rec.email = (data as any).email?.trim() || null;
           rec.address = (data as any).address?.trim() || null;
           rec.tags = JSON.stringify((data as any).tags || []);
@@ -131,9 +135,12 @@ export const useUpdateCustomer = () => {
       await (database as any).write(async () => {
         const rec: any = await (database as any).get("customers").find(id);
         await rec.update((r: any) => {
-          if (payload.name) r.name = payload.name.trim();
-          if (payload.phone !== undefined) r.phone = payload.phone?.trim() || null;
+          if ((payload as any).name) r.name = (payload as any).name.trim();
+          if ((payload as any).phone !== undefined) r.phone = (payload as any).phone?.trim() || null;
           if ((payload as any).email !== undefined) r.email = (payload as any).email?.trim() || null;
+          if ((payload as any).address !== undefined) r.address = (payload as any).address?.trim() || null;
+          if ((payload as any).tags !== undefined) r.tags = JSON.stringify((payload as any).tags || []);
+          if ((payload as any).notes !== undefined) r.notes = (payload as any).notes || null;
           r.syncVersion = (r.syncVersion || 1) + 1;
         });
       });

@@ -306,12 +306,23 @@ export interface InitiatePaymentRequest {
 export function toDecimalString(value: number | string | null | undefined, fallback = "0"): DecimalString {
   if (value === null || value === undefined || value === "") return fallback;
   if (typeof value === "number") return Number.isFinite(value) ? String(value) : fallback;
-  return value.trim() || fallback;
+  const str = String(value).trim();
+  if (str === "" || str.toLowerCase() === "nan" || str.toLowerCase() === "local") return fallback;
+  const n = Number(str);
+  if (!Number.isFinite(n)) return fallback;
+  return str;
 }
 
 export function toNumber(value: DecimalString | number | null | undefined): number {
-  if (typeof value === "number") return value;
-  const parsed = Number(value ?? 0);
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  if (value == null || value === "") return 0;
+  // Handle Decimal objects from Watermelon/SQLite or base64 edge
+  if (typeof value === "object") {
+    try { const v = (value as any).toString(); const n = Number(v); return Number.isFinite(n) ? n : 0; } catch { return 0; }
+  }
+  const str = String(value).trim();
+  if (str === "" || str.toLowerCase() === "nan" || str.toLowerCase() === "local") return 0;
+  const parsed = Number(str);
   return Number.isFinite(parsed) ? parsed : 0;
 }
 

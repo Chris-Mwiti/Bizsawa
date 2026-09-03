@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -98,11 +99,32 @@ func (s *Service) pullTable(ctx context.Context, businessID uuid.UUID, table str
 		return tc, err
 	}
 	for _, row := range rows {
-		// Convert all time.Time values to Unix milliseconds for Watermelon/RN (Watermelon schema uses number for dates)
-		// Watermelon expects numbers, not RFC3339 strings — prevents "date value out of bounds" on reload
 		for k, v := range row {
+			// Handle []uint8 from pg driver (numeric/uuid as bytes) -> string
+			if b, ok := v.([]uint8); ok {
+				row[k] = string(b)
+				v = string(b)
+			}
 			if t, ok := v.(time.Time); ok {
 				row[k] = t.UnixMilli()
+				continue
+			}
+			if s, ok := v.(string); ok && isTimestampColumn(k) {
+				if t, err := time.Parse(time.RFC3339Nano, s); err == nil {
+					row[k] = t.UnixMilli()
+				} else if t, err := time.Parse(time.RFC3339, s); err == nil {
+					row[k] = t.UnixMilli()
+				} else if ms, err := time.Parse("2006-01-02 15:04:05.999999999 -0700 MST", s); err == nil {
+					row[k] = ms.UnixMilli()
+				} else if s == "" || s == "0" {
+					row[k] = time.Now().UnixMilli()
+				}
+				continue
+			}
+			// Ensure Decimal numerics that arrived as []uint8 are now strings for Watermelon (which expects string for price/total)
+			if vStr, ok := row[k].(string); ok {
+				// keep as string for Watermelon string columns (amount/total/price)
+				row[k] = vStr
 			}
 		}
 		// Determine created vs updated by created_at (now number)
@@ -139,6 +161,10 @@ func (s *Service) pullTable(ctx context.Context, businessID uuid.UUID, table str
 
 // Push applies version-counter check per record (§4). Mismatches go to conflicts, not applied. Whole batch in tx.
 func (s *Service) Push(ctx context.Context, businessID uuid.UUID, req PushRequest) (*PushResult, error) {
+	return s.PushWithUser(ctx, businessID, uuid.Nil, req)
+}
+
+func (s *Service) PushWithUser(ctx context.Context, businessID uuid.UUID, userID uuid.UUID, req PushRequest) (*PushResult, error) {
 	result := &PushResult{Applied: map[string][]string{}, Conflicts: []Conflict{}, Errors: map[string][]string{}}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for table, changes := range req.Changes {
@@ -167,9 +193,7 @@ func (s *Service) Push(ctx context.Context, businessID uuid.UUID, req PushReques
 					result.Applied[table] = append(result.Applied[table], idStr)
 					continue
 				}
-				// Insert — respect client-generated UUID, set business_id, sync_version=1
-				// Build dynamic insert from rec map: we insert as JSONB? Simpler: use raw insert with json
-				if err := s.insertRecord(tx, businessID, table, rec); err != nil {
+				if err := s.insertRecord(tx, businessID, userID, table, rec); err != nil {
 					result.Errors[table] = append(result.Errors[table], err.Error())
 				} else {
 					result.Applied[table] = append(result.Applied[table], idStr)
@@ -284,9 +308,14 @@ func asTime(v any) *time.Time {
 	}
 	switch x := v.(type) {
 	case time.Time:
+		if x.UnixMilli() == 0 {
+			return nil
+		}
 		return &x
 	case float64:
-		// Watermelon sends ms; handle both ms and seconds (seconds < 1e12)
+		if x == 0 || x == 1 {
+			return nil
+		}
 		if x > 1e12 {
 			t := time.UnixMilli(int64(x))
 			return &t
@@ -298,52 +327,138 @@ func asTime(v any) *time.Time {
 		if x == 0 {
 			return nil
 		}
+		if x < 1000 {
+			return nil
+		}
 		t := time.UnixMilli(int64(x))
+		if t.UnixMilli() == 0 {
+			return nil
+		}
 		return &t
 	case int64:
+		if x == 0 || x == 1 {
+			return nil
+		}
 		if x > 1e12 {
 			t := time.UnixMilli(x)
 			return &t
 		}
-		t := time.Unix(x, 0)
-		return &t
-	case int:
-		return asTime(float64(x))
-	case string:
-		if x == "" {
+		if x < 1000 {
 			return nil
 		}
-		// Try RFC3339 first, then ms string, then seconds string
-		if t, err := time.Parse(time.RFC3339, x); err == nil {
-			return &t
+		t := time.Unix(x, 0)
+		if t.UnixMilli() == 0 {
+			return nil
 		}
-		if t, err := time.Parse(time.RFC3339Nano, x); err == nil {
-			return &t
+		return &t
+	case int:
+		if x == 0 {
+			return nil
+		}
+		return asTime(float64(x))
+	case string:
+		trimmed := strings.TrimSpace(x)
+		if trimmed == "" || trimmed == "0" || trimmed == "local" || strings.ToLower(trimmed) == "nan" {
+			return nil
+		}
+		if t, err := time.Parse(time.RFC3339, trimmed); err == nil {
+			if t.UnixMilli() != 0 {
+				return &t
+			}
+			return nil
+		}
+		if t, err := time.Parse(time.RFC3339Nano, trimmed); err == nil {
+			if t.UnixMilli() != 0 {
+				return &t
+			}
+			return nil
 		}
 		var ms int64
-		if _, err := fmt.Sscan(x, &ms); err == nil {
+		if _, err := fmt.Sscan(trimmed, &ms); err == nil {
+			if ms == 0 {
+				return nil
+			}
 			return asTime(float64(ms))
 		}
 	}
 	return nil
 }
 
-func (s *Service) insertRecord(tx *gorm.DB, businessID uuid.UUID, table string, rec map[string]any) error {
+func isUUIDColumn(k string) bool {
+	return k == "id" || strings.HasSuffix(k, "_id") || k == "staffId" || k == "businessId" || k == "tenantId"
+}
+
+func isValidUUID(v any) bool {
+	s, ok := v.(string)
+	if !ok || s == "" || s == "local" || s == "null" {
+		return false
+	}
+	_, err := uuid.Parse(s)
+	return err == nil
+}
+
+func (s *Service) insertRecord(tx *gorm.DB, businessID uuid.UUID, userID uuid.UUID, table string, rec map[string]any) error {
+	clean := map[string]any{}
+	for k, v := range rec {
+		if len(k) > 0 && k[0] == '_' {
+			continue
+		}
+		clean[k] = v
+	}
+	rec = clean
+	// Sanitize UUID columns — frontend historically sent "local" or "" for business_id/staff_id when offline before auth
+	for k, v := range rec {
+		if isUUIDColumn(k) && !isValidUUID(v) {
+			if vStr, ok := v.(string); ok && (vStr == "local" || vStr == "" || vStr == "null") {
+				// Replace known placeholders with correct context IDs
+				switch k {
+				case "business_id", "tenant_id":
+					rec[k] = businessID.String()
+				case "staff_id", "staffId", "created_by":
+					if userID != uuid.Nil {
+						rec[k] = userID.String()
+					} else {
+						delete(rec, k)
+					}
+				case "customer_id", "product_id", "sale_id", "order_id", "invoice_id", "orderId", "productId":
+					// nullable FKs — drop invalid placeholder, let DB handle NULL
+					delete(rec, k)
+				default:
+					delete(rec, k)
+				}
+				continue
+			}
+			// Also drop any other invalid UUID string to avoid 22P02
+			if sStr, ok := v.(string); ok {
+				if _, err := uuid.Parse(sStr); err != nil {
+					delete(rec, k)
+				}
+			}
+		}
+	}
 	if _, ok := rec["business_id"]; !ok {
 		rec["business_id"] = businessID.String()
 	}
 	if _, ok := rec["tenant_id"]; !ok {
 		rec["tenant_id"] = businessID.String()
 	}
+	// Ensure required staff_id for sales — fallback to authenticated user
+	if table == "sales" {
+		if _, ok := rec["staff_id"]; !ok {
+			if userID != uuid.Nil {
+				rec["staff_id"] = userID.String()
+			} else {
+				rec["staff_id"] = businessID.String()
+			}
+		}
+	}
 	rec["sync_version"] = 1
-	// Normalize timestamp fields from Watermelon (numbers ms) to Go time.Time for Postgres timestamptz
-	// Watermelon sends dates as numbers (ms since epoch), backend expects time.Time
 	for k, v := range rec {
 		if isTimestampColumn(k) {
 			if t := asTime(v); t != nil {
 				rec[k] = *t
-			} else if v == nil {
-				delete(rec, k) // let DB default handle null
+			} else {
+				delete(rec, k)
 			}
 		}
 	}
@@ -354,7 +469,7 @@ func (s *Service) updateRecord(tx *gorm.DB, businessID uuid.UUID, table string, 
 	id, _ := rec["id"].(string)
 	update := map[string]any{}
 	for k, v := range rec {
-		if k == "id" || k == "sync_version" || k == "syncVersion" || k == "_status" || k == "_changed" {
+		if k == "id" || k == "sync_version" || k == "syncVersion" || (len(k) > 0 && k[0] == '_') {
 			continue
 		}
 		if isTimestampColumn(k) {
@@ -373,12 +488,17 @@ func (s *Service) updateRecord(tx *gorm.DB, businessID uuid.UUID, table string, 
 }
 
 func (s *Service) ForceApplyClientPayload(ctx context.Context, businessID uuid.UUID, table string, recordID uuid.UUID, payload map[string]any) error {
-	// For conflict resolution: keep client's version, force apply and bump version
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		update := map[string]any{}
 		for k, v := range payload {
-			if k == "id" || k == "sync_version" || k == "syncVersion" || k == "_status" || k == "_changed" || k == "business_id" || k == "tenant_id" {
+			if k == "id" || k == "sync_version" || k == "syncVersion" || k == "business_id" || k == "tenant_id" || (len(k) > 0 && k[0] == '_') {
 				continue
+			}
+			if isTimestampColumn(k) {
+				if t := asTime(v); t != nil {
+					update[k] = *t
+					continue
+				}
 			}
 			update[k] = v
 		}

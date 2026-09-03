@@ -19,9 +19,6 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const stop = startSyncEngine()
     const unsub = NetInfo.addEventListener((s) => setState(s.isConnected ? 'online' : 'offline'))
-    // wrap syncNow to track state
-    const originalSync = syncNow
-    // hook into sync lifecycle via monkey patch? keep simple: poll lastSyncAt on interval
     return () => {
       stop()
       unsub()

@@ -52,6 +52,7 @@ func (h *Handler) Push(w http.ResponseWriter, r *http.Request) {
 		sharedhttp.Error(w, apperrors.ErrForbidden.WithMessage("business context required"))
 		return
 	}
+	uid, _ := middleware.UserIDFromCtx(r.Context())
 	var req PushRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		sharedhttp.Error(w, err)
@@ -60,7 +61,7 @@ func (h *Handler) Push(w http.ResponseWriter, r *http.Request) {
 	if req.Changes == nil {
 		req.Changes = map[string]TableChanges{}
 	}
-	res, err := h.svc.Push(r.Context(), bid, req)
+	res, err := h.svc.PushWithUser(r.Context(), bid, uid, req)
 	if err != nil {
 		sharedhttp.Error(w, err)
 		return

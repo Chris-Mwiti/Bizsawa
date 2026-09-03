@@ -14,7 +14,7 @@ function toInvoiceRequest(input: CreateInvoiceInput) {
   return { customerId: input.customerId, dueAt: input.dueAt, lines: input.lines.map((l) => ({ description: l.description, quantity: toDecimalString(l.quantity), unitPrice: toDecimalString(l.unitPrice), taxRuleId: l.taxRuleId })), notes: input.notes };
 }
 function mapRaw(raw: any): InvoiceListItem {
-  return { id: raw.id, invoiceNumber: raw.invoice_number, customerName: raw.customer_id || "Customer", status: raw.status, total: raw.total, amountDue: raw.amount_due, currency: raw.currency, dueAt: raw.due_at ? toISO(raw.due_at) : new Date().toISOString(), createdAt: toISO(raw.created_at) } as any;
+  return { id: raw.id, invoiceNumber: raw.invoice_number, customerName: raw.customer_id || "Customer", status: raw.status, total: raw.total, amountDue: raw.amount_due, currency: raw.currency, dueAt: toISO(raw.due_at), createdAt: toISO(raw.created_at) } as any;
 }
 
 export const useInvoices = () => {
@@ -64,7 +64,7 @@ export const useInvoices = () => {
             amountPaid: raw.amount_paid,
             amountDue: raw.amount_due,
             currency: raw.currency,
-            dueAt: raw.due_at ? toISO(raw.due_at) : new Date().toISOString(),
+            dueAt: toISO(raw.due_at),
             createdAt: toISO(raw.created_at),
             lines: lines.map((l: any) => ({ id: l.id, description: l.description, quantity: l.quantity, unitPrice: l.unitPrice, lineTotal: l.lineTotal })),
             payments: [],
