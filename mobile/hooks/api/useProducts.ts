@@ -6,7 +6,7 @@ import { database } from "../../db/database";
 import { v4 as uuidv4 } from "uuid";
 import { useBusinessContext } from "../../contexts/BusinessContext";
 import { Q } from "@nozbe/watermelondb";
-import { toISO, toMillis, nowMillis } from "../../lib/syncDates"; 
+import { nowMillis } from "../../lib/syncDates";
 import { useEffect, useState } from "react";
 
 // Offline-first wrapper — Phase 2.2 (§3.6): all local writes go through WatermelonDB writers

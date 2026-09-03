@@ -15,7 +15,7 @@ export interface StockMovement { id: UUID; businessId: UUID; productId: UUID; qu
 export interface InventoryValuation { productId: UUID; quantity: number; }
 export interface AdjustStockInput { productId: UUID; quantityDelta: number | string; lowStockThreshold?: number | string; notes?: string; }
 
-function mapRawItem(raw: any): InventoryItem { return { id: raw.id, businessId: raw.business_id, productId: raw.product_id, quantity: toNumber(raw.quantity), lowStockThreshold: toNumber(raw.low_stock_threshold) } as any; }
+function mapRawItem(raw: any): InventoryItem { return { id: raw.id, businessId: raw.business_id, productId: raw.product_id, quantity: toNumber(raw.quantity), lowStockThreshold: toNumber(raw.low_stock_threshold), createdAt: toISO(raw.created_at), updatedAt: toISO(raw.updated_at) } as any; }
 function mapRawMovement(raw: any): StockMovement { return { id: raw.id, businessId: raw.business_id, productId: raw.product_id, quantityDelta: toNumber(raw.quantity_delta), movementType: raw.movement_type, notes: raw.notes, occurredAt: toISO(raw.occurred_at) } as any; }
 
 export const useInventory = () => {

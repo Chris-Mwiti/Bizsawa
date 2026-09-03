@@ -66,11 +66,11 @@ export function OfflineBanner() {
             <>
               <Text className="text-sm font-bold text-amber-900">You are offline</Text>
               <Text className="text-xs text-amber-700 mt-0.5">Offline mode enabled — changes are saved locally and will sync when you reconnect.</Text>
-              {syncState === 'pending' || syncState === 'syncing' ? (
+              {syncState === 'syncing' || syncState === 'conflict' ? (
                 <View className="flex-row items-center gap-1.5 mt-1">
                   <CloudOff size={12} color="#b45309" />
                   <Text className="text-[11px] font-bold tracking-widest text-amber-700 uppercase">
-                    {syncState === 'syncing' ? 'Syncing…' : 'Pending changes queued'}
+                    {syncState === 'syncing' ? 'Syncing…' : 'Conflicts need review'}
                   </Text>
                 </View>
               ) : null}
