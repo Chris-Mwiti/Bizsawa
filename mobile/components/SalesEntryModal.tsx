@@ -1,6 +1,7 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Modal, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
-import { Banknote, CreditCard, Plus, Smartphone } from "lucide-react-native";
+import { Banknote, CreditCard, Plus, Smartphone, WifiOff } from "lucide-react-native";
+import NetInfo from "@react-native-community/netinfo";
 import { toNumber } from "../lib/api-dtos";
 
 export interface DraftLine {
@@ -31,6 +32,18 @@ export function SalesEntryModal(props: {
   onClose: () => void;
   onSubmit: () => void;
 }) {
+  const [isOffline, setIsOffline] = useState(false);
+  useEffect(() => {
+    const unsub = NetInfo.addEventListener((s) => setIsOffline(!s.isConnected));
+    NetInfo.fetch().then((s) => setIsOffline(!s.isConnected));
+    return () => unsub();
+  }, []);
+  // Enforce cash when offline if user previously had mpesa/card selected
+  useEffect(() => {
+    if (isOffline && (props.paymentMethod === "mpesa" || props.paymentMethod === "card")) {
+      props.setPaymentMethod("cash");
+    }
+  }, [isOffline]);
   const selectedProduct = props.products.find((product) => product.id === props.selectedProductId);
   const formatCurrency = (amount: number) => `KES ${amount.toLocaleString("en-KE")}`;
 
@@ -61,25 +74,44 @@ export function SalesEntryModal(props: {
             ))}
           </View>
 
-          <Text className="font-bold text-gray-900 mb-2">Payment Method</Text>
+          <View className="flex-row items-center justify-between mb-2">
+            <Text className="font-bold text-gray-900">Payment Method</Text>
+            {isOffline && (
+              <View className="flex-row items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200">
+                <WifiOff size={12} color="#b45309" />
+                <Text className="text-[11px] font-bold tracking-widest text-amber-700">OFFLINE</Text>
+              </View>
+            )}
+          </View>
+          {isOffline && (
+            <View className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 mb-3 flex-row items-center gap-2">
+              <WifiOff size={14} color="#b45309" />
+              <Text className="text-xs text-amber-800 flex-1">M-Pesa and Card require internet. Only Cash is available offline.</Text>
+            </View>
+          )}
           <View className="flex-row gap-2 mb-4">
             {[
-              { id: "mpesa", label: "M-Pesa", icon: Smartphone },
-              { id: "cash", label: "Cash", icon: Banknote },
-              { id: "card", label: "Card", icon: CreditCard },
+              { id: "mpesa", label: "M-Pesa", icon: Smartphone, offline: true },
+              { id: "cash", label: "Cash", icon: Banknote, offline: false },
+              { id: "card", label: "Card", icon: CreditCard, offline: true },
             ].map((method) => {
               const Icon = method.icon;
               const active = props.paymentMethod === method.id;
+              const disabled = isOffline && method.offline;
               return (
                 <TouchableOpacity
                   key={method.id}
+                  disabled={disabled}
                   className={`flex-1 p-3 rounded-lg flex-row items-center justify-center border ${
-                    active ? "bg-green-50 border-green-500" : "bg-white border-gray-200"
+                    disabled ? "bg-gray-100 border-gray-200 opacity-50" : active ? "bg-green-50 border-green-500" : "bg-white border-gray-200"
                   }`}
-                  onPress={() => props.setPaymentMethod(method.id)}
+                  onPress={() => {
+                    if (disabled) return;
+                    props.setPaymentMethod(method.id);
+                  }}
                 >
-                  <Icon size={16} color={active ? "#16a34a" : "#6b7280"} />
-                  <Text className={`ml-2 font-medium ${active ? "text-green-700" : "text-gray-600"}`}>
+                  <Icon size={16} color={disabled ? "#9ca3af" : active ? "#16a34a" : "#6b7280"} />
+                  <Text className={`ml-2 font-medium ${disabled ? "text-gray-400" : active ? "text-green-700" : "text-gray-600"}`}>
                     {method.label}
                   </Text>
                 </TouchableOpacity>
