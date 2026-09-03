@@ -98,11 +98,19 @@ func (s *Service) pullTable(ctx context.Context, businessID uuid.UUID, table str
 		return tc, err
 	}
 	for _, row := range rows {
-		// Convert all time.Time values to Unix milliseconds for Watermelon/RN (Watermelon schema uses number for dates)
-		// Watermelon expects numbers, not RFC3339 strings — prevents "date value out of bounds" on reload
 		for k, v := range row {
 			if t, ok := v.(time.Time); ok {
 				row[k] = t.UnixMilli()
+				continue
+			}
+			if s, ok := v.(string); ok && isTimestampColumn(k) {
+				if t, err := time.Parse(time.RFC3339Nano, s); err == nil {
+					row[k] = t.UnixMilli()
+				} else if t, err := time.Parse(time.RFC3339, s); err == nil {
+					row[k] = t.UnixMilli()
+				} else if ms, err := time.Parse("2006-01-02 15:04:05.999999999 -0700 MST", s); err == nil {
+					row[k] = ms.UnixMilli()
+				}
 			}
 		}
 		// Determine created vs updated by created_at (now number)
@@ -373,12 +381,17 @@ func (s *Service) updateRecord(tx *gorm.DB, businessID uuid.UUID, table string, 
 }
 
 func (s *Service) ForceApplyClientPayload(ctx context.Context, businessID uuid.UUID, table string, recordID uuid.UUID, payload map[string]any) error {
-	// For conflict resolution: keep client's version, force apply and bump version
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		update := map[string]any{}
 		for k, v := range payload {
 			if k == "id" || k == "sync_version" || k == "syncVersion" || k == "_status" || k == "_changed" || k == "business_id" || k == "tenant_id" {
 				continue
+			}
+			if isTimestampColumn(k) {
+				if t := asTime(v); t != nil {
+					update[k] = *t
+					continue
+				}
 			}
 			update[k] = v
 		}
