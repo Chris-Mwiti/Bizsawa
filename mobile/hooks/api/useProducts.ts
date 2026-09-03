@@ -55,8 +55,7 @@ export const useProducts = () => {
     if (!bid) { setLocalProducts([]); return; }
     const col: any = (database as any).get("products");
     const sub = col.query(Q.where("business_id", bid)).observe().subscribe((rows: any[]) => {
-      // map raw Watermelon rows to Product shape
-      setLocalProducts(rows.map((r: any) => ({ id: r.id, businessId: r.businessId, name: r.name, category: r.category, price: Number(r.price), cost: Number(r.cost) } as any)));
+      setLocalProducts(rows.map((r: any) => ({ id: r.id, businessId: r.businessId, name: r.name, category: r.category, price: toNumber(r.price), cost: toNumber(r.cost) } as any)));
     });
     return () => sub.unsubscribe();
   }, [bid]);
