@@ -124,6 +124,45 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
     },
   });
 
+  const getOrder = (id: UUID) =>
+    useQuery({
+      queryKey: ["orders", id],
+      queryFn: async () => {
+        // Prefer local Watermelon first (offline)
+        try {
+          const rec: any = await (database as any).get("orders").find(id);
+          const raw = rec._raw;
+          const lineCol: any = (database as any).get("order_lines");
+          const lines = await lineCol.query(Q.where("order_id", id)).fetch() as any[];
+          return {
+            id: raw.id,
+            businessId: raw.business_id,
+            customerId: raw.customer_id,
+            status: raw.status,
+            subtotal: raw.subtotal,
+            taxAmount: raw.tax_amount,
+            total: raw.total,
+            paymentMethod: raw.payment_method,
+            createdAt: toISO(raw.created_at),
+            updatedAt: toISO(raw.updated_at),
+            lines: lines.map((l: any) => ({
+              id: l.id,
+              orderId: l._raw.order_id,
+              productId: l._raw.product_id,
+              description: l._raw.description || "",
+              quantity: l._raw.quantity,
+              unitPrice: l._raw.unit_price,
+              lineTotal: l._raw.line_total,
+            })),
+          } as any;
+        } catch {
+          const res = await api.get(`/orders/${id}`);
+          return (res.data as any).order || res.data;
+        }
+      },
+      enabled: !!id && !!bid,
+    });
+
   return {
     orders, total, limit, offset, hasNextPage, hasPreviousPage, nextPage, previousPage, resetPagination,
     isLoading: isLocalLoading || (getOrders.isLoading as any),
@@ -136,5 +175,6 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
     isUpdating: updateOrder.isPending,
     deleteOrder: deleteOrder.mutateAsync,
     isDeleting: deleteOrder.isPending,
+    getOrder,
   };
 };
