@@ -63,8 +63,6 @@ export const useProducts = () => {
   const getProducts = useQuery({
     queryKey: ["products", bid],
     queryFn: async () => {
-      // Prefer local if we have synced data, else pull from API (first sync will populate local)
-      if (localProducts.length) return localProducts as any;
       const res = await api.get<{ products: BackendProduct[] }>("/products");
       return (res.data.products || []).map(mapProduct);
     },
@@ -128,9 +126,19 @@ export const useProducts = () => {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["products"] }),
   });
 
+  // Offline-first merge: server is source of truth for synced rows (heals 0/NaN), but pending local creates (ids not on server) must appear immediately.
+  // Without this, `getProducts.data` shadowing `localProducts` hides newly created offline records until push→pull completes.
+  const productsData = (() => {
+    const server = getProducts.data as any[] | undefined;
+    if (server === undefined) return (localProducts as any);
+    if (!localProducts.length) return server;
+    const serverIds = new Set(server.map((s: any) => s.id));
+    const pending = (localProducts as any[]).filter((l: any) => !serverIds.has(l.id));
+    return pending.length ? [...server, ...pending] : server;
+  })();
   return {
-    products: localProducts.length ? (localProducts as any) : (getProducts.data || []),
-    isLoading: getProducts.isLoading,
+    products: productsData || [],
+    isLoading: getProducts.isLoading && !localProducts.length && productsData.length === 0,
     error: (getProducts.error as ApiError)?.friendlyMessage || null,
     refetch: getProducts.refetch,
     createProduct: createProduct.mutateAsync,

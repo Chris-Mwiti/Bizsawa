@@ -43,7 +43,6 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
   const getOrders = useQuery({
     queryKey: ["orders", { limit, offset, status: options.status, bid }],
     queryFn: async () => {
-      if (local.length) return { orders: local, total: local.length } as any;
       const res = await api.get<{ orders: Order[]; total?: number }>("/orders", { params: { limit, offset } });
       return res.data;
     },
@@ -51,8 +50,17 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
     placeholderData: (prev: any) => prev,
   });
 
-  const orders = local.length ? local.slice(offset, offset + limit) : (getOrders.data?.orders ?? []);
-  const total = local.length ? local.length : (getOrders.data?.total ?? orders.length);
+  // Offline-first merge: server clean heals 0/NaN, but pending local orders must appear immediately
+  const allOrdersMerged = (() => {
+    const server = getOrders.data?.orders as any[] | undefined;
+    if (server === undefined) return local;
+    if (!local.length) return server;
+    const serverIds = new Set(server.map((s: any) => s.id));
+    const pending = local.filter((l: any) => !serverIds.has(l.id));
+    return pending.length ? [...server, ...pending] : server;
+  })();
+  const orders = allOrdersMerged.slice(offset, offset + limit);
+  const total = getOrders.data?.total !== undefined ? (getOrders.data.total as any) + (allOrdersMerged.length - (getOrders.data?.orders?.length || 0)) : allOrdersMerged.length;
   const hasNextPage = offset + orders.length < total;
   const hasPreviousPage = offset > 0;
   const nextPage = () => { if (hasNextPage) setOffset((p) => p + limit); };
@@ -166,7 +174,7 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
 
   return {
     orders, total, limit, offset, hasNextPage, hasPreviousPage, nextPage, previousPage, resetPagination,
-    isLoading: isLocalLoading || (getOrders.isLoading as any),
+    isLoading: (getOrders.isLoading as any) && !local.length,
     isFetching: getOrders.isFetching as any,
     error: getOrders.error,
     refetch: getOrders.refetch,

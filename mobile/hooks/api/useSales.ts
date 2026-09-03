@@ -59,7 +59,6 @@ export const useSales = () => {
   const getSales = useQuery({
     queryKey: ["sales", bid],
     queryFn: async () => {
-      if (local.length) return local;
       const res = await api.get<{ sales: Sale[] }>("/sales");
       return res.data.sales || [];
     },
@@ -125,10 +124,18 @@ export const useSales = () => {
     },
   });
 
-  const sales = local.length ? local : (getSales.data || []);
+  // Offline-first merge: server clean heals 0/NaN, but pending local sales (not yet on server) must appear immediately
+  const sales = (() => {
+    const server = getSales.data as any[] | undefined;
+    if (server === undefined) return local;
+    if (!local.length) return server;
+    const serverIds = new Set(server.map((s: any) => s.id));
+    const pending = local.filter((l: any) => !serverIds.has(l.id));
+    return pending.length ? [...server, ...pending] : server;
+  })();
   return {
     sales,
-    isLoading: isLocalLoading || getSales.isLoading,
+    isLoading: (getSales.isLoading && !local.length) || (isLocalLoading && !getSales.data),
     error: (getSales.error as ApiError)?.friendlyMessage || null,
     refetch: getSales.refetch,
     createSale: createSale.mutateAsync,

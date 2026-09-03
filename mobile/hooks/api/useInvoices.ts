@@ -36,7 +36,6 @@ export const useInvoices = () => {
   const getInvoices = useQuery({
     queryKey: ["invoices", bid],
     queryFn: async () => {
-      if (local.length) return local;
       const res = await api.get<{ invoices: InvoiceListItem[] }>("/invoices");
       return res.data.invoices || [];
     },
@@ -138,10 +137,18 @@ export const useInvoices = () => {
     onSuccess: (_, { id }) => { queryClient.invalidateQueries({ queryKey: ["invoices"] }); queryClient.invalidateQueries({ queryKey: ["invoices", id] }); },
   });
 
-  const invoices = local.length ? local : (getInvoices.data || []);
+  // Offline-first merge: server clean heals 0/NaN, pending local invoices must appear immediately
+  const invoices = (() => {
+    const server = getInvoices.data as any[] | undefined;
+    if (server === undefined) return local;
+    if (!local.length) return server;
+    const serverIds = new Set(server.map((s: any) => s.id));
+    const pending = local.filter((l: any) => !serverIds.has(l.id));
+    return pending.length ? [...server, ...pending] : server;
+  })();
   return {
     invoices,
-    isLoading: isLocalLoading || getInvoices.isLoading,
+    isLoading: getInvoices.isLoading && !local.length,
     error: (getInvoices.error as ApiError)?.friendlyMessage || null,
     refetch: getInvoices.refetch,
     getInvoice,
