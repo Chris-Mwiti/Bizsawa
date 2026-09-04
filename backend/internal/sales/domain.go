@@ -28,12 +28,13 @@ func (Sale) TableName() string { return "sales" }
 
 type SaleLine struct {
 	db.BaseModel
-	BusinessID uuid.UUID       `gorm:"type:uuid;not null;index" json:"businessId"`
-	SaleID     uuid.UUID       `gorm:"type:uuid;not null;index" json:"saleId"`
-	ProductID  uuid.UUID       `gorm:"type:uuid;not null;index" json:"productId"`
-	Quantity   decimal.Decimal `gorm:"type:numeric(18,3);not null" json:"quantity"`
-	UnitPrice  decimal.Decimal `gorm:"type:numeric(18,2);not null" json:"unitPrice"`
-	LineTotal  decimal.Decimal `gorm:"type:numeric(18,2);not null" json:"lineTotal"`
+	BusinessID       uuid.UUID       `gorm:"type:uuid;not null;index" json:"businessId"`
+	SaleID           uuid.UUID       `gorm:"type:uuid;not null;index" json:"saleId"`
+	ProductID        uuid.UUID       `gorm:"type:uuid;not null;index" json:"productId"`
+	ProductVariantID *uuid.UUID      `gorm:"type:uuid;index" json:"productVariantId"`
+	Quantity         decimal.Decimal `gorm:"type:numeric(18,3);not null" json:"quantity"`
+	UnitPrice        decimal.Decimal `gorm:"type:numeric(18,2);not null" json:"unitPrice"`
+	LineTotal        decimal.Decimal `gorm:"type:numeric(18,2);not null" json:"lineTotal"`
 }
 
 func (SaleLine) TableName() string { return "sale_lines" }
