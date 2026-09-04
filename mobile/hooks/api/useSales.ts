@@ -16,6 +16,7 @@ export interface CreateSaleInput {
   customerId?: UUID | null
   paymentMethod?: string
   productId?: UUID
+  variantId?: UUID | null
   quantity?: number | string
   totalAmount?: number | string
   lines?: CreateSaleRequest['lines']
@@ -31,6 +32,7 @@ function toCreateSaleRequest(data: CreateSaleInput): CreateSaleRequest {
         ? [
             {
               productId: data.productId,
+              variantId: data.variantId || null,
               quantity: toDecimalString(data.quantity ?? 1),
               unitPrice: toDecimalString(data.totalAmount ?? 0),
             },
@@ -139,6 +141,8 @@ export const useSales = () => {
             rec.businessId = bid
             rec.saleId = id
             rec.productId = line.productId
+            // variant-aware: store variant if selected, else null
+            rec.productVariantId = (line as any).variantId || null
             rec.quantity = toDecimalString(line.quantity)
             rec.unitPrice = toDecimalString(line.unitPrice)
             rec.lineTotal = toDecimalString(

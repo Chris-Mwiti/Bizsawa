@@ -28,6 +28,7 @@ export interface CreateOrderInput {
   paymentMethod?: string
   orderItems?: {
     productId: UUID
+    variantId?: UUID | null
     quantity: number | string
     unitPrice?: number | string
   }[]
@@ -50,6 +51,7 @@ function toCreateOrderRequest(data: CreateOrderInput): CreateOrderRequest {
       data.lines ||
       (data.orderItems || []).map((item) => ({
         productId: item.productId,
+        variantId: (item as any).variantId || null,
         quantity: toDecimalString(item.quantity),
         unitPrice: toDecimalString(item.unitPrice),
       })),
@@ -166,6 +168,7 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
             rec.businessId = bid
             rec.orderId = id
             rec.productId = line.productId
+            rec.productVariantId = (line as any).variantId || null
             rec.quantity = toDecimalString(line.quantity)
             rec.unitPrice = toDecimalString(line.unitPrice)
             rec.lineTotal = toDecimalString(
