@@ -1,5 +1,11 @@
 import { Model } from '@nozbe/watermelondb'
-import { field, text, date, readonly, writer } from '@nozbe/watermelondb/decorators'
+import {
+  field,
+  text,
+  date,
+  readonly,
+  writer,
+} from '@nozbe/watermelondb/decorators'
 export default class Invoice extends Model {
   static table = 'invoices'
   @field('business_id') businessId!: string
@@ -19,5 +25,10 @@ export default class Invoice extends Model {
   @field('deleted_at') deletedAt?: number
   @readonly @date('created_at') createdAt!: Date
   @readonly @date('updated_at') updatedAt!: Date
-  @writer async markDeletedLocal(){ await this.update((r:any)=>{r.deletedAt=Date.now()}); await this.markAsDeleted() }
+  @writer async markDeletedLocal() {
+    await this.update((r: any) => {
+      r.deletedAt = Date.now()
+    })
+    await this.markAsDeleted()
+  }
 }

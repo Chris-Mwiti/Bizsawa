@@ -1,8 +1,9 @@
-import '../polyfills';
+import '../polyfills'
 import { Database } from '@nozbe/watermelondb'
 import SQLiteAdapter from '@nozbe/watermelondb/adapters/sqlite'
 import { schema } from './schema'
 import Product from './models/Product'
+import ProductVariant from './models/ProductVariant'
 import Customer from './models/Customer'
 import Expense from './models/Expense'
 import Sale from './models/Sale'
@@ -18,19 +19,60 @@ import Conflict from './models/Conflict'
 
 // SQLiteAdapter via @morrowdigital/watermelondb-expo-plugin (disableJsi:false) → JSI in dev-client
 // Expo Go has no native module — must use dev-client build (see guide below)
+import { schemaMigrations } from '@nozbe/watermelondb/Schema/migrations'
+
+const migrations = schemaMigrations({
+  migrations: [
+    {
+      toVersion: 2,
+      steps: [
+        {
+          type: 'add_columns',
+          table: 'sale_lines',
+          columns: [
+            {
+              name: 'product_variant_id',
+              type: 'string',
+              isOptional: true,
+            },
+          ],
+        },
+        {
+          type: 'add_columns',
+          table: 'order_lines',
+          columns: [
+            {
+              name: 'product_variant_id',
+              type: 'string',
+              isOptional: true,
+            },
+          ],
+        },
+      ],
+    },
+  ],
+})
+
 let adapter: any
 try {
   adapter = new SQLiteAdapter({
     schema,
+    migrations,
     jsi: true, // now linked via plugin — 3x faster, Turbo Login §11
-    onSetUpError: (error) => console.error('[WatermelonDB] setup failed', error),
+    onSetUpError: (error) =>
+      console.error('[WatermelonDB] setup failed', error),
   })
 } catch (e: any) {
-  console.warn('[WatermelonDB] JSI init failed, falling back to async', e?.message)
+  console.warn(
+    '[WatermelonDB] JSI init failed, falling back to async',
+    e?.message,
+  )
   adapter = new SQLiteAdapter({
     schema,
+    migrations,
     jsi: false,
-    onSetUpError: (error) => console.error('[WatermelonDB] fallback setup failed', error),
+    onSetUpError: (error) =>
+      console.error('[WatermelonDB] fallback setup failed', error),
   })
 }
 
@@ -38,6 +80,7 @@ export const database = new Database({
   adapter,
   modelClasses: [
     Product as any,
+    ProductVariant as any,
     Customer as any,
     Expense as any,
     Sale as any,

@@ -1,79 +1,81 @@
-import axios, { AxiosError } from "axios";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Platform } from "react-native";
-import Constants from "expo-constants";
-import * as Device from "expo-device";
-import type { AuthResponse } from "./api-dtos";
-import { createIdempotencyKey } from "./idempotency";
+import axios, { AxiosError } from 'axios'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import { Platform } from 'react-native'
+import Constants from 'expo-constants'
+import * as Device from 'expo-device'
+import type { AuthResponse } from './api-dtos'
+import { createIdempotencyKey } from './idempotency'
 
-const DEFAULT_API_PORT = 5504;
+const DEFAULT_API_PORT = 5504
 
 export const AUTH_STORAGE_KEYS = {
-  accessToken: "bizsawa_access_token",
-  refreshToken: "bizsawa_refresh_token",
-  legacyToken: "bizsawa_token",
-  userId: "bizsawa_user_id",
-  userData: "bizsawa_userdata",
-  businessId: "bizsawa_business_id",
-  business: "bizsawa_business",
-  role: "bizsawa_role",
-};
+  accessToken: 'bizsawa_access_token',
+  refreshToken: 'bizsawa_refresh_token',
+  legacyToken: 'bizsawa_token',
+  userId: 'bizsawa_user_id',
+  userData: 'bizsawa_userdata',
+  businessId: 'bizsawa_business_id',
+  business: 'bizsawa_business',
+  role: 'bizsawa_role',
+}
 
 function parseHostFromHostUri(hostUri: string | undefined): string | null {
-  if (!hostUri?.trim()) return null;
-  const host = hostUri.split(":")[0];
-  return host || null;
+  if (!hostUri?.trim()) return null
+  const host = hostUri.split(':')[0]
+  return host || null
 }
 
 function getExpoDevHost(): string | null {
-  return parseHostFromHostUri(Constants.expoConfig?.hostUri);
+  return parseHostFromHostUri(Constants.expoConfig?.hostUri)
 }
 
 export function getApiUrl(): string {
-  const envUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
-  if (envUrl) return envUrl.replace(/\/$/, "");
+  const envUrl = process.env.EXPO_PUBLIC_API_URL?.trim()
+  if (envUrl) return envUrl.replace(/\/$/, '')
 
-  if (Platform.OS === "web") return `http://localhost:${DEFAULT_API_PORT}`;
+  if (Platform.OS === 'web') return `http://localhost:${DEFAULT_API_PORT}`
 
-  const expoHost = getExpoDevHost();
-  if (Platform.OS === "android") {
-    if (!Device.isDevice) return `http://10.0.2.2:${DEFAULT_API_PORT}`;
-    if (expoHost) return `http://${expoHost}:${DEFAULT_API_PORT}`;
+  const expoHost = getExpoDevHost()
+  if (Platform.OS === 'android') {
+    if (!Device.isDevice) return `http://10.0.2.2:${DEFAULT_API_PORT}`
+    if (expoHost) return `http://${expoHost}:${DEFAULT_API_PORT}`
   }
-  if (Platform.OS === "ios") {
-    if (!Device.isDevice) return `http://localhost:${DEFAULT_API_PORT}`;
-    if (expoHost) return `http://${expoHost}:${DEFAULT_API_PORT}`;
+  if (Platform.OS === 'ios') {
+    if (!Device.isDevice) return `http://localhost:${DEFAULT_API_PORT}`
+    if (expoHost) return `http://${expoHost}:${DEFAULT_API_PORT}`
   }
-  if (expoHost) return `http://${expoHost}:${DEFAULT_API_PORT}`;
+  if (expoHost) return `http://${expoHost}:${DEFAULT_API_PORT}`
 
   if (__DEV__) {
-    console.warn("[api] EXPO_PUBLIC_API_URL is unset and Expo hostUri is missing; API calls may fail.");
+    console.warn(
+      '[api] EXPO_PUBLIC_API_URL is unset and Expo hostUri is missing; API calls may fail.',
+    )
   }
-  return `http://localhost:${DEFAULT_API_PORT}`;
+  return `http://localhost:${DEFAULT_API_PORT}`
 }
 
 function withApiPrefix(hostRoot: string): string {
-  const trimmed = hostRoot.replace(/\/+$/, "");
-  if (trimmed.endsWith("/api/v1")) return trimmed;
-  if (trimmed.endsWith("/api")) return `${trimmed}/v1`;
-  return `${trimmed}/api/v1`;
+  const trimmed = hostRoot.replace(/\/+$/, '')
+  if (trimmed.endsWith('/api/v1')) return trimmed
+  if (trimmed.endsWith('/api')) return `${trimmed}/v1`
+  return `${trimmed}/api/v1`
 }
 
-const apiRoot = withApiPrefix(getApiUrl());
+const apiRoot = withApiPrefix(getApiUrl())
 
 export const api = axios.create({
   baseURL: apiRoot,
   timeout: 30000,
-  headers: { "Content-Type": "application/json" },
-});
+  headers: { 'Content-Type': 'application/json' },
+})
 
 export async function persistAuthResponse(data: AuthResponse): Promise<void> {
   await AsyncStorage.multiSet([
     [AUTH_STORAGE_KEYS.accessToken, data.accessToken],
     [AUTH_STORAGE_KEYS.refreshToken, data.refreshToken],
     [AUTH_STORAGE_KEYS.userId, data.userId],
-  ]);
-  await AsyncStorage.removeItem(AUTH_STORAGE_KEYS.legacyToken);
+  ])
+  await AsyncStorage.removeItem(AUTH_STORAGE_KEYS.legacyToken)
 }
 
 export async function clearAuthStorage(): Promise<void> {
@@ -86,130 +88,151 @@ export async function clearAuthStorage(): Promise<void> {
     AUTH_STORAGE_KEYS.businessId,
     AUTH_STORAGE_KEYS.business,
     AUTH_STORAGE_KEYS.role,
-  ]);
+  ])
 }
 
 function isMutatingMethod(method?: string): boolean {
-  return ["post", "put", "patch", "delete"].includes((method || "get").toLowerCase());
+  return ['post', 'put', 'patch', 'delete'].includes(
+    (method || 'get').toLowerCase(),
+  )
 }
 
-let refreshPromise: Promise<string | null> | null = null;
+let refreshPromise: Promise<string | null> | null = null
 
 async function refreshAccessToken(): Promise<string | null> {
   if (!refreshPromise) {
     refreshPromise = (async () => {
-      const refreshToken = await AsyncStorage.getItem(AUTH_STORAGE_KEYS.refreshToken);
-      if (!refreshToken) return null;
-      const response = await axios.post<AuthResponse>(`${apiRoot}/auth/refresh`, { refreshToken });
-      await persistAuthResponse(response.data);
-      return response.data.accessToken;
+      const refreshToken = await AsyncStorage.getItem(
+        AUTH_STORAGE_KEYS.refreshToken,
+      )
+      if (!refreshToken) return null
+      const response = await axios.post<AuthResponse>(
+        `${apiRoot}/auth/refresh`,
+        { refreshToken },
+      )
+      await persistAuthResponse(response.data)
+      return response.data.accessToken
     })().finally(() => {
-      refreshPromise = null;
-    });
+      refreshPromise = null
+    })
   }
-  return refreshPromise;
+  return refreshPromise
 }
 
 api.interceptors.request.use(
   async (config) => {
     const token =
       (await AsyncStorage.getItem(AUTH_STORAGE_KEYS.accessToken)) ||
-      (await AsyncStorage.getItem(AUTH_STORAGE_KEYS.legacyToken));
-    const rawBiz = await AsyncStorage.getItem(AUTH_STORAGE_KEYS.businessId);
-    const businessId = rawBiz?.trim() ? rawBiz.trim() : null;
+      (await AsyncStorage.getItem(AUTH_STORAGE_KEYS.legacyToken))
+    const rawBiz = await AsyncStorage.getItem(AUTH_STORAGE_KEYS.businessId)
+    const businessId = rawBiz?.trim() ? rawBiz.trim() : null
 
-    config.headers = config.headers || {};
-    if (token) config.headers.Authorization = `Bearer ${token}`;
+    config.headers = config.headers || {}
+    if (token) config.headers.Authorization = `Bearer ${token}`
     if (businessId) {
-      config.headers["X-Business-ID"] = businessId;
+      config.headers['X-Business-ID'] = businessId
       // lower-case mirror for proxies that normalize
-      (config.headers as any)["x-business-id"] = businessId;
+      ;(config.headers as any)['x-business-id'] = businessId
       // Fallback: also send as query ?businessId= so TenantResolution can read it even if header stripped by CORS/proxy
       // TenantResolution checks URLParam + header; we extend to query param below
-      const url = config.url || "";
+      const url = config.url || ''
       // attach as param only for analytics/sales/expenses where business context is required
       // keep existing params intact
-      (config.params as any) = { ...(config.params as any) };
+      ;(config.params as any) = { ...(config.params as any) }
       // do not overwrite explicit businessId param
-      if (!(config.params as any).businessId && !(config.params as any).business_id) {
-        (config.params as any).businessId = businessId;
+      if (
+        !(config.params as any).businessId &&
+        !(config.params as any).business_id
+      ) {
+        ;(config.params as any).businessId = businessId
       }
     } else {
-      console.warn("[api] X-Business-ID missing — BusinessContext not hydrated, analytics will 403 if queried");
+      console.warn(
+        '[api] X-Business-ID missing — BusinessContext not hydrated, analytics will 403 if queried',
+      )
     }
 
     console.debug(
-      "API Request:",
+      'API Request:',
       config.method?.toUpperCase(),
       config.url,
       config.baseURL,
-      "biz:",
-      businessId ? `${businessId.slice(0, 8)}…` : "none",
-      "headers:",
-      businessId ? { "X-Business-ID": `${businessId.slice(0, 8)}…` } : {},
-      "params:",
-      config.params
-    );
-    return config;
+      'biz:',
+      businessId ? `${businessId.slice(0, 8)}…` : 'none',
+      'headers:',
+      businessId ? { 'X-Business-ID': `${businessId.slice(0, 8)}…` } : {},
+      'params:',
+      config.params,
+    )
+    return config
   },
   (error) => Promise.reject(error),
-);
+)
 
 export interface ApiError extends AxiosError {
-  friendlyMessage?: string;
+  friendlyMessage?: string
 }
 
 export function standardizeApiError(error: any): string {
   if (error.response) {
-    const status = error.response.status;
-    const data = error.response.data;
-    if (status === 401) return "Session expired. Please log in again.";
-    if (status === 403) return "You don't have permission to do this.";
-    if (status === 404) return "The requested information was not found.";
-    if (status >= 500) return "Something went wrong on our end. Please try again in a moment.";
+    const status = error.response.status
+    const data = error.response.data
+    if (status === 401) return 'Session expired. Please log in again.'
+    if (status === 403) return "You don't have permission to do this."
+    if (status === 404) return 'The requested information was not found.'
+    if (status >= 500)
+      return 'Something went wrong on our end. Please try again in a moment.'
 
-    const message = data?.message || data?.error?.message || data?.error;
-    if (message && typeof message === "string") {
-      if (message.includes("Prisma") || message.includes("database") || message.includes("invocation")) {
-        return "A database error occurred. Please try again.";
+    const message = data?.message || data?.error?.message || data?.error
+    if (message && typeof message === 'string') {
+      if (
+        message.includes('Prisma') ||
+        message.includes('database') ||
+        message.includes('invocation')
+      ) {
+        return 'A database error occurred. Please try again.'
       }
-      return message;
+      return message
     }
   } else if (error.request) {
-    return "Connection failed. Please check your internet and try again.";
+    return 'Connection failed. Please check your internet and try again.'
   }
-  return "An unexpected error occurred. Please try again.";
+  return 'An unexpected error occurred. Please try again.'
 }
 
 api.interceptors.response.use(
   (response) => {
-    console.log("API Response:", response.status, response.config.url);
-    return response;
+    console.log('API Response:', response.status, response.config.url)
+    return response
   },
   async (error: ApiError & { config?: any }) => {
-    error.friendlyMessage = standardizeApiError(error);
+    error.friendlyMessage = standardizeApiError(error)
     console.error(`[API ERROR] ${error.config?.url}:`, {
       status: error.response?.status,
       message: error.message,
       data: error.response?.data,
-    });
+    })
 
-    const originalRequest = error.config;
-    if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
-      originalRequest._retry = true;
+    const originalRequest = error.config
+    if (
+      error.response?.status === 401 &&
+      originalRequest &&
+      !originalRequest._retry
+    ) {
+      originalRequest._retry = true
       try {
-        const accessToken = await refreshAccessToken();
+        const accessToken = await refreshAccessToken()
         if (accessToken) {
-          originalRequest.headers.Authorization = `Bearer ${accessToken}`;
-          return api(originalRequest);
+          originalRequest.headers.Authorization = `Bearer ${accessToken}`
+          return api(originalRequest)
         }
       } catch {
-        await clearAuthStorage();
+        await clearAuthStorage()
       }
     } else if (error.response?.status === 401) {
-      await clearAuthStorage();
+      await clearAuthStorage()
     }
 
-    return Promise.reject(error);
+    return Promise.reject(error)
   },
-);
+)

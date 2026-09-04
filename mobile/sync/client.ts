@@ -14,15 +14,39 @@ async function repairCorruptedLocal() {
   repaired = true
   try {
     const tables: Record<string, { numeric: string[]; dates: string[] }> = {
-      sales: { numeric: ['subtotal', 'tax_amount', 'total'], dates: ['sold_at'] },
-      sale_lines: { numeric: ['quantity', 'unit_price', 'line_total'], dates: [] },
-      invoices: { numeric: ['subtotal', 'tax_amount', 'total', 'amount_paid', 'amount_due'], dates: ['due_at'] },
-      invoice_lines: { numeric: ['quantity', 'unit_price', 'line_total'], dates: [] },
+      sales: {
+        numeric: ['subtotal', 'tax_amount', 'total'],
+        dates: ['sold_at'],
+      },
+      sale_lines: {
+        numeric: ['quantity', 'unit_price', 'line_total'],
+        dates: [],
+      },
+      invoices: {
+        numeric: [
+          'subtotal',
+          'tax_amount',
+          'total',
+          'amount_paid',
+          'amount_due',
+        ],
+        dates: ['due_at'],
+      },
+      invoice_lines: {
+        numeric: ['quantity', 'unit_price', 'line_total'],
+        dates: [],
+      },
       expenses: { numeric: ['amount', 'tax_amount'], dates: ['spent_at'] },
       orders: { numeric: ['subtotal', 'tax_amount', 'total'], dates: [] },
-      order_lines: { numeric: ['quantity', 'unit_price', 'line_total'], dates: [] },
+      order_lines: {
+        numeric: ['quantity', 'unit_price', 'line_total'],
+        dates: [],
+      },
       products: { numeric: ['price', 'cost'], dates: [] },
-      inventory_items: { numeric: ['quantity', 'low_stock_threshold'], dates: [] },
+      inventory_items: {
+        numeric: ['quantity', 'low_stock_threshold'],
+        dates: [],
+      },
       stock_movements: { numeric: ['quantity_delta'], dates: ['occurred_at'] },
       customers: { numeric: ['total_spend'], dates: ['last_purchase_at'] },
     }
@@ -40,18 +64,29 @@ async function repairCorruptedLocal() {
             const v = raw[c]
             if (v == null) continue
             const str = String(v).trim().toLowerCase()
-            if (str === "" || str === "nan" || str === "local" || str === "undefined" || (isNaN(Number(str)) && str !== "0")) {
+            if (
+              str === '' ||
+              str === 'nan' ||
+              str === 'local' ||
+              str === 'undefined' ||
+              (isNaN(Number(str)) && str !== '0')
+            ) {
               hasNumericCorruption = true
               break
             }
           }
           for (const c of cols.dates) {
             const v = raw[c]
-            if (v === 0 || v === "0" || v == null || (typeof v === "number" && v < 1000)) {
+            if (
+              v === 0 ||
+              v === '0' ||
+              v == null ||
+              (typeof v === 'number' && v < 1000)
+            ) {
               hasDateCorruption = true
               break
             }
-            if (typeof v === "number") {
+            if (typeof v === 'number') {
               const d = new Date(v)
               if (isNaN(d.getTime()) || d.getFullYear() <= 1970) {
                 hasDateCorruption = true
@@ -69,16 +104,30 @@ async function repairCorruptedLocal() {
                 const v = raw[c]
                 if (v == null) continue
                 const str = String(v).trim().toLowerCase()
-                if (str === "" || str === "nan" || str === "local" || (isNaN(Number(str)) && str !== "0")) patch[c] = "0"
+                if (
+                  str === '' ||
+                  str === 'nan' ||
+                  str === 'local' ||
+                  (isNaN(Number(str)) && str !== '0')
+                )
+                  patch[c] = '0'
               }
               for (const c of cols.dates) {
                 const v = raw[c]
-                if (v === 0 || v === "0" || v == null || (typeof v === "number" && v < 1000)) patch[c] = Date.now()
+                if (
+                  v === 0 ||
+                  v === '0' ||
+                  v == null ||
+                  (typeof v === 'number' && v < 1000)
+                )
+                  patch[c] = Date.now()
               }
               if (Object.keys(patch).length === 0) return
               await rec.update((r: any) => {
                 for (const [k, v] of Object.entries(patch)) {
-                  const camel = k.replace(/_([a-z])/g, (_, c) => c.toUpperCase())
+                  const camel = k.replace(/_([a-z])/g, (_, c) =>
+                    c.toUpperCase(),
+                  )
                   if (camel in r) (r as any)[camel] = v
                   else (r as any)[k] = v
                 }
@@ -107,9 +156,65 @@ export async function resetLocalDatabase() {
     repaired = false
   } catch (e) {
     // fallback: adapter level
-    try { await (database as any).adapter.unsafeResetDatabase() } catch {}
+    try {
+      await (database as any).adapter.unsafeResetDatabase()
+    } catch {}
     repaired = false
   }
+}
+
+// ── Pending & conflict inspection for OfflineBanner recovery actions ──────────
+
+const PENDING_TABLES = [
+  'products',
+  'product_variants',
+  'customers',
+  'inventory_items',
+  'stock_movements',
+  'orders',
+  'order_lines',
+  'sales',
+  'sale_lines',
+  'expenses',
+  'invoices',
+  'invoice_lines',
+  'payment_commands',
+  'tax_rules',
+]
+
+export async function getPendingChangesCount(): Promise<number> {
+  let total = 0
+  for (const table of PENDING_TABLES) {
+    try {
+      const col: any = (database as any).get(table)
+      // Watermelon marks unsynced rows with _status = 'created' | 'updated' | 'deleted'
+      const rows: any[] = await col.query().fetch()
+      for (const r of rows) {
+        const s = r._raw?._status
+        if (s === 'created' || s === 'updated' || s === 'deleted') total++
+      }
+    } catch {
+      // table may not exist yet
+    }
+  }
+  return total
+}
+
+export async function getConflictsCount(): Promise<number> {
+  try {
+    const col: any = (database as any).get('conflicts')
+    const rows: any[] = await col.query().fetch()
+    return rows.length
+  } catch {
+    return 0
+  }
+}
+
+export async function refreshFromRemote(): Promise<void> {
+  // Pull-only refresh: fetch server state without pushing pending (useful when conflicts need discarding)
+  // We achieve this by doing a normal sync but we clear pending _status via reset if user confirms
+  // For now, just run full sync — Watermelon's pull will bring server changes and surface conflicts
+  await syncNow()
 }
 
 // WatermelonDB synchronize() wired to Brief §5 endpoints — single source of truth while offline is local SQLite
@@ -136,7 +241,7 @@ export async function syncNow() {
       await api.post(
         `/sync/push`,
         { changes, lastPulledAt },
-        { headers: { 'X-Idempotency-Key': idempotencyKey } }
+        { headers: { 'X-Idempotency-Key': idempotencyKey } },
       )
     },
     // Version-counter conflict → conflicts table (§4), not last-write-wins (§10)
@@ -146,7 +251,10 @@ export async function syncNow() {
     conflictResolver: (table, local, remote, resolved) => {
       // Brief: do NOT silent merge. Mark for conflicts table via push response; locally keep remote + flag
       // Returning remote ensures local eventually reflects server, conflict row remains for manual resolve
-      console.warn('[Sync] conflict', table, local.id, { localSync: (local as any).sync_version, remoteSync: (remote as any).sync_version })
+      console.warn('[Sync] conflict', table, local.id, {
+        localSync: (local as any).sync_version,
+        remoteSync: (remote as any).sync_version,
+      })
       return remote
     },
     unsafeTurbo: false, // enable only for first login on empty DB per sketch §11
@@ -161,24 +269,31 @@ export function startSyncEngine() {
   // Initial hydration on startup if already online — populates local storage for offline resume
   NetInfo.fetch().then((s) => {
     if (s.isConnected) {
-      syncNow().catch((e) => console.warn('[Sync] initial hydration failed', e?.message))
+      syncNow().catch((e) =>
+        console.warn('[Sync] initial hydration failed', e?.message),
+      )
     }
   })
 
   // On reconnect — immediate sync
   const unsub = NetInfo.addEventListener((state) => {
     if (state.isConnected) {
-      syncNow().catch((e) => console.warn('[Sync] reconnect sync failed', e?.message))
+      syncNow().catch((e) =>
+        console.warn('[Sync] reconnect sync failed', e?.message),
+      )
     }
   })
 
   // Periodic while online (8 min — within 5-10 recommended)
-  intervalId = setInterval(async () => {
-    const s = await NetInfo.fetch()
-    if (s.isConnected) {
-      syncNow().catch(() => {})
-    }
-  }, 8 * 60 * 1000)
+  intervalId = setInterval(
+    async () => {
+      const s = await NetInfo.fetch()
+      if (s.isConnected) {
+        syncNow().catch(() => {})
+      }
+    },
+    8 * 60 * 1000,
+  )
 
   return () => {
     unsub()
@@ -189,6 +304,7 @@ export function startSyncEngine() {
 // Manual pull-to-refresh hook
 export async function manualSync() {
   const s = await NetInfo.fetch()
-  if (!s.isConnected) throw new Error('Offline — changes queued locally (pending)')
+  if (!s.isConnected)
+    throw new Error('Offline — changes queued locally (pending)')
   return syncNow()
 }

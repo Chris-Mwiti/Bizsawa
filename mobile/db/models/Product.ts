@@ -1,5 +1,11 @@
 import { Model } from '@nozbe/watermelondb'
-import { field, text, date, readonly, writer } from '@nozbe/watermelondb/decorators'
+import {
+  field,
+  text,
+  date,
+  readonly,
+  writer,
+} from '@nozbe/watermelondb/decorators'
 import { v4 as uuidv4 } from 'uuid'
 
 export default class Product extends Model {

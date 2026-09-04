@@ -14,5 +14,10 @@ export default class Payment extends Model {
   @field('deleted_at') deletedAt?: number
   @readonly @date('created_at') createdAt!: Date
   @readonly @date('updated_at') updatedAt!: Date
-  @writer async markDeletedLocal(){ await this.update((r:any)=>{r.deletedAt=Date.now()}); await this.markAsDeleted() }
+  @writer async markDeletedLocal() {
+    await this.update((r: any) => {
+      r.deletedAt = Date.now()
+    })
+    await this.markAsDeleted()
+  }
 }

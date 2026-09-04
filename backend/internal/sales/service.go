@@ -35,9 +35,10 @@ func NewService(repo *Repository, taxes TaxRecorder, outboxRepo *river.Client[*s
 }
 
 type SaleLineRequest struct {
-	ProductID uuid.UUID       `json:"productId"`
-	Quantity  decimal.Decimal `json:"quantity"`
-	UnitPrice decimal.Decimal `json:"unitPrice"`
+	ProductID        uuid.UUID       `json:"productId"`
+	ProductVariantID *uuid.UUID      `json:"variantId"`
+	Quantity         decimal.Decimal `json:"quantity"`
+	UnitPrice        decimal.Decimal `json:"unitPrice"`
 }
 type CreateSaleRequest struct {
 	OrderID       *uuid.UUID        `json:"orderId"`
@@ -46,9 +47,10 @@ type CreateSaleRequest struct {
 	Lines         []SaleLineRequest `json:"lines"`
 }
 type OrderLineInput struct {
-	ProductID uuid.UUID
-	Quantity  decimal.Decimal
-	UnitPrice decimal.Decimal
+	ProductID        uuid.UUID
+	ProductVariantID *uuid.UUID
+	Quantity         decimal.Decimal
+	UnitPrice        decimal.Decimal
 }
 
 func (s *Service) WithTx(tx *gorm.DB) *Service {
@@ -98,11 +100,12 @@ func (s *Service) create(ctx context.Context, businessID, staffID uuid.UUID, ord
 			BaseModel: shareddb.BaseModel{
 				TenantID: businessID,
 			},
-			BusinessID: businessID,
-			ProductID:  in.ProductID,
-			Quantity:   in.Quantity,
-			UnitPrice:  in.UnitPrice,
-			LineTotal:  total,
+			BusinessID:       businessID,
+			ProductID:        in.ProductID,
+			ProductVariantID: in.ProductVariantID,
+			Quantity:         in.Quantity,
+			UnitPrice:        in.UnitPrice,
+			LineTotal:        total,
 		})
 	}
 	tax := subtotal.Mul(decimal.NewFromFloat(0.16)).Round(2)
@@ -178,7 +181,12 @@ func (s *Service) GetSalesByProduct(ctx context.Context, businessID uuid.UUID) (
 func toLineInputs(lines []SaleLineRequest) []OrderLineInput {
 	out := make([]OrderLineInput, 0, len(lines))
 	for _, l := range lines {
-		out = append(out, OrderLineInput{ProductID: l.ProductID, Quantity: l.Quantity, UnitPrice: l.UnitPrice})
+		out = append(out, OrderLineInput{
+			ProductID:        l.ProductID,
+			ProductVariantID: l.ProductVariantID,
+			Quantity:         l.Quantity,
+			UnitPrice:        l.UnitPrice,
+		})
 	}
 	return out
 }

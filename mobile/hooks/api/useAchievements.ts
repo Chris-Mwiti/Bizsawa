@@ -1,67 +1,69 @@
-import { useState, useEffect } from 'react';
-import { api } from '../../lib/api';
-import { useAuth } from '../../contexts/AuthContext';
+import { useState, useEffect } from 'react'
+import { api } from '../../lib/api'
+import { useAuth } from '../../contexts/AuthContext'
 
 export interface Achievement {
-  id: number;
-  title: string;
-  description: string | null;
-  earned: boolean;
-  earnedAt: string | null;
-  createdAt: string;
+  id: number
+  title: string
+  description: string | null
+  earned: boolean
+  earnedAt: string | null
+  createdAt: string
 }
 
 export function useAchievements() {
-  const [achievements, setAchievements] = useState<Achievement[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const { authTokens } = useAuth();
+  const [achievements, setAchievements] = useState<Achievement[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const { authTokens } = useAuth()
 
   const fetchAchievements = async () => {
-    if (!authTokens?.access) return;
-    setIsLoading(true);
+    if (!authTokens?.access) return
+    setIsLoading(true)
     try {
-      const response = await api.get('/achievements');
-      setAchievements(response.data);
-      setError(null);
+      const response = await api.get('/achievements')
+      setAchievements(response.data)
+      setError(null)
     } catch (err) {
-      setError('Failed to load achievements');
+      setError('Failed to load achievements')
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  };
+  }
 
   useEffect(() => {
-    fetchAchievements();
-  }, [authTokens?.access]);
+    fetchAchievements()
+  }, [authTokens?.access])
 
   const addAchievement = async (title: string, description?: string) => {
     try {
-      const response = await api.post('/achievements', { title, description });
-      setAchievements([response.data, ...achievements]);
-      return response.data;
+      const response = await api.post('/achievements', { title, description })
+      setAchievements([response.data, ...achievements])
+      return response.data
     } catch (err) {
-      throw new Error('Failed to add achievement');
+      throw new Error('Failed to add achievement')
     }
-  };
+  }
 
   const toggleAchievement = async (id: number, earned: boolean) => {
     try {
-      const response = await api.patch(`/achievements/${id}`, { earned });
-      setAchievements(achievements.map((a) => (a.id === id ? response.data : a)));
+      const response = await api.patch(`/achievements/${id}`, { earned })
+      setAchievements(
+        achievements.map((a) => (a.id === id ? response.data : a)),
+      )
     } catch (err) {
-      throw new Error('Failed to update achievement');
+      throw new Error('Failed to update achievement')
     }
-  };
+  }
 
   const deleteAchievement = async (id: number) => {
     try {
-      await api.delete(`/achievements/${id}`);
-      setAchievements(achievements.filter((a) => a.id !== id));
+      await api.delete(`/achievements/${id}`)
+      setAchievements(achievements.filter((a) => a.id !== id))
     } catch (err) {
-      throw new Error('Failed to delete achievement');
+      throw new Error('Failed to delete achievement')
     }
-  };
+  }
 
   return {
     achievements,
@@ -71,5 +73,5 @@ export function useAchievements() {
     addAchievement,
     toggleAchievement,
     deleteAchievement,
-  };
+  }
 }
