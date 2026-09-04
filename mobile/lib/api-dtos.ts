@@ -121,6 +121,15 @@ export interface Product {
   updatedAt: ISODateTime
 }
 
+export interface VariantRequest {
+  name: string
+  sku?: string
+  barcode?: string
+  price: DecimalString
+  cost: DecimalString
+  isActive?: boolean
+}
+
 export interface ProductRequest {
   name: string
   description?: string
@@ -132,6 +141,7 @@ export interface ProductRequest {
   price: DecimalString
   cost: DecimalString
   isActive?: boolean
+  variants?: VariantRequest[]
 }
 
 export interface Customer {
@@ -162,6 +172,7 @@ export interface CustomerRequest {
 
 export interface LineRequest {
   productId: UUID
+  variantId?: UUID | null
   quantity: DecimalString
   unitPrice: DecimalString
 }
