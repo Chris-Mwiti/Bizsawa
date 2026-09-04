@@ -3,14 +3,39 @@ import { field, date, readonly } from '@nozbe/watermelondb/decorators'
 
 export default class SaleLine extends Model {
   static table = 'sale_lines'
-  @field('business_id') businessId!: string
-  @field('sale_id') saleId!: string
-  @field('product_id') productId!: string
-  @field('quantity') quantity!: string
-  @field('unit_price') unitPrice!: string
-  @field('line_total') lineTotal!: string
-  @field('sync_version') syncVersion!: number
-  @field('deleted_at') deletedAt?: number
-  @readonly @date('created_at') createdAt!: Date
-  @readonly @date('updated_at') updatedAt!: Date
+
+  @field('business_id')
+  businessId!: string
+
+  @field('sale_id')
+  saleId!: string
+
+  @field('product_id')
+  productId!: string
+
+  @field('product_variant_id')
+  productVariantId?: string
+
+  @field('quantity')
+  quantity!: string
+
+  @field('unit_price')
+  unitPrice!: string
+
+  @field('line_total')
+  lineTotal!: string
+
+  @field('sync_version')
+  syncVersion!: number
+
+  @field('deleted_at')
+  deletedAt?: number
+
+  @readonly
+  @date('created_at')
+  createdAt!: Date
+
+  @readonly
+  @date('updated_at')
+  updatedAt!: Date
 }
