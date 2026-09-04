@@ -166,6 +166,9 @@ export default function OrdersScreen() {
   const [paymentMethod, setPaymentMethod] = useState('cash')
   const [draftLines, setDraftLines] = useState<DraftLine[]>([])
   const [selectedProductId, setSelectedProductId] = useState('')
+  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(
+    null,
+  )
   const [quantity, setQuantity] = useState('1')
   const [paymentId, setPaymentId] = useState<string | null>(null)
 
@@ -216,25 +219,51 @@ export default function OrdersScreen() {
   const addLine = () => {
     if (!selectedProduct)
       return Alert.alert('Validation', 'Select a product first.')
+
+    const variants = (selectedProduct as any).variants || []
+    const hasVariants = variants.length > 0
+    if (hasVariants && !selectedVariantId) {
+      return Alert.alert(
+        'Validation',
+        'This product has variants — please select one.',
+      )
+    }
     if (toNumber(quantity) <= 0)
       return Alert.alert('Validation', 'Enter a valid quantity.')
+
+    const variant = hasVariants
+      ? variants.find((v: any) => v.id === selectedVariantId)
+      : null
+    const unitPrice = variant
+      ? variant.price.toString()
+      : selectedProduct.price.toString()
+
     setDraftLines((prev) => [
       ...prev,
       {
         productId: selectedProduct.id,
+        variantId: variant?.id || null,
         productName: selectedProduct.name,
+        variantName: variant?.name || null,
         quantity,
-        unitPrice: selectedProduct.price.toString(),
+        unitPrice,
       },
     ])
     setSelectedProductId('')
+    setSelectedVariantId(null)
     setQuantity('1')
   }
+
+  const removeLine = (index: number) => {
+    setDraftLines((prev) => prev.filter((_, i) => i !== index))
+  }
+
   const resetDraft = () => {
     setCustomerId(null)
     setPaymentMethod('cash')
     setDraftLines([])
     setSelectedProductId('')
+    setSelectedVariantId(null)
     setQuantity('1')
   }
   const handleCreateCustomer = async () => {
@@ -257,6 +286,7 @@ export default function OrdersScreen() {
         paymentMethod,
         lines: draftLines.map((l) => ({
           productId: l.productId,
+          variantId: (l as any).variantId || null,
           quantity: l.quantity,
           unitPrice: l.unitPrice,
         })),
@@ -434,14 +464,20 @@ export default function OrdersScreen() {
         setPaymentMethod={setPaymentMethod}
         selectedProductId={selectedProductId}
         setSelectedProductId={setSelectedProductId}
+        selectedVariantId={selectedVariantId}
+        setSelectedVariantId={setSelectedVariantId}
         quantity={quantity}
         setQuantity={setQuantity}
         draftLines={draftLines}
         addLine={addLine}
+        removeLine={removeLine}
         total={total}
         isSaving={isCreatingOrder}
         onAddCustomer={() => setShowCustomerModal(true)}
-        onClose={() => setShowOrderModal(false)}
+        onClose={() => {
+          setShowOrderModal(false)
+          setSelectedVariantId(null)
+        }}
         onSubmit={handleCreateOrder}
       />
 

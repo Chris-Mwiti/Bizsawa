@@ -70,6 +70,16 @@ export default function StockTab() {
     maximumCapacity: '0',
     unitPrice: '0',
     supplier: '',
+    sku: '',
+    barcode: '',
+    variants: [] as Array<{
+      id?: string
+      name: string
+      sku: string
+      barcode: string
+      price: string
+      cost: string
+    }>,
   })
 
   // cleanup unused dropdown state removed — category now free-text
@@ -169,11 +179,15 @@ export default function StockTab() {
       maximumCapacity: '0',
       unitPrice: '0',
       supplier: '',
+      sku: '',
+      barcode: '',
+      variants: [],
     })
     setShowItemModal(true)
   }
   const handleOpenEditModal = (item: InventoryItem) => {
     setEditingItem(item)
+    const prod = products.find((p: any) => p.id === item.productId) as any
     setFormState({
       name: item.name,
       category: item.category,
@@ -182,16 +196,51 @@ export default function StockTab() {
       maximumCapacity: item.maximumCapacity.toString(),
       unitPrice: item.unitPrice.toString(),
       supplier: item.supplier === '—' ? '' : item.supplier,
+      sku: prod?.sku || '',
+      barcode: prod?.barcode || '',
+      variants: (prod?.variants || []).map((v: any) => ({
+        id: v.id,
+        name: v.name,
+        sku: v.sku || '',
+        barcode: v.barcode || '',
+        price: String(v.price),
+        cost: String(v.cost || v.price),
+      })),
     })
     setShowItemModal(true)
   }
   const handleSaveItem = async () => {
     if (!formState.name.trim() || !formState.category.trim())
       return Alert.alert('Validation', 'Name and category are required.')
+
+    // Validate variants if any: each must have name and price
+    for (const v of formState.variants) {
+      if (!v.name.trim())
+        return Alert.alert(
+          'Validation',
+          'Each variant needs a name (e.g., 500ml, Red)',
+        )
+      if (!v.price || isNaN(parseFloat(v.price)))
+        return Alert.alert(
+          'Validation',
+          `Variant "${v.name}" needs a valid price`,
+        )
+    }
+
     const stock = parseInt(formState.currentStock) || 0
     const min = parseInt(formState.minimumThreshold) || 0
     const max = parseInt(formState.maximumCapacity) || 0
     const price = parseFloat(formState.unitPrice) || 0
+    const variantsPayload = formState.variants
+      .filter((v) => v.name.trim())
+      .map((v) => ({
+        name: v.name.trim(),
+        sku: v.sku.trim() || undefined,
+        barcode: v.barcode.trim() || undefined,
+        price: parseFloat(v.price) || 0,
+        cost: parseFloat(v.cost) || parseFloat(v.price) || 0,
+      }))
+
     try {
       if (editingItem) {
         await updateProduct({
@@ -203,7 +252,10 @@ export default function StockTab() {
             buyingPrice: Math.round(price * 0.7 * 100) / 100,
             supplier: formState.supplier.trim(),
             maxStockLevel: max > 0 ? max : null,
-          },
+            sku: formState.sku.trim() || undefined,
+            barcode: formState.barcode.trim() || undefined,
+            variants: variantsPayload,
+          } as any,
         })
         const delta = stock - editingItem.currentStock
         await adjustStock({
@@ -221,7 +273,10 @@ export default function StockTab() {
           buyingPrice: Math.round(price * 0.7 * 100) / 100,
           supplier: formState.supplier.trim(),
           maxStockLevel: max > 0 ? max : null,
-        })
+          sku: formState.sku.trim() || undefined,
+          barcode: formState.barcode.trim() || undefined,
+          variants: variantsPayload,
+        } as any)
         if (created?.id)
           await adjustStock({
             productId: created.id,
@@ -427,6 +482,32 @@ export default function StockTab() {
                       <Text className='text-xs font-semibold text-gray-900 mt-1'>
                         {formatCurrency(item.unitPrice)} / unit
                       </Text>
+                      {(() => {
+                        const prod = products.find(
+                          (p: any) => p.id === item.productId,
+                        ) as any
+                        const vcount = prod?.variants?.length || 0
+                        if (vcount === 0) return null
+                        return (
+                          <View className='flex-row items-center gap-1.5 mt-1'>
+                            <View className='px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200'>
+                              <Text className='text-[10px] font-bold text-amber-700'>
+                                {vcount} variant{vcount === 1 ? '' : 's'}
+                              </Text>
+                            </View>
+                            <Text className='text-xs text-gray-500'>
+                              from{' '}
+                              {formatCurrency(
+                                Math.min(
+                                  ...prod.variants.map((v: any) =>
+                                    parseFloat(String(v.price)),
+                                  ),
+                                ),
+                              )}
+                            </Text>
+                          </View>
+                        )
+                      })()}
                     </View>
                     <View className='items-end'>
                       <View className='flex-row items-center gap-1.5'>
@@ -661,6 +742,209 @@ export default function StockTab() {
                   setFormState({ ...formState, supplier: t })
                 }
               />
+            </View>
+
+            <View className='flex-row gap-3'>
+              <View className='flex-1'>
+                <Text className='text-sm font-semibold text-gray-700 mb-2'>
+                  SKU (optional)
+                </Text>
+                <TextInput
+                  className='bg-white border border-gray-300 rounded-xl px-4 py-3.5 text-sm'
+                  placeholder='e.g., DAIRY-50'
+                  value={formState.sku}
+                  onChangeText={(t) => setFormState({ ...formState, sku: t })}
+                  autoCapitalize='characters'
+                />
+              </View>
+              <View className='flex-1'>
+                <Text className='text-sm font-semibold text-gray-700 mb-2'>
+                  Barcode
+                </Text>
+                <TextInput
+                  className='bg-white border border-gray-300 rounded-xl px-4 py-3.5 text-sm'
+                  placeholder='Scan or type'
+                  value={formState.barcode}
+                  onChangeText={(t) =>
+                    setFormState({ ...formState, barcode: t })
+                  }
+                />
+              </View>
+            </View>
+
+            {/* Variants — sizes/colors with per-variant pricing */}
+            <View className='bg-white border border-gray-200 rounded-xl p-4 gap-3'>
+              <View className='flex-row justify-between items-center'>
+                <View className='flex-row items-center gap-2'>
+                  <Package size={16} color='#6b7280' />
+                  <Text className='text-sm font-bold text-gray-900'>
+                    Variants
+                  </Text>
+                  <View className='px-2 py-0.5 rounded-full bg-gray-100 border border-gray-200'>
+                    <Text className='text-[11px] font-bold text-gray-600'>
+                      {formState.variants.length} options
+                    </Text>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  onPress={() =>
+                    setFormState({
+                      ...formState,
+                      variants: [
+                        ...formState.variants,
+                        {
+                          name: '',
+                          sku: '',
+                          barcode: '',
+                          price: formState.unitPrice || '0',
+                          cost: String(
+                            Math.round(
+                              parseFloat(formState.unitPrice || '0') *
+                                0.7 *
+                                100,
+                            ) / 100,
+                          ),
+                        },
+                      ],
+                    })
+                  }
+                  className='px-3 py-1.5 rounded-full bg-gray-900 flex-row items-center gap-1.5'
+                >
+                  <Plus size={12} color='white' />
+                  <Text className='text-xs font-bold text-white'>Add</Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text className='text-xs text-gray-500'>
+                Define sizes, colors, or packs — each can have its own price.
+                Example: Unga 1kg / 2kg / 5kg. Sales will let customer pick
+                variant.
+              </Text>
+
+              {formState.variants.length === 0 ? (
+                <View className='border border-dashed border-gray-200 rounded-xl py-6 items-center bg-gray-50/50'>
+                  <Text className='text-sm font-medium text-gray-500'>
+                    No variants
+                  </Text>
+                  <Text className='text-xs text-gray-400 mt-1 text-center px-4'>
+                    Leave empty for single-price product. Add variants if same
+                    product sells in different sizes/colors.
+                  </Text>
+                </View>
+              ) : (
+                <View className='gap-3'>
+                  {formState.variants.map((variant, idx) => (
+                    <View
+                      key={idx}
+                      className='border border-gray-200 rounded-xl p-3 gap-2 bg-gray-50/50'
+                    >
+                      <View className='flex-row justify-between items-center'>
+                        <Text className='text-xs font-bold tracking-widest text-gray-500 uppercase'>
+                          Variant {idx + 1}
+                        </Text>
+                        <TouchableOpacity
+                          onPress={() =>
+                            setFormState({
+                              ...formState,
+                              variants: formState.variants.filter(
+                                (_, i) => i !== idx,
+                              ),
+                            })
+                          }
+                          className='w-7 h-7 rounded-full bg-white border border-red-100 items-center justify-center'
+                        >
+                          <Trash2 size={12} color='#dc2626' />
+                        </TouchableOpacity>
+                      </View>
+
+                      <View>
+                        <Text className='text-xs font-semibold text-gray-700 mb-1'>
+                          Name * (e.g., 500ml, Red, Small)
+                        </Text>
+                        <TextInput
+                          className='bg-white border border-gray-300 rounded-xl px-3 py-2.5 text-sm'
+                          placeholder='e.g., 1kg'
+                          value={variant.name}
+                          onChangeText={(t) => {
+                            const next = [...formState.variants]
+                            next[idx] = { ...next[idx], name: t }
+                            setFormState({ ...formState, variants: next })
+                          }}
+                        />
+                      </View>
+
+                      <View className='flex-row gap-2'>
+                        <View className='flex-1'>
+                          <Text className='text-xs font-semibold text-gray-700 mb-1'>
+                            Price *
+                          </Text>
+                          <TextInput
+                            className='bg-white border border-gray-300 rounded-xl px-3 py-2.5 text-sm'
+                            keyboardType='numeric'
+                            placeholder='0'
+                            value={variant.price}
+                            onChangeText={(t) => {
+                              const next = [...formState.variants]
+                              next[idx] = { ...next[idx], price: t }
+                              setFormState({ ...formState, variants: next })
+                            }}
+                          />
+                        </View>
+                        <View className='flex-1'>
+                          <Text className='text-xs font-semibold text-gray-700 mb-1'>
+                            Cost
+                          </Text>
+                          <TextInput
+                            className='bg-white border border-gray-300 rounded-xl px-3 py-2.5 text-sm'
+                            keyboardType='numeric'
+                            placeholder='0'
+                            value={variant.cost}
+                            onChangeText={(t) => {
+                              const next = [...formState.variants]
+                              next[idx] = { ...next[idx], cost: t }
+                              setFormState({ ...formState, variants: next })
+                            }}
+                          />
+                        </View>
+                      </View>
+
+                      <View className='flex-row gap-2'>
+                        <View className='flex-1'>
+                          <Text className='text-xs font-semibold text-gray-700 mb-1'>
+                            SKU
+                          </Text>
+                          <TextInput
+                            className='bg-white border border-gray-300 rounded-xl px-3 py-2.5 text-sm'
+                            placeholder='Optional'
+                            value={variant.sku}
+                            onChangeText={(t) => {
+                              const next = [...formState.variants]
+                              next[idx] = { ...next[idx], sku: t }
+                              setFormState({ ...formState, variants: next })
+                            }}
+                            autoCapitalize='characters'
+                          />
+                        </View>
+                        <View className='flex-1'>
+                          <Text className='text-xs font-semibold text-gray-700 mb-1'>
+                            Barcode
+                          </Text>
+                          <TextInput
+                            className='bg-white border border-gray-300 rounded-xl px-3 py-2.5 text-sm'
+                            placeholder='Optional'
+                            value={variant.barcode}
+                            onChangeText={(t) => {
+                              const next = [...formState.variants]
+                              next[idx] = { ...next[idx], barcode: t }
+                              setFormState({ ...formState, variants: next })
+                            }}
+                          />
+                        </View>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
             </View>
             <TouchableOpacity
               onPress={handleSaveItem}

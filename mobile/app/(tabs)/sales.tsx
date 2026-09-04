@@ -36,6 +36,9 @@ export default function SalesTab() {
   const [paymentMethod, setPaymentMethod] = useState('cash')
   const [draftLines, setDraftLines] = useState<DraftLine[]>([])
   const [selectedProductId, setSelectedProductId] = useState('')
+  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(
+    null,
+  )
   const [quantity, setQuantity] = useState('1')
 
   const { products, isLoading: productsLoading } = useProducts()
@@ -80,19 +83,45 @@ export default function SalesTab() {
   const addLine = () => {
     if (!selectedProduct)
       return Alert.alert('Validation', 'Select a product first.')
+
+    const variants = (selectedProduct as any).variants || []
+    const hasVariants = variants.length > 0
+
+    if (hasVariants && !selectedVariantId) {
+      return Alert.alert(
+        'Validation',
+        'This product has variants — please select one.',
+      )
+    }
+
     if (toNumber(quantity) <= 0)
       return Alert.alert('Validation', 'Enter a valid quantity.')
+
+    const variant = hasVariants
+      ? variants.find((v: any) => v.id === selectedVariantId)
+      : null
+    const unitPrice = variant
+      ? variant.price.toString()
+      : selectedProduct.price.toString()
+
     setDraftLines((prev) => [
       ...prev,
       {
         productId: selectedProduct.id,
+        variantId: variant?.id || null,
         productName: selectedProduct.name,
+        variantName: variant?.name || null,
         quantity,
-        unitPrice: selectedProduct.price.toString(),
+        unitPrice,
       },
     ])
     setSelectedProductId('')
+    setSelectedVariantId(null)
     setQuantity('1')
+  }
+
+  const removeLine = (index: number) => {
+    setDraftLines((prev) => prev.filter((_, i) => i !== index))
   }
 
   const resetDraft = () => {
@@ -100,6 +129,7 @@ export default function SalesTab() {
     setPaymentMethod('cash')
     setDraftLines([])
     setSelectedProductId('')
+    setSelectedVariantId(null)
     setQuantity('1')
   }
 
@@ -124,6 +154,7 @@ export default function SalesTab() {
         paymentMethod,
         lines: draftLines.map((l) => ({
           productId: l.productId,
+          variantId: (l as any).variantId || null,
           quantity: l.quantity,
           unitPrice: l.unitPrice,
         })),
@@ -292,14 +323,20 @@ export default function SalesTab() {
         setPaymentMethod={setPaymentMethod}
         selectedProductId={selectedProductId}
         setSelectedProductId={setSelectedProductId}
+        selectedVariantId={selectedVariantId}
+        setSelectedVariantId={setSelectedVariantId}
         quantity={quantity}
         setQuantity={setQuantity}
         draftLines={draftLines}
         addLine={addLine}
+        removeLine={removeLine}
         total={total}
         isSaving={isCreatingSale}
         onAddCustomer={() => setShowCustomerModal(true)}
-        onClose={() => setShowSaleModal(false)}
+        onClose={() => {
+          setShowSaleModal(false)
+          setSelectedVariantId(null)
+        }}
         onSubmit={handleCreateSale}
       />
 
