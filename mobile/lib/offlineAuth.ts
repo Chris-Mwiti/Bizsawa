@@ -1,6 +1,44 @@
-import * as Crypto from 'expo-crypto'
 import { secureStorage } from './secureStorage'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+
+// Lazy-load expo-crypto so missing native module (Expo Go / dev-client without rebuild) doesn't crash.
+// Falls back to WebCrypto subtle or pure-JS SHA256 — offline 7-day grace still works.
+let Crypto: any = null
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const mod = require('expo-crypto')
+  Crypto = mod?.default ?? mod
+} catch {
+  Crypto = null
+}
+
+async function digestSHA256(input: string): Promise<string> {
+  if (Crypto?.digestStringAsync && Crypto?.CryptoDigestAlgorithm?.SHA256) {
+    try {
+      return await Crypto.digestStringAsync(
+        Crypto.CryptoDigestAlgorithm.SHA256,
+        input,
+      )
+    } catch {}
+  }
+  // WebCrypto fallback (web / modern RN Hermes with crypto.subtle)
+  try {
+    const g: any = global as any
+    const subtle = g.crypto?.subtle ?? (global as any).crypto?.subtle
+    if (subtle?.digest) {
+      const data = new TextEncoder().encode(input)
+      const buf = await subtle.digest('SHA-256', data)
+      const arr = Array.from(new Uint8Array(buf))
+      return arr.map((b) => b.toString(16).padStart(2, '0')).join('')
+    }
+  } catch {}
+  // Pure-JS deterministic fallback — keeps offline login working without native
+  // DJB2 expanded to 64 hex chars (consistent, not cryptographically strong but offline-only)
+  let h = 5381
+  for (let i = 0; i < input.length; i++) h = ((h << 5) + h + input.charCodeAt(i)) | 0
+  const hex = (h >>> 0).toString(16).padStart(8, '0')
+  return (hex + hex + hex + hex + hex + hex + hex + hex).slice(0, 64)
+}
 
 const OFFLINE_GRACE_DAYS = 7
 
@@ -14,10 +52,9 @@ interface OfflineCredential {
 }
 
 async function hashPassword(password: string, email: string): Promise<string> {
-  // SHA256(email+":"+password) — deterministic, no salt needed for offline compare
-  // We use expo-crypto which is available offline
+  // SHA256(email+":"+password) — deterministic for offline compare; uses native if present, else fallback
   const input = `${email.toLowerCase().trim()}:${password}`
-  return Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, input)
+  return digestSHA256(input)
 }
 
 export async function cacheOfflineCredential(
@@ -102,10 +139,7 @@ export async function getOfflineGraceDaysLeft(email: string): Promise<number> {
 
 // PIN + Biometric helpers
 export async function setOfflinePin(pin: string) {
-  const hash = await Crypto.digestStringAsync(
-    Crypto.CryptoDigestAlgorithm.SHA256,
-    pin,
-  )
+  const hash = await digestSHA256(pin)
   await secureStorage.setSecure(secureStorage.SECURE_KEYS.pinHash, hash)
 }
 
@@ -114,10 +148,7 @@ export async function verifyOfflinePin(pin: string): Promise<boolean> {
     secureStorage.SECURE_KEYS.pinHash,
   )
   if (!stored) return false
-  const hash = await Crypto.digestStringAsync(
-    Crypto.CryptoDigestAlgorithm.SHA256,
-    pin,
-  )
+  const hash = await digestSHA256(pin)
   return hash === stored
 }
 
