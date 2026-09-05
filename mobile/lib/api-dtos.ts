@@ -417,6 +417,7 @@ export interface AnalyticsSummary {
 export interface InvoiceListItem {
   id: UUID
   invoiceNumber: string
+  customerId?: UUID | null
   customerName: string
   customerPhone?: string
   status:
@@ -438,6 +439,7 @@ export interface InvoiceListItem {
 export interface InvoiceDetail extends InvoiceListItem {
   lines: Array<{
     id: UUID
+    productId?: UUID | null
     description: string
     quantity: DecimalString
     unitPrice: DecimalString
