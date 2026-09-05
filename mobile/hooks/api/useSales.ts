@@ -41,21 +41,27 @@ function toCreateSaleRequest(data: CreateSaleInput): CreateSaleRequest {
   }
 }
 function mapRaw(raw: any): Sale {
+  // raw may be Watermelon Model instance (camelCase getters) or _raw snake_case object
+  const src: any = raw?._raw ? raw._raw : raw
+  const get = (snake: string, camel: string) =>
+    src[snake] ?? raw[camel] ?? raw[snake]
   return {
-    id: raw.id,
-    businessId: raw.business_id,
-    orderId: raw.order_id,
-    customerId: raw.customer_id,
-    receiptNumber: raw.receipt_number,
-    staffId: raw.staff_id || raw.staffId || null,
-    paymentMethod: raw.payment_method,
-    subtotal: raw.subtotal,
-    taxAmount: raw.tax_amount,
-    total: raw.total,
-    status: raw.status,
-    soldAt: toISO(raw.sold_at ?? raw.soldAt),
-    createdAt: toISO(raw.created_at ?? raw.createdAt),
-    updatedAt: toISO(raw.updated_at ?? raw.updatedAt),
+    id: raw.id || src.id,
+    businessId: get('business_id', 'businessId'),
+    orderId: get('order_id', 'orderId'),
+    customerId: get('customer_id', 'customerId'),
+    receiptNumber:
+      get('receipt_number', 'receiptNumber') ||
+      (raw.id ? `RCPT-${shortId(raw.id || src.id, 6)}` : ''),
+    staffId: get('staff_id', 'staffId') || null,
+    paymentMethod: get('payment_method', 'paymentMethod') || 'cash',
+    subtotal: get('subtotal', 'subtotal') || '0',
+    taxAmount: get('tax_amount', 'taxAmount') || '0',
+    total: get('total', 'total') || '0',
+    status: get('status', 'status') || 'completed',
+    soldAt: toISO(get('sold_at', 'soldAt')),
+    createdAt: toISO(get('created_at', 'createdAt')),
+    updatedAt: toISO(get('updated_at', 'updatedAt')),
   } as any
 }
 

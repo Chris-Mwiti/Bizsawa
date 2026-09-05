@@ -193,7 +193,16 @@ func (s *Service) Push(ctx context.Context, businessID uuid.UUID, req PushReques
 func (s *Service) PushWithUser(ctx context.Context, businessID uuid.UUID, userID uuid.UUID, req PushRequest) (*PushResult, error) {
 	result := &PushResult{Applied: map[string][]string{}, Conflicts: []Conflict{}, Errors: map[string][]string{}}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		for table, changes := range req.Changes {
+		// Process in syncableTables order to respect FKs (products → product_variants → inventory_items → ...).
+		// Go map iteration is random, so inventory_items could be attempted before its product and hit
+		// ERROR 23503 violates foreign key constraint "inventory_items_product_id_fkey".
+		processed := map[string]bool{}
+		for _, table := range syncableTables {
+			changes, ok := req.Changes[table]
+			if !ok {
+				continue
+			}
+			processed[table] = true
 			// Validate table is syncable
 			if !isSyncable(table) {
 				result.Errors[table] = append(result.Errors[table], "table not syncable")
@@ -306,7 +315,13 @@ func (s *Service) PushWithUser(ctx context.Context, businessID uuid.UUID, userID
 				}
 			}
 		}
-
+		// Any tables not in canonical syncableTables order (should be none) — surface as errors
+		for table := range req.Changes {
+			if processed[table] {
+				continue
+			}
+			result.Errors[table] = append(result.Errors[table], "table not syncable")
+		}
 		return nil
 	})
 
@@ -598,7 +613,92 @@ func (s *Service) insertRecord(tx *gorm.DB, businessID uuid.UUID, userID uuid.UU
 		}
 	}
 
+	// FK guard: avoid SQLSTATE 23503. If a required FK parent is missing in this tx,
+	// return a controlled error (surfaced in PushResult.Errors) instead of letting
+	// Postgres emit ERROR ... violates foreign key constraint.
+	if err := s.validateFKs(tx, businessID, table, rec); err != nil {
+		return err
+	}
+
 	return tx.Table(table).Create(rec).Error
+}
+
+func (s *Service) validateFKs(tx *gorm.DB, businessID uuid.UUID, table string, rec map[string]any) error {
+	type fkCheck struct {
+		col      string
+		parent   string
+		required bool
+	}
+	var checks []fkCheck
+	switch table {
+	case "product_variants":
+		checks = []fkCheck{{"product_id", "products", true}}
+	case "inventory_items":
+		checks = []fkCheck{{"product_id", "products", true}}
+	case "stock_movements":
+		checks = []fkCheck{{"product_id", "products", true}}
+	case "orders":
+		checks = []fkCheck{{"customer_id", "customers", false}}
+	case "order_lines":
+		checks = []fkCheck{{"order_id", "orders", true}, {"product_id", "products", true}, {"product_variant_id", "product_variants", false}}
+	case "sales":
+		checks = []fkCheck{{"customer_id", "customers", false}, {"order_id", "orders", false}}
+	case "sale_lines":
+		checks = []fkCheck{{"sale_id", "sales", true}, {"product_id", "products", true}, {"product_variant_id", "product_variants", false}}
+	case "invoices":
+		checks = []fkCheck{{"customer_id", "customers", false}, {"order_id", "orders", false}}
+	case "invoice_lines":
+		checks = []fkCheck{{"invoice_id", "invoices", true}, {"product_id", "products", false}}
+	case "payment_commands":
+		checks = []fkCheck{{"order_id", "orders", true}}
+	}
+	for _, c := range checks {
+		raw, ok := rec[c.col]
+		if !ok || raw == nil {
+			continue
+		}
+		idStr, ok := raw.(string)
+		if !ok || idStr == "" {
+			continue
+		}
+		if !isValidUUID(idStr) {
+			if c.required {
+				return fmt.Errorf("FK violation: %s=%s invalid UUID for %s — parent %s missing", c.col, idStr, table, c.parent)
+			}
+			delete(rec, c.col)
+			continue
+		}
+		pid, _ := uuid.Parse(idStr)
+		var exists int64
+		// parent must exist for this business and not soft-deleted
+		tx.Raw(fmt.Sprintf(`SELECT COUNT(*) FROM %s WHERE id = ? AND business_id = ? AND deleted_at IS NULL`, c.parent), pid, businessID).Scan(&exists)
+		if exists == 0 {
+			if c.required {
+				return fmt.Errorf("FK violation: %s=%s references %s not found for %s — ensure parent synced before child (SQLSTATE 23503)", c.col, idStr, c.parent, table)
+			}
+			// nullable FK — null it out to allow insert (SET NULL semantics)
+			delete(rec, c.col)
+		}
+	}
+	return nil
+}
+
+var allowedUpdateColumns = map[string]map[string]bool{
+	"products":         {"name": true, "description": true, "sku": true, "category": true, "barcode": true, "image_url": true, "tax_rule_id": true, "price": true, "cost": true, "is_active": true, "sync_version": true, "deleted_at": true},
+	"product_variants": {"business_id": true, "product_id": true, "name": true, "sku": true, "barcode": true, "price": true, "cost": true, "is_active": true, "sync_version": true, "deleted_at": true},
+	"customers":        {"name": true, "phone": true, "email": true, "address": true, "tags": true, "notes": true, "loyalty_points": true, "total_spend": true, "last_purchase_at": true, "sync_version": true, "deleted_at": true},
+	"inventory_items":  {"product_id": true, "quantity": true, "low_stock_threshold": true, "sync_version": true, "deleted_at": true},
+	"stock_movements":  {"product_id": true, "quantity_delta": true, "movement_type": true, "reference_type": true, "reference_id": true, "notes": true, "occurred_at": true, "sync_version": true, "deleted_at": true},
+	"orders":           {"customer_id": true, "status": true, "subtotal": true, "tax_amount": true, "total": true, "payment_method": true, "payment_status": true, "idempotency_key": true, "confirmed_at": true, "fulfilled_at": true, "sync_version": true, "deleted_at": true},
+	"order_lines":      {"order_id": true, "product_id": true, "product_variant_id": true, "quantity": true, "unit_price": true, "line_total": true, "sync_version": true, "deleted_at": true},
+	"sales":            {"order_id": true, "customer_id": true, "receipt_number": true, "staff_id": true, "payment_method": true, "subtotal": true, "tax_amount": true, "total": true, "status": true, "sold_at": true, "idempotency_key": true, "sync_version": true, "deleted_at": true},
+	"sale_lines":       {"sale_id": true, "product_id": true, "product_variant_id": true, "quantity": true, "unit_price": true, "line_total": true, "sync_version": true, "deleted_at": true},
+	"expenses":         {"category": true, "description": true, "vendor": true, "amount": true, "tax_amount": true, "is_recurring": true, "recurring_interval": true, "spent_at": true, "created_by": true, "sync_version": true, "deleted_at": true},
+	"invoices":         {"customer_id": true, "invoice_number": true, "order_id": true, "status": true, "subtotal": true, "tax_amount": true, "total": true, "amount_paid": true, "amount_due": true, "currency": true, "notes": true, "due_at": true, "sent_at": true, "sync_version": true, "deleted_at": true},
+	"invoice_lines":    {"invoice_id": true, "product_id": true, "description": true, "quantity": true, "unit_price": true, "line_total": true, "sync_version": true, "deleted_at": true},
+	"payments":         {"invoice_id": true, "order_id": true, "amount": true, "currency": true, "phone": true, "status": true, "provider": true, "sync_version": true, "deleted_at": true},
+	"payment_commands": {"order_id": true, "amount": true, "currency": true, "phone": true, "status": true, "provider": true, "type": true},
+	"tax_rules":        {"name": true, "rate": true, "country": true, "is_default": true, "is_active": true, "sync_version": true, "deleted_at": true},
 }
 
 func (s *Service) updateRecord(tx *gorm.DB, businessID uuid.UUID, table string, rec map[string]any) error {
@@ -608,6 +708,24 @@ func (s *Service) updateRecord(tx *gorm.DB, businessID uuid.UUID, table string, 
 	for k, v := range rec {
 		if k == "id" || k == "sync_version" || k == "syncVersion" || (len(k) > 0 && k[0] == '_') {
 			continue
+		}
+		// Explicitly drop stray keys that don't map to DB columns (e.g. legacy `type`, `customerPhone`, `undefined`)
+		if v == nil {
+			continue
+		}
+		if s, ok := v.(string); ok {
+			trim := strings.TrimSpace(s)
+			if trim == "" && k != "notes" && k != "description" && k != "address" {
+				// allow empty for nullable text but skip "undefined" sentinel
+			}
+			if strings.EqualFold(trim, "undefined") || strings.EqualFold(trim, "null") && trim == "undefined" {
+				continue
+			}
+		}
+		if allowed, ok := allowedUpdateColumns[table]; ok {
+			if !allowed[k] {
+				continue
+			}
 		}
 
 		if isTimestampColumn(k) {

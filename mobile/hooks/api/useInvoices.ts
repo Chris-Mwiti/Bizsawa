@@ -39,19 +39,26 @@ function toInvoiceRequest(input: CreateInvoiceInput) {
   }
 }
 function mapRaw(raw: any): InvoiceListItem {
-  // raw from Watermelon holds customer_id (UUID) — keep it as customerId and leave customerName to be resolved via useCustomers lookup
-  // This fixes list showing UUID instead of name
+  const src: any = raw?._raw ? raw._raw : raw
+  const get = (snake: string, camel: string) =>
+    src[snake] ?? raw[camel] ?? raw[snake]
+  const cid = get('customer_id', 'customerId') || null
+  // Do NOT put UUID into customerName — leave blank for UI lookup via useCustomers; prevents showing raw UUID
+  const invNo =
+    get('invoice_number', 'invoiceNumber') ||
+    get('invoiceNumber', 'invoice_number') ||
+    (raw.id || src.id ? `INV-${String(raw.id || src.id).slice(0, 6).toUpperCase()}` : 'INV-??????')
   return {
-    id: raw.id,
-    invoiceNumber: raw.invoice_number,
-    customerId: raw.customer_id || null,
-    customerName: raw.customer_id || 'Customer',
-    status: raw.status,
-    total: raw.total,
-    amountDue: raw.amount_due,
-    currency: raw.currency,
-    dueAt: toISO(raw.due_at),
-    createdAt: toISO(raw.created_at),
+    id: raw.id || src.id,
+    invoiceNumber: invNo,
+    customerId: cid,
+    customerName: '', // resolved in UI via getCustomerName -> useCustomers lookup
+    status: get('status', 'status') || 'draft',
+    total: get('total', 'total') || '0',
+    amountDue: get('amount_due', 'amountDue') || '0',
+    currency: get('currency', 'currency') || 'KES',
+    dueAt: toISO(get('due_at', 'dueAt')),
+    createdAt: toISO(get('created_at', 'createdAt')),
   } as any
 }
 
@@ -105,20 +112,25 @@ export const useInvoices = () => {
           const lines = (await linesCol
             .query(Q.where('invoice_id', id))
             .fetch()) as any[]
+          const srcInv: any = (raw as any)._raw ? (raw as any)._raw : raw
+          const g = (snake: string, camel: string) =>
+            srcInv[snake] ?? (raw as any)[camel] ?? srcInv[camel] ?? (raw as any)[snake]
           return {
-            id: raw.id,
-            invoiceNumber: raw.invoice_number,
-            customerId: raw.customer_id || null,
-            customerName: raw.customer_id,
-            status: raw.status,
-            total: raw.total,
-            subtotal: raw.subtotal,
-            taxAmount: raw.tax_amount,
-            amountPaid: raw.amount_paid,
-            amountDue: raw.amount_due,
-            currency: raw.currency,
-            dueAt: toISO(raw.due_at),
-            createdAt: toISO(raw.created_at),
+            id: raw.id || srcInv.id,
+            invoiceNumber:
+              g('invoice_number', 'invoiceNumber') ||
+              `INV-${String(raw.id || srcInv.id).slice(0, 6).toUpperCase()}`,
+            customerId: g('customer_id', 'customerId') || null,
+            customerName: '', // UI resolves via customers hook, avoid UUID display
+            status: g('status', 'status') || 'draft',
+            total: g('total', 'total') || '0',
+            subtotal: g('subtotal', 'subtotal') || '0',
+            taxAmount: g('tax_amount', 'taxAmount') || '0',
+            amountPaid: g('amount_paid', 'amountPaid') || '0',
+            amountDue: g('amount_due', 'amountDue') || '0',
+            currency: g('currency', 'currency') || 'KES',
+            dueAt: toISO(g('due_at', 'dueAt')),
+            createdAt: toISO(g('created_at', 'createdAt')),
             lines: lines.map((l: any) => ({
               id: l.id,
               productId: l._raw?.product_id || l.productId || null,

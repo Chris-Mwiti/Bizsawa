@@ -48,8 +48,14 @@
         "expo-build-properties",
         {
           "android": {
+            "kotlinVersion": "2.0.21",
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
             "packagingOptions": {
-              "pickFirst": ["**/libc++_shared.so", "**/libfbjni.so"]
+              "pickFirst": [
+                "**/libc++_shared.so",
+                "**/libfbjni.so"
+              ]
             }
           },
           "ios": {
@@ -63,7 +69,8 @@
           "disableJsi": false
         }
       ],
-      "expo-sqlite"
+      "expo-sqlite",
+      "expo-secure-store"
     ],
     "extra": {
       "router": {},

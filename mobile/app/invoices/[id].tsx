@@ -102,6 +102,7 @@ export default function InvoiceDetail() {
   const [paymentAmount, setPaymentAmount] = useState('')
   const [paymentMethod, setPaymentMethod] = useState('cash')
   const [paymentRef, setPaymentRef] = useState('')
+  const [lastSettlement, setLastSettlement] = useState<any>(null)
 
   const {
     getInvoice,
@@ -182,16 +183,22 @@ export default function InvoiceDetail() {
           reference: paymentRef,
         })
         const allocations = result?.allocations || []
+        setLastSettlement(result)
         if (allocations.length > 1) {
           const summary = allocations
             .map((a: any) => `${a.invoiceNumber}: ${a.amount} (${a.status})`)
             .join('\n')
           Alert.alert(
             'Payment distributed',
-            `KES ${paymentAmount} applied to ${allocations.length} invoices:\n${summary}${result.remainingCredit && parseFloat(result.remainingCredit) > 0 ? `\n\nCredit remaining: KES ${result.remainingCredit}` : ''}`,
+            `KES ${paymentAmount} applied to ${allocations.length} invoices:\n${summary}${result.remainingCredit && parseFloat(result.remainingCredit) > 0 ? `\n\nExcess credit: KES ${result.remainingCredit} — will apply to next invoices. ✅ Complete.` : '\n\nAll invoices fully settled. ✅'}`,
+          )
+        } else if (result?.remainingCredit && parseFloat(result.remainingCredit) > 0) {
+          Alert.alert(
+            'Payment complete — excess credit',
+            `Invoice ${invoice.invoiceNumber} fully paid. Excess KES ${result.remainingCredit} kept as customer credit and will auto-apply to oldest unpaid invoices.`,
           )
         } else {
-          Alert.alert('Success', 'Payment applied to customer invoices')
+          Alert.alert('Success', 'Payment applied — invoice fully settled ✅')
         }
       } else {
         await recordPayment({
@@ -344,6 +351,48 @@ export default function InvoiceDetail() {
             </View>
           </CardContent>
         </Card>
+
+        {/* Excess / allocation banner — visible sign that payment was complete and excess applied FIFO */}
+        {lastSettlement && (
+          <Card className='border border-emerald-200 bg-emerald-50/70'>
+            <CardContent className='p-4'>
+              <View className='flex-row items-center gap-2 mb-2'>
+                <CheckCircle size={16} color='#059669' />
+                <Text className='font-bold text-emerald-900 text-sm'>
+                  Payment complete — distributed FIFO
+                </Text>
+              </View>
+              {lastSettlement.allocations?.length ? (
+                <View className='gap-1.5'>
+                  {lastSettlement.allocations.map((a: any, idx: number) => (
+                    <View key={a.invoiceId || a.invoiceNumber || idx} className='flex-row justify-between items-center bg-white rounded-lg px-3 py-2 border border-emerald-100'>
+                      <Text className='text-xs font-bold text-gray-800' numberOfLines={1}>
+                        {a.invoiceNumber || `Inv ${String(a.invoiceId).slice(0, 6)}`} • {String(a.status).toUpperCase()}
+                      </Text>
+                      <Text className='text-xs font-bold text-emerald-700'>
+                        {formatCurrency(a.amount)}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+              {lastSettlement.remainingCredit && parseFloat(lastSettlement.remainingCredit) > 0 ? (
+                <View className='mt-3 p-3 bg-amber-50 border border-amber-200 rounded-xl'>
+                  <Text className='text-xs font-bold text-amber-900'>
+                    Excess credit: {formatCurrency(lastSettlement.remainingCredit)}
+                  </Text>
+                  <Text className='text-[11px] text-amber-800 mt-1'>
+                    Fully paid — excess will auto-apply to next oldest unpaid invoice for this customer.
+                  </Text>
+                </View>
+              ) : (
+                <Text className='text-[11px] text-emerald-700 mt-2'>
+                  All targeted invoices fully settled. No remaining credit.
+                </Text>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Customer */}
         <Card className='border border-gray-200'>
