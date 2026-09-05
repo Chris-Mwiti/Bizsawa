@@ -193,7 +193,16 @@ func (s *Service) Push(ctx context.Context, businessID uuid.UUID, req PushReques
 func (s *Service) PushWithUser(ctx context.Context, businessID uuid.UUID, userID uuid.UUID, req PushRequest) (*PushResult, error) {
 	result := &PushResult{Applied: map[string][]string{}, Conflicts: []Conflict{}, Errors: map[string][]string{}}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		for table, changes := range req.Changes {
+		// Process in syncableTables order to respect FKs (products → product_variants → inventory_items → ...).
+		// Go map iteration is random, so inventory_items could be attempted before its product and hit
+		// ERROR 23503 violates foreign key constraint "inventory_items_product_id_fkey".
+		processed := map[string]bool{}
+		for _, table := range syncableTables {
+			changes, ok := req.Changes[table]
+			if !ok {
+				continue
+			}
+			processed[table] = true
 			// Validate table is syncable
 			if !isSyncable(table) {
 				result.Errors[table] = append(result.Errors[table], "table not syncable")
@@ -306,7 +315,13 @@ func (s *Service) PushWithUser(ctx context.Context, businessID uuid.UUID, userID
 				}
 			}
 		}
-
+		// Any tables not in canonical syncableTables order (should be none) — surface as errors
+		for table := range req.Changes {
+			if processed[table] {
+				continue
+			}
+			result.Errors[table] = append(result.Errors[table], "table not syncable")
+		}
 		return nil
 	})
 
