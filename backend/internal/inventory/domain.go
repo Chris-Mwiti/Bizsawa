@@ -1,10 +1,12 @@
 package inventory
 
 import (
-	"github.com/Codecx-Org/FinAI/backend/internal/shared/db"
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
-	"time"
+
+	"github.com/Codecx-Org/FinAI/backend/internal/shared/db"
 )
 
 type InventoryItem struct {

@@ -27,4 +27,3 @@ func (m *Module) RegisterRoutes(r chi.Router) {
 }
 
 func (m *Module) Service() *Service { return m.svc }
-

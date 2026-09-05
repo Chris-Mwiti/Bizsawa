@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"time"
 
-	shareddb "github.com/Codecx-Org/FinAI/backend/internal/shared/db"
-	apperrors "github.com/Codecx-Org/FinAI/backend/internal/shared/errors"
-	"github.com/Codecx-Org/FinAI/backend/internal/shared/pagination"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+
+	shareddb "github.com/Codecx-Org/FinAI/backend/internal/shared/db"
+	apperrors "github.com/Codecx-Org/FinAI/backend/internal/shared/errors"
+	"github.com/Codecx-Org/FinAI/backend/internal/shared/pagination"
 )
 
 type Repository struct{ db *gorm.DB }
@@ -30,8 +31,8 @@ func (r *Repository) WithTx(tx *gorm.DB) *Repository {
 func (r *Repository) FindByIdempotency(ctx context.Context, businessID uuid.UUID, key string) (*PaymentCommand, error) {
 	var cmd PaymentCommand
 
-	//parse the key to find out if its valid
-	if _,err := uuid.Parse(key); err != nil {
+	// parse the key to find out if its valid
+	if _, err := uuid.Parse(key); err != nil {
 		return nil, fmt.Errorf("idempotency_key uuid is not valid")
 	}
 
@@ -39,6 +40,7 @@ func (r *Repository) FindByIdempotency(ctx context.Context, businessID uuid.UUID
 	if err != nil {
 		return nil, err
 	}
+
 	return &cmd, nil
 }
 
@@ -50,11 +52,14 @@ func (r *Repository) FindByProviderRequestID(ctx context.Context, requestID stri
 	if requestID == "" {
 		return nil, gorm.ErrRecordNotFound
 	}
+
 	var cmd PaymentCommand
+
 	err := r.db.WithContext(ctx).Where("provider_request_id = ?", requestID).Order("created_at DESC").First(&cmd).Error
 	if err != nil {
 		return nil, err
 	}
+
 	return &cmd, nil
 }
 
@@ -62,26 +67,33 @@ func (r *Repository) FindByAccountReference(ctx context.Context, accountReferenc
 	if accountReference == "" {
 		return nil, gorm.ErrRecordNotFound
 	}
+
 	var cmd PaymentCommand
+
 	err := r.db.WithContext(ctx).Where("account_reference = ?", accountReference).Order("created_at DESC").First(&cmd).Error
 	if err != nil {
 		return nil, err
 	}
+
 	return &cmd, nil
 }
 
 func (r *Repository) Find(ctx context.Context, businessID, id uuid.UUID) (*PaymentCommand, error) {
 	var cmd PaymentCommand
+
 	err := r.db.WithContext(ctx).Scopes(shareddb.BusinessScope(businessID)).Where("id = ?", id).First(&cmd).Error
 	if err != nil {
 		return nil, err
 	}
+
 	return &cmd, nil
 }
 
 func (r *Repository) List(ctx context.Context, businessID uuid.UUID, page pagination.Page) ([]PaymentCommand, error) {
 	var items []PaymentCommand
+
 	err := r.db.WithContext(ctx).Scopes(shareddb.BusinessScope(businessID)).Order("created_at DESC").Limit(page.Limit).Offset(page.Offset).Find(&items).Error
+
 	return items, err
 }
 
@@ -89,23 +101,27 @@ func (r *Repository) ClaimPending(ctx context.Context, limit int) ([]PaymentComm
 	if limit <= 0 {
 		limit = 25
 	}
+
 	var items []PaymentCommand
+
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).Where("status = ?", StatusPending).Order("created_at ASC").Limit(limit).Find(&items).Error; err != nil {
 			return err
 		}
+
 		for _, item := range items {
 			if err := tx.Model(&PaymentCommand{}).Where("id = ?", item.ID).Update("status", StatusProcessing).Error; err != nil {
 				return err
 			}
 		}
+
 		return nil
 	})
+
 	return items, err
 }
 
 func (r *Repository) ClaimSinglePayment(ctx context.Context, command *PaymentCommand) error {
-
 	command, err := r.Find(ctx, command.BusinessID, command.ID)
 
 	if err != nil {
@@ -124,9 +140,11 @@ func (r *Repository) MarkProviderAccepted(ctx context.Context, businessID, id uu
 	if requestID != "" {
 		updates["provider_request_id"] = requestID
 	}
+
 	if receipt != "" {
 		updates["provider_receipt"] = receipt
 	}
+
 	return r.db.WithContext(ctx).Scopes(shareddb.BusinessScope(businessID)).Model(&PaymentCommand{}).Where("id = ?", id).Updates(updates).Error
 }
 
@@ -145,8 +163,10 @@ func (r *Repository) MarkStatus(ctx context.Context, businessID, id uuid.UUID, s
 	if res.Error != nil {
 		return res.Error
 	}
+
 	if res.RowsAffected == 0 {
 		return apperrors.ErrNotFound.WithMessage("payment not found")
 	}
+
 	return nil
 }

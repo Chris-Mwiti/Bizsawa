@@ -5,10 +5,11 @@ import (
 	"net/http"
 	"strings"
 
-	sharedhttp "github.com/Codecx-Org/FinAI/backend/internal/shared/http"
-	"github.com/Codecx-Org/FinAI/backend/internal/shared/middleware"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+
+	sharedhttp "github.com/Codecx-Org/FinAI/backend/internal/shared/http"
+	"github.com/Codecx-Org/FinAI/backend/internal/shared/middleware"
 )
 
 type Role string
@@ -32,6 +33,7 @@ type Enforcer struct {
 func NewEnforcer(members MembershipResolver) *Enforcer {
 	e := &Enforcer{members: members, policy: map[Role]map[string]map[string]bool{}}
 	e.seedDefaults()
+
 	return e
 }
 
@@ -51,6 +53,7 @@ func (e *Enforcer) Middleware(next http.Handler) http.Handler {
 
 		resource, action := ResourceAction(r)
 		role, err := e.members.RoleForUser(r.Context(), businessID, userID)
+
 		if err != nil || !e.Allowed(role, resource, action) {
 			sharedhttp.Error(w, ErrForbidden())
 			return
@@ -65,10 +68,12 @@ func (e *Enforcer) Allowed(role Role, resource, action string) bool {
 	if !ok {
 		return false
 	}
+
 	actions, ok := resources[resource]
 	if !ok {
 		return false
 	}
+
 	return actions[action] || actions["*"]
 }
 
@@ -76,12 +81,14 @@ func ResourceAction(r *http.Request) (string, string) {
 	pattern := chi.RouteContext(r.Context()).RoutePattern()
 	parts := strings.Split(strings.Trim(pattern, "/"), "/")
 	resource := "unknown"
+
 	for i, part := range parts {
 		if part == "v1" && i+1 < len(parts) {
 			resource = parts[i+1]
 			break
 		}
 	}
+
 	if resource == "businesses" && strings.Contains(pattern, "/members") {
 		resource = "members"
 	}
@@ -104,9 +111,11 @@ func (e *Enforcer) allow(role Role, resource string, actions ...string) {
 	if e.policy[role] == nil {
 		e.policy[role] = map[string]map[string]bool{}
 	}
+
 	if e.policy[role][resource] == nil {
 		e.policy[role][resource] = map[string]bool{}
 	}
+
 	for _, action := range actions {
 		e.policy[role][resource][action] = true
 	}
@@ -116,9 +125,11 @@ func (e *Enforcer) seedDefaults() {
 	for _, resource := range []string{"businesses", "members", "products", "customers", "orders", "sales", "inventory", "expenses", "taxes", "invoices", "payments", "reports", "visualizations", "insights", "analytics", "chatbot", "chat", "sync", "ai", "whatsapp"} {
 		e.allow(RoleOwner, resource, "read", "write", "delete", "generate", "configure")
 	}
+
 	for _, resource := range []string{"businesses", "members", "products", "customers", "orders", "sales", "inventory", "expenses", "taxes", "invoices", "reports", "visualizations", "insights", "analytics", "chatbot", "chat", "sync", "ai", "whatsapp"} {
 		e.allow(RoleManager, resource, "read", "write", "generate", "configure")
 	}
+
 	e.allow(RoleCashier, "products", "read")
 	e.allow(RoleCashier, "customers", "read", "write")
 	e.allow(RoleCashier, "orders", "read", "write")
@@ -132,6 +143,7 @@ func (e *Enforcer) seedDefaults() {
 	e.allow(RoleCashier, "chat", "read", "write")
 	e.allow(RoleCashier, "sync", "read", "write")
 	e.allow(RoleCashier, "visualizations", "read")
+
 	for _, resource := range []string{"products", "customers", "orders", "sales", "inventory", "reports", "visualizations", "insights", "analytics", "chatbot", "chat", "sync"} {
 		e.allow(RoleViewer, resource, "read")
 	}

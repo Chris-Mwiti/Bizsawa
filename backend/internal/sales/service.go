@@ -4,16 +4,18 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	shareddb "github.com/Codecx-Org/FinAI/backend/internal/shared/db"
-	"github.com/Codecx-Org/FinAI/backend/internal/shared/middleware"
-	"github.com/Codecx-Org/FinAI/backend/internal/shared/pagination"
-	"github.com/Codecx-Org/FinAI/backend/internal/taxes"
+	"log/slog"
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/riverqueue/river"
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
-	"log/slog"
-	"time"
+
+	shareddb "github.com/Codecx-Org/FinAI/backend/internal/shared/db"
+	"github.com/Codecx-Org/FinAI/backend/internal/shared/middleware"
+	"github.com/Codecx-Org/FinAI/backend/internal/shared/pagination"
+	"github.com/Codecx-Org/FinAI/backend/internal/taxes"
 )
 
 type TaxRecorder interface {
@@ -31,6 +33,7 @@ func NewService(repo *Repository, taxes TaxRecorder, outboxRepo *river.Client[*s
 	if logger == nil {
 		logger = slog.Default()
 	}
+
 	return &Service{repo: repo, taxes: taxes, outbox: outboxRepo, logger: logger}
 }
 
@@ -73,6 +76,7 @@ func (s *Service) Create(ctx context.Context, businessID, staffID uuid.UUID, req
 			return existing, nil
 		}
 	}
+
 	return s.create(ctx, businessID, staffID, req.OrderID, req.CustomerID, req.PaymentMethod, key, toLineInputs(req.Lines))
 }
 
@@ -80,6 +84,7 @@ func (s *Service) CreateFromOrder(ctx context.Context, businessID, staffID, orde
 	if existing, err := s.repo.FindByOrder(ctx, businessID, orderID); err == nil {
 		return existing, nil
 	}
+
 	return s.create(ctx, businessID, staffID, &orderID, customerID, paymentMethod, "", lines)
 }
 
@@ -87,12 +92,15 @@ func (s *Service) create(ctx context.Context, businessID, staffID uuid.UUID, ord
 	if paymentMethod == "" {
 		paymentMethod = "cash"
 	}
+
 	receipt, err := s.repo.NextReceipt(ctx, businessID)
 	if err != nil {
 		return nil, err
 	}
+
 	subtotal := decimal.Zero
 	lines := make([]SaleLine, 0, len(inputs))
+
 	for _, in := range inputs {
 		total := in.Quantity.Mul(in.UnitPrice).Round(2)
 		subtotal = subtotal.Add(total)
@@ -108,6 +116,7 @@ func (s *Service) create(ctx context.Context, businessID, staffID uuid.UUID, ord
 			LineTotal:        total,
 		})
 	}
+
 	tax := subtotal.Mul(decimal.NewFromFloat(0.16)).Round(2)
 	sale := &Sale{
 		BaseModel: shareddb.BaseModel{
@@ -146,7 +155,9 @@ func (s *Service) create(ctx context.Context, businessID, staffID uuid.UUID, ord
 	}); err != nil {
 		return nil, err
 	}
+
 	s.logger.InfoContext(ctx, "[SALES]-sale created", "saleID", sale.ID.String(), "businessID", businessID.String())
+
 	return s.repo.Find(ctx, businessID, sale.ID)
 }
 
@@ -181,12 +192,8 @@ func (s *Service) GetSalesByProduct(ctx context.Context, businessID uuid.UUID) (
 func toLineInputs(lines []SaleLineRequest) []OrderLineInput {
 	out := make([]OrderLineInput, 0, len(lines))
 	for _, l := range lines {
-		out = append(out, OrderLineInput{
-			ProductID:        l.ProductID,
-			ProductVariantID: l.ProductVariantID,
-			Quantity:         l.Quantity,
-			UnitPrice:        l.UnitPrice,
-		})
+		out = append(out, OrderLineInput(l))
 	}
+
 	return out
 }

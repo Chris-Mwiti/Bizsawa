@@ -1,12 +1,12 @@
 package invoices
 
 import (
+	"database/sql"
 	"log/slog"
 
 	"github.com/go-chi/chi/v5"
 	"gorm.io/gorm"
 
-	"database/sql"
 	"github.com/riverqueue/river"
 )
 
@@ -20,9 +20,12 @@ func New(db *gorm.DB, outboxRepo *river.Client[*sql.Tx], logger *slog.Logger) *M
 	if logger == nil {
 		logger = slog.Default()
 	}
+
 	repo := NewRepository(db)
+
 	return &Module{repo: repo, svc: NewService(repo, outboxRepo, logger), logger: logger}
 }
+
 func (m *Module) RegisterRoutes(r chi.Router) {
 	h := Handler{svc: m.svc}
 	r.Get("/", h.List)
@@ -31,6 +34,7 @@ func (m *Module) RegisterRoutes(r chi.Router) {
 	r.Post("/{id}/send", h.Send)
 	r.Post("/{id}/send-whatsapp", h.SendWhatsApp)
 	r.Post("/{id}/record-payment", h.RecordPayment)
+	r.Post("/customer/{customerId}/settle", h.SettleCustomer)
 	r.Get("/{id}/pdf", h.PDF)
 }
 
@@ -38,7 +42,6 @@ func (m *Module) RegisterWorkers(worker *river.Workers) error {
 	river.AddWorker(worker, &invoiceWorker{service: m.svc, logger: m.logger})
 
 	return nil
-
 }
 
 func (m *Module) Service() *Service { return m.svc }

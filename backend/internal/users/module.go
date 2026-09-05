@@ -3,10 +3,11 @@ package users
 import (
 	"context"
 
-	"github.com/Codecx-Org/FinAI/backend/internal/shared/authz"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+
+	"github.com/Codecx-Org/FinAI/backend/internal/shared/authz"
 )
 
 type Module struct {
@@ -43,5 +44,6 @@ func (m *Module) RoleForUser(ctx context.Context, businessID uuid.UUID, userID u
 	if err != nil {
 		return "", err
 	}
+
 	return authz.Role(member.Role), nil
 }

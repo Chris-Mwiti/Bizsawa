@@ -4,12 +4,13 @@ import (
 	"context"
 	"strings"
 
-	shareddb "github.com/Codecx-Org/FinAI/backend/internal/shared/db"
-	apperrors "github.com/Codecx-Org/FinAI/backend/internal/shared/errors"
-	"github.com/Codecx-Org/FinAI/backend/internal/shared/pagination"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
+
+	shareddb "github.com/Codecx-Org/FinAI/backend/internal/shared/db"
+	apperrors "github.com/Codecx-Org/FinAI/backend/internal/shared/errors"
+	"github.com/Codecx-Org/FinAI/backend/internal/shared/pagination"
 )
 
 type Service struct{ repo *Repository }
@@ -42,9 +43,11 @@ func (s *Service) Create(ctx context.Context, businessID uuid.UUID, req Customer
 	if err != nil {
 		return nil, err
 	}
+
 	if err := s.repo.Create(ctx, customer); err != nil {
 		return nil, err
 	}
+
 	return customer, nil
 }
 
@@ -61,10 +64,12 @@ func (s *Service) Update(ctx context.Context, businessID, customerID uuid.UUID, 
 	if err != nil {
 		return nil, err
 	}
+
 	updated, err := customerFromRequest(businessID, req)
 	if err != nil {
 		return nil, err
 	}
+
 	customer.Name = updated.Name
 	customer.Phone = updated.Phone
 	customer.Email = updated.Email
@@ -73,9 +78,11 @@ func (s *Service) Update(ctx context.Context, businessID, customerID uuid.UUID, 
 	customer.Notes = updated.Notes
 	customer.LoyaltyPoints = updated.LoyaltyPoints
 	customer.TotalSpend = updated.TotalSpend
+
 	if err := s.repo.Update(ctx, customer); err != nil {
 		return nil, err
 	}
+
 	return customer, nil
 }
 
@@ -87,6 +94,7 @@ func (s *Service) GetTopCustomers(ctx context.Context, businessID uuid.UUID, lim
 	if limit <= 0 || limit > 100 {
 		limit = 10
 	}
+
 	return s.repo.TopCustomers(ctx, businessID, limit)
 }
 
@@ -94,6 +102,7 @@ func (s *Service) GetCustomerPurchaseHistory(ctx context.Context, businessID, cu
 	if _, err := s.repo.Find(ctx, businessID, customerID); err != nil {
 		return nil, err
 	}
+
 	return []PurchaseHistoryEntry{}, nil
 }
 
@@ -101,12 +110,15 @@ func customerFromRequest(businessID uuid.UUID, req CustomerRequest) (*Customer, 
 	if strings.TrimSpace(req.Name) == "" {
 		return nil, apperrors.ErrUnprocessable.WithMessage("customer name is required")
 	}
+
 	tags := make([]string, 0, len(req.Tags))
+
 	for _, tag := range req.Tags {
 		trimmed := strings.TrimSpace(tag)
 		if trimmed != "" {
 			tags = append(tags, trimmed)
 		}
 	}
+
 	return &Customer{BaseModel: shareddb.BaseModel{TenantID: businessID}, BusinessID: businessID, Name: strings.TrimSpace(req.Name), Phone: strings.TrimSpace(req.Phone), Email: strings.TrimSpace(req.Email), Address: strings.TrimSpace(req.Address), Tags: tags, Notes: strings.TrimSpace(req.Notes), LoyaltyPoints: req.LoyaltyPoints, TotalSpend: req.TotalSpend}, nil
 }

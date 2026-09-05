@@ -24,9 +24,10 @@ type Bus interface {
 	Subscribe(ctx context.Context, stream, targetType string, evtHandFun EventHandlerFunc) error
 }
 
-// MapToEvent converts raw Redis stream string fields back into your domain Event struct
+// MapToEvent converts raw Redis stream string fields back into your domain Event struct.
 func MapToEvent(fields map[string]string) (Event, error) {
 	var event Event
+
 	var err error
 
 	if idStr, exists := fields["id"]; exists && idStr != "" {
@@ -60,4 +61,3 @@ func MapToEvent(fields map[string]string) (Event, error) {
 
 	return event, nil
 }
-

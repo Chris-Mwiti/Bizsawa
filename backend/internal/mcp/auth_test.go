@@ -5,9 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Codecx-Org/FinAI/backend/internal/shared/config"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+
+	"github.com/Codecx-Org/FinAI/backend/internal/shared/config"
 )
 
 func TestAuthenticatorRequiresAudience(t *testing.T) {
@@ -32,6 +33,7 @@ func TestAuthenticatorBuildsSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("authenticate failed: %v", err)
 	}
+
 	if session.Profile != ProfileCustomerService || session.Role != "OWNER" || session.RequestID != "req-1" {
 		t.Fatalf("unexpected session: %#v", session)
 	}
@@ -39,6 +41,7 @@ func TestAuthenticatorBuildsSession(t *testing.T) {
 
 func tokenForTest(t *testing.T, issuer string, audience []string) string {
 	t.Helper()
+
 	claims := Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    issuer,
@@ -52,9 +55,11 @@ func tokenForTest(t *testing.T, issuer string, audience []string) string {
 		BusinessID: uuid.New(),
 		Roles:      []string{"OWNER"},
 	}
+
 	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte("secret"))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	return token
 }

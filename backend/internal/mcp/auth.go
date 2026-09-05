@@ -5,9 +5,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/Codecx-Org/FinAI/backend/internal/shared/config"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+
+	"github.com/Codecx-Org/FinAI/backend/internal/shared/config"
 )
 
 var ErrUnauthorized = errors.New("unauthorized")
@@ -32,6 +33,7 @@ func NewAuthenticator(jwtCfg config.JWTConfig, mcpCfg config.MCPConfig) *Authent
 	if issuer == "" {
 		issuer = jwtCfg.Issuer
 	}
+
 	return &Authenticator{signingKey: []byte(jwtCfg.SigningKey), issuer: issuer, audience: mcpCfg.AuthAudience}
 }
 
@@ -40,22 +42,28 @@ func (a *Authenticator) Authenticate(r *http.Request, profile Profile) (Session,
 	if !strings.HasPrefix(header, "Bearer ") {
 		return Session{}, ErrUnauthorized
 	}
+
 	claims := &Claims{}
 	token, err := jwt.ParseWithClaims(strings.TrimPrefix(header, "Bearer "), claims, func(token *jwt.Token) (any, error) {
 		if token.Method.Alg() != jwt.SigningMethodHS256.Alg() {
 			return nil, jwt.ErrTokenSignatureInvalid
 		}
+
 		return a.signingKey, nil
 	}, jwt.WithIssuer(a.issuer), jwt.WithAudience(a.audience))
+
 	if err != nil || !token.Valid {
 		return Session{}, ErrUnauthorized
 	}
+
 	role := ""
 	if len(claims.Roles) > 0 {
 		role = claims.Roles[0]
 	}
+
 	if claims.SubscriptionPlan == "" {
 		claims.SubscriptionPlan = "standard"
 	}
+
 	return Session{UserID: claims.UserID, TenantID: claims.TenantID, BusinessID: claims.BusinessID, Role: role, SubscriptionPlan: claims.SubscriptionPlan, Profile: profile, RequestID: r.Header.Get("X-Request-ID")}, nil
 }

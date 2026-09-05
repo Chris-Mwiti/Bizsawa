@@ -19,7 +19,9 @@ func New(db *gorm.DB, taxes TaxRecorder, outboxRepo *river.Client[*sql.Tx], logg
 	if logger == nil {
 		logger = slog.Default()
 	}
+
 	repo := NewRepository(db)
+
 	return &Module{repo: repo, svc: NewService(repo, taxes, outboxRepo, logger), logger: logger}
 }
 

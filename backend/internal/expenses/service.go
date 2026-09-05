@@ -4,12 +4,13 @@ import (
 	"context"
 	"time"
 
-	shareddb "github.com/Codecx-Org/FinAI/backend/internal/shared/db"
-	apperrors "github.com/Codecx-Org/FinAI/backend/internal/shared/errors"
-	"github.com/Codecx-Org/FinAI/backend/internal/shared/pagination"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
+
+	shareddb "github.com/Codecx-Org/FinAI/backend/internal/shared/db"
+	apperrors "github.com/Codecx-Org/FinAI/backend/internal/shared/errors"
+	"github.com/Codecx-Org/FinAI/backend/internal/shared/pagination"
 )
 
 type TaxRecorder interface {
@@ -41,51 +42,58 @@ func (s *Service) WithTx(tx *gorm.DB) *Service {
 	}
 
 	return &Service{
-		repo: s.repo.WithTx(tx),
+		repo:  s.repo.WithTx(tx),
 		taxes: s.taxes,
 	}
 }
-
-
 
 func (s *Service) Create(ctx context.Context, businessID, userID uuid.UUID, req ExpenseRequest) (*Expense, error) {
 	if req.Category == "" {
 		return nil, apperrors.ErrUnprocessable.WithMessage("expense category is required")
 	}
+
 	spent := time.Now().UTC()
 	if req.SpentAt != nil {
 		spent = *req.SpentAt
 	}
+
 	item := &Expense{
-		BaseModel: shareddb.BaseModel{TenantID: businessID}, 
-		BusinessID: businessID, 
-		Category: req.Category, 
-		Description: req.Description, 
-		Vendor: req.Vendor, 
-		Amount: req.Amount, 
-		TaxAmount: req.TaxAmount, 
-		IsRecurring: req.IsRecurring, 
-		RecurringInterval: req.RecurringInterval, 
-		SpentAt: spent, 
-		CreatedBy: userID,
+		BaseModel:         shareddb.BaseModel{TenantID: businessID},
+		BusinessID:        businessID,
+		Category:          req.Category,
+		Description:       req.Description,
+		Vendor:            req.Vendor,
+		Amount:            req.Amount,
+		TaxAmount:         req.TaxAmount,
+		IsRecurring:       req.IsRecurring,
+		RecurringInterval: req.RecurringInterval,
+		SpentAt:           spent,
+		CreatedBy:         userID,
 	}
+
 	if err := s.repo.Create(ctx, item); err != nil {
 		return nil, err
 	}
+
 	if s.taxes != nil && req.TaxAmount.IsPositive() {
 		_ = s.taxes.RecordExpenseTax(ctx, businessID, item.ID, req.Amount, req.TaxAmount)
 	}
+
 	return item, nil
 }
+
 func (s *Service) List(ctx context.Context, businessID uuid.UUID, page pagination.Page) ([]Expense, error) {
 	return s.repo.List(ctx, businessID, page)
 }
+
 func (s *Service) Get(ctx context.Context, businessID, id uuid.UUID) (*Expense, error) {
 	return s.repo.Find(ctx, businessID, id)
 }
+
 func (s *Service) Delete(ctx context.Context, businessID, id uuid.UUID) error {
 	return s.repo.Delete(ctx, businessID, id)
 }
+
 func (s *Service) SummaryByCategory(ctx context.Context, businessID uuid.UUID, from, to time.Time) ([]CategorySummary, error) {
 	return s.repo.Summary(ctx, businessID, from, to)
 }

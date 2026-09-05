@@ -15,16 +15,19 @@ func (h Handler) Send(w http.ResponseWriter, r *http.Request) {
 		sharedhttp.Error(w, errBusinessRequired())
 		return
 	}
+
 	var req SendRequest
 	if err := sharedhttp.Decode(r, &req); err != nil {
 		sharedhttp.Error(w, err)
 		return
 	}
+
 	resp, err := h.svc.Send(r.Context(), req.Phone, req.Message)
 	if err != nil {
 		sharedhttp.Error(w, err)
 		return
 	}
+
 	sharedhttp.JSON(w, http.StatusOK, resp)
 }
 
@@ -41,15 +44,18 @@ func (h Handler) Notify(w http.ResponseWriter, r *http.Request) {
 		sharedhttp.Error(w, errBusinessRequired())
 		return
 	}
+
 	var req notificationRequest
 	if err := sharedhttp.Decode(r, &req); err != nil {
 		sharedhttp.Error(w, err)
 		return
 	}
+
 	resp, err := h.svc.SendNotification(r.Context(), req.Phone, req.Type, req.Data)
 	if err != nil {
 		sharedhttp.Error(w, err)
 		return
 	}
+
 	sharedhttp.JSON(w, http.StatusOK, resp)
 }

@@ -21,18 +21,23 @@ func New[T any](cfg Config) *gobreaker.CircuitBreaker[T] {
 	if cfg.MaxRequests == 0 {
 		cfg.MaxRequests = 5
 	}
+
 	if cfg.Interval == 0 {
 		cfg.Interval = time.Minute
 	}
+
 	if cfg.Timeout == 0 {
 		cfg.Timeout = 30 * time.Second
 	}
+
 	if cfg.FailureRate == 0 {
 		cfg.FailureRate = 0.6
 	}
+
 	if cfg.MinRequests == 0 {
 		cfg.MinRequests = 3
 	}
+
 	logger := cfg.Logger
 	if logger == nil {
 		logger = slog.Default()

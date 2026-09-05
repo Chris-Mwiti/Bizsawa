@@ -4,8 +4,9 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/Codecx-Org/FinAI/backend/internal/shared/authz"
 	"github.com/google/uuid"
+
+	"github.com/Codecx-Org/FinAI/backend/internal/shared/authz"
 )
 
 func TestRegistryListFiltersByProfileRoleAndBusiness(t *testing.T) {
@@ -15,6 +16,7 @@ func TestRegistryListFiltersByProfileRoleAndBusiness(t *testing.T) {
 	)
 
 	session := Session{Profile: ProfileBusinessOwner, Role: string(authz.RoleOwner), BusinessID: uuid.New()}
+
 	tools := registry.List(session)
 	if len(tools) != 1 || tools[0].Name != "owner_tool" {
 		t.Fatalf("unexpected tools: %#v", tools)
@@ -43,6 +45,7 @@ func TestRegistryCallReturnsEnvelopeMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatalf("call failed: %v", err)
 	}
+
 	if envelope.Status != "ok" || envelope.Meta["business_id"] != businessID.String() || envelope.Meta["result_count"] != 1 {
 		t.Fatalf("unexpected envelope: %#v", envelope)
 	}

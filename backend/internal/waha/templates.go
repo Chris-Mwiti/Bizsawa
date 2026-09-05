@@ -30,23 +30,28 @@ func newTemplateError(name, missing string) error {
 // Template is a named message template with named variable placeholders in
 // the form {{.VariableName}}.
 type Template struct {
-	Name    string
-	Body    string
+	Name string
+	Body string
 }
 
 // Render substitutes {{.X}} placeholders with the provided variables.
 func (t Template) Render(vars map[string]any) (string, error) {
 	out := t.Body
+
 	for key, val := range vars {
 		placeholder := "{{." + key + "}}"
+
 		if out == "" {
 			continue
 		}
+
 		out = strings.ReplaceAll(out, placeholder, fmt.Sprintf("%v", val))
 	}
+
 	if strings.Contains(out, "{{.") {
 		return "", newTemplateError(t.Name, "unknown placeholder remains")
 	}
+
 	return out, nil
 }
 
@@ -56,10 +61,13 @@ func InvoiceTemplate(customerName, invoiceNumber, total, currency, dueAt string)
 		fmt.Sprintf("Hello %s,", customerName),
 		fmt.Sprintf("Your invoice %s of %s %s is ready.", invoiceNumber, total, currency),
 	}
+
 	if dueAt != "" {
 		lines = append(lines, fmt.Sprintf("Due date: %s", dueAt))
 	}
+
 	lines = append(lines, "Thank you for your business.")
+
 	return strings.Join(lines, "\n")
 }
 
@@ -84,8 +92,10 @@ func RenderNotification(kind string, data map[string]any) (string, error) {
 		if v, ok := data[key].(string); ok {
 			return v
 		}
+
 		return ""
 	}
+
 	switch kind {
 	case "invoice":
 		return InvoiceTemplate(str("customerName"), str("invoiceNumber"), str("total"), str("currency"), str("dueAt")), nil

@@ -26,5 +26,6 @@ func systemPrompt(lang string) string {
 	if lang == "sw" {
 		return systemPromptSW + "\n\n" + systemPromptEN
 	}
+
 	return systemPromptEN
 }

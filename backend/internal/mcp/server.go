@@ -8,10 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Codecx-Org/FinAI/backend/internal/shared/config"
-	sharedhttp "github.com/Codecx-Org/FinAI/backend/internal/shared/http"
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
+
+	"github.com/Codecx-Org/FinAI/backend/internal/shared/config"
+	sharedhttp "github.com/Codecx-Org/FinAI/backend/internal/shared/http"
 )
 
 type Server struct {
@@ -42,6 +43,7 @@ func (s *Server) Router() http.Handler {
 				return
 			}
 		}
+
 		sharedhttp.JSON(w, http.StatusOK, sharedhttp.Envelope{"status": "ready"})
 	})
 	r.Get("/.well-known/oauth-protected-resource", s.protectedResourceMetadata)
@@ -49,9 +51,11 @@ func (s *Server) Router() http.Handler {
 	if s.cfg.MCP.EnableBusinessOwner {
 		r.Post("/mcp/business-owner", s.handleProfile(ProfileBusinessOwner))
 	}
+
 	if s.cfg.MCP.EnableCustomerService {
 		r.Post("/mcp/customer-service", s.handleProfile(ProfileCustomerService))
 	}
+
 	return r
 }
 
@@ -78,20 +82,26 @@ func (s *Server) handleProfile(profile Profile) http.HandlerFunc {
 		if err != nil {
 			w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer resource_metadata="%s/.well-known/oauth-protected-resource", error="invalid_token"`, strings.TrimRight(s.cfg.MCP.PublicURL, "/")))
 			sharedhttp.JSON(w, http.StatusUnauthorized, ErrorEnvelope{Status: "error", Error: "unauthorized", Message: "A valid bearer token for the MCP resource is required.", Retryable: false})
+
 			return
 		}
+
 		r.Body = http.MaxBytesReader(w, r.Body, s.cfg.MCP.ToolPayloadLimitBytes)
+
 		var req RPCRequest
+
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			sharedhttp.JSON(w, http.StatusBadRequest, RPCResponse{JSONRPC: "2.0", Error: &RPCError{Code: -32700, Message: "invalid JSON-RPC request"}})
 			return
 		}
+
 		sharedhttp.JSON(w, http.StatusOK, s.dispatch(r, session, req))
 	}
 }
 
 func (s *Server) dispatch(r *http.Request, session Session, req RPCRequest) RPCResponse {
 	resp := RPCResponse{JSONRPC: "2.0", ID: req.ID}
+
 	switch req.Method {
 	case "initialize":
 		resp.Result = map[string]any{
@@ -107,13 +117,17 @@ func (s *Server) dispatch(r *http.Request, session Session, req RPCRequest) RPCR
 			resp.Error = &RPCError{Code: -32602, Message: "invalid tool call params"}
 			return resp
 		}
+
 		start := time.Now()
 		envelope, err := s.registry.Call(session, call.Name, call.Arguments)
 		latency := time.Since(start).Milliseconds()
+
 		if envelope.Meta == nil {
 			envelope.Meta = map[string]any{}
 		}
+
 		envelope.Meta["latency_ms"] = latency
+
 		if err != nil {
 			code, payload := ErrorPayload(err)
 			if errors.Is(err, ErrToolNotFound) {
@@ -121,15 +135,19 @@ func (s *Server) dispatch(r *http.Request, session Session, req RPCRequest) RPCR
 			} else if errors.Is(err, ErrPermissionDenied) {
 				payload.Message = "Forbidden: " + payload.Message
 			}
+
 			body, _ := json.Marshal(payload)
 			resp.Result = CallResponse{IsError: true, Content: []ContentBlock{{Type: "text", Text: string(body)}}}
 			resp.Error = &RPCError{Code: code, Message: payload.Error}
+
 			return resp
 		}
+
 		body, _ := json.Marshal(envelope)
 		resp.Result = CallResponse{Content: []ContentBlock{{Type: "text", Text: string(body)}}}
 	default:
 		resp.Error = &RPCError{Code: -32601, Message: "method not found"}
 	}
+
 	return resp
 }

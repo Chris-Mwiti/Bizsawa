@@ -16,6 +16,7 @@ func NewStore(cache cache.Client, ttl time.Duration) *Store {
 	if ttl == 0 {
 		ttl = 24 * time.Hour
 	}
+
 	return &Store{cache: cache, ttl: ttl}
 }
 

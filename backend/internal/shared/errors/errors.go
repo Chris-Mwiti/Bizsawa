@@ -24,12 +24,14 @@ func (e *AppError) Unwrap() error {
 func (e *AppError) WithMessage(message string) *AppError {
 	copy := *e
 	copy.Message = message
+
 	return &copy
 }
 
 func (e *AppError) WithCause(cause error) *AppError {
 	copy := *e
 	copy.Cause = cause
+
 	return &copy
 }
 
@@ -37,10 +39,12 @@ func FromError(err error) *AppError {
 	if err == nil {
 		return nil
 	}
+
 	var appErr *AppError
 	if stderrors.As(err, &appErr) {
 		return appErr
 	}
+
 	return ErrInternal.WithCause(err).WithMessage("internal server error")
 }
 

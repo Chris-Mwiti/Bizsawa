@@ -8,9 +8,10 @@ import (
 
 	shareddb "github.com/Codecx-Org/FinAI/backend/internal/shared/db"
 
-	apperrors "github.com/Codecx-Org/FinAI/backend/internal/shared/errors"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+
+	apperrors "github.com/Codecx-Org/FinAI/backend/internal/shared/errors"
 )
 
 type Service struct{ repo *Repository }
@@ -55,18 +56,19 @@ func (s *Service) InviteMember(ctx context.Context, businessID, invitedBy uuid.U
 	member := &BusinessMember{
 		BaseModel: shareddb.BaseModel{
 			TenantID: businessID,
-		}, 
-		BusinessID: businessID, 
-		UserID: req.UserID, 
-		Role: req.Role, 
-		IsActive: true, 
-		InvitedBy: invitedBy, 
-		InvitedAt: time.Now().UTC(),
+		},
+		BusinessID: businessID,
+		UserID:     req.UserID,
+		Role:       req.Role,
+		IsActive:   true,
+		InvitedBy:  invitedBy,
+		InvitedAt:  time.Now().UTC(),
 	}
 
 	if err := s.repo.CreateMember(ctx, member); err != nil {
 		return nil, err
 	}
+
 	return member, nil
 }
 
@@ -78,33 +80,37 @@ func (s *Service) UpdateRole(ctx context.Context, businessID, memberID uuid.UUID
 	if !validRole(role) || role == "OWNER" {
 		return apperrors.ErrUnprocessable.WithMessage("invalid role")
 	}
+
 	return s.repo.UpdateRole(ctx, businessID, memberID, role)
 }
+
 func (s *Service) Deactivate(ctx context.Context, businessID, memberID uuid.UUID) error {
 	return s.repo.Deactivate(ctx, businessID, memberID)
 }
-
-
 
 func (s *Service) GetOrCreateProfile(ctx context.Context, userID uuid.UUID, businessId uuid.UUID) (*UserProfile, error) {
 	profile, err := s.repo.FindProfileByUserID(ctx, userID)
 	if err == nil {
 		return profile, nil
 	}
+
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
 	}
+
 	profile = &UserProfile{
 		BaseModel: shareddb.BaseModel{
 			TenantID: businessId,
-		}, 
-		UserID: userID, 
-		Timezone: "Africa/Nairobi", 
+		},
+		UserID:   userID,
+		Timezone: "Africa/Nairobi",
 		Language: "en",
 	}
+
 	if err := s.repo.CreateProfile(ctx, profile); err != nil {
 		return nil, err
 	}
+
 	return profile, nil
 }
 
@@ -113,16 +119,15 @@ func (s *Service) CreateProfile(ctx context.Context, businessId uuid.UUID, userI
 		BaseModel: shareddb.BaseModel{
 			TenantID: businessId,
 		},
-		UserID: userID,
-		Timezone: "Africa/Nairobi",
+		UserID:    userID,
+		Timezone:  "Africa/Nairobi",
 		FirstName: defaultString(req.FirstName, ""),
-    LastName: defaultString(req.LastName, ""),
+		LastName:  defaultString(req.LastName, ""),
 		AvatarURL: defaultString(req.AvatarURL, ""),
-		Phone: defaultString(req.Phone, ""),
+		Phone:     defaultString(req.Phone, ""),
 	}
 
-  err := s.repo.CreateProfile(ctx, profile)
-
+	err := s.repo.CreateProfile(ctx, profile)
 	if err != nil {
 		return nil, err
 	}
@@ -130,17 +135,19 @@ func (s *Service) CreateProfile(ctx context.Context, businessId uuid.UUID, userI
 	return profile, nil
 }
 
-func (s *Service) UpdateProfile(ctx context.Context, userID uuid.UUID, businessId uuid.UUID,req UpdateProfileRequest) (*UserProfile, error) {
+func (s *Service) UpdateProfile(ctx context.Context, userID uuid.UUID, businessId uuid.UUID, req UpdateProfileRequest) (*UserProfile, error) {
 	profile, err := s.GetOrCreateProfile(ctx, userID, businessId)
 	if err != nil {
 		return nil, err
 	}
+
 	profile.FirstName = defaultString(strings.TrimSpace(req.FirstName), "")
 	profile.LastName = strings.TrimSpace(req.LastName)
 	profile.Phone = strings.TrimSpace(req.Phone)
 	profile.AvatarURL = strings.TrimSpace(req.AvatarURL)
 	profile.Timezone = defaultString(req.Timezone, "Africa/Nairobi")
 	profile.Language = defaultString(req.Language, "en")
+
 	return profile, s.repo.UpdateProfile(ctx, profile)
 }
 
@@ -157,5 +164,6 @@ func defaultString(value, fallback string) string {
 	if strings.TrimSpace(value) == "" {
 		return fallback
 	}
+
 	return strings.TrimSpace(value)
 }

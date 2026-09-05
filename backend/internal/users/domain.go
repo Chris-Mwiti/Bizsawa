@@ -3,8 +3,9 @@ package users
 import (
 	"time"
 
-	shareddb "github.com/Codecx-Org/FinAI/backend/internal/shared/db"
 	"github.com/google/uuid"
+
+	shareddb "github.com/Codecx-Org/FinAI/backend/internal/shared/db"
 )
 
 type BusinessMember struct {

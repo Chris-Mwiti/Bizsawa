@@ -10,6 +10,7 @@ func TestManagerEncryptDecryptAndBlindIndex(t *testing.T) {
 
 	first := manager.BlindIndex("600999")
 	second := manager.BlindIndex("600999")
+
 	if first == "" || first != second {
 		t.Fatal("blind index should be deterministic and non-empty")
 	}
@@ -18,13 +19,16 @@ func TestManagerEncryptDecryptAndBlindIndex(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if ciphertext == "600999" {
 		t.Fatal("ciphertext should not equal plaintext")
 	}
+
 	plaintext, err := manager.Decrypt(ciphertext)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if plaintext != "600999" {
 		t.Fatalf("plaintext = %q, want 600999", plaintext)
 	}

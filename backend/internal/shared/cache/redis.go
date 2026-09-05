@@ -4,8 +4,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/Codecx-Org/FinAI/backend/internal/shared/config"
 	"github.com/redis/go-redis/v9"
+
+	"github.com/Codecx-Org/FinAI/backend/internal/shared/config"
 )
 
 type Client interface {

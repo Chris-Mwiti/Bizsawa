@@ -19,6 +19,7 @@ func NewService(repo *Repository, logger *slog.Logger) *Service {
 	if logger == nil {
 		logger = slog.Default()
 	}
+
 	return &Service{repo: repo, logger: logger}
 }
 
@@ -27,14 +28,18 @@ func (s *Service) Compute(ctx context.Context, businessID uuid.UUID, tf Timefram
 	if !tf.Valid() {
 		return nil, errInvalidTimeframe()
 	}
+
 	now := time.Now().UTC()
 
 	revenue, err := s.repo.RevenueSeries(ctx, businessID, tf, now)
 	if err != nil {
 		return nil, err
 	}
+
 	var totalRev decimal.Decimal
+
 	var txns int
+
 	for _, r := range revenue {
 		totalRev = totalRev.Add(r.Revenue)
 		txns += r.Transactions
@@ -44,12 +49,16 @@ func (s *Service) Compute(ctx context.Context, businessID uuid.UUID, tf Timefram
 	if err != nil {
 		return nil, err
 	}
+
 	var totalProfit decimal.Decimal
+
 	var marginSum float64
+
 	for _, p := range profit {
 		totalProfit = totalProfit.Add(p.Profit)
 		marginSum += p.Margin
 	}
+
 	avgMargin := 0.0
 	if len(profit) > 0 {
 		avgMargin = marginSum / float64(len(profit))
@@ -69,6 +78,7 @@ func (s *Service) Compute(ctx context.Context, businessID uuid.UUID, tf Timefram
 	if err != nil {
 		return nil, err
 	}
+
 	ltv, err := s.repo.CustomerLTV(ctx, businessID)
 	if err != nil {
 		ltv = decimal.Zero
@@ -103,7 +113,7 @@ func (s *Service) Compute(ctx context.Context, businessID uuid.UUID, tf Timefram
 			TotalProfit: totalProfit,
 			AvgMargin:   avgMargin,
 		},
-		Categories: categories,
+		Categories:  categories,
 		TopProducts: topProducts,
 		Customers: &CustomerSummary{
 			Segments: segments,
@@ -118,6 +128,7 @@ func (s *Service) Compute(ctx context.Context, businessID uuid.UUID, tf Timefram
 	if err := s.repo.UpsertSnapshot(ctx, snap); err != nil {
 		return nil, err
 	}
+
 	return snap, nil
 }
 
@@ -127,10 +138,12 @@ func (s *Service) Get(ctx context.Context, businessID uuid.UUID, tf Timeframe) (
 	if !tf.Valid() {
 		return nil, errInvalidTimeframe()
 	}
+
 	snap, err := s.repo.FindSnapshot(ctx, businessID, tf)
 	if err != nil {
 		// Fall back to computing on the fly so a first request still succeeds.
 		return s.Compute(ctx, businessID, tf)
 	}
+
 	return snap, nil
 }

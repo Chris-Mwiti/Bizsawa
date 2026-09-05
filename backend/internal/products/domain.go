@@ -1,9 +1,10 @@
 package products
 
 import (
-	"github.com/Codecx-Org/FinAI/backend/internal/shared/db"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
+
+	"github.com/Codecx-Org/FinAI/backend/internal/shared/db"
 )
 
 type Product struct {

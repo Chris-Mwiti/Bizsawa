@@ -4,13 +4,14 @@ import (
 	"database/sql"
 	"log/slog"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/riverqueue/river"
+	"gorm.io/gorm"
+
 	"github.com/Codecx-Org/FinAI/backend/internal/customers"
 	"github.com/Codecx-Org/FinAI/backend/internal/inventory"
 	"github.com/Codecx-Org/FinAI/backend/internal/invoices"
 	"github.com/Codecx-Org/FinAI/backend/internal/sales"
-	"github.com/go-chi/chi/v5"
-	"github.com/riverqueue/river"
-	"gorm.io/gorm"
 )
 
 type Module struct {
@@ -23,9 +24,12 @@ func New(db *gorm.DB, inventory *inventory.Service, sales *sales.Service, outbox
 	if logger == nil {
 		logger = slog.Default()
 	}
+
 	repo := NewRepository(db)
+
 	return &Module{repo: repo, svc: NewService(repo, inventory, sales, outboxRepo, logger, invoice, customers, payments), logger: logger}
 }
+
 func (m *Module) RegisterRoutes(r chi.Router) {
 	h := Handler{svc: m.svc}
 	r.Get("/", h.List)

@@ -6,11 +6,12 @@ import (
 	"strings"
 	"time"
 
-	sharedhttp "github.com/Codecx-Org/FinAI/backend/internal/shared/http"
-	"github.com/Codecx-Org/FinAI/backend/internal/shared/middleware"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+
+	sharedhttp "github.com/Codecx-Org/FinAI/backend/internal/shared/http"
+	"github.com/Codecx-Org/FinAI/backend/internal/shared/middleware"
 )
 
 type Module struct {
@@ -39,9 +40,11 @@ func New(db *gorm.DB, cfg Config, opts ...Option) *Module {
 	for _, opt := range opts {
 		opt(&options)
 	}
+
 	repo := NewRepository(db)
 	tokens := NewTokenService(cfg)
 	svc := NewService(repo, tokens, options.memberships, options.subscriptions)
+
 	return &Module{repo: repo, tokens: tokens, svc: svc}
 }
 
@@ -59,18 +62,22 @@ func (m *Module) Middleware(next http.Handler) http.Handler {
 			sharedhttp.Error(w, ErrUnauthorized)
 			return
 		}
+
 		claims, err := m.tokens.Verify(strings.TrimPrefix(header, "Bearer "))
 		if err != nil {
 			sharedhttp.Error(w, ErrUnauthorized)
 			return
 		}
+
 		ctx := middleware.WithUserID(r.Context(), claims.UserID)
 		if claims.TenantID != uuid.Nil {
 			ctx = middleware.WithTenantID(ctx, claims.TenantID)
 		}
+
 		if claims.BusinessID != uuid.Nil {
 			ctx = middleware.WithBusinessID(ctx, claims.BusinessID)
 		}
+
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

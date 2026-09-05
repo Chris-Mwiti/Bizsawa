@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"net/http"
 
-	sharedhttp "github.com/Codecx-Org/FinAI/backend/internal/shared/http"
-	"github.com/Codecx-Org/FinAI/backend/internal/shared/middleware"
+	"github.com/google/uuid"
+
 	"github.com/Codecx-Org/FinAI/backend/internal/mcp"
 	apperrors "github.com/Codecx-Org/FinAI/backend/internal/shared/errors"
-	"github.com/google/uuid"
+	sharedhttp "github.com/Codecx-Org/FinAI/backend/internal/shared/http"
+	"github.com/Codecx-Org/FinAI/backend/internal/shared/middleware"
 )
 
 type Handler struct {
@@ -34,6 +35,7 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 		sharedhttp.Error(w, apperrors.ErrUnauthorized.WithMessage("unauthorized — missing user"))
 		return
 	}
+
 	bid, ok := middleware.BusinessIDFromCtx(r.Context())
 	if !ok || bid == uuid.Nil {
 		sharedhttp.Error(w, apperrors.ErrForbidden.WithMessage("business context is required — select a business (X-Business-ID)"))
@@ -70,12 +72,11 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 		req.Language = "en"
 	}
 
-	resp, err := h.svc.Chat(r.Context(), session, ChatRequest{Message: req.Message, History: req.History, Language: req.Language})
+	resp, err := h.svc.Chat(r.Context(), session, ChatRequest(req))
 	if err != nil {
 		sharedhttp.Error(w, err)
 		return
 	}
+
 	sharedhttp.JSON(w, http.StatusOK, resp)
 }
-
-

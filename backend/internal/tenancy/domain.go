@@ -46,5 +46,6 @@ func PlanByCode(code PlanCode) Plan {
 			return plan
 		}
 	}
+
 	return Plans()[0]
 }

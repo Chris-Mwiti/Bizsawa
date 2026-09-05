@@ -146,13 +146,14 @@ func Load() Config {
 
 func env(key, fallback string) string {
 	err := godotenv.Load(".env.development")
-
 	if err != nil {
 		log.Fatalf("Could not load up the environment variables")
 	}
+
 	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
 		return value
 	}
+
 	return fallback
 }
 
@@ -161,10 +162,12 @@ func intEnv(key string, fallback int) int {
 	if value == "" {
 		return fallback
 	}
+
 	parsed, err := strconv.Atoi(value)
 	if err != nil {
 		return fallback
 	}
+
 	return parsed
 }
 
@@ -173,10 +176,12 @@ func int64Env(key string, fallback int64) int64 {
 	if value == "" {
 		return fallback
 	}
+
 	parsed, err := strconv.ParseInt(value, 10, 64)
 	if err != nil {
 		return fallback
 	}
+
 	return parsed
 }
 
@@ -185,10 +190,12 @@ func boolEnv(key string, fallback bool) bool {
 	if value == "" {
 		return fallback
 	}
+
 	parsed, err := strconv.ParseBool(value)
 	if err != nil {
 		return fallback
 	}
+
 	return parsed
 }
 
@@ -197,10 +204,12 @@ func durationEnv(key string, fallback time.Duration) time.Duration {
 	if value == "" {
 		return fallback
 	}
+
 	parsed, err := time.ParseDuration(value)
 	if err != nil {
 		return fallback
 	}
+
 	return parsed
 }
 
@@ -209,16 +218,20 @@ func listEnv(key string, fallback []string) []string {
 	if value == "" {
 		return fallback
 	}
+
 	parts := strings.Split(value, ",")
 	out := make([]string, 0, len(parts))
+
 	for _, part := range parts {
 		item := strings.TrimSpace(part)
 		if item != "" {
 			out = append(out, item)
 		}
 	}
+
 	if len(out) == 0 {
 		return fallback
 	}
+
 	return out
 }

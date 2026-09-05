@@ -4,13 +4,16 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/Codecx-Org/FinAI/backend/internal/shared/db"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
+
+	"github.com/Codecx-Org/FinAI/backend/internal/shared/db"
 )
 
-type CommandType string
-type Status string
+type (
+	CommandType string
+	Status      string
+)
 
 const (
 	CommandSTKPush CommandType = "stk_push"

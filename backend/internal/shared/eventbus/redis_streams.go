@@ -55,28 +55,29 @@ func (b *RedisStreamsBus) Subscribe(ctx context.Context, stream, targetType stri
 			if err == redis.Nil {
 				continue
 			}
+
 			return fmt.Errorf("failed to read from event stream: %w", err)
 		}
 
 		for _, s := range streams {
 			for _, message := range s.Messages { // 1. Capitalized Messages
-
 				// 2. Consistent casing: lastId and message.ID
-				lastId = message.ID 
+				lastId = message.ID
 
 				// 3. Capitalized Values
-				rawType, ok := message.Values["type"] 
+				rawType, ok := message.Values["type"]
 				if !ok {
 					continue
 				}
 
 				eventType, ok := rawType.(string)
 				// 4. Consistent casing: targetType
-				if !ok || eventType != targetType { 
+				if !ok || eventType != targetType {
 					continue
 				}
 
 				eventData := make(map[string]string)
+
 				for k, v := range message.Values { // 3. Capitalized Values
 					if strVal, ok := v.(string); ok {
 						eventData[k] = strVal
@@ -88,7 +89,7 @@ func (b *RedisStreamsBus) Subscribe(ctx context.Context, stream, targetType stri
 					// 6. Fixed slog.Warn casing, err.Error() typo, and structured logging syntax
 					slog.Warn("error while subscribing to event queue", "stream", stream, "error", err)
 					return err
-				} 
+				}
 			}
 		}
 	} // 7. Added missing loop closure brace so it runs infinitely

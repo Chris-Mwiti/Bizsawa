@@ -6,9 +6,11 @@ func ObjectSchema(properties map[string]any, required ...string) map[string]any 
 		"properties":           properties,
 		"additionalProperties": false,
 	}
+
 	if len(required) > 0 {
 		schema["required"] = required
 	}
+
 	return schema
 }
 

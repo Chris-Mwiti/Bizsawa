@@ -14,6 +14,7 @@ func New(db *gorm.DB, taxes TaxRecorder) *Module {
 	repo := NewRepository(db)
 	return &Module{repo: repo, svc: NewService(repo, taxes)}
 }
+
 func (m *Module) RegisterRoutes(r chi.Router) {
 	h := Handler{svc: m.svc}
 	r.Get("/", h.List)
