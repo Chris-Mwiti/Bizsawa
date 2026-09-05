@@ -613,7 +613,74 @@ func (s *Service) insertRecord(tx *gorm.DB, businessID uuid.UUID, userID uuid.UU
 		}
 	}
 
+	// FK guard: avoid SQLSTATE 23503. If a required FK parent is missing in this tx,
+	// return a controlled error (surfaced in PushResult.Errors) instead of letting
+	// Postgres emit ERROR ... violates foreign key constraint.
+	if err := s.validateFKs(tx, businessID, table, rec); err != nil {
+		return err
+	}
+
 	return tx.Table(table).Create(rec).Error
+}
+
+func (s *Service) validateFKs(tx *gorm.DB, businessID uuid.UUID, table string, rec map[string]any) error {
+	type fkCheck struct {
+		col      string
+		parent   string
+		required bool
+	}
+	var checks []fkCheck
+	switch table {
+	case "product_variants":
+		checks = []fkCheck{{"product_id", "products", true}}
+	case "inventory_items":
+		checks = []fkCheck{{"product_id", "products", true}}
+	case "stock_movements":
+		checks = []fkCheck{{"product_id", "products", true}}
+	case "orders":
+		checks = []fkCheck{{"customer_id", "customers", false}}
+	case "order_lines":
+		checks = []fkCheck{{"order_id", "orders", true}, {"product_id", "products", true}, {"product_variant_id", "product_variants", false}}
+	case "sales":
+		checks = []fkCheck{{"customer_id", "customers", false}, {"order_id", "orders", false}}
+	case "sale_lines":
+		checks = []fkCheck{{"sale_id", "sales", true}, {"product_id", "products", true}, {"product_variant_id", "product_variants", false}}
+	case "invoices":
+		checks = []fkCheck{{"customer_id", "customers", false}, {"order_id", "orders", false}}
+	case "invoice_lines":
+		checks = []fkCheck{{"invoice_id", "invoices", true}, {"product_id", "products", false}}
+	case "payment_commands":
+		checks = []fkCheck{{"order_id", "orders", true}}
+	}
+	for _, c := range checks {
+		raw, ok := rec[c.col]
+		if !ok || raw == nil {
+			continue
+		}
+		idStr, ok := raw.(string)
+		if !ok || idStr == "" {
+			continue
+		}
+		if !isValidUUID(idStr) {
+			if c.required {
+				return fmt.Errorf("FK violation: %s=%s invalid UUID for %s — parent %s missing", c.col, idStr, table, c.parent)
+			}
+			delete(rec, c.col)
+			continue
+		}
+		pid, _ := uuid.Parse(idStr)
+		var exists int64
+		// parent must exist for this business and not soft-deleted
+		tx.Raw(fmt.Sprintf(`SELECT COUNT(*) FROM %s WHERE id = ? AND business_id = ? AND deleted_at IS NULL`, c.parent), pid, businessID).Scan(&exists)
+		if exists == 0 {
+			if c.required {
+				return fmt.Errorf("FK violation: %s=%s references %s not found for %s — ensure parent synced before child (SQLSTATE 23503)", c.col, idStr, c.parent, table)
+			}
+			// nullable FK — null it out to allow insert (SET NULL semantics)
+			delete(rec, c.col)
+		}
+	}
+	return nil
 }
 
 func (s *Service) updateRecord(tx *gorm.DB, businessID uuid.UUID, table string, rec map[string]any) error {
