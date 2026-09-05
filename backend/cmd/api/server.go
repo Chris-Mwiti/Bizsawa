@@ -4,12 +4,15 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Codecx-Org/FinAI/backend/internal/auth"
+	"github.com/go-chi/chi/v5"
+	chimiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
+
 	"github.com/Codecx-Org/FinAI/backend/internal/analytics"
+	"github.com/Codecx-Org/FinAI/backend/internal/auth"
 	"github.com/Codecx-Org/FinAI/backend/internal/business"
 	"github.com/Codecx-Org/FinAI/backend/internal/chat"
 	"github.com/Codecx-Org/FinAI/backend/internal/customers"
-	"github.com/Codecx-Org/FinAI/backend/internal/sync"
 	"github.com/Codecx-Org/FinAI/backend/internal/expenses"
 	"github.com/Codecx-Org/FinAI/backend/internal/inventory"
 	"github.com/Codecx-Org/FinAI/backend/internal/invoices"
@@ -21,13 +24,11 @@ import (
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/config"
 	sharedhttp "github.com/Codecx-Org/FinAI/backend/internal/shared/http"
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/middleware"
+	"github.com/Codecx-Org/FinAI/backend/internal/sync"
 	"github.com/Codecx-Org/FinAI/backend/internal/taxes"
 	"github.com/Codecx-Org/FinAI/backend/internal/tenancy"
 	"github.com/Codecx-Org/FinAI/backend/internal/users"
 	"github.com/Codecx-Org/FinAI/backend/internal/waha"
-	"github.com/go-chi/chi/v5"
-	chimiddleware "github.com/go-chi/chi/v5/middleware"
-	"github.com/go-chi/cors"
 )
 
 type Dependencies struct {
@@ -82,6 +83,7 @@ func NewRouter(deps Dependencies) http.Handler {
 				return
 			}
 		}
+
 		sharedhttp.JSON(w, http.StatusOK, sharedhttp.Envelope{"status": "ready"})
 	})
 
@@ -93,6 +95,7 @@ func NewRouter(deps Dependencies) http.Handler {
 		if deps.Auth != nil {
 			r.Route("/auth", deps.Auth.RegisterRoutes)
 		}
+
 		if deps.Tenancy != nil {
 			r.Route("/public", deps.Tenancy.RegisterPublicRoutes)
 		}
@@ -105,12 +108,15 @@ func NewRouter(deps Dependencies) http.Handler {
 			if deps.Auth != nil {
 				r.Use(deps.Auth.Middleware)
 			}
+
 			if deps.Tenancy != nil {
 				r.Route("/subscriptions", deps.Tenancy.RegisterRoutes)
 			}
+
 			if deps.Users != nil {
 				r.Route("/profile", deps.Users.RegisterProfileRoutes)
 			}
+
 			if deps.Business != nil {
 				r.Route("/businesses", deps.Business.RegisterRoutes)
 			}
@@ -120,45 +126,59 @@ func NewRouter(deps Dependencies) http.Handler {
 			if deps.Auth != nil {
 				r.Use(deps.Auth.Middleware)
 			}
+
 			if deps.Authz != nil {
 				r.Use(deps.Authz.Middleware)
 			}
+
 			if deps.Users != nil {
 				r.Route("/businesses/{businessID}/members", deps.Users.RegisterRoutes)
 			}
+
 			if deps.Products != nil {
 				r.Route("/products", deps.Products.RegisterRoutes)
 			}
+
 			if deps.Customers != nil {
 				r.Route("/customers", deps.Customers.RegisterRoutes)
 			}
+
 			if deps.Taxes != nil {
 				r.Route("/taxes", deps.Taxes.RegisterRoutes)
 			}
+
 			if deps.Inventory != nil {
 				r.Route("/inventory", deps.Inventory.RegisterRoutes)
 			}
+
 			if deps.Orders != nil {
 				r.Route("/orders", deps.Orders.RegisterRoutes)
 			}
+
 			if deps.Sales != nil {
 				r.Route("/sales", deps.Sales.RegisterRoutes)
 			}
+
 			if deps.Expenses != nil {
 				r.Route("/expenses", deps.Expenses.RegisterRoutes)
 			}
+
 			if deps.Invoices != nil {
 				r.Route("/invoices", deps.Invoices.RegisterRoutes)
 			}
+
 			if deps.Payments != nil {
 				r.Route("/payments", deps.Payments.RegisterRoutes)
 			}
+
 			if deps.Analytics != nil {
 				r.Route("/analytics", deps.Analytics.RegisterRoutes)
 			}
+
 			if deps.WAHA != nil {
 				r.Route("/waha", deps.WAHA.RegisterRoutes)
 			}
+
 			if deps.Chat != nil {
 				// Mobile expects POST /api/v1/chatbot/chat (see mobile/hooks/api/useChat.ts) and we also expose /chat/business-owner
 				r.Route("/chatbot", func(r chi.Router) {
@@ -168,6 +188,7 @@ func NewRouter(deps Dependencies) http.Handler {
 					r.Post("/business-owner", deps.Chat.Handler().Chat)
 				})
 			}
+
 			if deps.Sync != nil {
 				r.Route("/sync", deps.Sync.RegisterRoutes)
 			}
