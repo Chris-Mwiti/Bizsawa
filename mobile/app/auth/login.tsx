@@ -22,8 +22,17 @@ import {
   Fingerprint,
 } from 'lucide-react-native'
 import NetInfo from '@react-native-community/netinfo'
-import * as LocalAuthentication from 'expo-local-authentication'
 import { useRouter } from 'expo-router'
+
+// Lazy-load so missing native module (dev-client without rebuild) doesn't crash bundle
+let LocalAuthentication: any = null
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const mod = require('expo-local-authentication')
+  LocalAuthentication = mod?.default ?? mod
+} catch {
+  LocalAuthentication = null
+}
 import { useAuth } from '../../contexts/AuthContext'
 import {
   hasOfflineCredential,
@@ -49,9 +58,13 @@ export default function LoginScreen() {
   useEffect(() => {
     const unsub = NetInfo.addEventListener((s) => setIsOffline(!s.isConnected))
     NetInfo.fetch().then((s) => setIsOffline(!s.isConnected))
-    LocalAuthentication.hasHardwareAsync().then((has) => {
-      if (has) LocalAuthentication.isEnrolledAsync().then(setBiometricAvailable)
-    })
+    if (LocalAuthentication?.hasHardwareAsync) {
+      LocalAuthentication.hasHardwareAsync()
+        .then((has: boolean) => {
+          if (has) LocalAuthentication.isEnrolledAsync().then(setBiometricAvailable)
+        })
+        .catch(() => {})
+    }
     return () => unsub()
   }, [])
 
@@ -111,6 +124,10 @@ export default function LoginScreen() {
   }
 
   const handleBiometricLogin = async () => {
+    if (!LocalAuthentication?.authenticateAsync) {
+      Alert.alert('Not available', 'Biometrics not available in this build. Run a dev-client build to enable.')
+      return
+    }
     if (!formData.email) {
       Alert.alert('Email required', 'Enter your email first to use biometrics')
       return
