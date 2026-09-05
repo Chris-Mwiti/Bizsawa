@@ -115,13 +115,27 @@ export default function RegisterScreen() {
         yearsInBusiness: formData.yearsInBusiness,
       })
 
+      // Store pending business name for onboarding wizard
+      const pending = {
+        name: formData.name,
+        phone: formData.whatsappNumber,
+        email: formData.ownerEmail,
+      }
+      const AsyncStorage = (
+        await import('@react-native-async-storage/async-storage')
+      ).default
+      await AsyncStorage.setItem(
+        'bizsawa_pending_business_prefill',
+        JSON.stringify(pending),
+      )
+
       Alert.alert(
-        'Registration Successful',
-        'Your account has been created. Please sign in.',
+        'Account created',
+        'Now complete your business profile (takes 1 minute).',
         [
           {
-            text: 'OK',
-            onPress: () => router.replace('/auth/login'),
+            text: 'Continue',
+            onPress: () => router.replace('/auth/business-setup'),
           },
         ],
       )

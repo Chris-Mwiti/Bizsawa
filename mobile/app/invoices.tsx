@@ -22,6 +22,7 @@ import {
 import { router } from 'expo-router'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { useInvoices } from '../hooks/api/useInvoices'
+import { useCustomers } from '../hooks/api/useCustomers'
 import { TAB_BAR_SCROLL_PADDING } from '../constants/tabBar'
 import { toNumber } from '../lib/api-dtos'
 import { SyncStatusBadge } from '../components/SyncStatusBadge'
@@ -53,6 +54,31 @@ const STATUS_STYLE: Record<
 export default function Invoices() {
   const [refreshing, setRefreshing] = useState(false)
   const { invoices, isLoading, refetch } = useInvoices()
+  const { data: customers = [] } = useCustomers() as any
+
+  const getCustomerName = (inv: any) => {
+    const cid = inv.customerId || inv.customer_id
+    if (cid) {
+      const c: any = (customers as any[]).find((x) => x.id === cid)
+      if (c?.name) return c.name
+    }
+    // inv.customerName may already be a name (API enriched) or a UUID — detect UUID
+    const name = inv.customerName
+    if (
+      name &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        String(name).trim(),
+      )
+    ) {
+      return 'Customer'
+    }
+    return name || 'Customer'
+  }
+
+  const getCustomerInitial = (inv: any) => {
+    const name = getCustomerName(inv)
+    return name?.charAt(0)?.toUpperCase() || '?'
+  }
 
   const formatCurrency = (amount: string | number) =>
     `KES ${toNumber(amount).toLocaleString('en-KE')}`
@@ -236,7 +262,7 @@ export default function Invoices() {
                             className='text-xs text-gray-500'
                             numberOfLines={1}
                           >
-                            {inv.customerName}
+                            {getCustomerName(inv)}
                           </Text>
                         </View>
                       </View>
@@ -258,7 +284,7 @@ export default function Invoices() {
                       <View className='flex-row items-center gap-2'>
                         <View className='w-6 h-6 rounded-full bg-gray-900 items-center justify-center'>
                           <Text className='text-white text-[10px] font-bold'>
-                            {inv.customerName?.charAt(0)?.toUpperCase() || '?'}
+                            {getCustomerInitial(inv)}
                           </Text>
                         </View>
                         <Text
