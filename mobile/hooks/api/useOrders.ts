@@ -7,7 +7,9 @@ import { database } from '../../db/database'
 import { v4 as uuidv4 } from 'uuid'
 import { Q } from '@nozbe/watermelondb'
 import { useBusinessContext } from '../../contexts/BusinessContext'
+import { useAuth } from '../../contexts/AuthContext'
 import { toISO, nowMillis } from '../../lib/syncDates'
+import { shortId } from '../../lib/ids'
 
 export enum OrderStatus {
   draft = 'draft',
@@ -58,17 +60,20 @@ function toCreateOrderRequest(data: CreateOrderInput): CreateOrderRequest {
   }
 }
 function mapRaw(raw: any): Order {
+  const src: any = raw?._raw ? raw._raw : raw
+  const get = (snake: string, camel: string) =>
+    src[snake] ?? raw[camel] ?? raw[snake]
   return {
-    id: raw.id,
-    businessId: raw.business_id,
-    customerId: raw.customer_id,
-    status: raw.status,
-    subtotal: raw.subtotal,
-    taxAmount: raw.tax_amount,
-    total: raw.total,
-    paymentMethod: raw.payment_method,
-    createdAt: toISO(raw.created_at),
-    updatedAt: toISO(raw.updated_at),
+    id: raw.id || src.id,
+    businessId: get('business_id', 'businessId'),
+    customerId: get('customer_id', 'customerId'),
+    status: get('status', 'status') || 'draft',
+    subtotal: get('subtotal', 'subtotal') || '0',
+    taxAmount: get('tax_amount', 'taxAmount') || '0',
+    total: get('total', 'total') || '0',
+    paymentMethod: get('payment_method', 'paymentMethod') || 'cash',
+    createdAt: toISO(get('created_at', 'createdAt')),
+    updatedAt: toISO(get('updated_at', 'updatedAt')),
   } as any
 }
 
@@ -82,6 +87,13 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
     }
   })()
   const bid = activeBusinessId || ''
+  const { userId } = (() => {
+    try {
+      return useAuth() as any
+    } catch {
+      return { userId: null }
+    }
+  })()
   const limit = options.limit ?? 25
   const [offset, setOffset] = useState(0)
   const [local, setLocal] = useState<Order[]>([])
@@ -186,15 +198,84 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
 
   const updateOrder = useMutation({
     mutationFn: async ({ id, data }: { id: UUID; data: UpdateOrderInput }) => {
+      // Defensive: ensure status is valid string, avoid "type is undefined" from enum misuse
+      const newStatus = data?.status ? String(data.status).trim().toLowerCase() : null
+      if (newStatus && !['draft', 'confirmed', 'fulfilled', 'cancelled', 'refunded'].includes(newStatus)) {
+        throw new Error(`Invalid status: ${String(data.status)}`)
+      }
+      let shouldCreateSale = false
       await (database as any).write(async () => {
         const rec: any = await (database as any).get('orders').find(id)
-        await rec.update((r: any) => {
-          if (data.status) r.status = data.status
-          r.syncVersion = (r.syncVersion || 1) + 1
-        })
+        const prevStatus = String(rec.status || '').toLowerCase()
+        if (newStatus) {
+          await rec.update((r: any) => {
+            r.status = newStatus
+            // bump sync version for conflict detection (§4)
+            r.syncVersion = (r.syncVersion || 1) + 1
+          })
+          if (newStatus === 'fulfilled' && prevStatus !== 'fulfilled') {
+            shouldCreateSale = true
+          }
+        } else if (newStatus === null && (data as any).type !== undefined) {
+          // Guard against legacy callers passing {type} instead of {status}
+          throw new Error('type is undefined — did you mean status?')
+        }
+        // Offline fulfillment mirrors backend FulfillOrder -> CreateFromOrder: create sale + sale_lines locally
+        if (shouldCreateSale) {
+          const salesCol: any = (database as any).get('sales')
+          // idempotent: don't duplicate if sale for this order already exists
+          const existing: any[] = await salesCol.query(Q.where('order_id', id)).fetch()
+          if (existing.length === 0) {
+            const orderLinesCol: any = (database as any).get('order_lines')
+            const lines: any[] = await orderLinesCol.query(Q.where('order_id', id)).fetch()
+            const saleId = uuidv4()
+            const receipt = `RCPT-${shortId(saleId, 6)}`
+            // compute total from order lines if order total is 0/NaN
+            const rawTotal = rec.total || rec._raw?.total || '0'
+            const computedTotal = lines.reduce((s: number, l: any) => {
+              const q = toNumber(l.quantity ?? l._raw?.quantity)
+              const p = toNumber(l.unitPrice ?? l._raw?.unit_price)
+              return s + q * p
+            }, 0)
+            const totalStr = toDecimalString(rawTotal !== '0' && rawTotal ? rawTotal : computedTotal || 0)
+            const subtotalStr = toDecimalString(rec.subtotal ?? rec._raw?.subtotal ?? totalStr)
+            await salesCol.create((sRec: any) => {
+              sRec._raw.id = saleId
+              sRec.businessId = bid
+              sRec.orderId = id
+              sRec.customerId = rec.customerId || rec._raw?.customer_id || null
+              sRec.receiptNumber = receipt
+              sRec.staffId = userId || bid
+              sRec.paymentMethod = rec.paymentMethod || rec._raw?.payment_method || 'cash'
+              sRec.subtotal = subtotalStr
+              sRec.taxAmount = toDecimalString(rec.taxAmount ?? rec._raw?.tax_amount ?? 0)
+              sRec.total = totalStr
+              sRec.status = 'completed'
+              sRec.soldAt = nowMillis()
+              sRec.syncVersion = 1
+            })
+            const saleLinesCol: any = (database as any).get('sale_lines')
+            for (const ol of lines) {
+              const q = toDecimalString(ol.quantity ?? ol._raw?.quantity)
+              const p = toDecimalString(ol.unitPrice ?? ol._raw?.unit_price)
+              await saleLinesCol.create((sl: any) => {
+                sl._raw.id = uuidv4()
+                sl.businessId = bid
+                sl.saleId = saleId
+                sl.productId = ol.productId || ol._raw?.product_id
+                sl.productVariantId = ol.productVariantId || ol._raw?.product_variant_id || null
+                sl.quantity = q
+                sl.unitPrice = p
+                sl.lineTotal = toDecimalString(toNumber(q) * toNumber(p))
+                sl.syncVersion = 1
+              })
+            }
+          }
+        }
       })
       import('../../sync/client').then((m) => m.syncNow().catch(() => {}))
       queryClient.invalidateQueries({ queryKey: ['orders'] })
+      queryClient.invalidateQueries({ queryKey: ['sales'] })
       return { id } as any
     },
   })

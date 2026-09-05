@@ -21,8 +21,10 @@ import {
 } from 'lucide-react-native'
 import { useSync } from '../sync/SyncProvider'
 import { resetLocalDatabase, syncNow, refreshFromRemote } from '../sync/client'
+import { useRouter } from 'expo-router'
 
 export function OfflineBanner() {
+  const router = (() => { try { return useRouter() } catch { return null as any } })()
   const [isConnected, setIsConnected] = useState<boolean | null>(true)
   const [showOfflineCapabilities, setShowOfflineCapabilities] = useState(true)
   const [showRecovery, setShowRecovery] = useState(false)
@@ -308,6 +310,20 @@ export function OfflineBanner() {
         {/* Recovery actions — only when back online with pending/conflicts */}
         {showRecovery && !isOffline ? (
           <View className='mt-3 pt-3 border-t border-orange-200 gap-2'>
+            {conflictCount > 0 ? (
+              <Pressable
+                onPress={() => {
+                  try { router?.push('/sync-conflicts' as any) } catch {}
+                  setShowRecovery(false)
+                }}
+                className='py-2.5 rounded-full bg-red-600 flex-row items-center justify-center gap-1.5 active:bg-red-700'
+              >
+                <AlertTriangle size={14} color='#fff' />
+                <Text className='text-xs font-bold text-white'>
+                  Resolve {conflictCount} conflict{conflictCount === 1 ? '' : 's'} →
+                </Text>
+              </Pressable>
+            ) : null}
             <View className='flex-row gap-2'>
               <Pressable
                 onPress={handleRefresh}
@@ -353,6 +369,17 @@ export function OfflineBanner() {
               clears local and re-pulls — use if data looks corrupted.
             </Text>
           </View>
+        ) : null}
+        {conflictCount > 0 && !showRecovery && !isOffline ? (
+          <Pressable
+            onPress={() => { try { router?.push('/sync-conflicts' as any) } catch {} }}
+            className='mt-2 py-2 rounded-full bg-red-50 border border-red-200 flex-row items-center justify-center gap-1.5'
+          >
+            <AlertTriangle size={12} color='#dc2626' />
+            <Text className='text-[11px] font-bold tracking-widest text-red-700'>
+              {conflictCount} CONFLICT{conflictCount===1?'':'S'} — TAP TO RESOLVE
+            </Text>
+          </Pressable>
         ) : null}
 
         {/* Gentle offline heal actions (always when online, no pending) */}

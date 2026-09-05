@@ -18,25 +18,37 @@ export interface CreateCustomerRequest extends CustomerRequest {
 }
 
 function mapRawToCustomer(raw: any): Customer {
+  const src: any = raw?._raw ? raw._raw : raw
+  const get = (snake: string, camel: string) =>
+    src[snake] ?? raw[camel] ?? raw[snake]
+  const tagsRaw = get('tags', 'tags')
   return {
-    id: raw.id,
-    tenantId: raw.business_id,
-    businessId: raw.business_id,
-    name: raw.name,
-    phone: raw.phone,
-    email: raw.email,
-    address: raw.address,
-    tags: raw.tags
-      ? typeof raw.tags === 'string'
-        ? JSON.parse(raw.tags)
-        : raw.tags
+    id: raw.id || src.id,
+    tenantId: get('business_id', 'businessId'),
+    businessId: get('business_id', 'businessId'),
+    name: get('name', 'name'),
+    phone: get('phone', 'phone'),
+    email: get('email', 'email'),
+    address: get('address', 'address'),
+    tags: tagsRaw
+      ? typeof tagsRaw === 'string'
+        ? (() => {
+            try {
+              return JSON.parse(tagsRaw)
+            } catch {
+              return []
+            }
+          })()
+        : tagsRaw
       : [],
-    notes: raw.notes,
-    loyaltyPoints: raw.loyalty_points ?? 0,
-    totalSpend: raw.total_spend ?? '0',
-    lastPurchaseAt: raw.last_purchase_at ? toISO(raw.last_purchase_at) : null,
-    createdAt: toISO(raw.created_at),
-    updatedAt: toISO(raw.updated_at),
+    notes: get('notes', 'notes'),
+    loyaltyPoints: get('loyalty_points', 'loyaltyPoints') ?? 0,
+    totalSpend: get('total_spend', 'totalSpend') ?? '0',
+    lastPurchaseAt: get('last_purchase_at', 'lastPurchaseAt')
+      ? toISO(get('last_purchase_at', 'lastPurchaseAt'))
+      : null,
+    createdAt: toISO(get('created_at', 'createdAt')),
+    updatedAt: toISO(get('updated_at', 'updatedAt')),
   } as any
 }
 

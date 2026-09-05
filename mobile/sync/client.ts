@@ -238,11 +238,47 @@ export async function syncNow() {
     pushChanges: async ({ changes, lastPulledAt }) => {
       // Per-batch idempotency key §2 (Do Not Substitute)
       const idempotencyKey = uuidv4()
-      await api.post(
+      const res: any = await api.post(
         `/sync/push`,
         { changes, lastPulledAt },
         { headers: { 'X-Idempotency-Key': idempotencyKey } },
       )
+      // Persist server-reported conflicts to local `conflicts` table for badge + /sync-conflicts UI (§4)
+      const conflicts = res?.data?.conflicts || res?.data?.data?.conflicts || []
+      if (Array.isArray(conflicts) && conflicts.length) {
+        try {
+          await (database as any).write(async () => {
+            const col: any = (database as any).get('conflicts')
+            for (const c of conflicts) {
+              const rid = c.record_id || c.recordId || c.id
+              const tname = c.table_name || c.table || c.Table
+              if (!rid || !tname) continue
+              // idempotent: skip if unresolved conflict already exists for this record
+              const existing: any[] = await col.query().fetch()
+              const dup = existing.find((e: any) => e.recordId === rid && e.tableName === tname && !e.resolution)
+              if (dup) continue
+              await col.create((rec: any) => {
+                try { rec._raw.id = c.id || uuidv4() } catch {}
+                rec.businessId = c.business_id || c.businessId || ''
+                rec.tableName = tname
+                rec.recordId = rid
+                rec.clientPayload = typeof c.client_payload === 'string' ? c.client_payload : JSON.stringify(c.client_payload || c.clientPayload || {})
+                rec.serverPayload = typeof c.server_payload === 'string' ? c.server_payload : JSON.stringify(c.server_payload || c.serverPayload || {})
+                rec.clientVersion = c.client_version ?? c.clientVersion ?? 0
+                rec.serverVersion = c.server_version ?? c.serverVersion ?? 0
+                rec.resolution = null
+              })
+            }
+          })
+        } catch (e) {
+          console.warn('[Sync] failed to persist conflicts locally', e)
+        }
+        // Trigger navigation hint via global event — SyncProvider will pick up via refreshCounts and redirect
+        try {
+          const { getConflictsCount } = await import('./client')
+          // no-op, counts will be refreshed by SyncProvider interval; also emit via fetch
+        } catch {}
+      }
     },
     // Version-counter conflict → conflicts table (§4), not last-write-wins (§10)
     // Watermelon calls this when local modified row also changed remotely

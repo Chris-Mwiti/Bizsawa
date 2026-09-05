@@ -4,8 +4,10 @@ import React, {
   useEffect,
   useState,
   useCallback,
+  useRef,
 } from 'react'
 import NetInfo from '@react-native-community/netinfo'
+import { useRouter, usePathname } from 'expo-router'
 import {
   syncNow,
   startSyncEngine,
@@ -38,6 +40,13 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   const [lastSyncAt, setLastSyncAt] = useState<number | null>(null)
   const [pendingCount, setPendingCount] = useState(0)
   const [conflictCount, setConflictCount] = useState(0)
+  const router = (() => {
+    try { return useRouter() } catch { return null as any }
+  })()
+  const pathname = (() => {
+    try { return usePathname() } catch { return '' }
+  })()
+  const hasRedirectedRef = useRef(false)
 
   const refreshCounts = useCallback(async () => {
     try {
@@ -47,9 +56,24 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       ])
       setPendingCount(pending)
       setConflictCount(conflicts)
-      if (conflicts > 0) setState((s) => (s === 'syncing' ? 'conflict' : s))
+      if (conflicts > 0) setState((s) => (s === 'syncing' ? 'conflict' : 'conflict'))
     } catch {}
   }, [])
+
+  // Auto-redirect to /sync-conflicts when conflicts appear (existing screen was never reached)
+  useEffect(() => {
+    if (conflictCount > 0 && router && pathname !== '/sync-conflicts') {
+      // avoid spamming: only once per conflict batch
+      if (!hasRedirectedRef.current) {
+        hasRedirectedRef.current = true
+        // slight delay to avoid navigation during render
+        setTimeout(() => {
+          try { router.push('/sync-conflicts' as any) } catch {}
+        }, 600)
+      }
+    }
+    if (conflictCount === 0) hasRedirectedRef.current = false
+  }, [conflictCount, router, pathname])
 
   useEffect(() => {
     const stop = startSyncEngine()

@@ -683,6 +683,24 @@ func (s *Service) validateFKs(tx *gorm.DB, businessID uuid.UUID, table string, r
 	return nil
 }
 
+var allowedUpdateColumns = map[string]map[string]bool{
+	"products":         {"name": true, "description": true, "sku": true, "category": true, "barcode": true, "image_url": true, "tax_rule_id": true, "price": true, "cost": true, "is_active": true, "sync_version": true, "deleted_at": true},
+	"product_variants": {"business_id": true, "product_id": true, "name": true, "sku": true, "barcode": true, "price": true, "cost": true, "is_active": true, "sync_version": true, "deleted_at": true},
+	"customers":        {"name": true, "phone": true, "email": true, "address": true, "tags": true, "notes": true, "loyalty_points": true, "total_spend": true, "last_purchase_at": true, "sync_version": true, "deleted_at": true},
+	"inventory_items":  {"product_id": true, "quantity": true, "low_stock_threshold": true, "sync_version": true, "deleted_at": true},
+	"stock_movements":  {"product_id": true, "quantity_delta": true, "movement_type": true, "reference_type": true, "reference_id": true, "notes": true, "occurred_at": true, "sync_version": true, "deleted_at": true},
+	"orders":           {"customer_id": true, "status": true, "subtotal": true, "tax_amount": true, "total": true, "payment_method": true, "payment_status": true, "idempotency_key": true, "confirmed_at": true, "fulfilled_at": true, "sync_version": true, "deleted_at": true},
+	"order_lines":      {"order_id": true, "product_id": true, "product_variant_id": true, "quantity": true, "unit_price": true, "line_total": true, "sync_version": true, "deleted_at": true},
+	"sales":            {"order_id": true, "customer_id": true, "receipt_number": true, "staff_id": true, "payment_method": true, "subtotal": true, "tax_amount": true, "total": true, "status": true, "sold_at": true, "idempotency_key": true, "sync_version": true, "deleted_at": true},
+	"sale_lines":       {"sale_id": true, "product_id": true, "product_variant_id": true, "quantity": true, "unit_price": true, "line_total": true, "sync_version": true, "deleted_at": true},
+	"expenses":         {"category": true, "description": true, "vendor": true, "amount": true, "tax_amount": true, "is_recurring": true, "recurring_interval": true, "spent_at": true, "created_by": true, "sync_version": true, "deleted_at": true},
+	"invoices":         {"customer_id": true, "invoice_number": true, "order_id": true, "status": true, "subtotal": true, "tax_amount": true, "total": true, "amount_paid": true, "amount_due": true, "currency": true, "notes": true, "due_at": true, "sent_at": true, "sync_version": true, "deleted_at": true},
+	"invoice_lines":    {"invoice_id": true, "product_id": true, "description": true, "quantity": true, "unit_price": true, "line_total": true, "sync_version": true, "deleted_at": true},
+	"payments":         {"invoice_id": true, "order_id": true, "amount": true, "currency": true, "phone": true, "status": true, "provider": true, "sync_version": true, "deleted_at": true},
+	"payment_commands": {"order_id": true, "amount": true, "currency": true, "phone": true, "status": true, "provider": true, "type": true},
+	"tax_rules":        {"name": true, "rate": true, "country": true, "is_default": true, "is_active": true, "sync_version": true, "deleted_at": true},
+}
+
 func (s *Service) updateRecord(tx *gorm.DB, businessID uuid.UUID, table string, rec map[string]any) error {
 	id, _ := rec["id"].(string)
 	update := map[string]any{}
@@ -690,6 +708,24 @@ func (s *Service) updateRecord(tx *gorm.DB, businessID uuid.UUID, table string, 
 	for k, v := range rec {
 		if k == "id" || k == "sync_version" || k == "syncVersion" || (len(k) > 0 && k[0] == '_') {
 			continue
+		}
+		// Explicitly drop stray keys that don't map to DB columns (e.g. legacy `type`, `customerPhone`, `undefined`)
+		if v == nil {
+			continue
+		}
+		if s, ok := v.(string); ok {
+			trim := strings.TrimSpace(s)
+			if trim == "" && k != "notes" && k != "description" && k != "address" {
+				// allow empty for nullable text but skip "undefined" sentinel
+			}
+			if strings.EqualFold(trim, "undefined") || strings.EqualFold(trim, "null") && trim == "undefined" {
+				continue
+			}
+		}
+		if allowed, ok := allowedUpdateColumns[table]; ok {
+			if !allowed[k] {
+				continue
+			}
 		}
 
 		if isTimestampColumn(k) {
