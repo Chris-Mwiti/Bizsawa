@@ -42,7 +42,9 @@ func (w *worker) Work(ctx context.Context, job *river.Job[ComputeArgs]) error {
 	w.logger.InfoContext(ctx, "[ANALYTICS]-computing snapshot",
 		"businessID", job.Args.BusinessID.String(),
 		"timeframe", string(job.Args.Timeframe))
+
 	_, err := w.service.Compute(ctx, job.Args.BusinessID, job.Args.Timeframe)
+
 	return err
 }
 
@@ -54,10 +56,12 @@ type computeAllWorker struct {
 
 func (w *computeAllWorker) Work(ctx context.Context, job *river.Job[ComputeAllArgs]) error {
 	w.logger.InfoContext(ctx, "[ANALYTICS]-computing all snapshots", "businessID", job.Args.BusinessID.String())
+
 	for _, tf := range []Timeframe{TimeframeDay, TimeframeWeek, TimeframeMonth, TimeframeYear} {
 		if _, err := w.service.Compute(ctx, job.Args.BusinessID, tf); err != nil {
 			return err
 		}
 	}
+
 	return nil
 }

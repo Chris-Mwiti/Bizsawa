@@ -9,17 +9,17 @@ import (
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/models"
 )
 
-// buildInvoicePayload maps an Order struct to a CreateInvoiceRequest payload
+// buildInvoicePayload maps an Order struct to a CreateInvoiceRequest payload.
 func buildInvoicePayload(order *Order) invoices.CreateInvoiceRequest {
 	invoiceLines := make([]invoices.LineRequest, 0, len(order.Lines))
 
 	for _, line := range order.Lines {
 		// Create a local variable so we can safely take its memory address (&productID)
 		productID := line.ProductID
-		
-		desc := fmt.Sprintf("Product ID: %s | Unit Price: %v | Quantity: %d", 
-			line.ProductID.String(), 
-			line.UnitPrice, 
+
+		desc := fmt.Sprintf("Product ID: %s | Unit Price: %v | Quantity: %d",
+			line.ProductID.String(),
+			line.UnitPrice,
 			line.Quantity,
 		)
 
@@ -33,15 +33,14 @@ func buildInvoicePayload(order *Order) invoices.CreateInvoiceRequest {
 
 	fmt.Printf("invoice lines: %d", len(invoiceLines))
 
-
-	// Calculate due date (5 days from now). 
+	// Calculate due date (5 days from now).
 	// Assuming order.ConfirmedAt was set right before calling this.
-	dueAt := time.Now().AddDate(0,0,5)
+	dueAt := time.Now().AddDate(0, 0, 5)
 	orderId := order.ID
 
 	return invoices.CreateInvoiceRequest{
 		CustomerID: order.CustomerID,
-		OrderID: &orderId,
+		OrderID:    &orderId,
 		DueAt:      &dueAt,
 		Currency:   "KES", // Hardcoded per your original logic, can be parameterized
 		Lines:      invoiceLines,
@@ -49,9 +48,10 @@ func buildInvoicePayload(order *Order) invoices.CreateInvoiceRequest {
 	}
 }
 
-// buildPaymentPayload maps the Order and Invoice into a payment InitiateRequest
-func buildPaymentPayload(order *Order,customerPhone string) models.InitiateRequest{
+// buildPaymentPayload maps the Order and Invoice into a payment InitiateRequest.
+func buildPaymentPayload(order *Order, customerPhone string) models.InitiateRequest {
 	var commandType models.CommandType
+
 	var provider string
 
 	// Map the business domain payment method to the technical payment provider/command
@@ -68,9 +68,9 @@ func buildPaymentPayload(order *Order,customerPhone string) models.InitiateReque
 		provider = order.PaymentMethod
 	}
 
-		return models.InitiateRequest{
+	return models.InitiateRequest{
 		Provider:         provider,
-		OrderID: order.ID.String(),
+		OrderID:          order.ID.String(),
 		Type:             commandType,
 		AccountReference: fmt.Sprintf("OrderID:%s|IdempotencyKey:%s", order.ID.String(), order.IdempotencyKey),
 		Amount:           order.Total,
@@ -79,17 +79,18 @@ func buildPaymentPayload(order *Order,customerPhone string) models.InitiateReque
 	}
 }
 
-// buildSalesPayload maps the internal order lines to the sales module input type
+// buildSalesPayload maps the internal order lines to the sales module input type.
 func buildSalesPayload(order *Order) []sales.OrderLineInput {
 	saleLines := make([]sales.OrderLineInput, 0, len(order.Lines))
-	
+
 	for _, line := range order.Lines {
 		saleLines = append(saleLines, sales.OrderLineInput{
-			ProductID: line.ProductID,
-			Quantity:  line.Quantity,
-			UnitPrice: line.UnitPrice,
+			ProductID:        line.ProductID,
+			ProductVariantID: line.ProductVariantID,
+			Quantity:         line.Quantity,
+			UnitPrice:        line.UnitPrice,
 		})
 	}
-	
+
 	return saleLines
 }

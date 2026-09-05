@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
 import {
   ScrollView,
   View,
@@ -6,6 +6,9 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Pressable,
+  Modal,
+  TextInput,
+  Alert,
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import {
@@ -17,6 +20,11 @@ import {
   LogOut,
   CheckCircle,
   Smartphone,
+  Edit,
+  Save,
+  HelpCircle,
+  Sparkles,
+  Play,
 } from 'lucide-react-native'
 import {
   Card,
@@ -26,6 +34,9 @@ import {
 } from '../../components/ui/Card'
 import { useAuth } from '../../contexts/AuthContext'
 import { useBusiness } from '../../hooks/api/useBusiness'
+import { useBusinessContext } from '../../contexts/BusinessContext'
+import { useTour } from '../../contexts/TourContext'
+import { api } from '../../lib/api'
 import { TAB_BAR_SCROLL_PADDING } from '../../constants/tabBar'
 
 function metadataLocation(metadata: unknown): string | null {
@@ -40,6 +51,35 @@ export default function ProfileTab() {
   const router = useRouter()
   const { userData, logout } = useAuth()
   const { data: business, isLoading, isError, refetch } = useBusiness(null)
+  const { updateBusiness } = useBusinessContext()
+  const {
+    isEnabled: tourEnabled,
+    setEnabled: setTourEnabled,
+    startTour,
+    resetTour,
+    hasSeenTour,
+  } = useTour()
+  const [showBusinessEdit, setShowBusinessEdit] = useState(false)
+  const [showProfileEdit, setShowProfileEdit] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [businessForm, setBusinessForm] = useState({
+    name: '',
+    phone: '',
+    email: '',
+    address: '',
+    taxPin: '',
+    currency: 'KES',
+  })
+  const [profileForm, setProfileForm] = useState({
+    firstName: '',
+    lastName: '',
+    phone: '',
+  })
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  })
 
   const ownerParts = useMemo(() => {
     const name = business?.ownerName || userData?.ownerName || ''
@@ -61,6 +101,102 @@ export default function ProfileTab() {
   const location = metadataLocation(business?.metadata) || 'Not set'
   const businessType = business?.businessType?.trim() || '—'
   const years = business?.yearsInBusiness?.trim() || '—'
+
+  const openBusinessEdit = () => {
+    setBusinessForm({
+      name: business?.name || '',
+      phone: (business as any)?.phone || phone === 'Not set' ? '' : phone,
+      email: (business as any)?.email || '',
+      address:
+        (business as any)?.address || location === 'Not set' ? '' : location,
+      taxPin: (business as any)?.taxPin || '',
+      currency: (business as any)?.currency || 'KES',
+    })
+    setShowBusinessEdit(true)
+  }
+
+  const openProfileEdit = () => {
+    const parts = (business?.ownerName || userData?.ownerName || '').split(' ')
+    setProfileForm({
+      firstName: parts[0] || '',
+      lastName: parts.slice(1).join(' ') || '',
+      phone: phone === 'Not set' ? '' : phone,
+    })
+    setPasswordForm({
+      currentPassword: '',
+      newPassword: '',
+      confirmPassword: '',
+    })
+    setShowProfileEdit(true)
+  }
+
+  const handleSaveBusiness = async () => {
+    if (!business?.id) return Alert.alert('Error', 'No business selected')
+    if (!businessForm.name.trim())
+      return Alert.alert('Validation', 'Business name required')
+    setSaving(true)
+    try {
+      await updateBusiness(business.id, {
+        name: businessForm.name.trim(),
+        phone: businessForm.phone.trim() || undefined,
+        email: businessForm.email.trim() || undefined,
+        address: businessForm.address.trim() || undefined,
+        taxPin: businessForm.taxPin.trim() || undefined,
+        currency: businessForm.currency,
+      } as any)
+      Alert.alert('Success', 'Business updated')
+      setShowBusinessEdit(false)
+      refetch()
+    } catch (e: any) {
+      Alert.alert(
+        'Error',
+        e.friendlyMessage || e.message || 'Failed to update business',
+      )
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleSaveProfile = async () => {
+    setSaving(true)
+    try {
+      // Update user profile (first/last name, phone)
+      await api.put('/profile', {
+        firstName: profileForm.firstName.trim(),
+        lastName: profileForm.lastName.trim(),
+        phone: profileForm.phone.trim(),
+      })
+      // Password change if provided
+      if (passwordForm.newPassword) {
+        if (passwordForm.newPassword.length < 6)
+          throw new Error('New password must be at least 6 characters')
+        if (passwordForm.newPassword !== passwordForm.confirmPassword)
+          throw new Error('Passwords do not match')
+        // Try change-password endpoint, fallback to reset
+        try {
+          await api.post('/auth/change-password', {
+            currentPassword: passwordForm.currentPassword,
+            newPassword: passwordForm.newPassword,
+          })
+        } catch {
+          await api.post('/auth/reset-password', {
+            currentPassword: passwordForm.currentPassword,
+            newPassword: passwordForm.newPassword,
+          })
+        }
+      }
+      Alert.alert('Success', 'Profile updated')
+      setShowProfileEdit(false)
+      refetch()
+    } catch (e: any) {
+      Alert.alert(
+        'Error',
+        e.friendlyMessage || e.message || 'Failed to update profile',
+      )
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <View className='flex-1 bg-gray-50'>
@@ -141,13 +277,27 @@ export default function ProfileTab() {
                 </Text>
               </View>
             </View>
+            <TouchableOpacity
+              onPress={openProfileEdit}
+              className='w-8 h-8 rounded-full bg-white border border-gray-200 items-center justify-center'
+            >
+              <Edit size={14} color='#111827' />
+            </TouchableOpacity>
           </CardContent>
         </Card>
 
         <Card className='border border-gray-200'>
-          <CardHeader className='flex-row items-center gap-2'>
-            <User size={16} color='#111827' />
-            <CardTitle>Business information</CardTitle>
+          <CardHeader className='flex-row items-center justify-between'>
+            <View className='flex-row items-center gap-2'>
+              <User size={16} color='#111827' />
+              <CardTitle>Business information</CardTitle>
+            </View>
+            <TouchableOpacity
+              onPress={openBusinessEdit}
+              className='w-8 h-8 rounded-full bg-gray-50 border border-gray-200 items-center justify-center'
+            >
+              <Edit size={14} color='#374151' />
+            </TouchableOpacity>
           </CardHeader>
           <CardContent className='pt-0 gap-3'>
             <View className='flex-row items-center gap-3 py-2'>
@@ -211,9 +361,17 @@ export default function ProfileTab() {
         </Card>
 
         <Card className='border border-gray-200'>
-          <CardHeader className='flex-row items-center gap-2'>
-            <Smartphone size={16} color='#111827' />
-            <CardTitle>Mobile money</CardTitle>
+          <CardHeader className='flex-row items-center justify-between'>
+            <View className='flex-row items-center gap-2'>
+              <Smartphone size={16} color='#111827' />
+              <CardTitle>Mobile money</CardTitle>
+            </View>
+            <TouchableOpacity
+              onPress={openBusinessEdit}
+              className='w-8 h-8 rounded-full bg-gray-50 border border-gray-200 items-center justify-center'
+            >
+              <Edit size={14} color='#374151' />
+            </TouchableOpacity>
           </CardHeader>
           <CardContent className='pt-0'>
             <View className='flex-row items-center justify-between p-3.5 rounded-xl bg-gray-50 border border-gray-200'>
@@ -232,7 +390,309 @@ export default function ProfileTab() {
             </View>
           </CardContent>
         </Card>
+
+        <Card className='border border-amber-200 bg-amber-50/40'>
+          <CardHeader className='flex-row items-center gap-2'>
+            <HelpCircle size={16} color='#b45309' />
+            <CardTitle>User Journey & Tour</CardTitle>
+          </CardHeader>
+          <CardContent className='pt-0 gap-3'>
+            <View className='bg-white rounded-xl border border-amber-100 p-3'>
+              <View className='flex-row items-center gap-2 mb-1'>
+                <Sparkles size={14} color='#b45309' />
+                <Text className='text-sm font-bold text-gray-900'>
+                  Briefing
+                </Text>
+              </View>
+              <Text className='text-xs leading-4 text-gray-700'>
+                Pop-up menus brief you on each button and page: what
+                Sales/Orders/Invoices do, how variants change price, how cart
+                removal works, how to navigate tabs, and how offline sync
+                recovers. Tour is shown on first launch and stays on for testing
+                — toggle off when familiar.
+              </Text>
+            </View>
+
+            <View className='flex-row items-center justify-between p-3 bg-white rounded-xl border border-gray-200'>
+              <View>
+                <Text className='text-sm font-bold text-gray-900'>
+                  Interactive tour
+                </Text>
+                <Text className='text-xs text-gray-500'>
+                  {tourEnabled
+                    ? hasSeenTour
+                      ? 'Enabled • will auto-show for new users'
+                      : 'Enabled • constant for testing'
+                    : 'Disabled'}
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => setTourEnabled(!tourEnabled)}
+                className={`w-12 h-7 rounded-full p-1 ${tourEnabled ? 'bg-gray-900' : 'bg-gray-200'}`}
+              >
+                <View
+                  className={`w-5 h-5 rounded-full bg-white ${tourEnabled ? 'ml-5' : 'ml-0'}`}
+                />
+              </Pressable>
+            </View>
+
+            <View className='flex-row gap-2'>
+              <TouchableOpacity
+                onPress={startTour}
+                className='flex-1 flex-row items-center justify-center gap-2 py-3 rounded-xl bg-gray-900'
+              >
+                <Play size={14} color='white' />
+                <Text className='text-sm font-bold text-white'>Start tour</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={resetTour}
+                className='flex-1 py-3 rounded-xl bg-white border border-gray-200 items-center'
+              >
+                <Text className='text-sm font-bold text-gray-700'>
+                  Reset & replay
+                </Text>
+              </TouchableOpacity>
+            </View>
+            <Text className='text-[11px] text-gray-500 text-center'>
+              Toggle off in profile when you understand the app. Tour covers
+              Sales variants, cart, Invoices settlement, Stock, Profile edits,
+              navigation and offline.
+            </Text>
+          </CardContent>
+        </Card>
       </ScrollView>
+
+      {/* Business Edit Modal */}
+      <Modal
+        visible={showBusinessEdit}
+        animationType='slide'
+        presentationStyle='pageSheet'
+        onRequestClose={() => setShowBusinessEdit(false)}
+      >
+        <View className='flex-1 bg-gray-50'>
+          <View className='flex-row justify-between items-center p-4 bg-white border-b border-gray-200'>
+            <Text className='text-lg font-bold'>Edit Business</Text>
+            <TouchableOpacity
+              onPress={() => setShowBusinessEdit(false)}
+              className='w-8 h-8 rounded-full bg-gray-100 items-center justify-center'
+            >
+              <Text className='font-bold'>✕</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView contentContainerStyle={{ padding: 16, gap: 14 }}>
+            <View>
+              <Text className='text-sm font-semibold text-gray-700 mb-2'>
+                Business name *
+              </Text>
+              <TextInput
+                className='bg-white border border-gray-300 rounded-xl px-4 py-3.5'
+                value={businessForm.name}
+                onChangeText={(t) =>
+                  setBusinessForm({ ...businessForm, name: t })
+                }
+              />
+            </View>
+            <View>
+              <Text className='text-sm font-semibold text-gray-700 mb-2'>
+                Phone
+              </Text>
+              <TextInput
+                className='bg-white border border-gray-300 rounded-xl px-4 py-3.5'
+                keyboardType='phone-pad'
+                value={businessForm.phone}
+                onChangeText={(t) =>
+                  setBusinessForm({ ...businessForm, phone: t })
+                }
+              />
+            </View>
+            <View>
+              <Text className='text-sm font-semibold text-gray-700 mb-2'>
+                Email
+              </Text>
+              <TextInput
+                className='bg-white border border-gray-300 rounded-xl px-4 py-3.5'
+                keyboardType='email-address'
+                autoCapitalize='none'
+                value={businessForm.email}
+                onChangeText={(t) =>
+                  setBusinessForm({ ...businessForm, email: t })
+                }
+              />
+            </View>
+            <View>
+              <Text className='text-sm font-semibold text-gray-700 mb-2'>
+                Address
+              </Text>
+              <TextInput
+                className='bg-white border border-gray-300 rounded-xl px-4 py-3.5'
+                value={businessForm.address}
+                onChangeText={(t) =>
+                  setBusinessForm({ ...businessForm, address: t })
+                }
+              />
+            </View>
+            <View className='flex-row gap-3'>
+              <View className='flex-1'>
+                <Text className='text-sm font-semibold text-gray-700 mb-2'>
+                  Currency
+                </Text>
+                <TextInput
+                  className='bg-white border border-gray-300 rounded-xl px-4 py-3.5'
+                  value={businessForm.currency}
+                  onChangeText={(t) =>
+                    setBusinessForm({ ...businessForm, currency: t })
+                  }
+                />
+              </View>
+              <View className='flex-1'>
+                <Text className='text-sm font-semibold text-gray-700 mb-2'>
+                  Tax PIN
+                </Text>
+                <TextInput
+                  className='bg-white border border-gray-300 rounded-xl px-4 py-3.5'
+                  value={businessForm.taxPin}
+                  onChangeText={(t) =>
+                    setBusinessForm({ ...businessForm, taxPin: t })
+                  }
+                  autoCapitalize='characters'
+                />
+              </View>
+            </View>
+            <TouchableOpacity
+              onPress={handleSaveBusiness}
+              disabled={saving}
+              className='bg-gray-900 py-4 rounded-xl items-center flex-row justify-center gap-2'
+            >
+              {saving ? (
+                <ActivityIndicator color='white' />
+              ) : (
+                <>
+                  <Save size={16} color='white' />
+                  <Text className='text-white font-bold'>Save Business</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* Profile Edit Modal */}
+      <Modal
+        visible={showProfileEdit}
+        animationType='slide'
+        presentationStyle='pageSheet'
+        onRequestClose={() => setShowProfileEdit(false)}
+      >
+        <View className='flex-1 bg-gray-50'>
+          <View className='flex-row justify-between items-center p-4 bg-white border-b border-gray-200'>
+            <Text className='text-lg font-bold'>Edit Profile</Text>
+            <TouchableOpacity
+              onPress={() => setShowProfileEdit(false)}
+              className='w-8 h-8 rounded-full bg-gray-100 items-center justify-center'
+            >
+              <Text className='font-bold'>✕</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView contentContainerStyle={{ padding: 16, gap: 14 }}>
+            <View className='flex-row gap-3'>
+              <View className='flex-1'>
+                <Text className='text-sm font-semibold text-gray-700 mb-2'>
+                  First name
+                </Text>
+                <TextInput
+                  className='bg-white border border-gray-300 rounded-xl px-4 py-3.5'
+                  value={profileForm.firstName}
+                  onChangeText={(t) =>
+                    setProfileForm({ ...profileForm, firstName: t })
+                  }
+                />
+              </View>
+              <View className='flex-1'>
+                <Text className='text-sm font-semibold text-gray-700 mb-2'>
+                  Last name
+                </Text>
+                <TextInput
+                  className='bg-white border border-gray-300 rounded-xl px-4 py-3.5'
+                  value={profileForm.lastName}
+                  onChangeText={(t) =>
+                    setProfileForm({ ...profileForm, lastName: t })
+                  }
+                />
+              </View>
+            </View>
+            <View>
+              <Text className='text-sm font-semibold text-gray-700 mb-2'>
+                Phone
+              </Text>
+              <TextInput
+                className='bg-white border border-gray-300 rounded-xl px-4 py-3.5'
+                keyboardType='phone-pad'
+                value={profileForm.phone}
+                onChangeText={(t) =>
+                  setProfileForm({ ...profileForm, phone: t })
+                }
+              />
+            </View>
+            <View className='h-px bg-gray-200 my-2' />
+            <Text className='text-sm font-bold text-gray-900'>
+              Change password
+            </Text>
+            <View>
+              <Text className='text-sm font-semibold text-gray-700 mb-2'>
+                Current password
+              </Text>
+              <TextInput
+                className='bg-white border border-gray-300 rounded-xl px-4 py-3.5'
+                secureTextEntry
+                value={passwordForm.currentPassword}
+                onChangeText={(t) =>
+                  setPasswordForm({ ...passwordForm, currentPassword: t })
+                }
+              />
+            </View>
+            <View>
+              <Text className='text-sm font-semibold text-gray-700 mb-2'>
+                New password
+              </Text>
+              <TextInput
+                className='bg-white border border-gray-300 rounded-xl px-4 py-3.5'
+                secureTextEntry
+                value={passwordForm.newPassword}
+                onChangeText={(t) =>
+                  setPasswordForm({ ...passwordForm, newPassword: t })
+                }
+              />
+            </View>
+            <View>
+              <Text className='text-sm font-semibold text-gray-700 mb-2'>
+                Confirm new password
+              </Text>
+              <TextInput
+                className='bg-white border border-gray-300 rounded-xl px-4 py-3.5'
+                secureTextEntry
+                value={passwordForm.confirmPassword}
+                onChangeText={(t) =>
+                  setPasswordForm({ ...passwordForm, confirmPassword: t })
+                }
+              />
+            </View>
+            <TouchableOpacity
+              onPress={handleSaveProfile}
+              disabled={saving}
+              className='bg-gray-900 py-4 rounded-xl items-center flex-row justify-center gap-2'
+            >
+              {saving ? (
+                <ActivityIndicator color='white' />
+              ) : (
+                <>
+                  <Save size={16} color='white' />
+                  <Text className='text-white font-bold'>Save Profile</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      </Modal>
     </View>
   )
 }

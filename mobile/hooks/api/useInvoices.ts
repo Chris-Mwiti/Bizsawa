@@ -39,9 +39,12 @@ function toInvoiceRequest(input: CreateInvoiceInput) {
   }
 }
 function mapRaw(raw: any): InvoiceListItem {
+  // raw from Watermelon holds customer_id (UUID) — keep it as customerId and leave customerName to be resolved via useCustomers lookup
+  // This fixes list showing UUID instead of name
   return {
     id: raw.id,
     invoiceNumber: raw.invoice_number,
+    customerId: raw.customer_id || null,
     customerName: raw.customer_id || 'Customer',
     status: raw.status,
     total: raw.total,
@@ -94,7 +97,7 @@ export const useInvoices = () => {
     useQuery<InvoiceDetail>({
       queryKey: ['invoices', id],
       queryFn: async () => {
-        // Prefer local
+        // Prefer local — keep customerId and productId for name resolution in UI
         try {
           const rec: any = await (database as any).get('invoices').find(id)
           const raw = rec._raw
@@ -105,6 +108,7 @@ export const useInvoices = () => {
           return {
             id: raw.id,
             invoiceNumber: raw.invoice_number,
+            customerId: raw.customer_id || null,
             customerName: raw.customer_id,
             status: raw.status,
             total: raw.total,
@@ -117,6 +121,7 @@ export const useInvoices = () => {
             createdAt: toISO(raw.created_at),
             lines: lines.map((l: any) => ({
               id: l.id,
+              productId: l._raw?.product_id || l.productId || null,
               description: l.description,
               quantity: l.quantity,
               unitPrice: l.unitPrice,
@@ -215,6 +220,7 @@ export const useInvoices = () => {
       method: string
       reference?: string
     }) => {
+      // Legacy: specific invoice payment (kept for backward compat)
       await api.post(`/invoices/${id}/record-payment`, {
         amount: toDecimalString(amount),
         method,
@@ -224,6 +230,32 @@ export const useInvoices = () => {
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: ['invoices'] })
       queryClient.invalidateQueries({ queryKey: ['invoices', id] })
+    },
+  })
+
+  // Customer-level settlement: payment is distributed FIFO across all unpaid invoices for that customer
+  // Works for both cash and mpesa — worker also uses this path
+  const settleCustomerPayment = useMutation({
+    mutationFn: async ({
+      customerId,
+      amount,
+      method,
+      reference,
+    }: {
+      customerId: UUID
+      amount: number | string
+      method?: string
+      reference?: string
+    }) => {
+      const res = await api.post(`/invoices/customer/${customerId}/settle`, {
+        amount: toDecimalString(amount),
+        method: method || 'cash',
+        reference,
+      })
+      return res.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['invoices'] })
     },
   })
 
@@ -253,5 +285,7 @@ export const useInvoices = () => {
     isSendingWhatsApp: sendWhatsApp.isPending,
     recordPayment: recordPayment.mutateAsync,
     isRecordingPayment: recordPayment.isPending,
+    settleCustomerPayment: settleCustomerPayment.mutateAsync,
+    isSettlingCustomer: settleCustomerPayment.isPending,
   }
 }

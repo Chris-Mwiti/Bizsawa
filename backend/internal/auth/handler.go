@@ -14,11 +14,13 @@ func (h Handler) Register(w http.ResponseWriter, r *http.Request) {
 		sharedhttp.Error(w, err)
 		return
 	}
+
 	resp, err := h.svc.Register(r.Context(), req)
 	if err != nil {
 		sharedhttp.Error(w, err)
 		return
 	}
+
 	sharedhttp.JSON(w, http.StatusCreated, resp)
 }
 
@@ -28,11 +30,13 @@ func (h Handler) Login(w http.ResponseWriter, r *http.Request) {
 		sharedhttp.Error(w, err)
 		return
 	}
+
 	resp, err := h.svc.Login(r.Context(), req)
 	if err != nil {
 		sharedhttp.Error(w, err)
 		return
 	}
+
 	sharedhttp.JSON(w, http.StatusOK, resp)
 }
 
@@ -42,10 +46,12 @@ func (h Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 		sharedhttp.Error(w, err)
 		return
 	}
+
 	resp, err := h.svc.Refresh(r.Context(), req)
 	if err != nil {
 		sharedhttp.Error(w, err)
 		return
 	}
+
 	sharedhttp.JSON(w, http.StatusOK, resp)
 }

@@ -13,15 +13,19 @@ func TenantResolution(next http.Handler) http.Handler {
 		if businessID == "" {
 			businessID = chi.URLParam(r, "bizID")
 		}
+
 		if businessID == "" {
 			businessID = r.Header.Get("X-Business-ID")
 		}
+
 		if businessID == "" {
 			businessID = r.Header.Get("x-business-id")
 		}
+
 		if businessID == "" {
 			businessID = r.URL.Query().Get("businessId")
 		}
+
 		if businessID == "" {
 			businessID = r.URL.Query().Get("business_id")
 		}

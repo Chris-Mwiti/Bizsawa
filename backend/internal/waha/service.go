@@ -15,6 +15,7 @@ func NewService(client *Client, logger *slog.Logger) *Service {
 	if logger == nil {
 		logger = slog.Default()
 	}
+
 	return &Service{client: client, logger: logger}
 }
 
@@ -29,15 +30,19 @@ func (s *Service) Send(ctx context.Context, phone, message string) (*Response, e
 	if s.client == nil {
 		return nil, errNotConfigured()
 	}
+
 	if phone == "" {
 		return nil, errPhoneRequired()
 	}
+
 	s.logger.InfoContext(ctx, "[WAHA]-sending text", "phone", phone)
+
 	resp, err := s.client.SendText(ctx, normalizeChatID(phone), message)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "[WAHA]-send failed", "phone", phone, "err", err.Error())
 		return nil, err
 	}
+
 	return resp, nil
 }
 
@@ -46,9 +51,11 @@ func (s *Service) SendMedia(ctx context.Context, phone, message, mediaURL, media
 	if s.client == nil {
 		return nil, errNotConfigured()
 	}
+
 	if phone == "" {
 		return nil, errPhoneRequired()
 	}
+
 	return s.client.SendMedia(ctx, normalizeChatID(phone), message, mediaURL, mediaType)
 }
 
@@ -59,5 +66,6 @@ func (s *Service) SendNotification(ctx context.Context, phone, kind string, data
 	if err != nil {
 		return nil, err
 	}
+
 	return s.Send(ctx, phone, message)
 }

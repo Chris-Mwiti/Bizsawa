@@ -3,9 +3,10 @@ package customers
 import (
 	"time"
 
-	"github.com/Codecx-Org/FinAI/backend/internal/shared/db"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
+
+	"github.com/Codecx-Org/FinAI/backend/internal/shared/db"
 )
 
 type Customer struct {

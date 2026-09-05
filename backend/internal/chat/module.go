@@ -11,6 +11,7 @@ type Module struct {
 func NewModule(registry *mcp.Registry) *Module {
 	svc := NewService(registry)
 	h := NewHandler(svc, registry)
+
 	return &Module{svc: svc, handler: h, registry: registry}
 }
 

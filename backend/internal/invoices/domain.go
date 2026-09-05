@@ -3,9 +3,10 @@ package invoices
 import (
 	"time"
 
-	"github.com/Codecx-Org/FinAI/backend/internal/shared/db"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
+
+	"github.com/Codecx-Org/FinAI/backend/internal/shared/db"
 )
 
 type Status string
@@ -39,6 +40,9 @@ type Invoice struct {
 	ViewedAt      *time.Time      `json:"viewedAt"`
 	PaidAt        *time.Time      `json:"paidAt"`
 	Lines         []InvoiceLine   `gorm:"foreignKey:InvoiceID" json:"lines,omitempty"`
+	// Enriched fields for UX (not persisted) — populated via joins for API responses
+	CustomerName  string `gorm:"-" json:"customerName,omitempty"`
+	CustomerPhone string `gorm:"-" json:"customerPhone,omitempty"`
 }
 
 func (Invoice) TableName() string { return "invoices" }
@@ -52,6 +56,8 @@ type InvoiceLine struct {
 	Quantity    decimal.Decimal `gorm:"type:numeric(18,3);not null" json:"quantity"`
 	UnitPrice   decimal.Decimal `gorm:"type:numeric(18,2);not null" json:"unitPrice"`
 	LineTotal   decimal.Decimal `gorm:"type:numeric(18,2);not null" json:"lineTotal"`
+	// Enriched for UX
+	ProductName string `gorm:"-" json:"productName,omitempty"`
 }
 
 func (InvoiceLine) TableName() string { return "invoice_lines" }

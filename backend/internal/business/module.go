@@ -3,10 +3,11 @@ package business
 import (
 	"context"
 
-	sharedcrypto "github.com/Codecx-Org/FinAI/backend/internal/shared/crypto"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+
+	sharedcrypto "github.com/Codecx-Org/FinAI/backend/internal/shared/crypto"
 )
 
 type SubscriptionGuard interface {

@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { api, ApiError } from '../../lib/api'
 import type {
   Breakdown,
@@ -13,6 +14,8 @@ import type {
 } from '../../lib/api-dtos'
 import { toNumber } from '../../lib/api-dtos'
 import { useBusinessContext } from '../../contexts/BusinessContext'
+
+const SNAPSHOT_CACHE_PREFIX = 'bizsawa_analytics_snapshot_'
 
 export type Timeframe = 'day' | 'week' | 'month' | 'year' | 'all' | 'custom'
 
@@ -183,12 +186,27 @@ export const useAnalytics = () => {
   const enabled = hasBusiness && !businessLoading
 
   const fetchSnapshot = async (tf: Timeframe): Promise<BackendSnapshot> => {
-    // Single canonical endpoint — backend/internal/analytics/module.go:51 r.Get("/", h.Get)
-    // GET /api/v1/analytics?timeframe=week  with X-Business-ID header + ?businessId= fallback
-    const response = await api.get<BackendSnapshot>('/analytics', {
-      params: { timeframe: backendTimeframe(tf) },
-    })
-    return response.data
+    const bt = backendTimeframe(tf)
+    const cacheKey = `${SNAPSHOT_CACHE_PREFIX}${activeBusinessId || 'none'}_${bt}`
+    try {
+      // Single canonical endpoint — backend/internal/analytics/module.go:51 r.Get("/", h.Get)
+      // GET /api/v1/analytics?timeframe=week  with X-Business-ID header + ?businessId= fallback
+      const response = await api.get<BackendSnapshot>('/analytics', {
+        params: { timeframe: bt },
+      })
+      const data = response.data
+      // Cache for offline display
+      AsyncStorage.setItem(cacheKey, JSON.stringify(data)).catch(() => {})
+      return data
+    } catch (e) {
+      const cached = await AsyncStorage.getItem(cacheKey)
+      if (cached) {
+        try {
+          return JSON.parse(cached) as BackendSnapshot
+        } catch {}
+      }
+      throw e
+    }
   }
 
   // Pre-computed analytics summary endpoint — now backed by Snapshot

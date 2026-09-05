@@ -12,8 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Codecx-Org/FinAI/backend/internal/shared/config"
 	"github.com/shopspring/decimal"
+
+	"github.com/Codecx-Org/FinAI/backend/internal/shared/config"
 )
 
 type MpesaClient struct {
@@ -43,6 +44,7 @@ func NewMpesaClient(cfg config.MpesaConfig, logger *slog.Logger) *MpesaClient {
 	if logger == nil {
 		logger = slog.Default()
 	}
+
 	return &MpesaClient{cfg: cfg, logger: logger, httpClient: &http.Client{Timeout: 30 * time.Second}}
 }
 
@@ -55,7 +57,11 @@ func (c *MpesaClient) ProcessPayment(ctx context.Context, cmd PaymentCommand) (P
 	case CommandC2B:
 		return c.SimulateC2B(ctx, C2BSimulateRequest{Phone: cmd.Phone, Amount: cmd.Amount, BillRefNumber: cmd.AccountReference})
 	case CommandCash:
-		raw, _ := json.Marshal(map[string]any{"provider": "cash", "status": "accepted"})
+		raw, _ := json.Marshal(map[string]any{
+			"provider": "cash",
+			"status":   "accepted",
+		})
+
 		return ProviderResult{RequestID: cmd.ID.String(), Receipt: cmd.ID.String(), Raw: raw, Status: StatusSucceeded}, nil
 	default:
 		return ProviderResult{}, fmt.Errorf("unsupported payment command type %q", cmd.Type)
@@ -86,7 +92,7 @@ type C2BSimulateRequest struct {
 	BillRefNumber string
 }
 
-//dummy comment for the day
+// dummy comment for the day
 
 type TransactionStatusRequest struct {
 	TransactionID string
@@ -110,11 +116,13 @@ func (c *MpesaClient) STKPush(ctx context.Context, req STKPushRequest) (Provider
 		"AccountReference":  req.AccountReference,
 		"TransactionDesc":   firstNonEmpty(req.TransactionDesc, c.defaultDesc()),
 	}
+
 	resp, err := c.post(ctx, "/mpesa/stkpush/v1/processrequest", payload)
 	if err != nil {
 		c.logger.ErrorContext(ctx, "[STK_PUSH]-stk push failed", "err", err)
 		return ProviderResult{}, err
 	}
+
 	return providerResult(resp), nil
 }
 
@@ -131,10 +139,12 @@ func (c *MpesaClient) B2C(ctx context.Context, req B2CRequest) (ProviderResult, 
 		"ResultURL":          c.cfg.ResultURL,
 		"Occasion":           req.Occasion,
 	}
+
 	resp, err := c.post(ctx, "/mpesa/b2c/v1/paymentrequest", payload)
 	if err != nil {
 		return ProviderResult{}, err
 	}
+
 	return providerResult(resp), nil
 }
 
@@ -145,10 +155,12 @@ func (c *MpesaClient) RegisterC2BURLs(ctx context.Context, req C2BRegisterReques
 		"ConfirmationURL": c.cfg.C2BConfirmationURL,
 		"ValidationURL":   c.cfg.C2BValidationURL,
 	}
+
 	resp, err := c.post(ctx, "/mpesa/c2b/v1/registerurl", payload)
 	if err != nil {
 		return ProviderResult{}, err
 	}
+
 	return providerResult(resp), nil
 }
 
@@ -160,10 +172,12 @@ func (c *MpesaClient) SimulateC2B(ctx context.Context, req C2BSimulateRequest) (
 		"Msisdn":        normalizePhone(req.Phone),
 		"BillRefNumber": req.BillRefNumber,
 	}
+
 	resp, err := c.post(ctx, "/mpesa/c2b/v1/simulate", payload)
 	if err != nil {
 		return ProviderResult{}, err
 	}
+
 	return providerResult(resp), nil
 }
 
@@ -180,10 +194,12 @@ func (c *MpesaClient) TransactionStatus(ctx context.Context, req TransactionStat
 		"Remarks":            firstNonEmpty(req.Remarks, c.defaultDesc()),
 		"Occasion":           req.Occasion,
 	}
+
 	resp, err := c.post(ctx, "/mpesa/transactionstatus/v1/query", payload)
 	if err != nil {
 		return ProviderResult{}, err
 	}
+
 	return providerResult(resp), nil
 }
 
@@ -191,27 +207,35 @@ func (c *MpesaClient) token(ctx context.Context) (string, error) {
 	if c.cfg.ConsumerKey == "" || c.cfg.ConsumerSecret == "" {
 		return "", fmt.Errorf("mpesa consumer credentials are not configured")
 	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(c.cfg.BaseURL, "/")+"/oauth/v1/generate?grant_type=client_credentials", nil)
 	if err != nil {
 		return "", err
 	}
+
 	req.SetBasicAuth(c.cfg.ConsumerKey, c.cfg.ConsumerSecret)
+
 	res, err := c.httpClient.Do(req)
 	if err != nil {
 		return "", err
 	}
+
 	defer res.Body.Close()
+
 	body, _ := io.ReadAll(res.Body)
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
 		return "", fmt.Errorf("mpesa token request failed: status=%d body=%s", res.StatusCode, string(body))
 	}
+
 	var out mpesaTokenResponse
 	if err := json.Unmarshal(body, &out); err != nil {
 		return "", err
 	}
+
 	if out.AccessToken == "" {
 		return "", fmt.Errorf("mpesa token response missing access token")
 	}
+
 	return out.AccessToken, nil
 }
 
@@ -220,36 +244,46 @@ func (c *MpesaClient) post(ctx context.Context, path string, payload any) (mpesa
 	if err != nil {
 		return mpesaAPIResponse{}, err
 	}
+
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return mpesaAPIResponse{}, err
 	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(c.cfg.BaseURL, "/")+path, bytes.NewReader(body))
 	if err != nil {
 		return mpesaAPIResponse{}, err
 	}
+
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
+
 	res, err := c.httpClient.Do(req)
 	if err != nil {
 		return mpesaAPIResponse{}, err
 	}
+
 	defer res.Body.Close()
+
 	resBody, _ := io.ReadAll(res.Body)
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
 		return mpesaAPIResponse{}, fmt.Errorf("mpesa request failed: path=%s status=%d body=%s", path, res.StatusCode, string(resBody))
 	}
+
 	var out mpesaAPIResponse
 	if err := json.Unmarshal(resBody, &out); err != nil {
 		return mpesaAPIResponse{}, err
 	}
+
 	out.Raw = append(out.Raw[:0], resBody...)
+
 	return out, nil
 }
 
 func providerResult(resp mpesaAPIResponse) ProviderResult {
 	requestID := firstNonEmpty(resp.CheckoutRequestID, resp.ConversationID, resp.OriginatorConversationID, resp.MerchantRequestID)
 	receipt := firstNonEmpty(resp.ResponseCode, resp.ResultCode, requestID)
+
 	return ProviderResult{RequestID: requestID, Receipt: receipt, Raw: resp.Raw, Status: StatusProcessing}
 }
 
@@ -262,6 +296,7 @@ func normalizePhone(phone string) string {
 	if strings.HasPrefix(phone, "0") && len(phone) == 10 {
 		return "254" + phone[1:]
 	}
+
 	return phone
 }
 
@@ -271,5 +306,6 @@ func firstNonEmpty(values ...string) string {
 			return value
 		}
 	}
+
 	return ""
 }

@@ -4,10 +4,11 @@ import (
 	"context"
 	"net/http"
 
-	sharedhttp "github.com/Codecx-Org/FinAI/backend/internal/shared/http"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+
+	sharedhttp "github.com/Codecx-Org/FinAI/backend/internal/shared/http"
 )
 
 type Module struct {

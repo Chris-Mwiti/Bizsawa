@@ -8,6 +8,7 @@ import tamaguiConfig from '../tamagui.config'
 import { AuthProvider } from '../contexts/AuthContext'
 import { BusinessProvider } from '../contexts/BusinessContext'
 import { SyncProvider } from '../sync/SyncProvider'
+import { TourProvider } from '../contexts/TourContext'
 import { OfflineBanner } from '../components/OfflineBanner'
 
 export default function RootLayout() {
@@ -28,43 +29,45 @@ export default function RootLayout() {
         <AuthProvider>
           <BusinessProvider>
             <SyncProvider>
-              <OfflineBanner />
-              <Stack screenOptions={{ headerShown: false }}>
-                <Stack.Screen
-                  name='auth/login'
-                  options={{ headerShown: false }}
-                />
-                <Stack.Screen
-                  name='auth/register'
-                  options={{ headerShown: false }}
-                />
-                <Stack.Screen name='(tabs)' />
-                <Stack.Screen
-                  name='credit-preview'
-                  options={{
-                    title: 'Credit',
-                    presentation: 'card',
-                    headerShown: true,
-                  }}
-                />
-                <Stack.Screen
-                  name='coach'
-                  options={{ presentation: 'modal' }}
-                />
-                <Stack.Screen
-                  name='social'
-                  options={{ presentation: 'modal' }}
-                />
-                <Stack.Screen
-                  name='sync-conflicts'
-                  options={{
-                    presentation: 'card',
-                    headerShown: true,
-                    title: 'Sync Conflicts',
-                  }}
-                />
-              </Stack>
-              <Toast />
+              <TourProvider>
+                <OfflineBanner />
+                <Stack screenOptions={{ headerShown: false }}>
+                  <Stack.Screen
+                    name='auth/login'
+                    options={{ headerShown: false }}
+                  />
+                  <Stack.Screen
+                    name='auth/register'
+                    options={{ headerShown: false }}
+                  />
+                  <Stack.Screen name='(tabs)' />
+                  <Stack.Screen
+                    name='credit-preview'
+                    options={{
+                      title: 'Credit',
+                      presentation: 'card',
+                      headerShown: true,
+                    }}
+                  />
+                  <Stack.Screen
+                    name='coach'
+                    options={{ presentation: 'modal' }}
+                  />
+                  <Stack.Screen
+                    name='social'
+                    options={{ presentation: 'modal' }}
+                  />
+                  <Stack.Screen
+                    name='sync-conflicts'
+                    options={{
+                      presentation: 'card',
+                      headerShown: true,
+                      title: 'Sync Conflicts',
+                    }}
+                  />
+                </Stack>
+                <Toast />
+              </TourProvider>
             </SyncProvider>
           </BusinessProvider>
         </AuthProvider>

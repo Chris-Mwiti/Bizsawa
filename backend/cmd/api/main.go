@@ -10,12 +10,17 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Codecx-Org/FinAI/backend/internal/auth"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/riverqueue/river"
+	"github.com/riverqueue/river/riverdriver/riverdatabasesql"
+	"github.com/riverqueue/river/riverdriver/riverpgxv5"
+	"golang.org/x/sync/errgroup"
+
 	"github.com/Codecx-Org/FinAI/backend/internal/analytics"
+	"github.com/Codecx-Org/FinAI/backend/internal/auth"
 	"github.com/Codecx-Org/FinAI/backend/internal/business"
 	"github.com/Codecx-Org/FinAI/backend/internal/chat"
 	"github.com/Codecx-Org/FinAI/backend/internal/customers"
-	"github.com/Codecx-Org/FinAI/backend/internal/sync"
 	"github.com/Codecx-Org/FinAI/backend/internal/expenses"
 	"github.com/Codecx-Org/FinAI/backend/internal/inventory"
 	"github.com/Codecx-Org/FinAI/backend/internal/invoices"
@@ -29,15 +34,11 @@ import (
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/config"
 	sharedcrypto "github.com/Codecx-Org/FinAI/backend/internal/shared/crypto"
 	shareddb "github.com/Codecx-Org/FinAI/backend/internal/shared/db"
+	"github.com/Codecx-Org/FinAI/backend/internal/sync"
 	"github.com/Codecx-Org/FinAI/backend/internal/taxes"
 	"github.com/Codecx-Org/FinAI/backend/internal/tenancy"
 	"github.com/Codecx-Org/FinAI/backend/internal/users"
 	"github.com/Codecx-Org/FinAI/backend/internal/waha"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/riverqueue/river"
-	"github.com/riverqueue/river/riverdriver/riverdatabasesql"
-	"github.com/riverqueue/river/riverdriver/riverpgxv5"
-	"golang.org/x/sync/errgroup"
 )
 
 func main() {
@@ -50,6 +51,7 @@ func main() {
 		logger.Error("database open failed", "err", err)
 		os.Exit(1)
 	}
+
 	sqlDB, err := shareddb.SQLDB(gormDB)
 	if err != nil {
 		logger.Error("database sql pool unavailable", "err", err)
@@ -67,6 +69,7 @@ func main() {
 		logger.Error("river pgx config parse failed", "err", err)
 		os.Exit(1)
 	}
+
 	pgxConfig.MaxConns = 10
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -130,6 +133,7 @@ func main() {
 			river.QueueDefault: {MaxWorkers: 10},
 		},
 	})
+
 	if err != nil {
 		logger.Error("river worker engine initialization failed", "err", err)
 		os.Exit(1)
@@ -170,9 +174,11 @@ func main() {
 
 	g.Go(func() error {
 		logger.Info("api listening", "addr", cfg.Addr)
+
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			return err
 		}
+
 		return nil
 	})
 
@@ -183,11 +189,14 @@ func main() {
 
 	g.Go(func() error {
 		<-groupCtx.Done()
+
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 		defer cancel()
+
 		if err := srv.Shutdown(shutdownCtx); err != nil {
 			return err
 		}
+
 		return riverWorkerEngine.Stop(shutdownCtx)
 	})
 

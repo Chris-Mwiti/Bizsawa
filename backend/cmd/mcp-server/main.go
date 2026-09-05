@@ -10,6 +10,8 @@ import (
 	"syscall"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/Codecx-Org/FinAI/backend/internal/auth"
 	"github.com/Codecx-Org/FinAI/backend/internal/business"
 	"github.com/Codecx-Org/FinAI/backend/internal/customers"
@@ -26,7 +28,6 @@ import (
 	"github.com/Codecx-Org/FinAI/backend/internal/taxes"
 	"github.com/Codecx-Org/FinAI/backend/internal/tenancy"
 	"github.com/Codecx-Org/FinAI/backend/internal/users"
-	"golang.org/x/sync/errgroup"
 )
 
 func main() {
@@ -73,25 +74,31 @@ func main() {
 		if err := shareddb.Ping(r.Context(), gormDB); err != nil {
 			return err
 		}
+
 		return redisClient.Ping(r.Context())
 	})
 
 	srv := &http.Server{Addr: cfg.MCP.Addr, Handler: mcpServer.Router()}
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	g, groupCtx := errgroup.WithContext(ctx)
 	g.Go(func() error {
 		logger.Info("mcp server listening", "addr", cfg.MCP.Addr)
+
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			return err
 		}
+
 		return nil
 	})
 	g.Go(func() error {
 		<-groupCtx.Done()
+
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 		defer cancel()
+
 		return srv.Shutdown(shutdownCtx)
 	})
 

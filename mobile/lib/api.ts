@@ -76,6 +76,15 @@ export async function persistAuthResponse(data: AuthResponse): Promise<void> {
     [AUTH_STORAGE_KEYS.userId, data.userId],
   ])
   await AsyncStorage.removeItem(AUTH_STORAGE_KEYS.legacyToken)
+  // Also mirror to SecureStore for offline
+  try {
+    const { persistSecureAuth } = await import('./secureStorage')
+    await persistSecureAuth({
+      accessToken: data.accessToken,
+      refreshToken: data.refreshToken,
+      userId: data.userId,
+    })
+  } catch {}
 }
 
 export async function clearAuthStorage(): Promise<void> {
@@ -89,6 +98,10 @@ export async function clearAuthStorage(): Promise<void> {
     AUTH_STORAGE_KEYS.business,
     AUTH_STORAGE_KEYS.role,
   ])
+  try {
+    const { clearSecureAuth } = await import('./secureStorage')
+    await clearSecureAuth()
+  } catch {}
 }
 
 function isMutatingMethod(method?: string): boolean {

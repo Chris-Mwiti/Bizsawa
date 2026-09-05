@@ -13,6 +13,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/google/uuid"
+	"github.com/riverqueue/river"
+	"gorm.io/gorm"
+
 	"github.com/Codecx-Org/FinAI/backend/internal/invoices"
 	"github.com/Codecx-Org/FinAI/backend/internal/orders"
 	shareddb "github.com/Codecx-Org/FinAI/backend/internal/shared/db"
@@ -20,9 +24,6 @@ import (
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/middleware"
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/models"
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/pagination"
-	"github.com/google/uuid"
-	"github.com/riverqueue/river"
-	"gorm.io/gorm"
 )
 
 type PaymentEventType string
@@ -38,7 +39,14 @@ const (
 )
 
 type InvoicePayment interface {
-	RecordPayment(ctx context.Context, businessID, orderID uuid.UUID, req invoices.RecordPaymentRequest) (error)
+	RecordPayment(ctx context.Context, businessID, orderID uuid.UUID, req invoices.RecordPaymentRequest) error
+
+	SettleCustomerPayment(
+		ctx context.Context,
+		businessID uuid.UUID,
+		customerID uuid.UUID,
+		req invoices.RecordPaymentRequest,
+	) (*invoices.SettleResult, error)
 
 	Send(ctx context.Context, businessID, invoiceID uuid.UUID, channel string) (*invoices.Invoice, error)
 }
@@ -46,7 +54,7 @@ type InvoicePayment interface {
 type OrderPayment interface {
 	FindOrderByUpdate(ctx context.Context, businessID, orderID uuid.UUID) (*orders.Order, error)
 	FulfillOrder(ctx context.Context, businessID, orderID, staffID uuid.UUID) (*orders.Order, error)
-	PaymentUpdate(ctx context.Context, businessID, orderID uuid.UUID, status orders.PaymentStatus)(error)
+	PaymentUpdate(ctx context.Context, businessID, orderID uuid.UUID, status orders.PaymentStatus) error
 	Cancel(ctx context.Context, businessID, orderID uuid.UUID) error
 }
 
@@ -65,6 +73,7 @@ func NewService(repo *Repository, outboxRepo *river.Client[*sql.Tx], logger *slo
 	if logger == nil {
 		logger = slog.Default()
 	}
+
 	return &Service{repo: repo, outbox: outboxRepo, logger: logger, provider: provider}
 }
 
@@ -90,6 +99,7 @@ func (s *Service) WithTx(tx *gorm.DB) *Service {
 
 func (s *Service) Initiate(ctx context.Context, businessID uuid.UUID, req models.InitiateRequest) (*PaymentCommand, error) {
 	s.logger.InfoContext(ctx, "[PAYMENTS]-initiating payments", "businessID", businessID.String(), "orderID", req.OrderID)
+
 	key, ok := middleware.IdempotencyKeyFromCtx(ctx)
 	if !ok {
 		return nil, errIdempotencyRequired()
@@ -98,15 +108,17 @@ func (s *Service) Initiate(ctx context.Context, businessID uuid.UUID, req models
 	existing, err := s.repo.FindByIdempotency(ctx, businessID, key)
 	if err != nil {
 		s.logger.InfoContext(ctx, "[PAYMENTS]-error while finding by idempotency key", "err", err.Error())
-		if !errors.Is(err, gorm.ErrRecordNotFound){
+
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			s.logger.ErrorContext(ctx, "[PAYMENTS]-error(this is not a gorm record not found error)", "err", err.Error())
-			return nil,err
+			return nil, err
 		}
 	}
-		if existing != nil  {
+
+	if existing != nil {
 		return existing, nil
 	}
-	
+
 	if !req.Amount.IsPositive() {
 		return nil, apperrors.ErrUnprocessable.WithMessage("payment amount must be positive")
 	}
@@ -134,7 +146,7 @@ func (s *Service) Initiate(ctx context.Context, businessID uuid.UUID, req models
 			req.AccountReference = val
 		}
 	} else {
-		//create an accountreference by hashing both the reqType+reqAmount+orderID
+		// create an accountreference by hashing both the reqType+reqAmount+orderID
 		hash := sha256.New()
 
 		hash.Write([]byte(req.Type))
@@ -152,12 +164,13 @@ func (s *Service) Initiate(ctx context.Context, businessID uuid.UUID, req models
 	if currency == "" {
 		currency = "KES"
 	}
+
 	payload, _ := json.Marshal(req.Payload)
 	if len(payload) == 0 {
 		payload = []byte(`{}`)
 	}
 
-	//parse the orderID from the request payload
+	// parse the orderID from the request payload
 	orderID, err := uuid.Parse(req.OrderID)
 	if err != nil {
 		return nil, err
@@ -185,6 +198,7 @@ func (s *Service) Initiate(ctx context.Context, businessID uuid.UUID, req models
 			s.logger.ErrorContext(ctx, "[PAYMENTS]-error while creating paymentCmd", "err", err.Error(), "cmdID", cmd.ID.String())
 			return err
 		}
+
 		sqlTx, ok := tx.Statement.ConnPool.(*sql.Tx)
 		if !ok {
 			return fmt.Errorf("error while asserting tx type")
@@ -192,7 +206,7 @@ func (s *Service) Initiate(ctx context.Context, businessID uuid.UUID, req models
 
 		err = s.emitCommand(ctx, sqlTx, cmd, PaymentCreated, map[string]any{})
 		if err != nil {
-			s.logger.ErrorContext(ctx, "[PAYMENTS]-error while emmiting event creating paymentCmd", "err", err.Error(), "cmdID", cmd.ID.String())
+			s.logger.ErrorContext(ctx, "[PAYMENTS]-error while emitting event creating paymentCmd", "err", err.Error(), "cmdID", cmd.ID.String())
 			return err
 		}
 
@@ -208,12 +222,13 @@ func (s *Service) InitiateOrder(ctx context.Context, businessID uuid.UUID, req m
 	_, err := s.repo.FindByIdempotency(ctx, businessID, key)
 	if err != nil {
 		s.logger.InfoContext(ctx, "[PAYMENTS]-error while finding by idempotency key", "err", err.Error())
-		if !errors.Is(err, gorm.ErrRecordNotFound){
+
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			s.logger.ErrorContext(ctx, "[PAYMENTS]-error(this is not a gorm record not found error)", "err", err.Error())
 			return err
 		}
 	}
-	
+
 	if !req.Amount.IsPositive() {
 		return apperrors.ErrUnprocessable.WithMessage("payment amount must be positive")
 	}
@@ -241,7 +256,7 @@ func (s *Service) InitiateOrder(ctx context.Context, businessID uuid.UUID, req m
 			req.AccountReference = val
 		}
 	} else {
-		//create an accountreference by hashing both the reqType+reqAmount+orderID
+		// create an accountreference by hashing both the reqType+reqAmount+orderID
 		hash := sha256.New()
 
 		hash.Write([]byte(req.Type))
@@ -259,12 +274,13 @@ func (s *Service) InitiateOrder(ctx context.Context, businessID uuid.UUID, req m
 	if currency == "" {
 		currency = "KES"
 	}
+
 	payload, _ := json.Marshal(req.Payload)
 	if len(payload) == 0 {
 		payload = []byte(`{}`)
 	}
 
-	//parse the orderID from the request payload
+	// parse the orderID from the request payload
 	orderID, err := uuid.Parse(req.OrderID)
 	if err != nil {
 		return err
@@ -292,6 +308,7 @@ func (s *Service) InitiateOrder(ctx context.Context, businessID uuid.UUID, req m
 			s.logger.ErrorContext(ctx, "[PAYMENTS]-error while creating paymentCmd", "err", err.Error(), "cmdID", cmd.ID.String())
 			return err
 		}
+
 		sqlTx, ok := tx.Statement.ConnPool.(*sql.Tx)
 		if !ok {
 			return fmt.Errorf("error while asserting tx type")
@@ -299,7 +316,7 @@ func (s *Service) InitiateOrder(ctx context.Context, businessID uuid.UUID, req m
 
 		err = s.emitCommand(ctx, sqlTx, cmd, PaymentCreated, map[string]any{})
 		if err != nil {
-			s.logger.ErrorContext(ctx, "[PAYMENTS]-error while emmiting event creating paymentCmd", "err", err.Error(), "cmdID", cmd.ID.String())
+			s.logger.ErrorContext(ctx, "[PAYMENTS]-error while emitting event creating paymentCmd", "err", err.Error(), "cmdID", cmd.ID.String())
 			return err
 		}
 
@@ -313,51 +330,64 @@ func (s *Service) ExecuteProvider(ctx context.Context, businessID, cmdID uuid.UU
 	if s.provider == nil {
 		return apperrors.ErrInternal.WithMessage("payment provider not configured")
 	}
+
 	err := s.repo.db.Transaction(func(tx *gorm.DB) error {
 		cmd, err := s.WithTx(tx).Get(ctx, businessID, cmdID)
 		s.logger.InfoContext(ctx, "command", "cmd", cmd)
+
 		if err != nil {
 			s.logger.ErrorContext(ctx, "[PAYMENTS-EXECUTOR]-error while executing payment provider", "err", err.Error())
 			return err
 		}
+
 		if cmd.Status == StatusSucceeded || cmd.Status == StatusFailed {
 			s.logger.InfoContext(ctx, "[PAYMENTS]-payment already processed", "cmdID", cmd.ID.String(), "status", cmd.Status)
 			return apperrors.ErrConflict.WithMessage("paymente already processed")
 		}
+
 		if cmd.Status == StatusPending {
 			if err := s.WithTx(tx).ClaimPayment(ctx, businessID, cmdID); err != nil {
 				s.logger.ErrorContext(ctx, "[PAYMENTS-EXECUTOR]-error while executing payment provider", "err", err.Error())
 				return err
 			}
-			//fetch the updated paymentcmd 
+			// fetch the updated paymentcmd
 			cmd, err = s.WithTx(tx).Get(ctx, businessID, cmdID)
 			if err != nil {
 				s.logger.ErrorContext(ctx, "[PAYMENTS-EXECUTOR]-error while executing payment provider", "err", err.Error())
 				return err
 			}
 		}
+
 		result, err := s.WithTx(tx).provider.ProcessPayment(ctx, *cmd)
-		//debuggger
+		// debuggger
 		s.logger.InfoContext(ctx, "checkpoint")
 		s.logger.InfoContext(ctx, "callback_result", "result", result)
+
 		if err != nil {
 			s.logger.ErrorContext(ctx, "[PAYMENTS-EXECUTOR]-error while executing payment provider", "err", err.Error())
+
 			raw, _ := json.Marshal(map[string]any{"error": err.Error()})
+
 			markErr := s.MarkFailed(ctx, *cmd, "provider_error", err.Error(), raw)
 			if markErr != nil {
 				s.logger.ErrorContext(ctx, "[PAYMENTS]-failed to mark provider error", "cmdID", cmd.ID.String(), "err", markErr.Error())
 				return markErr
 			}
+
 			return err
 		}
+
 		s.logger.InfoContext(ctx, "[PAYMENTS]-provider request accepted", "cmdID", cmd.ID.String(), "providerRequestID", result.RequestID)
+
 		if result.Status == StatusSucceeded {
 			err := s.WithTx(tx).MarkProviderAccepted(ctx, *cmd, result)
 			if err != nil {
 				return err
 			}
+
 			return s.WithTx(tx).MarkSucceeded(ctx, *cmd, result)
 		}
+
 		return s.WithTx(tx).MarkProviderAccepted(ctx, *cmd, result)
 	})
 
@@ -373,15 +403,13 @@ func (s *Service) List(ctx context.Context, businessID uuid.UUID, page paginatio
 }
 
 func (s *Service) ClaimPayment(ctx context.Context, businessID, cmdId uuid.UUID) error {
-
 	err := s.repo.db.Transaction(func(tx *gorm.DB) error {
-
 		paymentCmd, err := s.WithTx(tx).Get(ctx, businessID, cmdId)
-
 		if err != nil {
 			s.logger.ErrorContext(ctx, "[PAYMENTS]-error while fetching paymentCmd", "err", err.Error(), "cmdID", paymentCmd.ID.String())
 			return err
 		}
+
 		sm := s.buildPaymentMachine(businessID, paymentCmd)
 
 		if err := sm.FireCtx(ctx, TriggerProcessing); err != nil {
@@ -389,7 +417,6 @@ func (s *Service) ClaimPayment(ctx context.Context, businessID, cmdId uuid.UUID)
 		}
 
 		err = s.WithTx(tx).repo.ClaimSinglePayment(ctx, paymentCmd)
-
 		if err != nil {
 			s.logger.ErrorContext(ctx, "[PAYMENTS]-error while claming paymentCmd", "err", err.Error(), "cmdID", paymentCmd.ID.String())
 			return err
@@ -402,7 +429,7 @@ func (s *Service) ClaimPayment(ctx context.Context, businessID, cmdId uuid.UUID)
 
 		err = s.emitCommand(ctx, sqlTx, paymentCmd, PaymentProcessing, map[string]any{})
 		if err != nil {
-			s.logger.ErrorContext(ctx, "[PAYMENTS]-error while emmiting event marking success paymentCmd", "err", err.Error(), "cmdID", paymentCmd.ID.String())
+			s.logger.ErrorContext(ctx, "[PAYMENTS]-error while emitting event marking success paymentCmd", "err", err.Error(), "cmdID", paymentCmd.ID.String())
 			return err
 		}
 
@@ -410,7 +437,6 @@ func (s *Service) ClaimPayment(ctx context.Context, businessID, cmdId uuid.UUID)
 	})
 
 	return err
-
 }
 
 func (s *Service) ClaimPending(ctx context.Context, limit int) ([]PaymentCommand, error) {
@@ -427,6 +453,7 @@ func (s *Service) MarkProviderAccepted(ctx context.Context, cmd PaymentCommand, 
 		s.logger.ErrorContext(ctx, "[PAYMENTS]-error while marking provider accepted", "err", err.Error(), "cmdID", cmd.ID.String())
 		return err
 	}
+
 	return nil
 }
 
@@ -437,7 +464,6 @@ func (s *Service) MarkSucceeded(ctx context.Context, cmd PaymentCommand, result 
 	}
 
 	err := s.repo.db.Transaction(func(tx *gorm.DB) error {
-
 		if err := s.WithTx(tx).repo.MarkSucceeded(ctx, cmd.ID, result.RequestID, result.Receipt, raw); err != nil {
 			s.logger.ErrorContext(ctx, "[PAYMENTS]-error while marking success paymentCmd", "err", err.Error(), "cmdID", cmd.ID.String())
 			return err
@@ -452,12 +478,11 @@ func (s *Service) MarkSucceeded(ctx context.Context, cmd PaymentCommand, result 
 
 		err := s.emitCommand(ctx, sqlTx, &refCmd, PaymentConfirmed, map[string]any{})
 		if err != nil {
-			s.logger.ErrorContext(ctx, "[PAYMENTS]-error while emmiting event marking success paymentCmd", "err", err.Error(), "cmdID", cmd.ID.String())
+			s.logger.ErrorContext(ctx, "[PAYMENTS]-error while emitting event marking success paymentCmd", "err", err.Error(), "cmdID", cmd.ID.String())
 			return err
 		}
 
 		return nil
-
 	})
 
 	return err
@@ -469,7 +494,6 @@ func (s *Service) MarkFailed(ctx context.Context, cmd PaymentCommand, code, mess
 	}
 
 	err := s.repo.db.Transaction(func(tx *gorm.DB) error {
-
 		if err := s.WithTx(tx).repo.MarkFailed(ctx, cmd.ID, code, message, raw); err != nil {
 			s.logger.ErrorContext(ctx, "[PAYMENTS]-error while marking failed paymentCmd", "err", err.Error(), "cmd", cmd.ID.String())
 			return err
@@ -479,19 +503,18 @@ func (s *Service) MarkFailed(ctx context.Context, cmd PaymentCommand, code, mess
 		if !ok {
 			return fmt.Errorf("error while asserting tx type")
 		}
-	
-		//make a copy of the cmd
+
+		// make a copy of the cmd
 		refCmd := cmd
 
 		err := s.emitCommand(ctx, sqlTx, &refCmd, PaymentFailed, map[string]any{})
 		if err != nil {
-			s.logger.ErrorContext(ctx, "[PAYMENTS]-error while emmiting event marking failed paymentCmd", "err", err.Error(), "cmdID", cmd.ID.String())
+			s.logger.ErrorContext(ctx, "[PAYMENTS]-error while emitting event marking failed paymentCmd", "err", err.Error(), "cmdID", cmd.ID.String())
 
 			return err
 		}
 
 		return nil
-
 	})
 
 	return err
@@ -501,10 +524,11 @@ func (s *Service) emitCommand(ctx context.Context, tx *sql.Tx, cmd *PaymentComma
 	if s.outbox == nil {
 		return apperrors.ErrInternal.WithMessage("service outbox not available")
 	}
+
 	payload := map[string]any{
 		"paymentID":  cmd.ID.String(),
 		"businessID": cmd.BusinessID.String(),
-		"orderID": 		cmd.OrderID.String(),
+		"orderID":    cmd.OrderID.String(),
 		"type":       cmd.Type,
 		"amount":     cmd.Amount,
 		"currency":   cmd.Currency,
@@ -515,8 +539,9 @@ func (s *Service) emitCommand(ctx context.Context, tx *sql.Tx, cmd *PaymentComma
 
 	err := s.emit(ctx, tx, cmd.BusinessID, cmd.ID, eventType, payload)
 	if err != nil {
-		return apperrors.ErrInternal.WithMessage("error while emmiting command")
+		return apperrors.ErrInternal.WithMessage("error while emitting command")
 	}
+
 	return nil
 }
 
@@ -530,12 +555,15 @@ func (s *Service) RegisterMpesaC2BURLs(ctx context.Context, responseType string)
 	if !ok {
 		return ProviderResult{}, apperrors.ErrInternal.WithMessage("mpesa provider not configured")
 	}
+
 	result, err := mpesa.RegisterC2BURLs(ctx, C2BRegisterRequest{ResponseType: responseType})
 	if err != nil {
 		s.logger.ErrorContext(ctx, "[PAYMENTS/MPESA]-c2b url registration failed", "err", err.Error())
 		return ProviderResult{}, err
 	}
+
 	s.logger.InfoContext(ctx, "[PAYMENTS/MPESA]-c2b urls registered", "providerRequestID", result.RequestID)
+
 	return result, nil
 }
 
@@ -544,12 +572,15 @@ func (s *Service) QueryMpesaTransactionStatus(ctx context.Context, req Transacti
 	if !ok {
 		return ProviderResult{}, apperrors.ErrInternal.WithMessage("mpesa provider not configured")
 	}
+
 	result, err := mpesa.TransactionStatus(ctx, req)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "[PAYMENTS/MPESA]-transaction status query failed", "transactionID", req.TransactionID, "err", err.Error())
 		return ProviderResult{}, err
 	}
+
 	s.logger.InfoContext(ctx, "[PAYMENTS/MPESA]-transaction status query accepted", "transactionID", req.TransactionID, "providerRequestID", result.RequestID)
+
 	return result, nil
 }
 
@@ -558,6 +589,7 @@ func (s *Service) HandleMpesaCallback(ctx context.Context, raw json.RawMessage) 
 	if err := json.Unmarshal(raw, &payload); err != nil {
 		return err
 	}
+
 	requestID := firstJSONString(payload, "Body.stkCallback.CheckoutRequestID", "Result.ConversationID", "Result.OriginatorConversationID", "CheckoutRequestID", "ConversationID", "OriginatorConversationID")
 	receipt := firstJSONString(payload, "Body.stkCallback.CallbackMetadata.Item[MpesaReceiptNumber]", "Result.ResultParameters.ResultParameter[TransactionReceipt]", "TransID", "MpesaReceiptNumber")
 	accountRef := firstJSONString(payload, "BillRefNumber", "Body.stkCallback.CallbackMetadata.Item[AccountReference]")
@@ -572,6 +604,7 @@ func (s *Service) HandleMpesaCallback(ctx context.Context, raw json.RawMessage) 
 	if cmd == nil {
 		return apperrors.ErrNotFound.WithMessage("command not found")
 	}
+
 	if err != nil {
 		s.logger.WarnContext(ctx, "[PAYMENTS/MPESA]-callback command not found", "providerRequestID", requestID, "accountReference", accountRef, "err", err.Error())
 		return nil
@@ -580,6 +613,7 @@ func (s *Service) HandleMpesaCallback(ctx context.Context, raw json.RawMessage) 
 	if resultCode == "" || resultCode == "0" {
 		return s.MarkSucceeded(ctx, *cmd, ProviderResult{RequestID: firstNonEmpty(requestID, cmd.ProviderRequestID), Receipt: firstNonEmpty(receipt, cmd.ProviderReceipt), Raw: raw, Status: StatusSucceeded})
 	}
+
 	return s.MarkFailed(ctx, *cmd, resultCode, firstNonEmpty(resultDesc, "mpesa payment failed"), raw)
 }
 
@@ -589,6 +623,7 @@ func firstJSONString(payload map[string]any, paths ...string) string {
 			return value
 		}
 	}
+
 	return ""
 }
 
@@ -596,39 +631,50 @@ func lookupJSONValue(value any, path string) string {
 	if path == "" {
 		return ""
 	}
+
 	parts := strings.Split(path, ".")
 	current := value
+
 	for _, part := range parts {
 		if strings.Contains(part, "[") && strings.HasSuffix(part, "]") {
 			name := part[:strings.Index(part, "[")]
 			key := strings.TrimSuffix(part[strings.Index(part, "[")+1:], "]")
+
 			m, ok := current.(map[string]any)
 			if !ok {
 				return ""
 			}
+
 			items, ok := m[name].([]any)
 			if !ok {
 				return ""
 			}
+
 			current = ""
+
 			for _, item := range items {
 				im, ok := item.(map[string]any)
 				if !ok {
 					continue
 				}
+
 				if im["Name"] == key {
 					current = im["Value"]
 					break
 				}
 			}
+
 			continue
 		}
+
 		m, ok := current.(map[string]any)
 		if !ok {
 			return ""
 		}
+
 		current = m[part]
 	}
+
 	switch v := current.(type) {
 	case string:
 		return v

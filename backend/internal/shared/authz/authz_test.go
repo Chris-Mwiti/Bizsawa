@@ -24,6 +24,7 @@ func TestDefaultPolicyCashier(t *testing.T) {
 	if !enforcer.Allowed(RoleCashier, "sales", "write") {
 		t.Fatal("cashier should be allowed to create sales")
 	}
+
 	if enforcer.Allowed(RoleCashier, "reports", "generate") {
 		t.Fatal("cashier should not be allowed to generate reports")
 	}
@@ -37,6 +38,7 @@ func TestResourceActionMapsNestedMembersRoute(t *testing.T) {
 			if resource != "members" {
 				t.Fatalf("resource = %q, want members", resource)
 			}
+
 			if action != "write" {
 				t.Fatalf("action = %q, want write", action)
 			}
@@ -46,6 +48,7 @@ func TestResourceActionMapsNestedMembersRoute(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/businesses/"+uuid.NewString()+"/members/invite", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
+
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
 	}

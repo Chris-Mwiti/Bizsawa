@@ -4,9 +4,10 @@ import (
 	"bytes"
 	"testing"
 
-	shareddb "github.com/Codecx-Org/FinAI/backend/internal/shared/db"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
+
+	shareddb "github.com/Codecx-Org/FinAI/backend/internal/shared/db"
 )
 
 func TestDeterministicPDF(t *testing.T) {
@@ -15,9 +16,11 @@ func TestDeterministicPDF(t *testing.T) {
 
 	first := deterministicPDF(invoice)
 	second := deterministicPDF(invoice)
+
 	if !bytes.Equal(first, second) {
 		t.Fatal("pdf output should be deterministic")
 	}
+
 	if !bytes.Contains(first, []byte("Invoice: INV-TEST-000001")) || !bytes.Contains(first, []byte("Line: A")) {
 		t.Fatalf("pdf output missing expected invoice content: %s", string(first))
 	}

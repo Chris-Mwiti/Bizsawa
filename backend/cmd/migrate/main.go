@@ -12,6 +12,7 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/joho/godotenv"
 )
+
 func main() {
 	// Load .env.development if present (so `go run ./cmd/migrate up` works without manual export)
 	_ = godotenv.Load(".env.development")
@@ -19,6 +20,7 @@ func main() {
 
 	// 1. Parse command-line flags/arguments
 	flag.Parse()
+
 	args := flag.Args()
 	if len(args) < 1 {
 		log.Fatal("Expected at least one command: 'up', 'down', or 'version'")
@@ -45,6 +47,7 @@ func main() {
 	switch command {
 	case "up":
 		log.Println("Running all pending 'up' migrations...")
+
 		if err := m.Up(); err != nil {
 			if errors.Is(err, migrate.ErrNoChange) {
 				log.Println("No new migrations to apply.")
@@ -64,7 +67,9 @@ func main() {
 				log.Fatalf("Invalid step count: %v", err)
 			}
 		}
+
 		log.Printf("Rolling back the last %d migration(s)...", steps)
+
 		if err := m.Steps(-steps); err != nil {
 			if errors.Is(err, migrate.ErrNoChange) {
 				log.Println("No migrations to roll back.")

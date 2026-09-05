@@ -7,27 +7,28 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/Codecx-Org/FinAI/backend/internal/shared/models"
 	"github.com/google/uuid"
 	"github.com/riverqueue/river"
+
+	"github.com/Codecx-Org/FinAI/backend/internal/shared/models"
 )
 
-// InvoiceEventArgs implements river.JobArgs for outbox job serialization
+// InvoiceEventArgs implements river.JobArgs for outbox job serialization.
 type OrderEventArgs struct {
-	TenantID      uuid.UUID        `json:"tenant_id"`
-	AggregateID   string           `json:"aggregate_id"`
-	AggregateType string           `json:"aggregate_type"`
-	EventType     OrderEventType `json:"event_type"`
-	Stream        string           `json:"stream"`
-	OrderID     uuid.UUID        `json:"orderID"`
-	Key 				uuid.UUID         `json:"key"`
-	Payload       json.RawMessage  `json:"payload"`
+	TenantID      uuid.UUID       `json:"tenant_id"`
+	AggregateID   string          `json:"aggregate_id"`
+	AggregateType string          `json:"aggregate_type"`
+	EventType     OrderEventType  `json:"event_type"`
+	Stream        string          `json:"stream"`
+	OrderID       uuid.UUID       `json:"orderID"`
+	Key           uuid.UUID       `json:"key"`
+	Payload       json.RawMessage `json:"payload"`
 }
 
 func (OrderEventArgs) Kind() string { return "order.event" }
 
-// emit function for the services
-func (s *Service) emit(ctx context.Context, tx *sql.Tx, businessID uuid.UUID, orderID uuid.UUID, key uuid.UUID,eventType OrderEventType, extra map[string]any, opts *river.InsertOpts) error {
+// emit function for the services.
+func (s *Service) emit(ctx context.Context, tx *sql.Tx, businessID uuid.UUID, orderID uuid.UUID, key uuid.UUID, eventType OrderEventType, extra map[string]any, opts *river.InsertOpts) error {
 	if s.outbox == nil {
 		return fmt.Errorf("service outbox missing")
 	}
@@ -42,8 +43,8 @@ func (s *Service) emit(ctx context.Context, tx *sql.Tx, businessID uuid.UUID, or
 		TenantID:      businessID,
 		AggregateID:   orderID.String(),
 		AggregateType: "order",
-		OrderID:     orderID,
-		Key: key,
+		OrderID:       orderID,
+		Key:           key,
 		EventType:     eventType,
 		Stream:        "orders",
 		Payload:       raw,
@@ -53,42 +54,43 @@ func (s *Service) emit(ctx context.Context, tx *sql.Tx, businessID uuid.UUID, or
 		s.logger.ErrorContext(ctx, "[ORDERS]-error while submitting an outbox insert request via River", "err", err)
 		return err
 	}
+
 	return nil
 }
 
 type OrderPaymentInterface interface {
-	InitiateOrder(ctx context.Context, businessID uuid.UUID, req models.InitiateRequest, key string) (error) 
+	InitiateOrder(ctx context.Context, businessID uuid.UUID, req models.InitiateRequest, key string) error
 }
 
-// struct to represent the workers
+// struct to represent the workers.
 type orderWorker struct {
 	river.WorkerDefaults[OrderEventArgs]
-	service *Service
+	service        *Service
 	paymentService OrderPaymentInterface
-	logger  *slog.Logger
+	logger         *slog.Logger
 }
 
-// execution and dispation of workers based on the event type.
-// for now the workers will not be majorly implemented since most of them rely on communication
+// for now the workers will not be majorly implemented since most of them rely on communication.
 func (w *orderWorker) Work(ctx context.Context, job *river.Job[OrderEventArgs]) error {
-
 	w.logger.InfoContext(ctx, "[ORDERS]-worker dispatched", "orderID", job.Args.OrderID.String(), "businessID", job.Args.TenantID.String())
 
 	switch job.Args.EventType {
 	case OrderPaymentInit:
 		w.logger.InfoContext(ctx, "[ORDER_WORKER]-initiating order payment worker", "orderID", job.Args.OrderID)
+
 		var payload models.InitiateRequest
 		if err := json.Unmarshal(job.Args.Payload, &payload); err != nil {
 			w.logger.ErrorContext(ctx, "[ORDER_WORKER]-error while unmarshalling request", "err", err.Error(), "businessID", job.Args.TenantID.String())
 			return err
 		}
+
 		err := w.paymentService.InitiateOrder(ctx, job.Args.TenantID, payload, job.Args.Key.String())
 		if err != nil {
 			w.logger.ErrorContext(ctx, "[ORDER_WORKER]-error while initiating payment request", "err", err.Error(), "businessID", job.Args.TenantID.String())
 			return err
 		}
 	default:
-		w.logger.WarnContext(ctx, "[ORDER_WORKER]-unhandled event type skipped execution", 
+		w.logger.WarnContext(ctx, "[ORDER_WORKER]-unhandled event type skipped execution",
 			"eventType", string(job.Args.EventType),
 			"businessID", job.Args.TenantID.String(),
 		)

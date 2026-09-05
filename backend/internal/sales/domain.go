@@ -1,10 +1,12 @@
 package sales
 
 import (
-	"github.com/Codecx-Org/FinAI/backend/internal/shared/db"
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
-	"time"
+
+	"github.com/Codecx-Org/FinAI/backend/internal/shared/db"
 )
 
 type Sale struct {

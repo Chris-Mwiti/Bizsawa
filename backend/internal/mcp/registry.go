@@ -7,8 +7,9 @@ import (
 	"sort"
 	"time"
 
-	"github.com/Codecx-Org/FinAI/backend/internal/shared/authz"
 	"github.com/google/uuid"
+
+	"github.com/Codecx-Org/FinAI/backend/internal/shared/authz"
 )
 
 var (
@@ -27,17 +28,21 @@ func NewRegistry(enforcer *authz.Enforcer, tools ...Tool) *Registry {
 	for _, tool := range tools {
 		r.tools[tool.Name] = tool
 	}
+
 	return r
 }
 
 func (r *Registry) List(session Session) []ToolDescriptor {
 	out := []ToolDescriptor{}
+
 	for _, tool := range r.tools {
 		if r.available(session, tool) {
 			out = append(out, ToolDescriptor{Name: tool.Name, Description: tool.Description, InputSchema: tool.InputSchema})
 		}
 	}
+
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+
 	return out
 }
 
@@ -46,20 +51,26 @@ func (r *Registry) Call(session Session, name string, args json.RawMessage) (Env
 	if !ok {
 		return Envelope{}, ErrToolNotFound
 	}
+
 	if !r.available(session, tool) {
 		return Envelope{}, ErrPermissionDenied
 	}
+
 	if session.BusinessID == uuid.Nil {
 		return Envelope{}, ErrBusinessRequired
 	}
+
 	data, meta, err := tool.Handler(ToolContext{Session: session, Now: time.Now().UTC()}, args)
 	if err != nil {
 		return Envelope{}, err
 	}
+
 	if meta == nil {
 		meta = map[string]any{}
 	}
+
 	meta["business_id"] = session.BusinessID.String()
+
 	return Envelope{Status: "ok", Data: data, Meta: meta}, nil
 }
 
@@ -67,12 +78,15 @@ func (r *Registry) available(session Session, tool Tool) bool {
 	if tool.Profile != session.Profile {
 		return false
 	}
+
 	if session.BusinessID == uuid.Nil {
 		return false
 	}
+
 	if r.enforcer == nil {
 		return true
 	}
+
 	return r.enforcer.Allowed(authz.Role(session.Role), tool.Resource, tool.Action)
 }
 

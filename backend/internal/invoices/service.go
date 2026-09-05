@@ -10,13 +10,14 @@ import (
 	"sort"
 	"time"
 
-	shareddb "github.com/Codecx-Org/FinAI/backend/internal/shared/db"
-	apperrors "github.com/Codecx-Org/FinAI/backend/internal/shared/errors"
-	"github.com/Codecx-Org/FinAI/backend/internal/shared/pagination"
 	"github.com/google/uuid"
 	"github.com/riverqueue/river"
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
+
+	shareddb "github.com/Codecx-Org/FinAI/backend/internal/shared/db"
+	apperrors "github.com/Codecx-Org/FinAI/backend/internal/shared/errors"
+	"github.com/Codecx-Org/FinAI/backend/internal/shared/pagination"
 )
 
 type InvoiceEventType string
@@ -59,6 +60,8 @@ type RecordPaymentRequest struct {
 	Amount    decimal.Decimal `json:"amount"`
 	PaymentID uuid.UUID       `json:"paymentId"`
 	PaidAt    *time.Time      `json:"paidAt"`
+	Method    string          `json:"method"`
+	Reference string          `json:"reference"`
 }
 
 func (s *Service) WithTx(tx *gorm.DB) *Service {
@@ -77,6 +80,7 @@ func (s *Service) CreateInvoice(ctx context.Context, businessID uuid.UUID, req C
 	if len(req.Lines) == 0 {
 		return nil, apperrors.ErrUnprocessable.WithMessage("invoice requires at least one line")
 	}
+
 	var inv *Invoice
 
 	err := s.repo.db.Transaction(func(tx *gorm.DB) error {
@@ -85,6 +89,7 @@ func (s *Service) CreateInvoice(ctx context.Context, businessID uuid.UUID, req C
 			s.logger.ErrorContext(ctx, "[INVOICES]-error while creating invoice next number", "businessID", businessID.String(), "err", err.Error())
 			return apperrors.ErrInternal.WithMessage("error while creating next number for invoice")
 		}
+
 		subtotal := decimal.Zero
 		lines := make([]InvoiceLine, 0, len(req.Lines))
 
@@ -92,6 +97,7 @@ func (s *Service) CreateInvoice(ctx context.Context, businessID uuid.UUID, req C
 			if line.Description == "" {
 				return apperrors.ErrUnprocessable.WithMessage("invoice line description is required")
 			}
+
 			lineTotal := line.Quantity.Mul(line.UnitPrice).Round(2)
 			subtotal = subtotal.Add(lineTotal)
 			lines = append(lines, InvoiceLine{
@@ -108,6 +114,7 @@ func (s *Service) CreateInvoice(ctx context.Context, businessID uuid.UUID, req C
 		}
 
 		tax := subtotal.Mul(decimal.NewFromFloat(0.16)).Round(2)
+
 		currency := req.Currency
 		if currency == "" {
 			currency = "KES"
@@ -163,6 +170,7 @@ func (s *Service) GetInvoiceByOrderID(ctx context.Context, businessID, orderID u
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, err
 		}
+
 		return nil, apperrors.ErrNotFound.WithMessage("invoice not found")
 	}
 
@@ -174,22 +182,26 @@ func (s *Service) Send(ctx context.Context, businessID, invoiceID uuid.UUID, cha
 
 	err := s.repo.db.Transaction(func(tx *gorm.DB) error {
 		var err error
+
 		invoice, err = s.WithTx(tx).repo.Find(ctx, businessID, invoiceID)
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return apperrors.ErrNotFound.WithMessage("invoice not found")
 			}
+
 			return err
 		}
 
 		now := time.Now().UTC()
 		invoice.Status = StatusSent
 		invoice.SentAt = &now
+
 		if err := s.WithTx(tx).repo.Update(ctx, invoice); err != nil {
 			return err
 		}
 
 		sqlTx, _ := tx.Statement.ConnPool.(*sql.Tx)
+
 		err = s.WithTx(tx).emit(ctx, sqlTx, businessID, invoice.ID, InvoiceSent, map[string]any{"channel": channel})
 		if err != nil {
 			return err
@@ -197,7 +209,6 @@ func (s *Service) Send(ctx context.Context, businessID, invoiceID uuid.UUID, cha
 
 		return nil
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -210,13 +221,16 @@ func (s *Service) RecordPayment(ctx context.Context, businessID, orderID uuid.UU
 
 	err := s.repo.db.Transaction(func(tx *gorm.DB) error {
 		var err error
+
 		invoices, err = s.WithTx(tx).repo.FindByOrderId(ctx, businessID, orderID, pagination.Page{Limit: 10})
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return apperrors.ErrNotFound.WithMessage("invoice record not found")
 			}
+
 			return err
 		}
+
 		if !req.Amount.IsPositive() {
 			return apperrors.ErrUnprocessable.WithMessage("payment amount must be positive")
 		}
@@ -229,24 +243,32 @@ func (s *Service) RecordPayment(ctx context.Context, businessID, orderID uuid.UU
 
 		inv.AmountPaid = inv.AmountPaid.Add(req.Amount).Round(2)
 		inv.AmountDue = inv.Total.Sub(inv.AmountPaid).Round(2)
+
 		if inv.AmountDue.LessThanOrEqual(decimal.Zero) {
 			inv.AmountDue = decimal.Zero
 			inv.Status = StatusPaid
+
 			paidAt := time.Now().UTC()
 			if req.PaidAt != nil {
 				paidAt = *req.PaidAt
 			}
+
 			inv.PaidAt = &paidAt
 		} else {
 			inv.Status = StatusPartial
 		}
+
 		if err := s.WithTx(tx).repo.Update(ctx, inv); err != nil {
 			return err
 		}
 
 		if inv.Status == StatusPaid {
 			sqlTx, _ := tx.Statement.ConnPool.(*sql.Tx)
-			err := s.WithTx(tx).emit(ctx, sqlTx, businessID, inv.ID, InvoicePaid, map[string]any{"amount": inv.AmountPaid.String(), "paymentId": req.PaymentID})
+
+			err := s.WithTx(tx).emit(ctx, sqlTx, businessID, inv.ID, InvoicePaid, map[string]any{
+				"amount":    inv.AmountPaid.String(),
+				"paymentId": req.PaymentID,
+			})
 			if err != nil {
 				return err
 			}
@@ -258,16 +280,127 @@ func (s *Service) RecordPayment(ctx context.Context, businessID, orderID uuid.UU
 	return err
 }
 
+// SettleCustomerPayment distributes a payment across all unpaid invoices for a customer (FIFO by due date)
+// This satisfies the requirement that a payment for a customer settles unpaid invoices rather than a specific one.
+// Works for both cash and mpesa — payment worker should call this with customerID derived from order or phone.
+func (s *Service) SettleCustomerPayment(ctx context.Context, businessID, customerID uuid.UUID, req RecordPaymentRequest) (*SettleResult, error) {
+	if !req.Amount.IsPositive() {
+		return nil, apperrors.ErrUnprocessable.WithMessage("payment amount must be positive")
+	}
+
+	if customerID == uuid.Nil {
+		return nil, apperrors.ErrUnprocessable.WithMessage("customerId is required")
+	}
+
+	var result SettleResult
+
+	err := s.repo.db.Transaction(func(tx *gorm.DB) error {
+		invoices, err := s.WithTx(tx).repo.FindUnpaidByCustomer(ctx, businessID, customerID)
+		if err != nil {
+			return err
+		}
+
+		if len(invoices) == 0 {
+			return apperrors.ErrNotFound.WithMessage("no unpaid invoices for this customer")
+		}
+
+		remaining := req.Amount
+
+		paidAt := time.Now().UTC()
+		if req.PaidAt != nil {
+			paidAt = *req.PaidAt
+		}
+
+		for i := range invoices {
+			if remaining.LessThanOrEqual(decimal.Zero) {
+				break
+			}
+
+			inv := &invoices[i]
+
+			due := inv.AmountDue
+			if due.LessThanOrEqual(decimal.Zero) {
+				continue
+			}
+
+			apply := remaining
+			if apply.GreaterThan(due) {
+				apply = due
+			}
+
+			inv.AmountPaid = inv.AmountPaid.Add(apply).Round(2)
+			inv.AmountDue = inv.Total.Sub(inv.AmountPaid).Round(2)
+
+			if inv.AmountDue.LessThanOrEqual(decimal.Zero) {
+				inv.AmountDue = decimal.Zero
+				inv.Status = StatusPaid
+				inv.PaidAt = &paidAt
+			} else {
+				inv.Status = StatusPartial
+			}
+
+			if err := s.WithTx(tx).repo.Update(ctx, inv); err != nil {
+				return err
+			}
+
+			result.Allocations = append(result.Allocations, Allocation{
+				InvoiceID:     inv.ID,
+				InvoiceNumber: inv.InvoiceNumber,
+				Amount:        apply,
+				Status:        string(inv.Status),
+			})
+			result.TotalApplied = result.TotalApplied.Add(apply)
+			remaining = remaining.Sub(apply).Round(2)
+
+			if inv.Status == StatusPaid {
+				sqlTx, _ := tx.Statement.ConnPool.(*sql.Tx)
+				_ = s.WithTx(tx).emit(ctx, sqlTx, businessID, inv.ID, InvoicePaid, map[string]any{
+					"amount":     apply.String(),
+					"paymentId":  req.PaymentID,
+					"customerId": customerID.String(),
+				})
+			}
+		}
+
+		result.RemainingCredit = remaining
+		if result.TotalApplied.IsZero() {
+			return apperrors.ErrUnprocessable.WithMessage("payment could not be applied to any invoice")
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+type Allocation struct {
+	InvoiceID     uuid.UUID       `json:"invoiceId"`
+	InvoiceNumber string          `json:"invoiceNumber"`
+	Amount        decimal.Decimal `json:"amount"`
+	Status        string          `json:"status"`
+}
+
+type SettleResult struct {
+	Allocations     []Allocation    `json:"allocations"`
+	TotalApplied    decimal.Decimal `json:"totalApplied"`
+	RemainingCredit decimal.Decimal `json:"remainingCredit"`
+}
+
 func (s *Service) Cancel(ctx context.Context, businessID, invoiceID uuid.UUID) (*Invoice, error) {
 	var invoice *Invoice
 
 	err := s.repo.db.Transaction(func(tx *gorm.DB) error {
 		var err error
+
 		invoice, err = s.WithTx(tx).repo.Find(ctx, businessID, invoiceID)
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return apperrors.ErrNotFound.WithMessage("invoice record not found")
 			}
+
 			return err
 		}
 
@@ -278,9 +411,9 @@ func (s *Service) Cancel(ctx context.Context, businessID, invoiceID uuid.UUID) (
 
 		sqlTx, _ := tx.Statement.ConnPool.(*sql.Tx)
 		err = s.WithTx(tx).emit(ctx, sqlTx, businessID, invoiceID, InvoiceCancelled, map[string]any{"amount": invoice.Total.String()})
+
 		return err
 	})
-
 	if err != nil {
 		s.logger.ErrorContext(ctx, "[INVOICES]-error while cancelling order", "businessID", businessID.String(), "err", err)
 		return nil, err
@@ -311,7 +444,6 @@ func (s *Service) MarkOverdue(ctx context.Context, businessID uuid.UUID, now tim
 
 		return nil
 	})
-
 	if err != nil {
 		s.logger.ErrorContext(ctx, "[INVOICES]-error while marking overdue order", "err", err)
 		return nil, err
@@ -325,6 +457,7 @@ func (s *Service) PDF(ctx context.Context, businessID, invoiceID uuid.UUID) ([]b
 	if err != nil {
 		return nil, err
 	}
+
 	return deterministicPDF(inv), nil
 }
 
@@ -357,6 +490,8 @@ func deterministicPDF(inv *Invoice) []byte {
 			),
 		)
 	}
+
 	b.WriteString("%%EOF\n")
+
 	return b.Bytes()
 }

@@ -15,7 +15,9 @@ func New(baseURL, session, apiKey string, logger *slog.Logger) *Module {
 	if logger == nil {
 		logger = slog.Default()
 	}
+
 	client := NewClient(baseURL, session, apiKey)
+
 	return &Module{svc: NewService(client, logger), logger: logger}
 }
 

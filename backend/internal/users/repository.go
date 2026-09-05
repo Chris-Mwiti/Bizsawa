@@ -17,16 +17,20 @@ func (r *Repository) CreateMember(ctx context.Context, member *BusinessMember) e
 
 func (r *Repository) FindActiveByBusinessAndUser(ctx context.Context, businessID, userID uuid.UUID) (*BusinessMember, error) {
 	var member BusinessMember
+
 	err := r.db.WithContext(ctx).Where("business_id = ? AND user_id = ? AND is_active = true", businessID, userID).First(&member).Error
 	if err != nil {
 		return nil, err
 	}
+
 	return &member, nil
 }
 
 func (r *Repository) ListByBusiness(ctx context.Context, businessID uuid.UUID) ([]BusinessMember, error) {
 	var members []BusinessMember
+
 	err := r.db.WithContext(ctx).Where("business_id = ?", businessID).Order("created_at ASC").Find(&members).Error
+
 	return members, err
 }
 
@@ -40,10 +44,12 @@ func (r *Repository) Deactivate(ctx context.Context, businessID, memberID uuid.U
 
 func (r *Repository) FindProfileByUserID(ctx context.Context, userID uuid.UUID) (*UserProfile, error) {
 	var profile UserProfile
+
 	err := r.db.WithContext(ctx).Where("user_id = ?", userID).First(&profile).Error
 	if err != nil {
 		return nil, err
 	}
+
 	return &profile, nil
 }
 

@@ -1,0 +1,67 @@
+# Bizworth backend lint & format — readability focused
+# Each struct field on new line when multiline, blank lines between stages
+
+run:
+  timeout: 2m
+  go: "1.25"
+
+output:
+  sort-results: true
+
+linters:
+  enable:
+    - gofmt
+    - goimports
+    - gocritic
+    - govet
+    - ineffassign
+    - misspell
+    - revive
+    - whitespace
+    - wsl
+    - lll
+    - godot
+    - staticcheck
+
+linters-settings:
+  gofmt:
+    simplify: true
+  goimports:
+    local-prefixes: github.com/Codecx-Org/FinAI/backend
+  lll:
+    line-length: 130
+    tab-width: 4
+  wsl:
+    # Enforce blank lines between stages of execution
+    strict-whitespace: true
+    allow-assign-and-call: false
+    allow-multiline-assign: false
+    force-early-return: true
+    force-short-decl-cuddling: false
+  whitespace:
+    multi-if: false
+    multi-func: false
+  gocritic:
+    enabled-checks:
+      - paramTypeCombine
+      - singleCaseSwitch
+  revive:
+    rules:
+      - name: var-naming
+      - name: package-comments
+        disabled: true
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+
+issues:
+  exclude-rules:
+    - path: "_test\\.go"
+      linters:
+        - lll
+        - godot
+
+severity:
+  default-severity: warning

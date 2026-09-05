@@ -36,11 +36,11 @@ type RevenueDataPoint struct {
 
 // ProfitDataPoint is a single date bucket of revenue/expenses/profit.
 type ProfitDataPoint struct {
-	Date     string          `json:"date"`
-	Revenue  decimal.Decimal `json:"revenue"`
-	Expense  decimal.Decimal `json:"expense"`
-	Profit   decimal.Decimal `json:"profit"`
-	Margin   float64         `json:"margin"`
+	Date    string          `json:"date"`
+	Revenue decimal.Decimal `json:"revenue"`
+	Expense decimal.Decimal `json:"expense"`
+	Profit  decimal.Decimal `json:"profit"`
+	Margin  float64         `json:"margin"`
 }
 
 // CategoryDataPoint is a product category performance bucket.
@@ -79,47 +79,47 @@ type ExpenseBreakdownDataPoint struct {
 
 // CashFlowDataPoint is a single date bucket of net cash flow.
 type CashFlowDataPoint struct {
-	Date       string          `json:"date"`
-	Inflow     decimal.Decimal `json:"inflow"`
-	Outflow    decimal.Decimal `json:"outflow"`
-	NetFlow    decimal.Decimal `json:"netFlow"`
+	Date    string          `json:"date"`
+	Inflow  decimal.Decimal `json:"inflow"`
+	Outflow decimal.Decimal `json:"outflow"`
+	NetFlow decimal.Decimal `json:"netFlow"`
 }
 
 // SalesVelocityDataPoint captures how quickly sales convert.
 type SalesVelocityDataPoint struct {
-	SalesCount      int             `json:"salesCount"`
-	AvgOrderValue   decimal.Decimal `json:"avgOrderValue"`
-	AvgDaysToClose  float64         `json:"avgDaysToClose"`
+	SalesCount     int             `json:"salesCount"`
+	AvgOrderValue  decimal.Decimal `json:"avgOrderValue"`
+	AvgDaysToClose float64         `json:"avgDaysToClose"`
 }
 
 // Snapshot is the materialized, ready-to-serve analytics payload for a
 // business and timeframe. It is pre-computed by River background jobs so
 // reads never compute on the request path.
 type Snapshot struct {
-	BusinessID   uuid.UUID                  `json:"businessId"`
-	Timeframe    Timeframe                  `json:"timeframe"`
-	Revenue      *RevenueSummary            `json:"revenue"`
-	Profit       *ProfitSummary             `json:"profit"`
-	Categories   []CategoryDataPoint        `json:"categories"`
-	TopProducts  []TopProduct               `json:"topProducts"`
-	Customers    *CustomerSummary           `json:"customers"`
-	Expenses     []ExpenseBreakdownDataPoint `json:"expenses"`
-	CashFlow     []CashFlowDataPoint        `json:"cashFlow"`
-	SalesVelocity *SalesVelocityDataPoint   `json:"salesVelocity"`
-	GeneratedAt  time.Time                  `json:"generatedAt"`
+	BusinessID    uuid.UUID                   `json:"businessId"`
+	Timeframe     Timeframe                   `json:"timeframe"`
+	Revenue       *RevenueSummary             `json:"revenue"`
+	Profit        *ProfitSummary              `json:"profit"`
+	Categories    []CategoryDataPoint         `json:"categories"`
+	TopProducts   []TopProduct                `json:"topProducts"`
+	Customers     *CustomerSummary            `json:"customers"`
+	Expenses      []ExpenseBreakdownDataPoint `json:"expenses"`
+	CashFlow      []CashFlowDataPoint         `json:"cashFlow"`
+	SalesVelocity *SalesVelocityDataPoint     `json:"salesVelocity"`
+	GeneratedAt   time.Time                   `json:"generatedAt"`
 }
 
 type RevenueSummary struct {
-	Data          []RevenueDataPoint `json:"data"`
-	TotalRevenue  decimal.Decimal    `json:"totalRevenue"`
-	Transactions  int                `json:"transactions"`
-	GrowthRate    float64            `json:"growthRate"`
+	Data         []RevenueDataPoint `json:"data"`
+	TotalRevenue decimal.Decimal    `json:"totalRevenue"`
+	Transactions int                `json:"transactions"`
+	GrowthRate   float64            `json:"growthRate"`
 }
 
 type ProfitSummary struct {
-	Data       []ProfitDataPoint `json:"data"`
-	TotalProfit decimal.Decimal  `json:"totalProfit"`
-	AvgMargin  float64           `json:"avgMargin"`
+	Data        []ProfitDataPoint `json:"data"`
+	TotalProfit decimal.Decimal   `json:"totalProfit"`
+	AvgMargin   float64           `json:"avgMargin"`
 }
 
 type CustomerSummary struct {

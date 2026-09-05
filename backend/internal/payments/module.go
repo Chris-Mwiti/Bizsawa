@@ -21,7 +21,9 @@ func New(db *gorm.DB, outboxRepo *river.Client[*sql.Tx], logger *slog.Logger, pr
 	if logger == nil {
 		logger = slog.Default()
 	}
+
 	repo := NewRepository(db)
+
 	return &Module{
 		repo:           repo,
 		svc:            NewService(repo, outboxRepo, logger, provider),

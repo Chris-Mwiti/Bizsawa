@@ -111,7 +111,9 @@ export default function InvoiceDetail() {
     isSendingWhatsApp,
     recordPayment,
     isRecordingPayment,
-  } = useInvoices()
+    settleCustomerPayment,
+    isSettlingCustomer,
+  } = useInvoices() as any
   const { data: customers = [] } = useCustomers()
   const { products } = useProducts()
 
@@ -165,20 +167,50 @@ export default function InvoiceDetail() {
       Alert.alert('Error', 'Amount required')
       return
     }
+    // Use customer-level FIFO settlement when possible (requirement: payment for customer settles oldest unpaid first, works for cash & mpesa)
+    const customerId =
+      (invoice as any)?.customerId ||
+      (invoice as any)?.customer_id ||
+      customer?.id
+    const useCustomerSettle = !!customerId
     try {
-      await recordPayment({
-        id,
-        amount: paymentAmount,
-        method: paymentMethod,
-        reference: paymentRef,
-      })
-      Alert.alert('Success', 'Payment recorded')
+      if (useCustomerSettle) {
+        const result: any = await settleCustomerPayment({
+          customerId,
+          amount: paymentAmount,
+          method: paymentMethod,
+          reference: paymentRef,
+        })
+        const allocations = result?.allocations || []
+        if (allocations.length > 1) {
+          const summary = allocations
+            .map((a: any) => `${a.invoiceNumber}: ${a.amount} (${a.status})`)
+            .join('\n')
+          Alert.alert(
+            'Payment distributed',
+            `KES ${paymentAmount} applied to ${allocations.length} invoices:\n${summary}${result.remainingCredit && parseFloat(result.remainingCredit) > 0 ? `\n\nCredit remaining: KES ${result.remainingCredit}` : ''}`,
+          )
+        } else {
+          Alert.alert('Success', 'Payment applied to customer invoices')
+        }
+      } else {
+        await recordPayment({
+          id,
+          amount: paymentAmount,
+          method: paymentMethod,
+          reference: paymentRef,
+        })
+        Alert.alert('Success', 'Payment recorded')
+      }
       setShowPaymentModal(false)
       setPaymentAmount('')
       setPaymentRef('')
       query.refetch()
     } catch (e: any) {
-      Alert.alert('Error', e.friendlyMessage || 'Failed to record payment')
+      Alert.alert(
+        'Error',
+        e.friendlyMessage || e.message || 'Failed to record payment',
+      )
     }
   }
   const handleDownloadPDF = () =>
@@ -578,10 +610,14 @@ export default function InvoiceDetail() {
           <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
             <View className='p-4 bg-white rounded-xl border border-gray-200'>
               <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
-                Amount Due
+                Amount Due (this invoice)
               </Text>
               <Text className='text-2xl font-bold text-gray-900 mt-1'>
                 {formatCurrency(invoice.amountDue)}
+              </Text>
+              <Text className='text-xs text-gray-500 mt-1'>
+                Payment will be applied FIFO to oldest unpaid invoices for{' '}
+                {customer?.name || 'this customer'} — works for cash & M-Pesa.
               </Text>
             </View>
             <View>
@@ -630,10 +666,12 @@ export default function InvoiceDetail() {
             <TouchableOpacity
               className='mt-2 bg-gray-900 py-4 rounded-xl items-center active:opacity-90'
               onPress={handleRecordPayment}
-              disabled={isRecordingPayment}
+              disabled={isRecordingPayment || isSettlingCustomer}
             >
               <Text className='text-white font-bold'>
-                {isRecordingPayment ? 'Recording…' : 'Record Payment'}
+                {isRecordingPayment || isSettlingCustomer
+                  ? 'Recording…'
+                  : 'Record Payment'}
               </Text>
             </TouchableOpacity>
           </ScrollView>

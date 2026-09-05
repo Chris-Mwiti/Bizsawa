@@ -6,11 +6,12 @@ import (
 	"errors"
 	"time"
 
-	shareddb "github.com/Codecx-Org/FinAI/backend/internal/shared/db"
-	apperrors "github.com/Codecx-Org/FinAI/backend/internal/shared/errors"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
+
+	shareddb "github.com/Codecx-Org/FinAI/backend/internal/shared/db"
+	apperrors "github.com/Codecx-Org/FinAI/backend/internal/shared/errors"
 )
 
 type Repository struct{ db *gorm.DB }
@@ -21,6 +22,7 @@ func (r *Repository) WithTx(tx *gorm.DB) *Repository {
 	if tx == nil {
 		return r
 	}
+
 	return &Repository{db: tx}
 }
 
@@ -32,6 +34,7 @@ type window struct {
 
 func resolveWindow(tf Timeframe, now time.Time) window {
 	day := time.Date(now.UTC().Year(), now.UTC().Month(), now.UTC().Day(), 0, 0, 0, 0, time.UTC)
+
 	switch tf {
 	case TimeframeDay:
 		return window{lower: now.Add(-24 * time.Hour), bucketExpr: "DATE_TRUNC('hour', sold_at)"}
@@ -51,6 +54,7 @@ func decFromString(s string) decimal.Decimal {
 	if err != nil {
 		return decimal.Zero
 	}
+
 	return d
 }
 
@@ -80,7 +84,9 @@ type revenueRow struct {
 // RevenueSeries aggregates sales into time buckets.
 func (r *Repository) RevenueSeries(ctx context.Context, businessID uuid.UUID, tf Timeframe, now time.Time) ([]RevenueDataPoint, error) {
 	w := resolveWindow(tf, now)
+
 	var rows []revenueRow
+
 	err := r.db.WithContext(ctx).Raw(
 		`SELECT `+w.bucketExpr+` AS bucket, COALESCE(SUM(total),0)::text AS revenue, COUNT(*) AS transactions
 		 FROM sales
@@ -88,9 +94,11 @@ func (r *Repository) RevenueSeries(ctx context.Context, businessID uuid.UUID, tf
 		 GROUP BY bucket ORDER BY bucket ASC`,
 		businessID, w.lower,
 	).Scan(&rows).Error
+
 	if err != nil {
 		return nil, err
 	}
+
 	out := make([]RevenueDataPoint, 0, len(rows))
 	for _, row := range rows {
 		out = append(out, RevenueDataPoint{
@@ -99,6 +107,7 @@ func (r *Repository) RevenueSeries(ctx context.Context, businessID uuid.UUID, tf
 			Transactions: row.Transactions,
 		})
 	}
+
 	return out, nil
 }
 
@@ -112,7 +121,9 @@ type profitRow struct {
 func (r *Repository) ProfitSeries(ctx context.Context, businessID uuid.UUID, tf Timeframe, now time.Time) ([]ProfitDataPoint, error) {
 	w := resolveWindow(tf, now)
 	expenseBucket := replaceSoldAt(w.bucketExpr)
+
 	var rows []profitRow
+
 	err := r.db.WithContext(ctx).Raw(
 		`SELECT COALESCE(s.bucket, e.bucket) AS bucket,
 		        COALESCE(s.revenue, 0) AS revenue,
@@ -132,19 +143,24 @@ func (r *Repository) ProfitSeries(ctx context.Context, businessID uuid.UUID, tf 
 		 ORDER BY bucket ASC`,
 		businessID, w.lower, businessID, w.lower,
 	).Scan(&rows).Error
+
 	if err != nil {
 		return nil, err
 	}
+
 	out := make([]ProfitDataPoint, 0, len(rows))
+
 	for _, row := range rows {
 		revenue := decFromString(row.Revenue)
 		expense := decFromString(row.Expense)
 		profit := revenue.Sub(expense)
 		margin := 0.0
+
 		if revenue.IsPositive() {
 			margin, _ = profit.Div(revenue).Float64()
 			margin *= 100
 		}
+
 		out = append(out, ProfitDataPoint{
 			Date:    row.Bucket,
 			Revenue: revenue,
@@ -153,17 +169,21 @@ func (r *Repository) ProfitSeries(ctx context.Context, businessID uuid.UUID, tf 
 			Margin:  margin,
 		})
 	}
+
 	return out, nil
 }
 
 // CategorySeries aggregates revenue by product category.
 func (r *Repository) CategorySeries(ctx context.Context, businessID uuid.UUID, tf Timeframe, now time.Time) ([]CategoryDataPoint, error) {
 	w := resolveWindow(tf, now)
+
 	type catRow struct {
 		Category string `json:"category"`
 		Revenue  string `json:"revenue"`
 	}
+
 	var rows []catRow
+
 	err := r.db.WithContext(ctx).Raw(
 		`SELECT COALESCE(p.category, 'Uncategorized') AS category, COALESCE(SUM(sl.line_total),0)::text AS revenue
 		 FROM sale_lines sl
@@ -173,15 +193,20 @@ func (r *Repository) CategorySeries(ctx context.Context, businessID uuid.UUID, t
 		 GROUP BY category ORDER BY revenue DESC`,
 		businessID, w.lower,
 	).Scan(&rows).Error
+
 	if err != nil {
 		return nil, err
 	}
+
 	out := make([]CategoryDataPoint, 0, len(rows))
+
 	var total float64
+
 	for _, row := range rows {
 		rev := decFromString(row.Revenue)
 		f, _ := rev.Float64()
 		total += f
+
 		out = append(out, CategoryDataPoint{
 			Name:       row.Category,
 			Revenue:    rev,
@@ -189,12 +214,14 @@ func (r *Repository) CategorySeries(ctx context.Context, businessID uuid.UUID, t
 			Trend:      "stable",
 		})
 	}
+
 	for i := range out {
 		f, _ := out[i].Revenue.Float64()
 		if total > 0 {
 			out[i].Percentage = f / total * 100
 		}
 	}
+
 	return out, nil
 }
 
@@ -203,8 +230,11 @@ func (r *Repository) TopProducts(ctx context.Context, businessID uuid.UUID, tf T
 	if limit <= 0 || limit > 50 {
 		limit = 5
 	}
+
 	w := resolveWindow(tf, now)
+
 	var rows []TopProduct
+
 	err := r.db.WithContext(ctx).Raw(
 		`SELECT sl.product_id::text AS product_id,
 		        COALESCE(p.name, 'Unknown') AS name,
@@ -220,13 +250,16 @@ func (r *Repository) TopProducts(ctx context.Context, businessID uuid.UUID, tf T
 		 LIMIT ?`,
 		businessID, w.lower, limit,
 	).Scan(&rows).Error
+
 	return rows, err
 }
 
 // ExpenseBreakdown aggregates expenses by category.
 func (r *Repository) ExpenseBreakdown(ctx context.Context, businessID uuid.UUID, tf Timeframe, now time.Time) ([]ExpenseBreakdownDataPoint, error) {
 	w := resolveWindow(tf, now)
+
 	var rows []ExpenseBreakdownDataPoint
+
 	err := r.db.WithContext(ctx).Raw(
 		`SELECT category,
 		        COALESCE(SUM(amount),0) AS amount,
@@ -237,6 +270,7 @@ func (r *Repository) ExpenseBreakdown(ctx context.Context, businessID uuid.UUID,
 		 GROUP BY category ORDER BY amount DESC`,
 		businessID, w.lower,
 	).Scan(&rows).Error
+
 	return rows, err
 }
 
@@ -244,12 +278,15 @@ func (r *Repository) ExpenseBreakdown(ctx context.Context, businessID uuid.UUID,
 func (r *Repository) CashFlowSeries(ctx context.Context, businessID uuid.UUID, tf Timeframe, now time.Time) ([]CashFlowDataPoint, error) {
 	w := resolveWindow(tf, now)
 	expenseBucket := replaceSoldAt(w.bucketExpr)
+
 	type cfRow struct {
 		Bucket  string `json:"bucket"`
 		Inflow  string `json:"inflow"`
 		Outflow string `json:"outflow"`
 	}
+
 	var rows []cfRow
+
 	err := r.db.WithContext(ctx).Raw(
 		`SELECT COALESCE(s.bucket, e.bucket) AS bucket,
 		        COALESCE(s.inflow, 0) AS inflow,
@@ -267,10 +304,13 @@ func (r *Repository) CashFlowSeries(ctx context.Context, businessID uuid.UUID, t
 		 ORDER BY bucket ASC`,
 		businessID, w.lower, businessID, w.lower,
 	).Scan(&rows).Error
+
 	if err != nil {
 		return nil, err
 	}
+
 	out := make([]CashFlowDataPoint, 0, len(rows))
+
 	for _, row := range rows {
 		inflow := decFromString(row.Inflow)
 		outflow := decFromString(row.Outflow)
@@ -281,6 +321,7 @@ func (r *Repository) CashFlowSeries(ctx context.Context, businessID uuid.UUID, t
 			NetFlow: inflow.Sub(outflow),
 		})
 	}
+
 	return out, nil
 }
 
@@ -291,7 +332,9 @@ func (r *Repository) CustomerSegments(ctx context.Context, businessID uuid.UUID)
 		Count      int    `json:"count"`
 		TotalSpend string `json:"totalSpend"`
 	}
+
 	var rows []segRow
+
 	err := r.db.WithContext(ctx).Raw(
 		`SELECT
 		     CASE
@@ -306,9 +349,11 @@ func (r *Repository) CustomerSegments(ctx context.Context, businessID uuid.UUID)
 		 GROUP BY segment`,
 		businessID,
 	).Scan(&rows).Error
+
 	if err != nil {
 		return nil, err
 	}
+
 	labelFor := func(seg string) string {
 		switch seg {
 		case "large-scale":
@@ -320,13 +365,16 @@ func (r *Repository) CustomerSegments(ctx context.Context, businessID uuid.UUID)
 		}
 	}
 	out := make([]CustomerSegmentDataPoint, 0, len(rows))
+
 	for _, row := range rows {
 		total := decFromString(row.TotalSpend)
 		avg := 0.0
+
 		if row.Count > 0 {
 			f, _ := total.Float64()
 			avg = f / float64(row.Count)
 		}
+
 		out = append(out, CustomerSegmentDataPoint{
 			Segment:       labelFor(row.Segment),
 			Count:         row.Count,
@@ -335,6 +383,7 @@ func (r *Repository) CustomerSegments(ctx context.Context, businessID uuid.UUID)
 			TotalSpend:    total,
 		})
 	}
+
 	return out, nil
 }
 
@@ -343,14 +392,18 @@ func (r *Repository) CustomerLTV(ctx context.Context, businessID uuid.UUID) (dec
 	type ltvRow struct {
 		Avg string `json:"avg"`
 	}
+
 	var rr ltvRow
+
 	err := r.db.WithContext(ctx).Raw(
 		`SELECT COALESCE(AVG(total_spend),0)::text AS avg FROM customers WHERE business_id = ?`,
 		businessID,
 	).Scan(&rr).Error
+
 	if err != nil {
 		return decimal.Zero, err
 	}
+
 	return decFromString(rr.Avg), nil
 }
 
@@ -358,13 +411,16 @@ func (r *Repository) CustomerLTV(ctx context.Context, businessID uuid.UUID) (dec
 // the window (a coarse sales-cycle proxy).
 func (r *Repository) SalesVelocity(ctx context.Context, businessID uuid.UUID, tf Timeframe, now time.Time) (*SalesVelocityDataPoint, error) {
 	w := resolveWindow(tf, now)
+
 	type vRow struct {
 		Count int    `json:"count"`
 		Avg   string `json:"avg"`
 		Min   string `json:"min"`
 		Max   string `json:"max"`
 	}
+
 	var rr vRow
+
 	err := r.db.WithContext(ctx).Raw(
 		`SELECT COUNT(*) AS count,
 		        COALESCE(AVG(total),0)::text AS avg,
@@ -374,17 +430,22 @@ func (r *Repository) SalesVelocity(ctx context.Context, businessID uuid.UUID, tf
 		 WHERE business_id = ? AND sold_at >= ? AND status <> 'void'`,
 		businessID, w.lower,
 	).Scan(&rr).Error
+
 	if err != nil {
 		return nil, err
 	}
+
 	avgDays := 0.0
+
 	if rr.Count > 0 {
 		minT, err1 := time.Parse(time.RFC3339, rr.Min)
 		maxT, err2 := time.Parse(time.RFC3339, rr.Max)
+
 		if err1 == nil && err2 == nil && maxT.After(minT) {
 			avgDays = maxT.Sub(minT).Hours() / 24
 		}
 	}
+
 	return &SalesVelocityDataPoint{
 		SalesCount:     rr.Count,
 		AvgOrderValue:  decFromString(rr.Avg),
@@ -399,6 +460,7 @@ func (r *Repository) UpsertSnapshot(ctx context.Context, s *Snapshot) error {
 	if err != nil {
 		return err
 	}
+
 	stored := StoredSnapshot{
 		TenantID:    s.BusinessID,
 		BusinessID:  s.BusinessID,
@@ -406,11 +468,13 @@ func (r *Repository) UpsertSnapshot(ctx context.Context, s *Snapshot) error {
 		Payload:     raw,
 		GeneratedAt: s.GeneratedAt,
 	}
+
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("business_id = ? AND timeframe = ?", s.BusinessID, string(s.Timeframe)).
 			Delete(&StoredSnapshot{}).Error; err != nil {
 			return err
 		}
+
 		return tx.Create(&stored).Error
 	})
 }
@@ -418,20 +482,25 @@ func (r *Repository) UpsertSnapshot(ctx context.Context, s *Snapshot) error {
 // FindSnapshot loads the latest stored snapshot for a business/timeframe.
 func (r *Repository) FindSnapshot(ctx context.Context, businessID uuid.UUID, tf Timeframe) (*Snapshot, error) {
 	var stored StoredSnapshot
+
 	err := r.db.WithContext(ctx).
 		Scopes(shareddb.BusinessScope(businessID)).
 		Where("timeframe = ?", string(tf)).
 		Order("generated_at DESC").
 		First(&stored).Error
+
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, apperrors.ErrNotFound.WithMessage("analytics not yet generated for this timeframe")
 		}
+
 		return nil, err
 	}
+
 	var s Snapshot
 	if err := json.Unmarshal(stored.Payload, &s); err != nil {
 		return nil, err
 	}
+
 	return &s, nil
 }

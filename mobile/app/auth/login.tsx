@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   View,
   Text,
@@ -11,9 +11,33 @@ import {
   Alert,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { Eye, EyeOff, Lock, User, ArrowRight, Mail } from 'lucide-react-native'
+import {
+  Eye,
+  EyeOff,
+  Lock,
+  ArrowRight,
+  Mail,
+  WifiOff,
+  Shield,
+  Fingerprint,
+} from 'lucide-react-native'
+import NetInfo from '@react-native-community/netinfo'
 import { useRouter } from 'expo-router'
+
+// Lazy-load so missing native module (dev-client without rebuild) doesn't crash bundle
+let LocalAuthentication: any = null
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const mod = require('expo-local-authentication')
+  LocalAuthentication = mod?.default ?? mod
+} catch {
+  LocalAuthentication = null
+}
 import { useAuth } from '../../contexts/AuthContext'
+import {
+  hasOfflineCredential,
+  getOfflineGraceDaysLeft,
+} from '../../lib/offlineAuth'
 
 export default function LoginScreen() {
   const [formData, setFormData] = useState({
@@ -23,9 +47,35 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [isOffline, setIsOffline] = useState(false)
+  const [offlineAvailable, setOfflineAvailable] = useState(false)
+  const [graceDays, setGraceDays] = useState(0)
+  const [biometricAvailable, setBiometricAvailable] = useState(false)
 
-  const { login, loginWithGoogle } = useAuth()
+  const { login, loginWithGoogle, loginWithBiometrics } = useAuth()
   const router = useRouter()
+
+  useEffect(() => {
+    const unsub = NetInfo.addEventListener((s) => setIsOffline(!s.isConnected))
+    NetInfo.fetch().then((s) => setIsOffline(!s.isConnected))
+    if (LocalAuthentication?.hasHardwareAsync) {
+      LocalAuthentication.hasHardwareAsync()
+        .then((has: boolean) => {
+          if (has) LocalAuthentication.isEnrolledAsync().then(setBiometricAvailable)
+        })
+        .catch(() => {})
+    }
+    return () => unsub()
+  }, [])
+
+  useEffect(() => {
+    if (formData.email) {
+      hasOfflineCredential(formData.email).then(setOfflineAvailable)
+      getOfflineGraceDaysLeft(formData.email).then(setGraceDays)
+    } else {
+      setOfflineAvailable(false)
+    }
+  }, [formData.email])
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {}
@@ -73,6 +123,39 @@ export default function LoginScreen() {
     }
   }
 
+  const handleBiometricLogin = async () => {
+    if (!LocalAuthentication?.authenticateAsync) {
+      Alert.alert('Not available', 'Biometrics not available in this build. Run a dev-client build to enable.')
+      return
+    }
+    if (!formData.email) {
+      Alert.alert('Email required', 'Enter your email first to use biometrics')
+      return
+    }
+    const has = await hasOfflineCredential(formData.email)
+    if (!has) {
+      Alert.alert(
+        'Not available',
+        'Biometric offline login requires at least one online login first (7-day grace).',
+      )
+      return
+    }
+    const res = await LocalAuthentication.authenticateAsync({
+      promptMessage: 'Unlock BizSawa offline',
+      disableDeviceFallback: false,
+    })
+    if (!res.success) return
+    try {
+      await loginWithBiometrics(formData.email)
+      router.replace('/(tabs)')
+    } catch (e: any) {
+      Alert.alert(
+        'Biometric login failed',
+        e.message || 'Could not unlock offline. Try password.',
+      )
+    }
+  }
+
   return (
     <SafeAreaView className='flex-1 bg-white'>
       <KeyboardAvoidingView
@@ -92,6 +175,22 @@ export default function LoginScreen() {
               <Text className='text-gray-500 text-center'>
                 {'Welcome back! \nSign in to manage your business'}
               </Text>
+              {isOffline && (
+                <View className='mt-3 px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200 flex-row items-center gap-1.5'>
+                  <WifiOff size={12} color='#b45309' />
+                  <Text className='text-xs font-bold text-amber-700'>
+                    Offline mode
+                  </Text>
+                </View>
+              )}
+              {offlineAvailable && (
+                <View className='mt-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 flex-row items-center gap-1.5'>
+                  <Shield size={12} color='#047857' />
+                  <Text className='text-xs text-emerald-700'>
+                    Offline login available • {graceDays} days left
+                  </Text>
+                </View>
+              )}
             </View>
 
             {/* Form */}
@@ -190,6 +289,19 @@ export default function LoginScreen() {
                 <View className='flex-1 h-[1px] bg-gray-200' />
               </View>
 
+              {/* Biometric / Offline hint */}
+              {biometricAvailable && offlineAvailable && (
+                <TouchableOpacity
+                  onPress={handleBiometricLogin}
+                  className='flex-row items-center justify-center border border-emerald-200 rounded-lg py-3 bg-emerald-50 mt-2'
+                >
+                  <Fingerprint size={18} color='#047857' />
+                  <Text className='text-emerald-700 font-semibold ml-2'>
+                    Unlock with Biometrics
+                  </Text>
+                </TouchableOpacity>
+              )}
+
               {/* Google Login Button */}
               <TouchableOpacity
                 onPress={handleGoogleSubmit}
@@ -200,6 +312,15 @@ export default function LoginScreen() {
                   Continue with Google
                 </Text>
               </TouchableOpacity>
+
+              {isOffline && !offlineAvailable && formData.email ? (
+                <View className='bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 mt-4'>
+                  <Text className='text-xs text-amber-800 text-center'>
+                    Offline login not yet enabled for this email. Connect once
+                    online to cache credentials (7-day grace).
+                  </Text>
+                </View>
+              ) : null}
 
               {/* Register Link */}
               <View className='flex-row justify-center mt-6'>

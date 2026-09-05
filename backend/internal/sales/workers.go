@@ -32,17 +32,24 @@ func (s *Service) emit(ctx context.Context, tx *sql.Tx, businessID, saleID uuid.
 	if s.outbox == nil {
 		return fmt.Errorf("service outbox missing")
 	}
-	payload := map[string]any{"businessId": businessID, "saleId": saleID}
+
+	payload := map[string]any{
+		"businessId": businessID,
+		"saleId":     saleID,
+	}
 	maps.Copy(payload, extra)
+
 	raw, err := json.Marshal(payload)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "[SALES]-failed to marshal payload telemetry", "err", err)
 		return err
 	}
+
 	_, err = s.outbox.InsertTx(ctx, tx, SaleEventArgs{TenantID: businessID, AggregateID: saleID.String(), AggregateType: "sale", EventType: eventType, Stream: "sales", SaleID: saleID, Payload: raw}, nil)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "[SALES]-error while submitting event via River", "err", err)
 	}
+
 	return err
 }
 

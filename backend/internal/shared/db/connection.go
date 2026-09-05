@@ -5,9 +5,10 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/Codecx-Org/FinAI/backend/internal/shared/config"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+
+	"github.com/Codecx-Org/FinAI/backend/internal/shared/config"
 )
 
 func Open(cfg config.DatabaseConfig) (*gorm.DB, error) {
@@ -20,6 +21,7 @@ func Open(cfg config.DatabaseConfig) (*gorm.DB, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	sqlDB.SetMaxOpenConns(cfg.MaxOpenConns)
 	sqlDB.SetMaxIdleConns(cfg.MaxIdleConns)
 	sqlDB.SetConnMaxLifetime(time.Hour)
@@ -32,6 +34,7 @@ func Ping(ctx context.Context, gormDB *gorm.DB) error {
 	if err != nil {
 		return err
 	}
+
 	return sqlDB.PingContext(ctx)
 }
 

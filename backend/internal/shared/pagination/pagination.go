@@ -20,6 +20,7 @@ func FromRequest(r *http.Request) Page {
 	if limit <= 0 {
 		limit = defaultLimit
 	}
+
 	if limit > maxLimit {
 		limit = maxLimit
 	}
@@ -36,9 +37,11 @@ func parseInt(value string, fallback int) int {
 	if value == "" {
 		return fallback
 	}
+
 	parsed, err := strconv.Atoi(value)
 	if err != nil {
 		return fallback
 	}
+
 	return parsed
 }

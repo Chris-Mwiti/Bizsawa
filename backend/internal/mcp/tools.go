@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/Codecx-Org/FinAI/backend/internal/customers"
 	"github.com/Codecx-Org/FinAI/backend/internal/expenses"
 	"github.com/Codecx-Org/FinAI/backend/internal/inventory"
@@ -14,7 +16,6 @@ import (
 	"github.com/Codecx-Org/FinAI/backend/internal/sales"
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/authz"
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/pagination"
-	"github.com/google/uuid"
 )
 
 type Services struct {
@@ -57,155 +58,156 @@ func DefaultTools(services Services) []Tool {
 	tools := []Tool{}
 	businessOwner := []Tool{
 		readTool(
-			ProfileBusinessOwner, 
-			"summarize_sales", 
-			"Use when the business owner asks for revenue, tax, and sales totals over a bounded period. Requires authenticated business context; follow up with sales breakdown tools when the owner asks why totals changed.", 
-			"sales", 
-			summarizeSales(services.Sales), 
+			ProfileBusinessOwner,
+			"summarize_sales",
+			"Use when the business owner asks for revenue, tax, and sales totals over a bounded period. Requires authenticated business context; follow up with sales breakdown tools when the owner asks why totals changed.",
+			"sales",
+			summarizeSales(services.Sales),
 			periodSchema()),
 
 		readTool(
-			ProfileBusinessOwner, 
-			"list_sales_by_product", 
-			"Use to identify products contributing to sales totals. Requires business-owner profile and active business context; returns compact aggregate rows.", 
-			"sales", 
-			listSalesByProduct(services.Sales), 
+			ProfileBusinessOwner,
+			"list_sales_by_product",
+			"Use to identify products contributing to sales totals. Requires business-owner profile and active business context; returns compact aggregate rows.",
+			"sales",
+			listSalesByProduct(services.Sales),
 			limitSchema()),
 
 		readTool(
-			ProfileBusinessOwner, 
-			"list_sales_by_payment_method", 
-			"Use to compare sales totals by payment method for reconciliation questions. Requires business-owner profile and active business context.", "sales", 
-			listSalesByPaymentMethod(services.Sales), 
+			ProfileBusinessOwner,
+			"list_sales_by_payment_method",
+			"Use to compare sales totals by payment method for reconciliation questions. Requires business-owner profile and active business context.", "sales",
+			listSalesByPaymentMethod(services.Sales),
 			limitSchema()),
 
 		readTool(
-			ProfileBusinessOwner, 
-			"list_sales_by_staff", 
-			"Use to compare sales totals by staff member. Requires business-owner profile and active business context; IDs should be resolved by the client if names are needed.", 
-			"sales", 
-			listSalesByStaff(services.Sales), 
+			ProfileBusinessOwner,
+			"list_sales_by_staff",
+			"Use to compare sales totals by staff member. Requires business-owner profile and active business context; IDs should be resolved by the client if names are needed.",
+			"sales",
+			listSalesByStaff(services.Sales),
 			limitSchema()),
 
 		readTool(
-			ProfileBusinessOwner, 
-			"list_low_stock_items", 
-			"Use when the owner asks what inventory needs restocking. Requires active business context and returns product IDs, quantity, and threshold only.", 
-			"inventory", 
-			listLowStock(services.Inventory), 
+			ProfileBusinessOwner,
+			"list_low_stock_items",
+			"Use when the owner asks what inventory needs restocking. Requires active business context and returns product IDs, quantity, and threshold only.",
+			"inventory",
+			listLowStock(services.Inventory),
 			limitSchema()),
 
 		readTool(
-			ProfileBusinessOwner, 
-			"get_inventory_valuation", 
-			"Use for current inventory quantity valuation inputs. Requires active business context; returns product IDs and quantities without cost or margin fields.", 
-			"inventory", 
-			inventoryValuation(services.Inventory), 
+			ProfileBusinessOwner,
+			"get_inventory_valuation",
+			"Use for current inventory quantity valuation inputs. Requires active business context; returns product IDs and quantities without cost or margin fields.",
+			"inventory",
+			inventoryValuation(services.Inventory),
 			limitSchema()),
 
 		readTool(
-			ProfileBusinessOwner, 
-			"list_stock_movements", 
-			"Use to inspect recent stock movement history. Requires active business context; always pass a bounded limit and optional offset.", 
-			"inventory", 
-			stockMovements(services.Inventory), 
+			ProfileBusinessOwner,
+			"list_stock_movements",
+			"Use to inspect recent stock movement history. Requires active business context; always pass a bounded limit and optional offset.",
+			"inventory",
+			stockMovements(services.Inventory),
 			pageSchema()),
 
 		readTool(
-			ProfileBusinessOwner, 
-			"summarize_expenses_by_category", 
-			"Use when the owner asks for expense totals by category over a bounded period. Requires business-owner profile and active business context.", 
-			"expenses", 
+			ProfileBusinessOwner,
+			"summarize_expenses_by_category",
+			"Use when the owner asks for expense totals by category over a bounded period. Requires business-owner profile and active business context.",
+			"expenses",
 			expenseSummary(services.Expenses), periodSchema()),
-		
+
 		readTool(
-			ProfileBusinessOwner, 
-			"search_customers", 
-			"Use to find customer candidates before getting purchase history or invoices. Requires at least a short query when possible; returns minimal disambiguation fields.", 
-			"customers", 
+			ProfileBusinessOwner,
+			"search_customers",
+			"Use to find customer candidates before getting purchase history or invoices. Requires at least a short query when possible; returns minimal disambiguation fields.",
+			"customers",
 			searchCustomers(services.Customers), searchSchema()),
-		
+
 		readTool(
-			ProfileBusinessOwner, 
-			"get_customer_purchase_history", 
-			"Use after a customer is selected to summarize that customer's purchase history. Requires a validated customer_id from search_customers or prior context.", 
-			"customers", 
-			purchaseHistory(services.Customers), 
+			ProfileBusinessOwner,
+			"get_customer_purchase_history",
+			"Use after a customer is selected to summarize that customer's purchase history. Requires a validated customer_id from search_customers or prior context.",
+			"customers",
+			purchaseHistory(services.Customers),
 			idSchema("customer_id")),
 
 		readTool(
-			ProfileBusinessOwner, 
-			"list_invoices", 
-			"Use to list recent invoices for follow-up questions. Requires active business context and bounded pagination.", "invoices", 
-			listInvoices(services.Invoices), 
+			ProfileBusinessOwner,
+			"list_invoices",
+			"Use to list recent invoices for follow-up questions. Requires active business context and bounded pagination.", "invoices",
+			listInvoices(services.Invoices),
 			pageSchema()),
 
 		readTool(
-			ProfileBusinessOwner, 
-			"get_invoice", 
-			"Use after an invoice has been selected to inspect compact invoice details. Requires a validated invoice_id.", "invoices", 
-			getInvoice(services.Invoices), 
+			ProfileBusinessOwner,
+			"get_invoice",
+			"Use after an invoice has been selected to inspect compact invoice details. Requires a validated invoice_id.", "invoices",
+			getInvoice(services.Invoices),
 			idSchema("invoice_id")),
 
 		readTool(
-			ProfileBusinessOwner, 
-			"search_business_knowledge", 
-			"Use for BizSawa business-owner help, workflow guidance, and policy questions. Initial implementation returns a stable empty result until the knowledge index is configured.", 
-			"ai", 
-			knowledgeSearch("business"), 
+			ProfileBusinessOwner,
+			"search_business_knowledge",
+			"Use for BizSawa business-owner help, workflow guidance, and policy questions. Initial implementation returns a stable empty result until the knowledge index is configured.",
+			"ai",
+			knowledgeSearch("business"),
 			knowledgeSchema()),
 	}
 
 	customerService := []Tool{
 		readTool(
-			ProfileCustomerService, 
-			"search_customers", 
-			"Use to find customer candidates before looking up orders, invoices, payments, or purchase history. Returns minimal fields for disambiguation only.", 
-			"customers", 
+			ProfileCustomerService,
+			"search_customers",
+			"Use to find customer candidates before looking up orders, invoices, payments, or purchase history. Returns minimal fields for disambiguation only.",
+			"customers",
 			searchCustomers(services.Customers), searchSchema()),
 
 		readTool(
-			ProfileCustomerService, 
-			"get_customer", 
-			"Use after a customer is selected to view support-safe customer details. Requires a validated customer_id from search_customers.", 
-			"customers", 
-			getCustomer(services.Customers), 
+			ProfileCustomerService,
+			"get_customer",
+			"Use after a customer is selected to view support-safe customer details. Requires a validated customer_id from search_customers.",
+			"customers",
+			getCustomer(services.Customers),
 			idSchema("customer_id")),
 
 		readTool(
-			ProfileCustomerService, 
-			"get_customer_purchase_history", 
-			"Use to answer customer support questions about a selected customer's purchase history. Requires a validated customer_id.", 
-			"customers", 
-			purchaseHistory(services.Customers), 
+			ProfileCustomerService,
+			"get_customer_purchase_history",
+			"Use to answer customer support questions about a selected customer's purchase history. Requires a validated customer_id.",
+			"customers",
+			purchaseHistory(services.Customers),
 			idSchema("customer_id")),
 
 		readTool(
-			ProfileCustomerService, 
-			"list_customer_invoices", 
-			"Use to find invoices for a selected customer. Requires a validated customer_id; returns compact invoice rows.", 
-			"invoices", 
-			listCustomerInvoices(services.Invoices), 
+			ProfileCustomerService,
+			"list_customer_invoices",
+			"Use to find invoices for a selected customer. Requires a validated customer_id; returns compact invoice rows.",
+			"invoices",
+			listCustomerInvoices(services.Invoices),
 			customerPageSchema()),
 
 		readTool(
-			ProfileCustomerService, 
-			"get_invoice", 
-			"Use after an invoice has been selected to inspect support-safe invoice details. Requires a validated invoice_id.", "invoices", 
-			getInvoice(services.Invoices), 
+			ProfileCustomerService,
+			"get_invoice",
+			"Use after an invoice has been selected to inspect support-safe invoice details. Requires a validated invoice_id.", "invoices",
+			getInvoice(services.Invoices),
 			idSchema("invoice_id")),
 
 		readTool(
-			ProfileCustomerService, 
-			"search_support_knowledge", 
-			"Use for support scripts, FAQs, and customer-service policy questions. Initial implementation returns a stable empty result until the knowledge index is configured.", 
-			"ai", 
-			knowledgeSearch("support"), 
+			ProfileCustomerService,
+			"search_support_knowledge",
+			"Use for support scripts, FAQs, and customer-service policy questions. Initial implementation returns a stable empty result until the knowledge index is configured.",
+			"ai",
+			knowledgeSearch("support"),
 			knowledgeSchema()),
-
 	}
+
 	tools = append(tools, businessOwner...)
 	tools = append(tools, customerService...)
+
 	return tools
 }
 
@@ -249,14 +251,17 @@ func summarizeSales(svc SalesService) ToolHandler {
 		if svc == nil {
 			return nil, nil, fmt.Errorf("sales service unavailable")
 		}
+
 		from, to, err := parsePeriod(args, ctx.Now)
 		if err != nil {
 			return nil, nil, err
 		}
+
 		summary, err := svc.GetSalesSummary(context.Background(), ctx.Session.BusinessID, from, to)
 		if err != nil {
 			return nil, nil, err
 		}
+
 		return map[string]any{"count": summary.Count, "subtotal": summary.Subtotal.String(), "tax_amount": summary.TaxAmount.String(), "total": summary.Total.String(), "currency": "KES", "from": from.Format(time.RFC3339), "to": to.Format(time.RFC3339)}, nil, nil
 	}
 }
@@ -282,21 +287,26 @@ func breakdownHandler(fn func(context.Context, uuid.UUID) ([]sales.Breakdown, er
 		if svc == nil {
 			return nil, nil, fmt.Errorf("sales service unavailable")
 		}
+
 		limit, _, err := parsePage(args)
 		if err != nil {
 			return nil, nil, err
 		}
+
 		rows, err := fn(context.Background(), ctx.Session.BusinessID)
 		if err != nil {
 			return nil, nil, err
 		}
+
 		if len(rows) > limit {
 			rows = rows[:limit]
 		}
+
 		out := make([]map[string]any, 0, len(rows))
 		for _, row := range rows {
 			out = append(out, map[string]any{"key": row.Key, "total": row.Total.String(), "count": row.Count, "currency": "KES"})
 		}
+
 		return map[string]any{"results": out}, map[string]any{"result_count": len(out)}, nil
 	}
 }
@@ -306,21 +316,26 @@ func listLowStock(svc InventoryService) ToolHandler {
 		if svc == nil {
 			return nil, nil, fmt.Errorf("inventory service unavailable")
 		}
+
 		limit, _, err := parsePage(args)
 		if err != nil {
 			return nil, nil, err
 		}
+
 		items, err := svc.GetLowStockItems(context.Background(), ctx.Session.BusinessID)
 		if err != nil {
 			return nil, nil, err
 		}
+
 		if len(items) > limit {
 			items = items[:limit]
 		}
+
 		out := make([]map[string]any, 0, len(items))
 		for _, item := range items {
 			out = append(out, map[string]any{"product_id": item.ProductID.String(), "quantity": item.Quantity.String(), "low_stock_threshold": item.LowStockThreshold.String()})
 		}
+
 		return map[string]any{"results": out}, map[string]any{"result_count": len(out)}, nil
 	}
 }
@@ -330,21 +345,26 @@ func inventoryValuation(svc InventoryService) ToolHandler {
 		if svc == nil {
 			return nil, nil, fmt.Errorf("inventory service unavailable")
 		}
+
 		limit, _, err := parsePage(args)
 		if err != nil {
 			return nil, nil, err
 		}
+
 		items, err := svc.GetInventoryValuation(context.Background(), ctx.Session.BusinessID)
 		if err != nil {
 			return nil, nil, err
 		}
+
 		if len(items) > limit {
 			items = items[:limit]
 		}
+
 		out := make([]map[string]any, 0, len(items))
 		for _, item := range items {
 			out = append(out, map[string]any{"product_id": item.ProductID.String(), "quantity": item.Quantity.String()})
 		}
+
 		return map[string]any{"results": out}, map[string]any{"result_count": len(out)}, nil
 	}
 }
@@ -354,18 +374,22 @@ func stockMovements(svc InventoryService) ToolHandler {
 		if svc == nil {
 			return nil, nil, fmt.Errorf("inventory service unavailable")
 		}
+
 		limit, offset, err := parsePage(args)
 		if err != nil {
 			return nil, nil, err
 		}
+
 		rows, err := svc.GetStockMovements(context.Background(), ctx.Session.BusinessID, pagination.Page{Limit: limit, Offset: offset})
 		if err != nil {
 			return nil, nil, err
 		}
+
 		out := make([]map[string]any, 0, len(rows))
 		for _, row := range rows {
 			out = append(out, map[string]any{"id": row.ID.String(), "product_id": row.ProductID.String(), "quantity_delta": row.QuantityDelta.String(), "movement_type": row.MovementType, "occurred_at": row.OccurredAt.Format(time.RFC3339)})
 		}
+
 		return map[string]any{"results": out}, map[string]any{"result_count": len(out)}, nil
 	}
 }
@@ -375,18 +399,22 @@ func expenseSummary(svc ExpensesService) ToolHandler {
 		if svc == nil {
 			return nil, nil, fmt.Errorf("expenses service unavailable")
 		}
+
 		from, to, err := parsePeriod(args, ctx.Now)
 		if err != nil {
 			return nil, nil, err
 		}
+
 		rows, err := svc.SummaryByCategory(context.Background(), ctx.Session.BusinessID, from, to)
 		if err != nil {
 			return nil, nil, err
 		}
+
 		out := make([]map[string]any, 0, len(rows))
 		for _, row := range rows {
 			out = append(out, map[string]any{"category": row.Category, "amount": row.Amount.String(), "tax_amount": row.TaxAmount.String(), "count": row.Count, "currency": "KES"})
 		}
+
 		return map[string]any{"results": out, "from": from.Format(time.RFC3339), "to": to.Format(time.RFC3339)}, map[string]any{"result_count": len(out)}, nil
 	}
 }
@@ -396,24 +424,31 @@ func searchCustomers(svc CustomersService) ToolHandler {
 		if svc == nil {
 			return nil, nil, fmt.Errorf("customers service unavailable")
 		}
+
 		var in searchArgs
+
 		_ = json.Unmarshal(args, &in)
 		limit := clampLimit(in.Limit)
+
 		rows, err := svc.List(context.Background(), ctx.Session.BusinessID, pagination.Page{Limit: 50, Offset: 0})
 		if err != nil {
 			return nil, nil, err
 		}
+
 		q := strings.ToLower(strings.TrimSpace(in.Query))
 		out := []map[string]any{}
+
 		for _, row := range rows {
 			if q != "" && !strings.Contains(strings.ToLower(row.Name+" "+row.Phone+" "+row.Email), q) {
 				continue
 			}
+
 			out = append(out, map[string]any{"customer_id": row.ID.String(), "name": row.Name, "phone_last4": last4(row.Phone), "email_domain": emailDomain(row.Email), "loyalty_points": row.LoyaltyPoints})
 			if len(out) >= limit {
 				break
 			}
 		}
+
 		return map[string]any{"results": out}, map[string]any{"result_count": len(out), "truncated": len(out) == limit}, nil
 	}
 }
@@ -423,14 +458,17 @@ func getCustomer(svc CustomersService) ToolHandler {
 		if svc == nil {
 			return nil, nil, fmt.Errorf("customers service unavailable")
 		}
+
 		id, err := parseUUIDArg(args, "customer_id")
 		if err != nil {
 			return nil, nil, err
 		}
+
 		row, err := svc.Get(context.Background(), ctx.Session.BusinessID, id)
 		if err != nil {
 			return nil, nil, err
 		}
+
 		return map[string]any{"customer_id": row.ID.String(), "name": row.Name, "phone_last4": last4(row.Phone), "email_domain": emailDomain(row.Email), "tags": row.Tags, "loyalty_points": row.LoyaltyPoints, "last_purchase_at": row.LastPurchaseAt}, nil, nil
 	}
 }
@@ -440,18 +478,22 @@ func purchaseHistory(svc CustomersService) ToolHandler {
 		if svc == nil {
 			return nil, nil, fmt.Errorf("customers service unavailable")
 		}
+
 		id, err := parseUUIDArg(args, "customer_id")
 		if err != nil {
 			return nil, nil, err
 		}
+
 		rows, err := svc.GetCustomerPurchaseHistory(context.Background(), ctx.Session.BusinessID, id)
 		if err != nil {
 			return nil, nil, err
 		}
+
 		out := make([]map[string]any, 0, len(rows))
 		for _, row := range rows {
 			out = append(out, map[string]any{"sale_id": row.SaleID.String(), "receipt_number": row.ReceiptNumber, "purchased_at": row.PurchasedAt.Format(time.RFC3339), "total": row.Total.String(), "currency": "KES"})
 		}
+
 		return map[string]any{"results": out}, map[string]any{"result_count": len(out)}, nil
 	}
 }
@@ -461,14 +503,17 @@ func listInvoices(svc InvoicesService) ToolHandler {
 		if svc == nil {
 			return nil, nil, fmt.Errorf("invoices service unavailable")
 		}
+
 		limit, offset, err := parsePage(args)
 		if err != nil {
 			return nil, nil, err
 		}
+
 		rows, err := svc.List(context.Background(), ctx.Session.BusinessID, pagination.Page{Limit: limit, Offset: offset})
 		if err != nil {
 			return nil, nil, err
 		}
+
 		return invoiceListPayload(rows), map[string]any{"result_count": len(rows)}, nil
 	}
 }
@@ -478,19 +523,24 @@ func listCustomerInvoices(svc InvoicesService) ToolHandler {
 		if svc == nil {
 			return nil, nil, fmt.Errorf("invoices service unavailable")
 		}
+
 		cid, err := parseUUIDArg(args, "customer_id")
 		if err != nil {
 			return nil, nil, err
 		}
+
 		limit, offset, err := parsePage(args)
 		if err != nil {
 			return nil, nil, err
 		}
+
 		rows, err := svc.List(context.Background(), ctx.Session.BusinessID, pagination.Page{Limit: 50, Offset: offset})
 		if err != nil {
 			return nil, nil, err
 		}
+
 		filtered := []invoices.Invoice{}
+
 		for _, row := range rows {
 			if row.CustomerID != nil && *row.CustomerID == cid {
 				filtered = append(filtered, row)
@@ -499,6 +549,7 @@ func listCustomerInvoices(svc InvoicesService) ToolHandler {
 				}
 			}
 		}
+
 		return invoiceListPayload(filtered), map[string]any{"result_count": len(filtered)}, nil
 	}
 }
@@ -508,14 +559,17 @@ func getInvoice(svc InvoicesService) ToolHandler {
 		if svc == nil {
 			return nil, nil, fmt.Errorf("invoices service unavailable")
 		}
+
 		id, err := parseUUIDArg(args, "invoice_id")
 		if err != nil {
 			return nil, nil, err
 		}
+
 		row, err := svc.Get(context.Background(), ctx.Session.BusinessID, id)
 		if err != nil {
 			return nil, nil, err
 		}
+
 		return invoicePayload(*row), nil, nil
 	}
 }
@@ -523,11 +577,14 @@ func getInvoice(svc InvoicesService) ToolHandler {
 func knowledgeSearch(kind string) ToolHandler {
 	return func(ctx ToolContext, args json.RawMessage) (any, map[string]any, error) {
 		var in knowledgeArgs
+
 		_ = json.Unmarshal(args, &in)
+
 		max := in.MaxResults
 		if max <= 0 || max > 10 {
 			max = 3
 		}
+
 		return map[string]any{"results": []any{}, "query": strings.TrimSpace(in.Query), "collection": in.Collection, "profile": kind}, map[string]any{"result_count": 0, "tokens_estimate": 0, "truncated": false, "max_results": max}, nil
 	}
 }
@@ -537,6 +594,7 @@ func invoiceListPayload(rows []invoices.Invoice) map[string]any {
 	for _, row := range rows {
 		out = append(out, invoicePayload(row))
 	}
+
 	return map[string]any{"results": out}
 }
 
@@ -545,17 +603,21 @@ func invoicePayload(row invoices.Invoice) map[string]any {
 	if row.CustomerID != nil {
 		payload["customer_id"] = row.CustomerID.String()
 	}
+
 	if row.OrderID != nil {
 		payload["order_id"] = row.OrderID.String()
 	}
+
 	return payload
 }
 
 func parsePeriod(raw json.RawMessage, now time.Time) (time.Time, time.Time, error) {
 	var in periodArgs
+
 	_ = json.Unmarshal(raw, &in)
 	to := now
 	from := now.AddDate(0, -1, 0)
+
 	var err error
 	if in.To != "" {
 		to, err = time.Parse(time.RFC3339, in.To)
@@ -563,29 +625,36 @@ func parsePeriod(raw json.RawMessage, now time.Time) (time.Time, time.Time, erro
 			return time.Time{}, time.Time{}, fmt.Errorf("to must be RFC3339")
 		}
 	}
+
 	if in.From != "" {
 		from, err = time.Parse(time.RFC3339, in.From)
 		if err != nil {
 			return time.Time{}, time.Time{}, fmt.Errorf("from must be RFC3339")
 		}
 	}
+
 	if !from.Before(to) {
 		return time.Time{}, time.Time{}, fmt.Errorf("from must be before to")
 	}
+
 	if to.Sub(from) > 370*24*time.Hour {
 		return time.Time{}, time.Time{}, fmt.Errorf("date range cannot exceed 370 days")
 	}
+
 	return from, to, nil
 }
 
 func parsePage(raw json.RawMessage) (int, int, error) {
 	var in pageArgs
+
 	_ = json.Unmarshal(raw, &in)
 	limit := clampLimit(in.Limit)
+
 	offset := in.Offset
 	if offset < 0 {
 		return 0, 0, fmt.Errorf("offset cannot be negative")
 	}
+
 	return limit, offset, nil
 }
 
@@ -594,10 +663,12 @@ func parseUUIDArg(raw json.RawMessage, key string) (uuid.UUID, error) {
 	if err := json.Unmarshal(raw, &values); err != nil {
 		return uuid.Nil, fmt.Errorf("invalid arguments")
 	}
+
 	id, err := uuid.Parse(values[key])
 	if err != nil || id == uuid.Nil {
 		return uuid.Nil, fmt.Errorf("%s must be a valid UUID", key)
 	}
+
 	return id, nil
 }
 
@@ -605,9 +676,11 @@ func clampLimit(limit int) int {
 	if limit <= 0 {
 		return 10
 	}
+
 	if limit > 50 {
 		return 50
 	}
+
 	return limit
 }
 
@@ -616,6 +689,7 @@ func last4(value string) string {
 	if len(value) <= 4 {
 		return value
 	}
+
 	return value[len(value)-4:]
 }
 
@@ -624,6 +698,7 @@ func emailDomain(value string) string {
 	if len(parts) != 2 {
 		return ""
 	}
+
 	return parts[1]
 }
 

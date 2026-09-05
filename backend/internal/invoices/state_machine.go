@@ -12,11 +12,10 @@ const (
 	TriggerPartial  InvoiceTrigger = "invoice_partial"
 	TriggerPaid     InvoiceTrigger = "invoice_paid"
 	TriggerCanceled InvoiceTrigger = "invoice_canceled"
-	TriggerDue			InvoiceTrigger = 	"invoice_due"
+	TriggerDue      InvoiceTrigger = "invoice_due"
 )
 
 func (s *Service) buildInvoiceMachine(invoice Invoice) *stateless.StateMachine {
-
 	sm := stateless.NewStateMachine(invoice.Status)
 
 	sm.Configure(StatusDraft).Permit(TriggerSent, StatusSent).Permit(TriggerCanceled, StatusCancelled)
