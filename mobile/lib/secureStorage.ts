@@ -1,5 +1,15 @@
-import * as SecureStore from 'expo-secure-store'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+
+// Lazy-load SecureStore so missing native module (Expo Go/web/bare without prebuild) doesn't crash import.
+// When unavailable we fallback to AsyncStorage — offline 7-day grace still works, just without hardware Keychain.
+let SecureStore: any = null
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const mod = require('expo-secure-store')
+  SecureStore = mod?.default ?? mod
+} catch {
+  SecureStore = null
+}
 
 const SECURE_KEYS = {
   accessToken: 'bizsawa_secure_access_token',
@@ -14,28 +24,36 @@ const SECURE_KEYS = {
 }
 
 async function setSecure(key: string, value: string) {
-  try {
-    await SecureStore.setItemAsync(key, value, {
-      keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
-    })
-  } catch {
-    // Fallback to AsyncStorage if SecureStore unavailable (e.g. web)
-    await AsyncStorage.setItem(key, value)
+  if (SecureStore?.setItemAsync) {
+    try {
+      await SecureStore.setItemAsync(key, value, {
+        keychainAccessible:
+          SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY ??
+          SecureStore.WHEN_UNLOCKED ??
+          0,
+      })
+      return
+    } catch {}
   }
+  await AsyncStorage.setItem(key, value)
 }
 
 async function getSecure(key: string): Promise<string | null> {
-  try {
-    const v = await SecureStore.getItemAsync(key)
-    if (v !== null) return v
-  } catch {}
+  if (SecureStore?.getItemAsync) {
+    try {
+      const v = await SecureStore.getItemAsync(key)
+      if (v !== null) return v
+    } catch {}
+  }
   return AsyncStorage.getItem(key)
 }
 
 async function removeSecure(key: string) {
-  try {
-    await SecureStore.deleteItemAsync(key)
-  } catch {}
+  if (SecureStore?.deleteItemAsync) {
+    try {
+      await SecureStore.deleteItemAsync(key)
+    } catch {}
+  }
   await AsyncStorage.removeItem(key)
 }
 
