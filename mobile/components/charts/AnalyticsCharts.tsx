@@ -1,5 +1,5 @@
 import React from 'react'
-import { View, Text } from 'react-native'
+import { View, Text, useWindowDimensions } from 'react-native'
 import Svg, { Path, Circle, Line, G, Text as SvgText } from 'react-native-svg'
 import { Tabs } from 'tamagui'
 
@@ -16,42 +16,70 @@ export function BarChart({
   showValues?: boolean
 }) {
   const max = Math.max(...data.map((d) => d.value), 1)
+  const min = Math.min(...data.map((d) => d.value), 0)
+  const range = max - min || 1
+  // y-tick for grid label
+  const yTop = max
+  const yMid = (max + min) / 2
   return (
-    <View className='flex-row items-end gap-1.5' style={{ height }}>
-      {data.map((d, i) => {
-        const hPct = (d.value / max) * 100
-        return (
-          <View key={i} className='flex-1 items-center gap-1.5'>
-            <View
-              className='relative w-full items-center justify-end'
-              style={{ height: height - 20 }}
-            >
-              {showValues && d.value > 0 ? (
-                <Text className='text-[9px] font-bold text-gray-500 mb-1'>
-                  {d.value > 1000
-                    ? `${(d.value / 1000).toFixed(1)}k`
-                    : String(Math.round(d.value))}
-                </Text>
-              ) : null}
+    <View className='gap-1.5'>
+      {/* y-scale */}
+      <View className='flex-row justify-between px-1'>
+        <Text className='text-[9px] font-bold text-gray-400'>{Math.round(yTop).toLocaleString('en-KE')}</Text>
+        <Text className='text-[9px] text-gray-300'>KES</Text>
+        <Text className='text-[9px] font-bold text-gray-400'>{Math.round(yMid).toLocaleString('en-KE')}</Text>
+      </View>
+      <View className='flex-row items-end gap-1.5' style={{ height }}>
+        {data.map((d, i) => {
+          const isZero = d.value === 0
+          const hPct = (d.value - min) / range * 100
+          const barHeight = isZero ? 2 : Math.max(hPct, 4)
+          const isNegative = d.value < 0
+          return (
+            <View key={i} className='flex-1 items-center gap-1'>
               <View
-                style={{
-                  height: `${Math.max(hPct, 6)}%`,
-                  backgroundColor: color,
-                  width: '100%',
-                  maxWidth: 28,
-                }}
-                className='rounded-full'
-              />
+                className='relative w-full items-center justify-end'
+                style={{ height: height - 20 }}
+              >
+                {/* value label — always show for explicitness, 0 in muted, non-zero in strong */}
+                <Text
+                  className={`text-[9px] font-bold mb-1 ${isZero ? 'text-gray-300' : 'text-gray-600'}`}
+                  numberOfLines={1}
+                >
+                  {showValues || isZero
+                    ? d.value === 0
+                      ? '0'
+                      : d.value > 1000 || d.value < -1000
+                        ? `${(d.value / 1000).toFixed(1)}k`
+                        : String(Math.round(d.value))
+                    : ''}
+                </Text>
+                <View
+                  style={{
+                    height: `${barHeight}%`,
+                    backgroundColor: isZero ? '#e5e7eb' : isNegative ? '#dc2626' : color,
+                    width: '100%',
+                    maxWidth: 28,
+                    borderWidth: isZero ? 1 : 0,
+                    borderColor: '#e5e7eb',
+                    opacity: isZero ? 1 : 1,
+                  }}
+                  className='rounded-full'
+                />
+              </View>
+              <Text
+                className={`text-[10px] font-bold ${isZero ? 'text-gray-400' : 'text-gray-600'}`}
+                numberOfLines={1}
+              >
+                {d.label}
+              </Text>
+              {isZero ? (
+                <View className='w-1 h-1 rounded-full bg-gray-300 -mt-0.5' />
+              ) : null}
             </View>
-            <Text
-              className='text-[10px] font-bold text-gray-500'
-              numberOfLines={1}
-            >
-              {d.label}
-            </Text>
-          </View>
-        )
-      })}
+          )
+        })}
+      </View>
     </View>
   )
 }
@@ -61,50 +89,68 @@ export function LineChart({
   data,
   color = '#111827',
   height = 160,
-  width = 320,
+  width, // optional fixed width; if omitted, uses screen width
 }: {
   data: Array<{ label: string; value: number }>
   color?: string
   height?: number
   width?: number
 }) {
+  const { width: screenW } = useWindowDimensions()
+  const w = width ?? Math.min(screenW - 32, 360)
   const padding = 16
-  const chartW = width - padding * 2
-  const chartH = height - 30
+  const yLabelW = 36
+  const chartW = w - padding * 2 - yLabelW
+  const chartH = height - 38 // extra for x labels + value bubbles
   const max = Math.max(...data.map((d) => d.value), 1)
   const min = Math.min(...data.map((d) => d.value), 0)
-  const range = max - min || 1
+  // add headroom so top dot not clipped by value label
+  const paddedMax = max === 0 ? 1 : max * 1.18
+  const paddedMin = min < 0 ? min * 1.18 : 0
+  const range = paddedMax - paddedMin || 1
 
   // build path
   const points = data.map((d, i) => {
-    const x = padding + (i / Math.max(data.length - 1, 1)) * chartW
-    const y = padding + chartH - ((d.value - min) / range) * chartH
+    const x = padding + yLabelW + (i / Math.max(data.length - 1, 1)) * chartW
+    const y = padding + 10 + chartH - ((d.value - paddedMin) / range) * chartH
     return { x, y, label: d.label, value: d.value }
   })
 
   const pathD = points
     .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`)
     .join(' ')
-  const areaD = `${pathD} L ${points[points.length - 1]?.x ?? 0} ${padding + chartH} L ${points[0]?.x ?? 0} ${padding + chartH} Z`
+  const areaD = `${pathD} L ${points[points.length - 1]?.x ?? 0} ${padding + 10 + chartH} L ${points[0]?.x ?? 0} ${padding + 10 + chartH} Z`
+
+  const formatVal = (v: number) => (v === 0 ? '0' : v > 1000 || v < -1000 ? `${(v/1000).toFixed(1)}k` : String(Math.round(v)))
 
   return (
     <View className='bg-white rounded-xl overflow-hidden'>
-      <Svg width={width} height={height} className='bg-white'>
-        {/* grid */}
+      <Svg width={w} height={height} className='bg-white'>
+        {/* y-axis labels */}
         {[0, 0.5, 1].map((t) => {
-          const y = padding + chartH * t
+          const v = paddedMax - t * range
+          const y = padding + 10 + chartH * t
           return (
-            <Line
-              key={t}
-              x1={padding}
-              y1={y}
-              x2={padding + chartW}
-              y2={y}
-              stroke='#f3f4f6'
-              strokeWidth={1}
-            />
+            <G key={t}>
+              <Line x1={padding + yLabelW} y1={y} x2={padding + yLabelW + chartW} y2={y} stroke='#f3f4f6' strokeWidth={1} />
+              <SvgText x={padding + yLabelW - 4} y={y + 3} textAnchor='end' fontSize={8} fontWeight='600' fill='#9ca3af'>
+                {Math.round(v).toLocaleString('en-KE')}
+              </SvgText>
+            </G>
           )
         })}
+        {/* zero baseline if negative values present */}
+        {paddedMin < 0 ? (
+          <Line
+            x1={padding + yLabelW}
+            y1={padding + 10 + chartH - ((0 - paddedMin) / range) * chartH}
+            x2={padding + yLabelW + chartW}
+            y2={padding + 10 + chartH - ((0 - paddedMin) / range) * chartH}
+            stroke='#e5e7eb'
+            strokeWidth={1}
+            strokeDasharray='3 3'
+          />
+        ) : null}
         {/* area fill */}
         <Path d={areaD} fill={color} fillOpacity={0.08} />
         {/* line */}
@@ -116,29 +162,48 @@ export function LineChart({
           strokeLinejoin='round'
           strokeLinecap='round'
         />
-        {/* dots */}
-        {points.map((p, i) => (
-          <G key={i}>
-            <Circle cx={p.x} cy={p.y} r={10} fill={color} opacity={0.08} />
-            <Circle
-              cx={p.x}
-              cy={p.y}
-              r={3.5}
-              fill={color}
-              stroke='white'
-              strokeWidth={2}
-            />
-          </G>
-        ))}
+        {/* dots + value bubbles */}
+        {points.map((p, i) => {
+          const isZero = p.value === 0
+          return (
+            <G key={i}>
+              {/* halo */}
+              <Circle cx={p.x} cy={p.y} r={10} fill={color} opacity={isZero ? 0.04 : 0.08} />
+              {/* value bubble above dot */}
+              <G>
+                <SvgText
+                  x={p.x}
+                  y={p.y - 10}
+                  textAnchor='middle'
+                  fontSize={8}
+                  fontWeight='700'
+                  fill={isZero ? '#9ca3af' : '#374151'}
+                >
+                  {formatVal(p.value)}
+                </SvgText>
+              </G>
+              <Circle
+                cx={p.x}
+                cy={p.y}
+                r={isZero ? 4 : 3.5}
+                fill={isZero ? 'white' : color}
+                stroke={color}
+                strokeWidth={isZero ? 1.5 : 2}
+              />
+              {isZero ? <Circle cx={p.x} cy={p.y} r={1.2} fill={color} /> : null}
+            </G>
+          )
+        })}
       </Svg>
-      <View className='flex-row justify-between px-2'>
+      <View className='flex-row justify-between' style={{ paddingLeft: padding + yLabelW, paddingRight: padding, marginTop: 2 }}>
         {points.map((p, i) => (
           <Text
             key={i}
-            className='text-[9px] font-bold text-gray-400'
+            className={`text-[9px] font-bold ${p.value === 0 ? 'text-gray-400' : 'text-gray-500'}`}
             style={{ width: chartW / points.length, textAlign: 'center' }}
+            numberOfLines={1}
           >
-            {p.label.slice(0, 3)}
+            {p.label}
           </Text>
         ))}
       </View>
@@ -230,7 +295,7 @@ export function SwitchableLineCard({
       <View className='bg-white rounded-xl border border-gray-200 p-2'>
         <View className='flex-row justify-between items-center px-2 py-1'>
           <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
-            {label} • week
+            {label} • 7 days • 0 = no sales
           </Text>
           <Text className='text-xs font-bold text-gray-900'>
             KES{' '}
@@ -241,6 +306,7 @@ export function SwitchableLineCard({
           data={data.length ? data : [{ label: '—', value: 0 }]}
           color={color}
         />
+        <Text className='text-[10px] text-gray-400 text-center mt-1'>Dots on baseline = 0 • value above each point</Text>
       </View>
     </View>
   )
