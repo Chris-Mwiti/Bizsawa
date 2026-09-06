@@ -158,8 +158,11 @@ export const useSales = () => {
           })
         }
       })
-      import('../../sync/client').then((m) => m.syncNow().catch(() => {}))
+      import('../../sync/client').then((m) => m.syncNow().catch((e) => console.warn('[Sales] auto-sync after create failed', e?.message)))
       queryClient.invalidateQueries({ queryKey: ['sales'] })
+      queryClient.invalidateQueries({ queryKey: ['analytics'] })
+      // poke backend to ensure snapshot reflects new sale within seconds (sync push also invalidates server-side)
+      import('../../lib/api').then(({ api }) => api.post('/analytics/refresh', {}, { params: { timeframe: 'week' } }).catch(()=>{}))
       return {
         id,
         receiptNumber: receipt,
@@ -177,8 +180,10 @@ export const useSales = () => {
         })
         await rec.markAsDeleted()
       })
-      import('../../sync/client').then((m) => m.syncNow().catch(() => {}))
+      import('../../sync/client').then((m) => m.syncNow().catch((e) => console.warn('[Sales] auto-sync after void failed', e?.message)))
       queryClient.invalidateQueries({ queryKey: ['sales'] })
+      queryClient.invalidateQueries({ queryKey: ['analytics'] })
+      import('../../lib/api').then(({ api }) => api.post('/analytics/refresh', {}, { params: { timeframe: 'week' } }).catch(()=>{}))
     },
   })
 

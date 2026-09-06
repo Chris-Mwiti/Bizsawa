@@ -233,10 +233,10 @@ export default function InsightsAnalytics() {
               <Loading />
             ) : revenueQuery.data && revenueQuery.data.data.length ? (
               <BarChart
-                data={revenueQuery.data.data.slice(-7).map((p) => ({
-                  label: String(p.date).slice(5, 10),
-                  value: Number(p.revenue),
-                }))}
+                data={revenueQuery.data.data.slice(-7).map((p) => {
+                  const dt=new Date(p.date); const lbl=timeframe==='day'? dt.toLocaleTimeString('en-KE',{hour:'2-digit'}): timeframe==='year'? dt.toLocaleDateString('en-KE',{month:'short'}): `${dt.toLocaleDateString('en-KE',{weekday:'short'}).slice(0,2)} ${String(dt.getMonth()+1).padStart(2,'0')}/${String(dt.getDate()).padStart(2,'0')}`
+                  return { label: lbl, value: Number(p.revenue) }
+                })}
                 color='#0f766e'
                 height={130}
                 showValues
@@ -261,18 +261,15 @@ export default function InsightsAnalytics() {
               <Loading />
             ) : (
               <SwitchableLineCard
-                sales={(revenueQuery.data?.data || []).slice(-7).map((p) => ({
-                  label: String(p.date).slice(5, 10),
-                  value: Number((p as any).transactions ?? 0),
-                }))}
-                revenue={(revenueQuery.data?.data || []).slice(-7).map((p) => ({
-                  label: String(p.date).slice(5, 10),
-                  value: Number(p.revenue),
-                }))}
-                profit={(profitQuery.data?.data || []).slice(-7).map((p) => ({
-                  label: String(p.date).slice(5, 10),
-                  value: Number((p as any).profit ?? 0),
-                }))}
+                sales={(revenueQuery.data?.data || []).slice(-7).map((p) => {
+                  const dt=new Date(p.date); return { label: timeframe==='day'? dt.toLocaleTimeString('en-KE',{hour:'2-digit'}): `${dt.toLocaleDateString('en-KE',{weekday:'short'}).slice(0,3)} ${String(dt.getMonth()+1).padStart(2,'0')}/${String(dt.getDate()).padStart(2,'0')}`, value: Number((p as any).transactions ?? 0) }
+                })}
+                revenue={(revenueQuery.data?.data || []).slice(-7).map((p) => {
+                  const dt=new Date(p.date); return { label: timeframe==='day'? dt.toLocaleTimeString('en-KE',{hour:'2-digit'}): `${dt.toLocaleDateString('en-KE',{weekday:'short'}).slice(0,3)} ${String(dt.getMonth()+1).padStart(2,'0')}/${String(dt.getDate()).padStart(2,'0')}`, value: Number(p.revenue) }
+                })}
+                profit={(profitQuery.data?.data || []).slice(-7).map((p) => {
+                  const dt=new Date(p.date); return { label: timeframe==='day'? dt.toLocaleTimeString('en-KE',{hour:'2-digit'}): `${dt.toLocaleDateString('en-KE',{weekday:'short'}).slice(0,3)} ${String(dt.getMonth()+1).padStart(2,'0')}/${String(dt.getDate()).padStart(2,'0')}`, value: Number((p as any).profit ?? 0) }
+                })}
               />
             )}
           </CardContent>

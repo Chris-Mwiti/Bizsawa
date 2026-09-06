@@ -79,6 +79,8 @@ func (s *Service) Create(ctx context.Context, businessID, userID uuid.UUID, req 
 		_ = s.taxes.RecordExpenseTax(ctx, businessID, item.ID, req.Amount, req.TaxAmount)
 	}
 
+	_ = s.repo.DB().WithContext(ctx).Exec(`DELETE FROM analytics_snapshots WHERE business_id = ?`, businessID).Error
+
 	return item, nil
 }
 
@@ -91,7 +93,11 @@ func (s *Service) Get(ctx context.Context, businessID, id uuid.UUID) (*Expense, 
 }
 
 func (s *Service) Delete(ctx context.Context, businessID, id uuid.UUID) error {
-	return s.repo.Delete(ctx, businessID, id)
+	err := s.repo.Delete(ctx, businessID, id)
+	if err == nil {
+		_ = s.repo.DB().WithContext(ctx).Exec(`DELETE FROM analytics_snapshots WHERE business_id = ?`, businessID).Error
+	}
+	return err
 }
 
 func (s *Service) SummaryByCategory(ctx context.Context, businessID uuid.UUID, from, to time.Time) ([]CategorySummary, error) {

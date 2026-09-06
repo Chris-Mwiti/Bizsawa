@@ -197,12 +197,12 @@ export default function InsightsOverview() {
           ))}
         </View>
 
-        {/* Day sales — Bar chart */}
+        {/* Day sales — Bar chart — now 7 dated bars, 0 = gray baseline + "0" */}
         <Card className='border border-gray-200'>
           <CardHeader className='flex-row items-center gap-2'>
             <BarChart3 size={16} color='#111827' />
             <CardTitle>Day sales • week</CardTitle>
-            <Text className='ml-auto text-xs text-gray-400'>bar • units</Text>
+            <Text className='ml-auto text-xs text-gray-400'>7 days • 0 baseline</Text>
           </CardHeader>
           <CardContent className='pt-0'>
             {isOverviewLoading ? (
@@ -213,7 +213,7 @@ export default function InsightsOverview() {
             ) : weeklyOverview.length ? (
               <BarChart
                 data={weeklyOverview.map((d) => ({
-                  label: d.day.slice(0, 3),
+                  label: `${d.day.slice(0, 3)} ${new Date(d.fullDate).toLocaleDateString('en-KE', { month: '2-digit', day: '2-digit' })}`,
                   value: d.sales,
                 }))}
                 color='#111827'
@@ -228,7 +228,7 @@ export default function InsightsOverview() {
           </CardContent>
         </Card>
 
-        {/* Revenue / Profit bars */}
+        {/* Revenue / Profit bars — 7 dated buckets, zero = gray hairline + "0" */}
         <View className='flex-row gap-3'>
           <Card className='flex-1 border border-gray-200'>
             <CardHeader>
@@ -237,12 +237,13 @@ export default function InsightsOverview() {
             <CardContent className='pt-0'>
               {revenueWeek?.data?.length ? (
                 <BarChart
-                  data={revenueWeek.data.slice(-7).map((p) => ({
-                    label: String(p.date).slice(5, 10),
-                    value: Number(p.revenue),
-                  }))}
+                  data={revenueWeek.data.slice(-7).map((p) => {
+                    const dt = new Date(p.date)
+                    return { label: `${dt.toLocaleDateString('en-KE', { weekday: 'short' }).slice(0,2)} ${String(dt.getMonth()+1).padStart(2,'0')}/${String(dt.getDate()).padStart(2,'0')}`, value: Number(p.revenue) }
+                  })}
                   color='#0f766e'
                   height={110}
+                  showValues
                 />
               ) : (
                 <Text className='text-xs text-gray-500 py-4 text-center'>
@@ -258,12 +259,13 @@ export default function InsightsOverview() {
             <CardContent className='pt-0'>
               {profitWeek?.data?.length ? (
                 <BarChart
-                  data={profitWeek.data.slice(-7).map((p) => ({
-                    label: String(p.date).slice(5, 10),
-                    value: Number(p.profit),
-                  }))}
+                  data={profitWeek.data.slice(-7).map((p) => {
+                    const dt = new Date(p.date)
+                    return { label: `${dt.toLocaleDateString('en-KE', { weekday: 'short' }).slice(0,2)} ${String(dt.getMonth()+1).padStart(2,'0')}/${String(dt.getDate()).padStart(2,'0')}`, value: Number(p.profit) }
+                  })}
                   color='#1d4ed8'
                   height={110}
+                  showValues
                 />
               ) : (
                 <Text className='text-xs text-gray-500 py-4 text-center'>
@@ -290,35 +292,32 @@ export default function InsightsOverview() {
             ) : (
               <SwitchableLineCard
                 sales={weeklyOverview.map((d) => ({
-                  label: d.day.slice(0, 3),
+                  label: `${d.day.slice(0,3)} ${new Date(d.fullDate).toLocaleDateString('en-KE', { month: '2-digit', day: '2-digit' })}`,
                   value: d.sales,
                 }))}
-                revenue={(revenueWeek?.data || []).slice(-7).map((p: any) => ({
-                  label: String(p.date).slice(5, 10),
-                  value: Number(p.revenue),
-                }))}
-                profit={(profitWeek?.data || []).slice(-7).map((p: any) => ({
-                  label: String(p.date).slice(5, 10),
-                  value: Number(p.profit),
-                }))}
+                revenue={(revenueWeek?.data || []).slice(-7).map((p: any) => {
+                  const dt=new Date(p.date); return { label: `${dt.toLocaleDateString('en-KE',{weekday:'short'}).slice(0,3)} ${String(dt.getMonth()+1).padStart(2,'0')}/${String(dt.getDate()).padStart(2,'0')}`, value: Number(p.revenue) }
+                })}
+                profit={(profitWeek?.data || []).slice(-7).map((p: any) => {
+                  const dt=new Date(p.date); return { label: `${dt.toLocaleDateString('en-KE',{weekday:'short'}).slice(0,3)} ${String(dt.getMonth()+1).padStart(2,'0')}/${String(dt.getDate()).padStart(2,'0')}`, value: Number(p.profit) }
+                })}
               />
             )}
           </CardContent>
         </Card>
 
-        {/* Profit margin line explicit */}
+        {/* Profit margin — 7 dated bars */}
         {profitWeek?.data?.length ? (
           <Card className='border border-gray-200'>
             <CardHeader>
               <CardTitle>Profit margin • week</CardTitle>
-              <Text className='text-xs text-gray-500'>margin % line</Text>
+              <Text className='text-xs text-gray-500'>margin % • 0 baseline</Text>
             </CardHeader>
             <CardContent className='pt-0'>
               <BarChart
-                data={profitWeek.data.slice(-7).map((p: any) => ({
-                  label: String(p.date).slice(5, 10),
-                  value: Number(p.margin),
-                }))}
+                data={profitWeek.data.slice(-7).map((p: any) => {
+                  const dt=new Date(p.date); return { label: `${dt.toLocaleDateString('en-KE',{weekday:'short'}).slice(0,2)} ${String(dt.getMonth()+1).padStart(2,'0')}/${String(dt.getDate()).padStart(2,'0')}`, value: Number(p.margin) }
+                })}
                 color='#7c3aed'
                 height={110}
                 showValues

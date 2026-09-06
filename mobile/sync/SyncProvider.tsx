@@ -13,6 +13,8 @@ import {
   startSyncEngine,
   getPendingChangesCount,
   getConflictsCount,
+  debugSyncState,
+  pushPendingOnly,
 } from './client'
 
 type SyncState = 'online' | 'offline' | 'syncing' | 'conflict'
@@ -56,8 +58,9 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       ])
       setPendingCount(pending)
       setConflictCount(conflicts)
+      if (pending > 0) console.log('[SyncProvider] pending=', pending, 'conflicts=', conflicts)
       if (conflicts > 0) setState((s) => (s === 'syncing' ? 'conflict' : 'conflict'))
-    } catch {}
+    } catch (e) { console.warn('[SyncProvider] refreshCounts failed', (e as any)?.message) }
   }, [])
 
   // Auto-redirect to /sync-conflicts when conflicts appear (existing screen was never reached)
@@ -75,6 +78,28 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     if (conflictCount === 0) hasRedirectedRef.current = false
   }, [conflictCount, router, pathname])
 
+  // Auto-push when pending appears while online (covers interval gap + import().then syncNow race)
+  const autoPushRef = useRef<number>(0)
+  useEffect(() => {
+    if (pendingCount > 0 && state === 'online') {
+      const now = Date.now()
+      if (now - autoPushRef.current < 10000) return // debounce 10s
+      autoPushRef.current = now
+      console.log('[SyncProvider] autoPush pending=', pendingCount)
+      syncNow().then(() => refreshCounts()).catch(async (e) => {
+        console.warn('[SyncProvider] autoPush syncNow failed', (e as any)?.message, '— trying pushPendingOnly fallback')
+        try {
+          const net = await (await import('@react-native-community/netinfo')).default.fetch()
+          if ((net as any).isConnected) {
+            await debugSyncState()
+            await pushPendingOnly()
+            await refreshCounts()
+          }
+        } catch (e2) { console.warn('[SyncProvider] pushPendingOnly failed', (e2 as any)?.message) }
+      })
+    }
+  }, [pendingCount, state, refreshCounts])
+
   useEffect(() => {
     const stop = startSyncEngine()
     const unsub = NetInfo.addEventListener((s) =>
@@ -83,6 +108,8 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     // initial counts + poll every 15s while mounted
     refreshCounts()
     const id = setInterval(refreshCounts, 15000)
+    // expose manual debug trigger globally for console: globalThis.__bizSyncDebug = ...
+    try { (globalThis as any).__bizSyncDebug = debugSyncState; (globalThis as any).__bizPushPending = pushPendingOnly } catch {}
     return () => {
       stop()
       unsub()
