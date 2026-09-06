@@ -210,15 +210,55 @@ export const useAnalytics = () => {
   }
 
   // Pre-computed analytics summary endpoint — now backed by Snapshot
+  // Helpers: fill missing buckets on client as well (defensive — backend now also gap-fills)
+  function fillWeekBuckets<T extends { date: string }>(data: T[], tf: Timeframe, zero: Omit<T, 'date'>): T[] {
+    if (!data) return []
+    // If backend already returns correct bucket count (7/24/30/12), pass through
+    const expected = tf === 'day' ? 24 : tf === 'week' ? 7 : tf === 'month' ? 30 : 12
+    if (data.length >= expected) return data
+    // Build map by YYYY-MM-DD (or hour/month)
+    const keyOf = (d: string) => {
+      const dt = new Date(d)
+      if (tf === 'day') return `${dt.toISOString().slice(0, 13)}` // hour
+      if (tf === 'year') return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth()+1).padStart(2,'0')}`
+      return dt.toISOString().slice(0,10)
+    }
+    const map = new Map<string, T>()
+    data.forEach(x => map.set(keyOf(x.date), x))
+    const now = new Date()
+    const out: T[] = []
+    if (tf === 'week') {
+      for (let i=6;i>=0;i--) { const dt=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate()-i)); const k=dt.toISOString().slice(0,10); const hit=map.get(k); out.push(hit||{date:dt.toISOString(), ...zero} as T) }
+    } else if (tf === 'day') {
+      const base = new Date(now); base.setMinutes(0,0,0)
+      for (let i=23;i>=0;i--) { const dt=new Date(base.getTime()-i*3600*1000); const k=dt.toISOString().slice(0,13); const hit=map.get(k); out.push(hit||{date:dt.toISOString(), ...zero} as T) }
+    } else if (tf === 'month') {
+      for (let i=29;i>=0;i--) { const dt=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate()-i)); const k=dt.toISOString().slice(0,10); const hit=map.get(k); out.push(hit||{date:dt.toISOString(), ...zero} as T) }
+    } else {
+      // year: 12 months
+      for (let i=11;i>=0;i--) { const dt=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth()-i,1)); const k=`${dt.getUTCFullYear()}-${String(dt.getUTCMonth()+1).padStart(2,'0')}`; const hit=map.get(k); out.push(hit||{date:dt.toISOString(), ...zero} as T) }
+    }
+    return out
+  }
+
+  const SNAP_STALE: Record<string, number> = { day: 30*1000, week: 60*1000, month: 5*60*1000, year: 15*60*1000 }
+
   const getAnalyticsSummary = (timeframe: Timeframe = 'week') =>
     useQuery<AnalyticsSummary>({
       queryKey: ['analytics', 'snapshot', timeframe, activeBusinessId],
       queryFn: async () => {
         const snap = await fetchSnapshot(timeframe)
-        return mapSnapshotToAnalytics(snap, timeframe)
+        const mapped = mapSnapshotToAnalytics(snap, timeframe)
+        // client-side gap fill as safety
+        ;(mapped.revenue as any).data = fillWeekBuckets(mapped.revenue.data as any, timeframe, { revenue: 0, transactions: 0 } as any)
+        ;(mapped.profit as any).data = fillWeekBuckets(mapped.profit.data as any, timeframe, { revenue: 0, expenses: 0, profit: 0, margin: 0 } as any)
+        return mapped
       },
       enabled,
-      staleTime: 5 * 60 * 1000,
+      staleTime: SNAP_STALE[timeframe] ?? 60*1000,
+      gcTime: 5*60*1000,
+      refetchOnWindowFocus: true,
+      refetchOnReconnect: true,
       retry: (count, err: any) =>
         err?.response?.status === 403 ? false : count < 2,
     })
@@ -228,10 +268,15 @@ export const useAnalytics = () => {
       queryKey: ['analytics', 'revenue', timeframe, activeBusinessId],
       queryFn: async () => {
         const snap = await fetchSnapshot(timeframe)
-        return mapSnapshotToAnalytics(snap, timeframe).revenue
+        const m = mapSnapshotToAnalytics(snap, timeframe).revenue
+        ;(m as any).data = fillWeekBuckets(m.data as any, timeframe, { revenue: 0, transactions: 0 } as any)
+        return m
       },
       enabled,
-      staleTime: 5 * 60 * 1000,
+      staleTime: SNAP_STALE[timeframe] ?? 60*1000,
+      gcTime: 5*60*1000,
+      refetchOnWindowFocus: true,
+      refetchOnReconnect: true,
       retry: (count, err: any) =>
         err?.response?.status === 403 ? false : count < 2,
     })
@@ -241,10 +286,15 @@ export const useAnalytics = () => {
       queryKey: ['analytics', 'profit', timeframe, activeBusinessId],
       queryFn: async () => {
         const snap = await fetchSnapshot(timeframe)
-        return mapSnapshotToAnalytics(snap, timeframe).profit
+        const m = mapSnapshotToAnalytics(snap, timeframe).profit
+        ;(m as any).data = fillWeekBuckets(m.data as any, timeframe, { revenue: 0, expenses: 0, profit: 0, margin: 0 } as any)
+        return m
       },
       enabled,
-      staleTime: 5 * 60 * 1000,
+      staleTime: SNAP_STALE[timeframe] ?? 60*1000,
+      gcTime: 5*60*1000,
+      refetchOnWindowFocus: true,
+      refetchOnReconnect: true,
       retry: (count, err: any) =>
         err?.response?.status === 403 ? false : count < 2,
     })
@@ -257,7 +307,7 @@ export const useAnalytics = () => {
         return mapSnapshotToAnalytics(snap, timeframe).categories
       },
       enabled,
-      staleTime: 5 * 60 * 1000,
+      staleTime: 2*60*1000,
       retry: (count, err: any) =>
         err?.response?.status === 403 ? false : count < 2,
     })
@@ -270,7 +320,7 @@ export const useAnalytics = () => {
         return mapSnapshotToAnalytics(snap, timeframe).customers
       },
       enabled,
-      staleTime: 5 * 60 * 1000,
+      staleTime: 5*60*1000,
       retry: (count, err: any) =>
         err?.response?.status === 403 ? false : count < 2,
     })
@@ -367,6 +417,27 @@ export const useAnalytics = () => {
   })
 
   const defaultTimeframe: Timeframe = 'week'
+  // Build 7-day overview from the same canonical snapshot — fixes "single bar" bug where overview previously showed one aggregated "This week" bar.
+  const _revenueWeekForOverview = getRevenueAnalytics('week')
+  const _profitWeekForOverview = getProfitAnalytics('week')
+  const weeklyOverview: WeeklyOverview[] = (() => {
+    const data = (_revenueWeekForOverview.data as any)?.data as Array<{ date: string; revenue: number; transactions: number }> | undefined
+    if (data && data.length) {
+      return data.slice(-7).map((p) => {
+        const dt = new Date(p.date)
+        const day = dt.toLocaleDateString('en-KE', { weekday: 'short' })
+        return { day, sales: Number(p.revenue), fullDate: p.date }
+      })
+    }
+    // fallback while loading: generate 7 empty buckets so chart still renders 7 x-positions with zeros
+    const now = new Date()
+    return Array.from({ length: 7 }, (_, i) => {
+      const dt = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - (6 - i)))
+      const day = dt.toLocaleDateString('en-KE', { weekday: 'short' })
+      return { day, sales: 0, fullDate: dt.toISOString() }
+    })
+  })()
+  const isOverviewLoading = businessLoading || _revenueWeekForOverview.isLoading
 
   return {
     analyticsSummary: getAnalyticsSummary(defaultTimeframe),
@@ -379,14 +450,10 @@ export const useAnalytics = () => {
     getProfitAnalytics,
     getCategoryAnalytics,
     getCustomerAnalytics,
-    weeklyOverview: [
-      {
-        day: 'This week',
-        sales: toNumber(getSalesSummary.data?.total),
-        fullDate: new Date().toISOString(),
-      },
-    ],
-    isOverviewLoading: businessLoading || getSalesSummary.isLoading,
+    weeklyOverview,
+    isOverviewLoading,
+    // keep legacy sales summary query for backward compat but not used for overview anymore
+    _getSalesSummary: getSalesSummary,
     overviewError: (getSalesSummary.error as ApiError)?.friendlyMessage || null,
     hasBusiness,
     isBusinessLoading: businessLoading,
