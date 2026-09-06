@@ -25,6 +25,9 @@ import {
   HelpCircle,
   Sparkles,
   Play,
+  AlertTriangle,
+  RefreshCw,
+  ShieldAlert,
 } from 'lucide-react-native'
 import {
   Card,
@@ -36,6 +39,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useBusiness } from '../../hooks/api/useBusiness'
 import { useBusinessContext } from '../../contexts/BusinessContext'
 import { useTour } from '../../contexts/TourContext'
+import { useSync } from '../../sync/SyncProvider'
 import { api } from '../../lib/api'
 import { TAB_BAR_SCROLL_PADDING } from '../../constants/tabBar'
 
@@ -52,6 +56,9 @@ export default function ProfileTab() {
   const { userData, logout } = useAuth()
   const { data: business, isLoading, isError, refetch } = useBusiness(null)
   const { updateBusiness } = useBusinessContext()
+  const { pendingCount, conflictCount, trigger: triggerSync } = (() => {
+    try { return useSync() } catch { return { pendingCount: 0, conflictCount: 0, trigger: async()=>{} } as any }
+  })()
   const {
     isEnabled: tourEnabled,
     setEnabled: setTourEnabled,
@@ -388,6 +395,39 @@ export default function ProfileTab() {
               </View>
               <CheckCircle size={18} color='#059669' />
             </View>
+          </CardContent>
+        </Card>
+
+        <Card className={`border ${conflictCount>0?'border-amber-300 bg-amber-50/60':'border-gray-200'}`}>
+          <CardHeader className='flex-row items-center gap-2'>
+            <ShieldAlert size={16} color={conflictCount>0?'#b45309':'#111827'} />
+            <CardTitle>Sync & conflicts</CardTitle>
+            {conflictCount>0 && <View className='ml-auto bg-amber-500 rounded-full px-2.5 py-1'><Text className='text-xs font-bold text-white'>{conflictCount} conflict{conflictCount>1?'s':''}</Text></View>}
+            {conflictCount===0 && pendingCount>0 && <View className='ml-auto bg-gray-900 rounded-full px-2.5 py-1'><Text className='text-xs font-bold text-white'>{pendingCount} pending</Text></View>}
+          </CardHeader>
+          <CardContent className='pt-0 gap-3'>
+            <Text className='text-xs leading-4 text-gray-600'>
+              Owner-only: review and resolve sync conflicts when the same record was edited offline on two devices. Pending shows local changes not yet pushed.
+            </Text>
+            <View className='flex-row gap-2'>
+              <TouchableOpacity
+                onPress={() => router.push('/sync-conflicts' as any)}
+                className={`flex-1 flex-row items-center justify-center gap-2 py-3.5 rounded-xl border ${conflictCount>0?'bg-amber-500 border-amber-600':'bg-white border-gray-200'}`}
+              >
+                <AlertTriangle size={16} color={conflictCount>0?'white':'#111827'} />
+                <Text className={`text-sm font-bold ${conflictCount>0?'text-white':'text-gray-900'}`}>
+                  {conflictCount>0?'Resolve conflicts':'View conflicts'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={async () => { try { await triggerSync(); Alert.alert('Sync', 'Sync completed')} catch(e:any){ Alert.alert('Sync failed', e?.message||'Failed')} }}
+                className='w-[112px] flex-row items-center justify-center gap-2 py-3.5 rounded-xl bg-gray-900'
+              >
+                <RefreshCw size={14} color='white' />
+                <Text className='text-sm font-bold text-white'>Sync now</Text>
+              </TouchableOpacity>
+            </View>
+            {(pendingCount>0 || conflictCount>0) && <Text className='text-[11px] text-gray-500 text-center'>Tap Sync now to push {pendingCount} pending, or View conflicts when push returns version mismatch.</Text>}
           </CardContent>
         </Card>
 
