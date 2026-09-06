@@ -158,6 +158,9 @@ func (s *Service) create(ctx context.Context, businessID, staffID uuid.UUID, ord
 
 	s.logger.InfoContext(ctx, "[SALES]-sale created", "saleID", sale.ID.String(), "businessID", businessID.String())
 
+	// Invalidate analytics snapshots so next insights fetch recomputes with fresh sale.
+	_ = s.repo.DB().WithContext(ctx).Exec(`DELETE FROM analytics_snapshots WHERE business_id = ?`, businessID).Error
+
 	return s.repo.Find(ctx, businessID, sale.ID)
 }
 
@@ -170,7 +173,11 @@ func (s *Service) Get(ctx context.Context, businessID, saleID uuid.UUID) (*Sale,
 }
 
 func (s *Service) Void(ctx context.Context, businessID, saleID uuid.UUID) error {
-	return s.repo.Void(ctx, businessID, saleID)
+	err := s.repo.Void(ctx, businessID, saleID)
+	if err == nil {
+		_ = s.repo.DB().WithContext(ctx).Exec(`DELETE FROM analytics_snapshots WHERE business_id = ?`, businessID).Error
+	}
+	return err
 }
 
 func (s *Service) GetSalesSummary(ctx context.Context, businessID uuid.UUID, from, to time.Time) (Summary, error) {
