@@ -4,6 +4,7 @@ import { database } from '../db/database'
 import { api } from '../lib/api'
 import { v4 as uuidv4 } from 'uuid'
 import { toNumber } from '../lib/api-dtos'
+import { Q } from '@nozbe/watermelondb'
 
 // One-time repair for corrupted local rows — now destructive for synced data to avoid pushing "0" to server
 // NaN numerics and 0/1970 dates are healed: created (not yet pushed) rows are sanitized to "0"/now,
@@ -183,21 +184,49 @@ const PENDING_TABLES = [
 ]
 
 export async function getPendingChangesCount(): Promise<number> {
+  const d = await getPendingChangesDebug()
+  return d.total
+}
+
+export async function getPendingChangesDebug(): Promise<{ total: number; perTable: Record<string, { created: number; updated: number; deleted: number }> }> {
+  const perTable: Record<string, { created: number; updated: number; deleted: number }> = {}
   let total = 0
   for (const table of PENDING_TABLES) {
     try {
       const col: any = (database as any).get(table)
-      // Watermelon marks unsynced rows with _status = 'created' | 'updated' | 'deleted'
-      const rows: any[] = await col.query().fetch()
-      for (const r of rows) {
-        const s = r._raw?._status
-        if (s === 'created' || s === 'updated' || s === 'deleted') total++
+      let createdCount = 0, updatedCount = 0, deletedCount = 0
+      try {
+        const rows: any[] = await col.query().fetch()
+        for (const r of rows) {
+          const s = r._raw?._status
+          if (s === 'created') createdCount++
+          else if (s === 'updated') updatedCount++
+          else if (s === 'deleted') deletedCount++
+        }
+        // also count adapter deleted records (Watermelon deleted queue) — matches fetchLocalChanges
+        try {
+          const deletedIds: string[] = await (database as any).adapter.getDeletedRecords(table)
+          deletedCount = Math.max(deletedCount, deletedIds.length)
+        } catch {}
+      } catch (e) {
+        // Fallback: try Q.where which uses proper columnName handling for _status
+        try {
+          const created = await col.query(Q.where('_status', 'created')).fetch()
+          createdCount = created.length
+          const updated = await col.query(Q.where('_status', 'updated')).fetch()
+          updatedCount = updated.length
+        } catch {}
       }
-    } catch {
-      // table may not exist yet
+      perTable[table] = { created: createdCount, updated: updatedCount, deleted: deletedCount }
+      total += createdCount + updatedCount + deletedCount
+      if (createdCount + updatedCount + deletedCount > 0) {
+        console.log(`[Sync] pending ${table}:`, perTable[table])
+      }
+    } catch (e) {
+      perTable[table] = { created: 0, updated: 0, deleted: 0 }
     }
   }
-  return total
+  return { total, perTable }
 }
 
 export async function getConflictsCount(): Promise<number> {
@@ -210,6 +239,63 @@ export async function getConflictsCount(): Promise<number> {
   }
 }
 
+export async function debugSyncState(): Promise<any> {
+  const net = await NetInfo.fetch().catch(() => ({ isConnected: null, type: 'unknown' } as any))
+  let lastPulledAt: any = null
+  try { lastPulledAt = await (database as any).adapter.getLocal('__watermelon_last_pulled_at') } catch {}
+  let apiUrl = ''
+  try { const { getApiUrl } = require('../lib/api'); apiUrl = getApiUrl() } catch {}
+  const pending = await getPendingChangesDebug().catch(() => ({ total: -1, perTable: {} } as any))
+  const info = { net: { isConnected: (net as any).isConnected, type: (net as any).type }, lastPulledAt, apiUrl, pending, lastSyncDebug: _lastSyncDebug, isSyncing: _isSyncing }
+  console.log('[Sync] debugSyncState', JSON.stringify(info, null, 2))
+  return info
+}
+
+export async function pushPendingOnly(): Promise<any> {
+  // Bypass pull — directly push fetchLocalChanges (for when pull is blocked by 401/403 but push would succeed)
+  const { default: fetchLocal } = await import('@nozbe/watermelondb/sync/impl/fetchLocal' as any).catch(() => ({ default: null } as any))
+  let changes: any = null
+  let affected: any[] = []
+  if (fetchLocal) {
+    try {
+      const res: any = await (fetchLocal as any)(database as any)
+      changes = res.changes
+      affected = res.affectedRecords || []
+    } catch (e) { console.warn('[Sync] pushPendingOnly fetchLocal failed', e) }
+  }
+  if (!changes) {
+    // fallback: build from pending debug (created only)
+    changes = {}
+    for (const t of Object.keys((await getPendingChangesDebug()).perTable)) {
+      try {
+        const col: any = (database as any).get(t)
+        const rows: any[] = await col.query().fetch()
+        const created = rows.filter((r:any)=>r._raw?._status==='created').map((r:any)=>({...r._raw}))
+        const updated = rows.filter((r:any)=>r._raw?._status==='updated').map((r:any)=>({...r._raw}))
+        if (created.length || updated.length) changes[t] = { created, updated, deleted: [] }
+      } catch {}
+    }
+  }
+  const total = countChanges(changes)
+  console.log('[Sync] pushPendingOnly firing total=', total, summarizeChanges(changes))
+  if (total===0) return { applied: {}, errors: {}, note: 'no local changes' }
+  const idempotencyKey = uuidv4()
+  // Need lastPulledAt for backend shape (use current lastPulledAt)
+  let lastPulledAt: any = null
+  try { const v = await (database as any).adapter.getLocal('__watermelon_last_pulled_at'); lastPulledAt = v? parseInt(v,10): null } catch {}
+  const res: any = await api.post(`/sync/push`, { changes, lastPulledAt }, { headers: { 'X-Idempotency-Key': idempotencyKey } })
+  console.log('[Sync] pushPendingOnly result', res.status, res.data)
+  // mark as synced via Watermelon helper if push succeeded
+  try {
+    const { markLocalChangesAsSynced } = await import('@nozbe/watermelondb/sync/impl' as any)
+    if (markLocalChangesAsSynced && affected.length) {
+      await (markLocalChangesAsSynced as any)(database as any, { changes, affectedRecords: affected }, res.data?.experimentalRejectedIds)
+      console.log('[Sync] pushPendingOnly marked synced')
+    }
+  } catch (e) { console.warn('[Sync] markLocalChangesAsSynced failed — pending may remain until next full sync', e) }
+  return res.data
+}
+
 export async function refreshFromRemote(): Promise<void> {
   // Pull-only refresh: fetch server state without pushing pending (useful when conflicts need discarding)
   // We achieve this by doing a normal sync but we clear pending _status via reset if user confirms
@@ -217,25 +303,147 @@ export async function refreshFromRemote(): Promise<void> {
   await syncNow()
 }
 
+// Mutex to avoid concurrent synchronize() which Watermelon aborts with "Concurrent synchronization" invariant
+let _isSyncing = false
+let _lastSyncDebug: any = null
+export function getLastSyncDebug() { return _lastSyncDebug }
+
+function countChanges(ch: any): number {
+  if (!ch) return 0
+  let n = 0
+  for (const t of Object.keys(ch)) {
+    const tc = ch[t] || {}
+    n += (tc.created?.length || 0) + (tc.updated?.length || 0) + (tc.deleted?.length || 0)
+  }
+  return n
+}
+function summarizeChanges(ch: any): Record<string, { created: number; updated: number; deleted: number }> {
+  const out: Record<string, any> = {}
+  for (const t of Object.keys(ch || {})) {
+    const tc = ch[t] || {}
+    out[t] = { created: tc.created?.length || 0, updated: tc.updated?.length || 0, deleted: tc.deleted?.length || 0 }
+  }
+  return out
+}
+
 // WatermelonDB synchronize() wired to Brief §5 endpoints — single source of truth while offline is local SQLite
 export async function syncNow() {
+  if (_isSyncing) {
+    console.log('[Sync] syncNow skipped — already syncing')
+    return
+  }
+  _isSyncing = true
+  const syncStart = Date.now()
+  try {
   await repairCorruptedLocal()
+  // Pre-pull pending diagnostic
+  try {
+    const pre = await getPendingChangesDebug()
+    if (pre.total > 0) console.log('[Sync] pre-pull pending', pre.perTable)
+  } catch {}
   await synchronize({
     database: database as any,
     pullChanges: async ({ lastPulledAt, schemaVersion, migration }) => {
-      // lastPulledAt is number ms Watermelon tracks; backend expects ?since=<ms|RFC3339>
       const since = lastPulledAt ? String(lastPulledAt) : '0'
-      const res = await api.get(`/sync/pull`, { params: { since } })
-      // Backend returns {changes: {table:{created, updated, deleted}}, timestamp}
-      // Watermelon expects {changes, timestamp}
-      const data = res.data as any
-      // Map backend snake_case to Watermelon camelCase if needed — for now passthrough
-      return {
-        changes: data.changes ?? data,
-        timestamp: data.timestamp ?? Date.now(),
+      console.log('[Sync] pull start since=', since, 'schemaVersion=', schemaVersion)
+      try {
+        const res = await api.get(`/sync/pull`, { params: { since } })
+        const data = res.data as any
+        const changes = data.changes ?? data
+        const remoteCount = countChanges(changes)
+        console.log('[Sync] pull response timestamp=', data.timestamp, 'remoteCount=', remoteCount, 'tables=', Object.keys(changes ?? {}))
+        // Fix for "Server wants client to create but already exists" — last sync partially executed.
+        // If remote sends `created` for an id we already have as pending (_status='created'), Watermelon
+        // will log diagnostic and try to update, but can hit `type` crash if schema mismatch. Pre-filter:
+        // move overlapping ids from `created` → `updated` so applyRemote treats as update.
+        try {
+          for (const tbl of Object.keys(changes)) {
+            const tc: any = (changes as any)[tbl]
+            if (!tc?.created?.length) continue
+            const col: any = (database as any).collections?.get?.(tbl) || (database as any).get?.(tbl)
+            if (!col) continue
+            const createdIds: string[] = tc.created.map((r: any) => r.id).filter(Boolean)
+            if (!createdIds.length) continue
+            // Fetch local raws for these ids
+            try {
+              const locals: any[] = await col.query(Q.where('id', Q.oneOf(createdIds))).fetch().catch(async () => {
+                const all: any[] = await col.query().fetch()
+                return all.filter((r: any) => createdIds.includes(r.id))
+              })
+              const existingIds = new Set(locals.map((r: any) => r.id))
+              if (existingIds.size) {
+                const keepCreated: any[] = []
+                const moveToUpdated: any[] = []
+                for (const r of tc.created) {
+                  if (existingIds.has(r.id)) moveToUpdated.push(r)
+                  else keepCreated.push(r)
+                }
+                if (moveToUpdated.length) {
+                  console.log(`[Sync] pull dedup ${tbl}: moving ${moveToUpdated.length} ids from created→updated (already exists locally)`, moveToUpdated.map((r:any)=>r.id).slice(0,3))
+                  tc.created = keepCreated
+                  tc.updated = [...(tc.updated||[]), ...moveToUpdated]
+                }
+              }
+            } catch {}
+          }
+        } catch (e) { console.warn('[Sync] pull dedup check failed', (e as any)?.message) }
+        // Validate records can be sanitized — drop any that would cause `schema.columns[xxx].type` crash
+        // (e.g. remote sends column not in local schema due to schema drift)
+        try {
+          const { sanitizedRaw } = await import('@nozbe/watermelondb/RawRecord')
+          for (const tbl of Object.keys(changes)) {
+            const col: any = (database as any).collections?.get?.(tbl) || (database as any).get?.(tbl)
+            if (!col) continue
+            const tableSchema: any = (col as any).schema || (database as any).schema?.tables?.[tbl]
+            if (!tableSchema) continue
+            for (const bucket of ['created', 'updated'] as const) {
+              const arr: any[] = (changes as any)[tbl][bucket] || []
+              if (!arr.length) continue
+              const keep: any[] = []
+              for (const raw of arr) {
+                try {
+                  sanitizedRaw(raw, tableSchema)
+                  keep.push(raw)
+                } catch (e: any) {
+                  console.warn(`[Sync] dropping invalid raw ${tbl}#${raw.id} bucket=${bucket} keys=${Object.keys(raw).join(',')} error=${e?.message} stack=${e?.stack}`)
+                }
+              }
+              if (keep.length !== arr.length) {
+                console.warn(`[Sync] filtered ${tbl}.${bucket} ${arr.length}→${keep.length} invalid records`)
+                ;(changes as any)[tbl][bucket] = keep
+              }
+            }
+          }
+        } catch (e) { console.warn('[Sync] sanitize check failed', (e as any)?.message) }
+        return {
+          changes,
+          timestamp: data.timestamp ?? Date.now(),
+        }
+      } catch (e: any) {
+        console.warn('[Sync] pull failed', e?.message, e?.stack || String(e), 'status=', e?.response?.status, 'data=', e?.response?.data)
+        throw e
       }
     },
     pushChanges: async ({ changes, lastPulledAt }) => {
+      const summary = summarizeChanges(changes)
+      const totalLocal = countChanges(changes)
+      console.log('[Sync] push firing lastPulledAt=', lastPulledAt, 'localCount=', totalLocal, 'summary=', summary)
+      // Extra verification: ensure _status==='created' sales actually present
+      if (totalLocal === 0) {
+        console.warn('[Sync] push called with 0 local changes — fetchLocal found nothing (check _status column). Pending debug follows')
+        try {
+          const dbg = await getPendingChangesDebug()
+          console.warn('[Sync] pending debug at push time', dbg)
+        } catch {}
+      } else {
+        // Log sample ids to correlate with backend errors
+        for (const t of Object.keys(changes || {})) {
+          const tc: any = (changes as any)[t]
+          if (tc.created?.length) console.log(`[Sync] push ${t}.created ids=`, tc.created.slice(0,3).map((r:any)=>r.id))
+          if (tc.updated?.length) console.log(`[Sync] push ${t}.updated ids=`, tc.updated.slice(0,3).map((r:any)=>r.id))
+          if (tc.deleted?.length) console.log(`[Sync] push ${t}.deleted ids=`, tc.deleted.slice(0,3))
+        }
+      }
       // Per-batch idempotency key §2 (Do Not Substitute)
       const idempotencyKey = uuidv4()
       const res: any = await api.post(
@@ -243,9 +451,19 @@ export async function syncNow() {
         { changes, lastPulledAt },
         { headers: { 'X-Idempotency-Key': idempotencyKey } },
       )
+      // Log push result applied/errors/conflicts for verification
+      const pushData = (res?.data || res) as any
+      const applied = pushData?.applied || pushData?.data?.applied
+      const errors = pushData?.errors || pushData?.data?.errors
+      console.log('[Sync] push result status=', res.status, 'applied=', applied, 'errors=', errors, 'idempotencyKey=', idempotencyKey)
+      if (errors && Object.keys(errors).length) {
+        console.warn('[Sync] push errors — will remain pending for retry', errors)
+      }
+      _lastSyncDebug = { pushApplied: applied, pushErrors: errors, pushTimestamp: Date.now() }
       // Persist server-reported conflicts to local `conflicts` table for badge + /sync-conflicts UI (§4)
       const conflicts = res?.data?.conflicts || res?.data?.data?.conflicts || []
       if (Array.isArray(conflicts) && conflicts.length) {
+        console.log('[Sync] push conflicts=', conflicts)
         try {
           await (database as any).write(async () => {
             const col: any = (database as any).get('conflicts')
@@ -281,20 +499,43 @@ export async function syncNow() {
       }
     },
     // Version-counter conflict → conflicts table (§4), not last-write-wins (§10)
-    // Watermelon calls this when local modified row also changed remotely
-    // We route to conflicts table via push's conflict response; here we just surface
-    // Full resolution UI is Phase 3 — for now, keep server's version and flag
+    // Watermelon calls this when local _changed row also changed remotely (incremental sync)
+    // We must return a sanitized raw; returning `remote` directly causes `sanitizedRaw` to set _status='created'
+    // and can trigger `type` crash. Return `resolved` (Watermelon's per-column merge) and persist push conflict separately.
     conflictResolver: (table, local, remote, resolved) => {
-      // Brief: do NOT silent merge. Mark for conflicts table via push response; locally keep remote + flag
-      // Returning remote ensures local eventually reflects server, conflict row remains for manual resolve
       console.warn('[Sync] conflict', table, local.id, {
-        localSync: (local as any).sync_version,
-        remoteSync: (remote as any).sync_version,
+        localSync: (local as any).sync_version ?? (local as any).syncVersion,
+        remoteSync: (remote as any).sync_version ?? (remote as any).syncVersion,
+        resolvedKeys: Object.keys(resolved || {}).slice(0,8),
       })
-      return remote
+      // Keep Watermelon's resolved (local _changed wins) but ensure _status stays valid for apply
+      return resolved
     },
     unsafeTurbo: false, // enable only for first login on empty DB per sketch §11
   })
+  // Invalidate analytics so insights re-fetches fresh snapshot after sync applied sales/expenses
+  try {
+    const { QueryClient } = await import('@tanstack/react-query').catch(()=>({QueryClient:null} as any))
+    // need global client — stored on window or import from lib; fallback to fetch trigger
+    const { api: api2 } = await import('../lib/api').catch(()=>({api:null} as any))
+    if (api2) {
+      // best-effort refresh enqueue for week (server will delete stale snapshot and next GET recomputes)
+      api2.post('/analytics/refresh', {}, { params: { timeframe: 'week' } }).catch(()=>{})
+    }
+  } catch {}
+  // Post-sync pending verification
+  try {
+    const post = await getPendingChangesDebug()
+    console.log(`[Sync] done in ${Date.now()-syncStart}ms post-pending total=`, post.total, post.perTable)
+    _lastSyncDebug = { ...(_lastSyncDebug||{}), durationMs: Date.now()-syncStart, postPending: post }
+  } catch {}
+  } catch (e: any) {
+    console.warn('[Sync] syncNow failed', e?.message, e?.stack || String(e), 'response=', e?.response?.data || e)
+    _lastSyncDebug = { error: e?.message, stack: e?.stack, response: e?.response?.data, at: Date.now() }
+    throw e
+  } finally {
+    _isSyncing = false
+  }
 }
 
 // NetInfo + interval triggers per Brief §3.4 (reconnect + periodic 5-10min + manual pull-to-refresh)
@@ -305,8 +546,8 @@ export function startSyncEngine() {
   // Initial hydration on startup if already online — populates local storage for offline resume
   NetInfo.fetch().then((s) => {
     if (s.isConnected) {
-      syncNow().catch((e) =>
-        console.warn('[Sync] initial hydration failed', e?.message),
+      syncNow().catch((e: any) =>
+        console.warn('[Sync] initial hydration failed', e?.message, e?.stack || String(e)),
       )
     }
   })
@@ -314,8 +555,8 @@ export function startSyncEngine() {
   // On reconnect — immediate sync
   const unsub = NetInfo.addEventListener((state) => {
     if (state.isConnected) {
-      syncNow().catch((e) =>
-        console.warn('[Sync] reconnect sync failed', e?.message),
+      syncNow().catch((e: any) =>
+        console.warn('[Sync] reconnect sync failed', e?.message, e?.stack || String(e)),
       )
     }
   })
@@ -325,7 +566,7 @@ export function startSyncEngine() {
     async () => {
       const s = await NetInfo.fetch()
       if (s.isConnected) {
-        syncNow().catch(() => {})
+        syncNow().catch((e: any) => console.warn('[Sync] interval sync failed', e?.message, e?.stack || String(e)))
       }
     },
     8 * 60 * 1000,
