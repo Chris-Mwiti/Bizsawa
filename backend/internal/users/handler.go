@@ -141,10 +141,10 @@ func (h Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	businessId, ok := middleware.BusinessIDFromCtx(r.Context())
-	if !ok {
-		sharedhttp.Error(w, errUnauthorized())
-		return
+	businessId, _ := middleware.BusinessIDFromCtx(r.Context())
+	if businessId == uuid.Nil {
+		// profile is per-user, not strictly per-business — allow without business context
+		businessId = userID
 	}
 
 	profile, err := h.svc.GetOrCreateProfile(r.Context(), userID, businessId)
@@ -163,10 +163,9 @@ func (h Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	businessId, ok := middleware.BusinessIDFromCtx(r.Context())
-	if !ok {
-		sharedhttp.Error(w, errUnauthorized())
-		return
+	businessId, _ := middleware.BusinessIDFromCtx(r.Context())
+	if businessId == uuid.Nil {
+		businessId = userID
 	}
 
 	var req UpdateProfileRequest
