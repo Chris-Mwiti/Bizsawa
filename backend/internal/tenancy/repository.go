@@ -2,6 +2,7 @@ package tenancy
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -32,4 +33,53 @@ func (r *Repository) CountBusinessesByOwner(ctx context.Context, userID uuid.UUI
 	err := r.db.WithContext(ctx).Table("businesses").Where("owner_id = ?", userID).Count(&count).Error
 
 	return count, err
+}
+
+func (r *Repository) CreateSubscriptionPayment(ctx context.Context, p *SubscriptionPayment) error {
+	return r.db.WithContext(ctx).Create(p).Error
+}
+
+func (r *Repository) FindSubscriptionPaymentByID(ctx context.Context, id uuid.UUID) (*SubscriptionPayment, error) {
+	var p SubscriptionPayment
+	err := r.db.WithContext(ctx).Where("id = ?", id).First(&p).Error
+	if err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+func (r *Repository) FindSubscriptionPaymentByCheckout(ctx context.Context, checkout string) (*SubscriptionPayment, error) {
+	var p SubscriptionPayment
+	err := r.db.WithContext(ctx).Where("checkout_request_id = ?", checkout).First(&p).Error
+	if err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+func (r *Repository) FindSubscriptionPaymentByIdempotency(ctx context.Context, key string) (*SubscriptionPayment, error) {
+	var p SubscriptionPayment
+	err := r.db.WithContext(ctx).Where("idempotency_key = ?", key).First(&p).Error
+	if err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+func (r *Repository) UpdateSubscriptionPayment(ctx context.Context, p *SubscriptionPayment) error {
+	return r.db.WithContext(ctx).Save(p).Error
+}
+
+func (r *Repository) UpsertActiveSubscription(ctx context.Context, userID uuid.UUID, plan PlanCode, endsAt *time.Time) (*Subscription, error) {
+	// Deactivate previous active, create new active
+	var active Subscription
+	err := r.db.WithContext(ctx).Where("user_id = ? AND status = 'ACTIVE'", userID).First(&active).Error
+	if err == nil {
+		_ = r.db.WithContext(ctx).Model(&active).Update("status", "INACTIVE").Error
+	}
+	sub := &Subscription{UserID: userID, PlanCode: plan, Status: "ACTIVE", EndsAt: endsAt}
+	if err := r.db.WithContext(ctx).Create(sub).Error; err != nil {
+		return nil, err
+	}
+	return sub, nil
 }

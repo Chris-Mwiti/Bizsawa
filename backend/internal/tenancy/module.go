@@ -25,9 +25,18 @@ func (m *Module) RegisterPublicRoutes(r chi.Router) {
 	r.Get("/plans", func(w http.ResponseWriter, r *http.Request) { sharedhttp.JSON(w, http.StatusOK, Plans()) })
 }
 
+func (m *Module) Service() *Service { return m.svc }
+
 func (m *Module) RegisterRoutes(r chi.Router) {
 	h := Handler{svc: m.svc}
 	r.Get("/subscription", h.GetActiveSubscription)
+	r.Post("/upgrade/initiate", h.InitiateUpgrade)
+	r.Get("/payments/{id}", h.GetSubscriptionPayment)
+}
+
+func (m *Module) RegisterCallbackRoute(r chi.Router) {
+	h := Handler{svc: m.svc}
+	r.Post("/callback", h.SubscriptionCallback)
 }
 
 func (m *Module) EnsureDefaultSubscription(ctx context.Context, userID uuid.UUID) (*Subscription, error) {
