@@ -2,6 +2,7 @@ import '../polyfills'
 import { Database } from '@nozbe/watermelondb'
 import SQLiteAdapter from '@nozbe/watermelondb/adapters/sqlite'
 import { schema } from './schema'
+import { tableSchema } from '@nozbe/watermelondb'
 import Product from './models/Product'
 import ProductVariant from './models/ProductVariant'
 import Customer from './models/Customer'
@@ -47,6 +48,29 @@ const migrations = schemaMigrations({
               isOptional: true,
             },
           ],
+        },
+      ],
+    },
+    {
+      toVersion: 3,
+      steps: [
+        {
+          type: 'create_table',
+          schema: tableSchema({
+            name: 'payment_commands',
+            columns: [
+              { name: 'business_id', type: 'string', isIndexed: true },
+              { name: 'order_id', type: 'string', isIndexed: true },
+              { name: 'amount', type: 'string' },
+              { name: 'currency', type: 'string' },
+              { name: 'phone', type: 'string', isOptional: true },
+              { name: 'status', type: 'string' },
+              { name: 'provider', type: 'string' },
+              { name: 'type', type: 'string' },
+              { name: 'sync_version', type: 'number' },
+              { name: 'deleted_at', type: 'number', isOptional: true },
+            ],
+          }),
         },
       ],
     },
