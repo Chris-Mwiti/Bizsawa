@@ -387,34 +387,110 @@ export async function syncNow() {
             } catch {}
           }
         } catch (e) { console.warn('[Sync] pull dedup check failed', (e as any)?.message) }
-        // Validate records can be sanitized — drop any that would cause `schema.columns[xxx].type` crash
-        // (e.g. remote sends column not in local schema due to schema drift)
+        // Strip unknown columns + clean _changed to prevent `column.type` crash (§ Root cause: server sends tenant_id/payload/type etc not in local schema, or local _changed contains stale/undefined column names)
         try {
           const { sanitizedRaw } = await import('@nozbe/watermelondb/RawRecord')
           for (const tbl of Object.keys(changes)) {
             const col: any = (database as any).collections?.get?.(tbl) || (database as any).get?.(tbl)
-            if (!col) continue
+            if (!col) {
+              console.warn(`[Sync] pull contains unknown table ${tbl} — dropping (local schema missing). Keys:`, Object.keys((changes as any)[tbl]||{}))
+              delete (changes as any)[tbl]
+              continue
+            }
             const tableSchema: any = (col as any).schema || (database as any).schema?.tables?.[tbl]
             if (!tableSchema) continue
+            // Build set of known column names (snake_case) plus id
+            const knownCols = new Set<string>(['id'])
+            try {
+              const cols: any[] = tableSchema.columnArray || Object.values(tableSchema.columns || {})
+              for (const c of cols) if (c?.name) knownCols.add(c.name)
+            } catch {}
+            // Also include columns map keys fallback
+            try {
+              for (const k of Object.keys(tableSchema.columns || {})) knownCols.add(k)
+            } catch {}
             for (const bucket of ['created', 'updated'] as const) {
               const arr: any[] = (changes as any)[tbl][bucket] || []
               if (!arr.length) continue
               const keep: any[] = []
               for (const raw of arr) {
+                // Strip unknown keys before sanitizedRaw test — prevents `payload`, `tenant_id`, `provider_request_id` etc from polluting
+                const stripped: any = { id: raw.id }
+                for (const k of Object.keys(raw)) {
+                  if (knownCols.has(k)) stripped[k] = raw[k]
+                  else if (k === 'created_at' || k === 'updated_at') {
+                    // ignore system fields — Watermelon generates them
+                  } else {
+                    // drop unknown column (e.g. tenant_id, payload, failure_code)
+                  }
+                }
                 try {
-                  sanitizedRaw(raw, tableSchema)
-                  keep.push(raw)
+                  sanitizedRaw(stripped, tableSchema)
+                  keep.push(stripped)
                 } catch (e: any) {
-                  console.warn(`[Sync] dropping invalid raw ${tbl}#${raw.id} bucket=${bucket} keys=${Object.keys(raw).join(',')} error=${e?.message} stack=${e?.stack}`)
+                  console.warn(`[Sync] dropping invalid raw ${tbl}#${raw.id} bucket=${bucket} keys=${Object.keys(raw).join(',')} strippedKeys=${Object.keys(stripped).join(',')} error=${e?.message} stack=${e?.stack}`)
                 }
               }
               if (keep.length !== arr.length) {
                 console.warn(`[Sync] filtered ${tbl}.${bucket} ${arr.length}→${keep.length} invalid records`)
                 ;(changes as any)[tbl][bucket] = keep
+              } else {
+                // replace with stripped versions even when all pass, to ensure no unknown keys leak to applyRemote
+                ;(changes as any)[tbl][bucket] = keep
               }
             }
           }
-        } catch (e) { console.warn('[Sync] sanitize check failed', (e as any)?.message) }
+        } catch (e) { console.warn('[Sync] sanitize check failed', (e as any)?.message, (e as any)?.stack) }
+        // Clean local _changed that may contain stale column names (e.g. `type`, `undefined`, `tenant_id`) which cause `schema.columns[col].type` crash in resolveConflict
+        try {
+          for (const tbl of Object.keys(changes)) {
+            const col: any = (database as any).collections?.get?.(tbl) || (database as any).get?.(tbl)
+            if (!col) continue
+            const tableSchema: any = (col as any).schema || (database as any).schema?.tables?.[tbl]
+            if (!tableSchema) continue
+            const knownCols = new Set<string>()
+            try {
+              const cols: any[] = tableSchema.columnArray || Object.values(tableSchema.columns || {})
+              for (const c of cols) if (c?.name) knownCols.add(c.name)
+            } catch {}
+            try {
+              for (const k of Object.keys(tableSchema.columns || {})) knownCols.add(k)
+            } catch {}
+            // Fetch local raws for ids in this table's changes to clean their _changed before applyRemote runs
+            const ids: string[] = [...((changes as any)[tbl].created||[]), ...((changes as any)[tbl].updated||[])].map((r:any)=>r.id).filter(Boolean)
+            if (!ids.length) continue
+            try {
+              const locals: any[] = await col.query(Q.where('id', Q.oneOf(ids))).fetch().catch(async () => {
+                const all: any[] = await col.query().fetch()
+                return all.filter((r: any) => ids.includes(r.id))
+              })
+              for (const rec of locals) {
+                const raw = rec._raw
+                if (!raw?._changed) continue
+                const parts = String(raw._changed).split(',').map((s:string)=>s.trim()).filter(Boolean)
+                const cleaned = parts.filter((p:string) => knownCols.has(p))
+                // also filter literal "undefined"/"null"/"" and "type" if not in schema
+                const finalChanged = cleaned.filter((p:string) => p !== 'undefined' && p !== 'null' && p !== '')
+                if (finalChanged.length !== parts.length) {
+                  console.warn(`[Sync] cleaning _changed for ${tbl}#${raw.id} ${JSON.stringify(parts)}→${JSON.stringify(finalChanged)}`)
+                  try {
+                    await (database as any).write(async () => {
+                      await rec.update((r: any) => {
+                        // Watermelon stores _changed in _raw; we can mutate via update + direct _raw patch
+                        // Use adapter-level raw update to avoid decorator type check
+                        r._raw._changed = finalChanged.join(',')
+                        if (!finalChanged.length && r._raw._status === 'updated') {
+                          // if no valid changes remain, mark as synced to avoid loop
+                          // keep status as updated so push still attempts? No, clear to prevent crash
+                        }
+                      })
+                    })
+                  } catch (e:any) { console.warn(`[Sync] failed to clean _changed for ${tbl}#${raw.id}`, e?.message) }
+                }
+              }
+            } catch {}
+          }
+        } catch (e) { console.warn('[Sync] _changed cleaning failed', (e as any)?.message) }
         return {
           changes,
           timestamp: data.timestamp ?? Date.now(),
@@ -507,7 +583,36 @@ export async function syncNow() {
         localSync: (local as any).sync_version ?? (local as any).syncVersion,
         remoteSync: (remote as any).sync_version ?? (remote as any).syncVersion,
         resolvedKeys: Object.keys(resolved || {}).slice(0,8),
+        localChanged: (local as any)._changed,
       })
+      // Defensive: strip resolved keys that don't exist in local schema to avoid `schema.columns[col].type` crash
+      try {
+        const col: any = (database as any).collections?.get?.(table) || (database as any).get?.(table)
+        const tableSchema: any = (col as any)?.schema || (database as any).schema?.tables?.[table]
+        if (tableSchema) {
+          const known = new Set<string>(['id', '_status', '_changed'])
+          try {
+            const cols: any[] = tableSchema.columnArray || Object.values(tableSchema.columns || {})
+            for (const c of cols) if (c?.name) known.add(c.name)
+          } catch {}
+          try { for (const k of Object.keys(tableSchema.columns || {})) known.add(k) } catch {}
+          for (const k of Object.keys(resolved || {})) {
+            if (!known.has(k)) {
+              console.warn(`[Sync] conflictResolver stripping unknown key ${table}.${k}`)
+              delete (resolved as any)[k]
+            }
+          }
+          // also clean local _changed reference inside resolved if it contains unknown columns
+          if ((resolved as any)._changed) {
+            const parts = String((resolved as any)._changed).split(',').map((s:string)=>s.trim()).filter(Boolean)
+            const cleaned = parts.filter((p:string) => known.has(p) && p !== 'undefined' && p !== 'null')
+            if (cleaned.length !== parts.length) {
+              console.warn(`[Sync] conflictResolver cleaning _changed ${JSON.stringify(parts)}→${JSON.stringify(cleaned)}`)
+              ;(resolved as any)._changed = cleaned.join(',')
+            }
+          }
+        }
+      } catch {}
       // Keep Watermelon's resolved (local _changed wins) but ensure _status stays valid for apply
       return resolved
     },
