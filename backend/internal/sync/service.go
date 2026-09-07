@@ -104,6 +104,12 @@ func (s *Service) pullTable(ctx context.Context, businessID uuid.UUID, table str
 	}
 
 	for _, row := range rows {
+		// Strip server-only columns not present in mobile Watermelon schema (tenant_id, payload, provider ids etc) — prevents `schema.columns[col].type` crash on client
+		for k := range row {
+			if k == "tenant_id" || k == "payload" || k == "result_payload" || k == "provider_request_id" || k == "provider_receipt" || k == "failure_code" || k == "failure_message" || k == "account_reference" || k == "processed_at" {
+				delete(row, k)
+			}
+		}
 		for k, v := range row {
 			// Handle []uint8 from pg driver (numeric/uuid as bytes) -> string
 			if b, ok := v.([]uint8); ok {
@@ -145,7 +151,7 @@ func (s *Service) pullTable(ctx context.Context, businessID uuid.UUID, table str
 				row[k] = vStr
 			}
 		}
-		// Determine created vs updated by created_at (now number)
+		// Determine created vs updated by created_at (now number UnixMilli) before stripping system fields
 		var createdAt time.Time
 
 		if v, ok := row["created_at"]; ok {
@@ -155,6 +161,10 @@ func (s *Service) pullTable(ctx context.Context, businessID uuid.UUID, table str
 				createdAt = t
 			}
 		}
+		// Strip server-only/system fields not in client Watermelon schema
+		delete(row, "created_at")
+		delete(row, "updated_at")
+		delete(row, "tenant_id")
 
 		if createdAt.After(since) {
 			tc.Created = append(tc.Created, row)
@@ -513,7 +523,7 @@ func (s *Service) updateRecord(tx *gorm.DB, businessID uuid.UUID, table string, 
 			if trim == "" && k != "notes" && k != "description" && k != "address" {
 				// allow empty for nullable text but skip "undefined" sentinel
 			}
-			if strings.EqualFold(trim, "undefined") || strings.EqualFold(trim, "null") && trim == "undefined" {
+			if strings.EqualFold(trim, "undefined") || strings.EqualFold(trim, "null") {
 				continue
 			}
 		}
