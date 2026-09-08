@@ -176,7 +176,7 @@ export default function LoginScreen() {
                 {'Welcome back! \nSign in to manage your business'}
               </Text>
               {isOffline && (
-                <View className='mt-3 px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200 flex-row items-center gap-1.5'>
+                <View className='mt-3 px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200 flex-row items-center gap-2'>
                   <WifiOff size={12} color='#b45309' />
                   <Text className='text-xs font-bold text-amber-700'>
                     Offline mode
@@ -184,7 +184,7 @@ export default function LoginScreen() {
                 </View>
               )}
               {offlineAvailable && (
-                <View className='mt-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 flex-row items-center gap-1.5'>
+                <View className='mt-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 flex-row items-center gap-2'>
                   <Shield size={12} color='#047857' />
                   <Text className='text-xs text-emerald-700'>
                     Offline login available • {graceDays} days left
@@ -205,7 +205,7 @@ export default function LoginScreen() {
                     style={{ position: 'absolute', left: 12, top: 12 }}
                   />
                   <TextInput
-                    className={`border rounded-lg px-12 py-3 text-gray-900 ${
+                    className={`border rounded-2xl px-12 py-3 text-gray-900 ${
                       errors.email ? 'border-red-500' : 'border-gray-300'
                     }`}
                     placeholder='Enter your email'
@@ -234,7 +234,7 @@ export default function LoginScreen() {
                     style={{ position: 'absolute', left: 12, top: 12 }}
                   />
                   <TextInput
-                    className={`border rounded-lg px-12 pr-12 py-3 text-gray-900 ${
+                    className={`border rounded-2xl px-12 pr-12 py-3 text-gray-900 ${
                       errors.password ? 'border-red-500' : 'border-gray-300'
                     }`}
                     placeholder='Enter your password'
@@ -266,7 +266,7 @@ export default function LoginScreen() {
               <TouchableOpacity
                 onPress={handleSubmit}
                 disabled={isLoading}
-                className={`bg-primary-600 rounded-lg mt-6 py-4 items-center ${
+                className={`bg-primary-600 rounded-2xl mt-6 py-4 items-center ${
                   isLoading ? 'opacity-50' : ''
                 }`}
               >
@@ -293,7 +293,7 @@ export default function LoginScreen() {
               {biometricAvailable && offlineAvailable && (
                 <TouchableOpacity
                   onPress={handleBiometricLogin}
-                  className='flex-row items-center justify-center border border-emerald-200 rounded-lg py-3 bg-emerald-50 mt-2'
+                  className='flex-row items-center justify-center border border-emerald-200 rounded-2xl py-3 bg-emerald-50 mt-2'
                 >
                   <Fingerprint size={18} color='#047857' />
                   <Text className='text-emerald-700 font-semibold ml-2'>
@@ -306,7 +306,7 @@ export default function LoginScreen() {
               <TouchableOpacity
                 onPress={handleGoogleSubmit}
                 disabled={isLoading}
-                className='flex-row items-center justify-center border border-gray-300 rounded-lg py-4 bg-white'
+                className='flex-row items-center justify-center border border-gray-300 rounded-2xl py-4 bg-white'
               >
                 <Text className='text-gray-700 font-semibold text-lg'>
                   Continue with Google
@@ -314,7 +314,7 @@ export default function LoginScreen() {
               </TouchableOpacity>
 
               {isOffline && !offlineAvailable && formData.email ? (
-                <View className='bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 mt-4'>
+                <View className='bg-amber-50 border border-amber-200 rounded-2xl px-3 py-3 mt-4'>
                   <Text className='text-xs text-amber-800 text-center'>
                     Offline login not yet enabled for this email. Connect once
                     online to cache credentials (7-day grace).

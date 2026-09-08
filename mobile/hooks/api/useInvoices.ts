@@ -232,21 +232,57 @@ export const useInvoices = () => {
       method: string
       reference?: string
     }) => {
-      // Legacy: specific invoice payment (kept for backward compat)
-      await api.post(`/invoices/${id}/record-payment`, {
-        amount: toDecimalString(amount),
-        method,
-        reference,
-      })
-    },
-    onSuccess: (_, { id }) => {
+      if (!bid) throw new Error('Select a business first')
+      const amountStr = toDecimalString(amount)
+      if (toNumber(amountStr) <= 0) throw new Error('Payment amount must be positive')
+      // Offline-first: update local invoice immediately
+      let localResult: any = null
+      try {
+        await (database as any).write(async () => {
+          const rec: any = await (database as any).get('invoices').find(id)
+          const raw = rec._raw
+          const total = toNumber(raw.total ?? raw._raw?.total ?? rec.total)
+          const prevPaid = toNumber(raw.amount_paid ?? rec.amountPaid ?? '0')
+          const newPaid = prevPaid + toNumber(amountStr)
+          const newDue = Math.max(0, total - newPaid)
+          const newStatus = newDue <= 0.005 ? 'paid' : 'partial'
+          await rec.update((r: any) => {
+            r.amountPaid = toDecimalString(newPaid)
+            r.amountDue = toDecimalString(newDue)
+            r.status = newStatus
+            // bump sync version for conflict detection
+            const cur = (r.syncVersion ?? raw.sync_version ?? 1) as number
+            r.syncVersion = (typeof cur === 'number' ? cur : toNumber(cur as any) || 1) + 1
+          })
+          localResult = { id, amount: amountStr, amountPaid: toDecimalString(newPaid), amountDue: toDecimalString(newDue), status: newStatus }
+        })
+      } catch (e: any) {
+        // If invoice not found locally, fallback to server (e.g. legacy server-only invoice)
+        console.warn('[Invoices] recordPayment local update failed, will try server', e?.message)
+      }
+      import('../../sync/client').then((m) => m.syncNow().catch(() => {}))
       queryClient.invalidateQueries({ queryKey: ['invoices'] })
       queryClient.invalidateQueries({ queryKey: ['invoices', id] })
+      // Best-effort online API for immediate server settlement (when online, sync push will also reconcile)
+      try {
+        const { default: NetInfo } = await import('@react-native-community/netinfo')
+        const s: any = await NetInfo.fetch()
+        if (s.isConnected) {
+          try {
+            await api.post(`/invoices/${id}/record-payment`, { amount: amountStr, method, reference })
+          } catch (apiErr: any) {
+            // If API fails due to invoice not yet synced (404), rely on sync push — don't throw
+            if (apiErr?.response?.status >= 400 && apiErr?.response?.status < 500 && apiErr?.response?.status !== 404) throw apiErr
+            console.warn('[Invoices] recordPayment API failed (offline queue will sync)', apiErr?.message)
+          }
+        }
+      } catch {}
+      return localResult || { id, amount: amountStr }
     },
   })
 
   // Customer-level settlement: payment is distributed FIFO across all unpaid invoices for that customer
-  // Works for both cash and mpesa — worker also uses this path
+  // Offline-first mirror of backend SettleCustomerPayment — updates local invoices FIFO, then syncs
   const settleCustomerPayment = useMutation({
     mutationFn: async ({
       customerId,
@@ -259,15 +295,70 @@ export const useInvoices = () => {
       method?: string
       reference?: string
     }) => {
-      const res = await api.post(`/invoices/customer/${customerId}/settle`, {
-        amount: toDecimalString(amount),
-        method: method || 'cash',
-        reference,
-      })
-      return res.data
-    },
-    onSuccess: () => {
+      if (!bid) throw new Error('Select a business first')
+      const amountStr = toDecimalString(amount)
+      if (toNumber(amountStr) <= 0) throw new Error('Payment amount must be positive')
+      if (!customerId) throw new Error('customerId required')
+      // Local FIFO settlement
+      let result: any = { allocations: [], totalApplied: '0', remainingCredit: amountStr }
+      try {
+        await (database as any).write(async () => {
+          const col: any = (database as any).get('invoices')
+          const rows: any[] = await col.query(Q.where('business_id', bid), Q.where('customer_id', customerId)).fetch()
+          // Filter unpaid & sort by due_at asc (oldest first)
+          const unpaid = rows
+            .map((r: any) => ({ rec: r, raw: r._raw, dueAt: r.dueAt ?? r._raw?.due_at ?? r._raw?.created_at ?? 0, total: toNumber(r._raw?.total ?? r.total), paid: toNumber(r._raw?.amount_paid ?? r.amountPaid), due: toNumber(r._raw?.amount_due ?? r.amountDue) }))
+            .filter((x: any) => x.due > 0.005 && !['paid', 'cancelled'].includes(String(x.raw.status ?? x.rec.status)))
+            .sort((a: any, b: any) => (a.dueAt || 0) - (b.dueAt || 0))
+          if (!unpaid.length) throw new Error('no unpaid invoices for this customer (local)')
+          let remaining = toNumber(amountStr)
+          const allocations: any[] = []
+          let totalApplied = 0
+          for (const item of unpaid) {
+            if (remaining <= 0.005) break
+            const due = item.due
+            const apply = Math.min(remaining, due)
+            const newPaid = item.paid + apply
+            const newDue = Math.max(0, item.total - newPaid)
+            const newStatus = newDue <= 0.005 ? 'paid' : 'partial'
+            await item.rec.update((r: any) => {
+              r.amountPaid = toDecimalString(newPaid)
+              r.amountDue = toDecimalString(newDue)
+              r.status = newStatus
+              const cur = (r.syncVersion ?? item.raw.sync_version ?? 1) as number
+              r.syncVersion = (typeof cur === 'number' ? cur : toNumber(cur as any) || 1) + 1
+            })
+            allocations.push({ invoiceId: item.rec.id, invoiceNumber: item.rec.invoiceNumber ?? item.raw.invoice_number, amount: toDecimalString(apply), status: newStatus })
+            totalApplied += apply
+            remaining = Math.max(0, remaining - apply)
+          }
+          if (!allocations.length) throw new Error('payment could not be applied to any invoice')
+          result = { allocations, totalApplied: toDecimalString(totalApplied), remainingCredit: toDecimalString(remaining) }
+        })
+      } catch (e: any) {
+        // If no local unpaid invoices (e.g. all server-only), fallback to API when online
+        console.warn('[Invoices] settleCustomerPayment local failed', e?.message)
+        try {
+          const { default: NetInfo } = await import('@react-native-community/netinfo')
+          const s: any = await NetInfo.fetch()
+          if (s.isConnected) {
+            const res = await api.post(`/invoices/customer/${customerId}/settle`, { amount: amountStr, method: method || 'cash', reference })
+            return res.data
+          }
+        } catch {}
+        throw e
+      }
+      import('../../sync/client').then((m) => m.syncNow().catch(() => {}))
       queryClient.invalidateQueries({ queryKey: ['invoices'] })
+      // Best-effort server settle when online (idempotent, will reconcile on next pull)
+      try {
+        const { default: NetInfo } = await import('@react-native-community/netinfo')
+        const s: any = await NetInfo.fetch()
+        if (s.isConnected) {
+          api.post(`/invoices/customer/${customerId}/settle`, { amount: amountStr, method: method || 'cash', reference }).catch((err: any) => console.warn('[Invoices] settle API background failed', err?.message))
+        }
+      } catch {}
+      return result
     },
   })
 

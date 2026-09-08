@@ -152,7 +152,7 @@ export default function BusinessSetup() {
     <SafeAreaView className='flex-1 bg-white'>
       <View className='px-6 pt-6 pb-4 border-b border-gray-100'>
         <View className='flex-row items-center justify-between mb-4'>
-          <Text className='text-[11px] font-bold tracking-widest text-gray-400 uppercase'>
+          <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
             Step {step + 1} of {STEPS.length}
           </Text>
           <Text className='text-xs text-gray-500'>{STEPS[step].title}</Text>
@@ -183,7 +183,7 @@ export default function BusinessSetup() {
                 Business name *
               </Text>
               <TextInput
-                className='bg-white border border-gray-300 rounded-xl px-4 py-3.5 text-sm'
+                className='bg-white border border-gray-300 rounded-2xl px-4 py-4 text-sm'
                 placeholder='e.g., Juma Retail'
                 value={form.name}
                 onChangeText={(t) =>
@@ -196,7 +196,7 @@ export default function BusinessSetup() {
                 Slug (auto)
               </Text>
               <TextInput
-                className='bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 text-sm text-gray-600'
+                className='bg-gray-50 border border-gray-200 rounded-2xl px-4 py-4 text-sm text-gray-600'
                 placeholder='auto from name'
                 value={form.slug}
                 onChangeText={(t) => setForm({ ...form, slug: t })}
@@ -228,7 +228,7 @@ export default function BusinessSetup() {
                 Business phone *
               </Text>
               <TextInput
-                className='bg-white border border-gray-300 rounded-xl px-4 py-3.5 text-sm'
+                className='bg-white border border-gray-300 rounded-2xl px-4 py-4 text-sm'
                 placeholder='+254...'
                 keyboardType='phone-pad'
                 value={form.phone}
@@ -240,7 +240,7 @@ export default function BusinessSetup() {
                 Business email
               </Text>
               <TextInput
-                className='bg-white border border-gray-300 rounded-xl px-4 py-3.5 text-sm'
+                className='bg-white border border-gray-300 rounded-2xl px-4 py-4 text-sm'
                 placeholder='biz@example.com'
                 keyboardType='email-address'
                 autoCapitalize='none'
@@ -258,7 +258,7 @@ export default function BusinessSetup() {
                 Address
               </Text>
               <TextInput
-                className='bg-white border border-gray-300 rounded-xl px-4 py-3.5 text-sm'
+                className='bg-white border border-gray-300 rounded-2xl px-4 py-4 text-sm'
                 placeholder='Street, town, county'
                 value={form.address}
                 onChangeText={(t) => setForm({ ...form, address: t })}
@@ -304,7 +304,7 @@ export default function BusinessSetup() {
                   <Pressable
                     key={c}
                     onPress={() => setForm({ ...form, currency: c })}
-                    className={`px-4 py-2.5 rounded-full border ${form.currency === c ? 'bg-gray-900 border-gray-900' : 'bg-white border-gray-200'}`}
+                    className={`px-4 py-3 rounded-full border ${form.currency === c ? 'bg-gray-900 border-gray-900' : 'bg-white border-gray-200'}`}
                   >
                     <Text
                       className={`text-xs font-bold ${form.currency === c ? 'text-white' : 'text-gray-700'}`}
@@ -320,7 +320,7 @@ export default function BusinessSetup() {
                 Timezone
               </Text>
               <TextInput
-                className='bg-white border border-gray-300 rounded-xl px-4 py-3.5 text-sm'
+                className='bg-white border border-gray-300 rounded-2xl px-4 py-4 text-sm'
                 value={form.timezone}
                 onChangeText={(t) => setForm({ ...form, timezone: t })}
               />
@@ -333,7 +333,7 @@ export default function BusinessSetup() {
                 KRA Tax PIN (optional)
               </Text>
               <TextInput
-                className='bg-white border border-gray-300 rounded-xl px-4 py-3.5 text-sm'
+                className='bg-white border border-gray-300 rounded-2xl px-4 py-4 text-sm'
                 placeholder='A123456789B'
                 autoCapitalize='characters'
                 value={form.taxPin}
@@ -359,7 +359,7 @@ export default function BusinessSetup() {
                   onPress={() =>
                     setForm({ ...form, mpesaPaymentType: m.id as any })
                   }
-                  className={`flex-1 py-3 rounded-xl border items-center ${form.mpesaPaymentType === m.id ? 'bg-green-50 border-green-500' : 'bg-white border-gray-200'}`}
+                  className={`flex-1 py-3 rounded-2xl border items-center ${form.mpesaPaymentType === m.id ? 'bg-green-50 border-green-500' : 'bg-white border-gray-200'}`}
                 >
                   <Text
                     className={`text-xs font-bold ${form.mpesaPaymentType === m.id ? 'text-green-700' : 'text-gray-700'}`}
@@ -374,7 +374,7 @@ export default function BusinessSetup() {
                 Shortcode / Till
               </Text>
               <TextInput
-                className='bg-white border border-gray-300 rounded-xl px-4 py-3.5 text-sm'
+                className='bg-white border border-gray-300 rounded-2xl px-4 py-4 text-sm'
                 placeholder='e.g., 123456'
                 keyboardType='numeric'
                 value={form.mpesaShortcode}
@@ -384,7 +384,7 @@ export default function BusinessSetup() {
                 Encrypted on server
               </Text>
             </View>
-            <View className='bg-amber-50 border border-amber-200 rounded-xl p-3'>
+            <View className='bg-amber-50 border border-amber-200 rounded-2xl p-3'>
               <Text className='text-xs text-amber-800'>
                 You can skip and configure later in Business Profile.
               </Text>
@@ -397,7 +397,7 @@ export default function BusinessSetup() {
         {step > 0 ? (
           <TouchableOpacity
             onPress={back}
-            className='flex-1 py-3.5 rounded-xl border border-gray-300 items-center flex-row justify-center gap-2'
+            className='flex-1 py-4 rounded-2xl border border-gray-300 items-center flex-row justify-center gap-2'
           >
             <ArrowLeft size={16} color='#374151' />
             <Text className='font-bold text-gray-700'>Back</Text>
@@ -408,7 +408,7 @@ export default function BusinessSetup() {
         {step < STEPS.length - 1 ? (
           <TouchableOpacity
             onPress={next}
-            className='flex-1 py-3.5 rounded-xl bg-gray-900 items-center flex-row justify-center gap-2'
+            className='flex-1 py-4 rounded-2xl bg-gray-900 items-center flex-row justify-center gap-2'
           >
             <Text className='font-bold text-white'>Next</Text>
             <ArrowRight size={16} color='white' />
@@ -417,7 +417,7 @@ export default function BusinessSetup() {
           <TouchableOpacity
             onPress={handleCreate}
             disabled={isSaving}
-            className='flex-1 py-3.5 rounded-xl bg-emerald-600 items-center flex-row justify-center gap-2'
+            className='flex-1 py-4 rounded-2xl bg-emerald-600 items-center flex-row justify-center gap-2'
           >
             {isSaving ? (
               <ActivityIndicator color='white' />

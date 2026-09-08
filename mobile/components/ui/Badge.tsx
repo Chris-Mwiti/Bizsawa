@@ -56,7 +56,7 @@ export function Badge({
 
   return (
     <View
-      className={`px-2 py-0.5 rounded-full items-center justify-center ${bgClass} ${borderClass} ${className || ''}`}
+      className={`px-2 py-1 rounded-full items-center justify-center ${bgClass} ${borderClass} ${className || ''}`}
       {...props}
     >
       {renderChildren()}

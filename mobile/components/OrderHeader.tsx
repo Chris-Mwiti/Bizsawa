@@ -34,7 +34,7 @@ export const OrdersHeader = memo(
           </Card>
           <Card className='w-[31%]'>
             <CardContent className='p-3 items-center'>
-              <Text className='text-lg font-bold'>
+              <Text className='text-lg font-bold font-mono'>
                 {formatCurrency(stats.value)}
               </Text>
               <Text className='text-xs text-gray-500'>Value</Text>
@@ -42,7 +42,7 @@ export const OrdersHeader = memo(
           </Card>
         </View>
         <TouchableOpacity
-          className='bg-gray-900 h-12 rounded-lg flex-row items-center justify-center mb-4'
+          className='bg-gray-900 h-12 rounded-2xl flex-row items-center justify-center mb-4'
           onPress={onCreateOrder}
         >
           <Plus size={18} color='white' />

@@ -123,7 +123,7 @@ export default function Invoices() {
             <ChevronLeft size={22} color='#374151' />
           </TouchableOpacity>
           <View className='flex-1'>
-            <Text className='text-[11px] font-bold tracking-widest text-gray-400 uppercase'>
+            <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
               Billing
             </Text>
             <Text className='text-xl font-bold text-gray-900 -mt-0.5'>
@@ -134,28 +134,28 @@ export default function Invoices() {
             </Text>
           </View>
           <TouchableOpacity
-            className='flex-row items-center gap-2 bg-gray-900 px-4 py-2.5 rounded-full active:opacity-90'
+            className='flex-row items-center gap-2 bg-gray-900 px-4 py-3 rounded-full active:opacity-90'
             onPress={handleCreatePress}
           >
             <Plus size={16} color='white' />
-            <Text className='text-white font-bold text-[13px]'>Create</Text>
+            <Text className='text-white font-bold text-sm'>Create</Text>
           </TouchableOpacity>
         </View>
 
         <View className='flex-row bg-gray-100 rounded-full p-1'>
           <Pressable
-            className='flex-1 py-2.5 rounded-full items-center'
+            className='flex-1 py-3 rounded-full items-center'
             onPress={() => router.replace('/(tabs)/sales')}
           >
             <Text className='font-medium text-gray-500 text-sm'>Sales</Text>
           </Pressable>
           <Pressable
-            className='flex-1 py-2.5 rounded-full items-center'
+            className='flex-1 py-3 rounded-full items-center'
             onPress={() => router.replace('/orders')}
           >
             <Text className='font-medium text-gray-500 text-sm'>Orders</Text>
           </Pressable>
-          <View className='flex-1 py-2.5 rounded-full items-center bg-white shadow-sm border border-gray-200'>
+          <View className='flex-1 py-3 rounded-full items-center bg-white shadow-sm border border-gray-200'>
             <Text className='font-bold text-gray-900 text-sm'>Invoices</Text>
           </View>
         </View>
@@ -229,14 +229,14 @@ export default function Invoices() {
                     <View className='flex-row items-start justify-between gap-4 mb-3'>
                       <View className='flex-1'>
                         <Text
-                          className='font-bold text-gray-900 text-[15px]'
+                          className='font-bold text-gray-900 text-base'
                           numberOfLines={1}
                         >
                           {inv.invoiceNumber}
                         </Text>
-                        <View className='flex-row items-center gap-1.5 mt-1.5 flex-wrap'>
+                        <View className='flex-row items-center gap-2 mt-1.5 flex-wrap'>
                           <View
-                            className={`flex-row items-center gap-1 px-2.5 py-1 rounded-full ${s.bg}`}
+                            className={`flex-row items-center gap-1 px-3 py-1 rounded-full ${s.bg}`}
                           >
                             <Icon
                               size={11}
@@ -251,7 +251,7 @@ export default function Invoices() {
                               }
                             />
                             <Text
-                              className={`text-[10px] font-bold tracking-widest ${s.text}`}
+                              className={`text-xs font-bold tracking-widest ${s.text}`}
                             >
                               {inv.status.toUpperCase()}
                             </Text>
@@ -269,11 +269,11 @@ export default function Invoices() {
 
                       <View className='items-end shrink-0 ml-2'>
                         <Text
-                          className={`text-base font-bold tracking-tight ${isPaid ? 'text-emerald-700' : 'text-gray-900'}`}
+                          className={`text-base font-bold tracking-tight font-mono ${isPaid ? 'text-emerald-700' : 'text-gray-900'}`}
                         >
                           {formatCurrency(inv.total)}
                         </Text>
-                        <Text className='text-[11px] text-gray-400 mt-0.5'>
+                        <Text className='text-xs text-gray-400 mt-0.5'>
                           Due {formatDate(inv.dueAt)}
                         </Text>
                       </View>
@@ -283,7 +283,7 @@ export default function Invoices() {
                     <View className='flex-row items-center justify-between pt-3 mt-1 border-t border-gray-100'>
                       <View className='flex-row items-center gap-2'>
                         <View className='w-6 h-6 rounded-full bg-gray-900 items-center justify-center'>
-                          <Text className='text-white text-[10px] font-bold'>
+                          <Text className='text-white text-xs font-bold'>
                             {getCustomerInitial(inv)}
                           </Text>
                         </View>

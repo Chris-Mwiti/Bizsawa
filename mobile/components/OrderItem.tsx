@@ -38,7 +38,7 @@ export const OrderItem = memo(
               </Text>
             </View>
             <View className='items-end'>
-              <Text className='font-bold'>
+              <Text className='font-bold font-mono'>
                 {formatCurrency(toNumber(order.total))}
               </Text>
               <Badge
@@ -54,7 +54,7 @@ export const OrderItem = memo(
           <View className='flex-row gap-2'>
             {order.status === 'draft' && (
               <TouchableOpacity
-                className='flex-1 bg-green-600 py-2 rounded-lg items-center'
+                className='flex-1 bg-green-600 py-2 rounded-2xl items-center'
                 onPress={() => onUpdateStatus(order.id, OrderStatus.confirmed)}
               >
                 <Text className='text-white font-bold'>Confirm</Text>
@@ -62,21 +62,21 @@ export const OrderItem = memo(
             )}
             {order.status === 'confirmed' && (
               <TouchableOpacity
-                className='flex-1 bg-blue-600 py-2 rounded-lg items-center'
+                className='flex-1 bg-blue-600 py-2 rounded-2xl items-center'
                 onPress={() => onUpdateStatus(order.id, OrderStatus.fulfilled)}
               >
                 <Text className='text-white font-bold'>Fulfill</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity
-              className='px-3 py-2 rounded-lg bg-gray-100'
+              className='px-3 py-2 rounded-2xl bg-gray-100'
               onPress={() => onInitiatePayment(order.id, order.total)}
               disabled={isInitiatingPayment}
             >
               <Smartphone size={18} color='#006b5f' />
             </TouchableOpacity>
             <TouchableOpacity
-              className='px-3 py-2 rounded-lg bg-red-50'
+              className='px-3 py-2 rounded-2xl bg-red-50'
               onPress={() => onUpdateStatus(order.id, OrderStatus.cancelled)}
             >
               <Trash2 size={18} color='#dc2626' />

@@ -110,7 +110,7 @@ export default function RewardsScreen() {
         {!isAdding ? (
           <TouchableOpacity
             onPress={() => setIsAdding(true)}
-            className='flex-row items-center justify-center p-4 border-2 border-dashed border-primary-300 rounded-xl mb-6'
+            className='flex-row items-center justify-center p-4 border-2 border-dashed border-primary-300 rounded-2xl mb-6'
           >
             <Plus size={20} color='#006b5f' />
             <Text className='ml-2 text-primary-700 font-bold'>
@@ -122,13 +122,13 @@ export default function RewardsScreen() {
             <CardContent className='p-4'>
               <Text className='font-bold mb-2'>New Achievement</Text>
               <TextInput
-                className='bg-gray-100 p-3 rounded-lg mb-3'
+                className='bg-gray-100 p-3 rounded-2xl mb-3'
                 placeholder='Title (e.g., Sold 100 items)'
                 value={newTitle}
                 onChangeText={setNewTitle}
               />
               <TextInput
-                className='bg-gray-100 p-3 rounded-lg mb-4'
+                className='bg-gray-100 p-3 rounded-2xl mb-4'
                 placeholder='Description (Optional)'
                 value={newDesc}
                 onChangeText={setNewDesc}
@@ -137,13 +137,13 @@ export default function RewardsScreen() {
               <View className='flex-row gap-2'>
                 <TouchableOpacity
                   onPress={() => setIsAdding(false)}
-                  className='flex-1 p-3 bg-gray-200 rounded-lg items-center'
+                  className='flex-1 p-3 bg-gray-200 rounded-2xl items-center'
                 >
                   <Text className='font-bold text-gray-700'>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={handleAdd}
-                  className='flex-1 p-3 bg-primary-600 rounded-lg items-center'
+                  className='flex-1 p-3 bg-primary-600 rounded-2xl items-center'
                 >
                   <Text className='font-bold text-white'>Save</Text>
                 </TouchableOpacity>
@@ -194,7 +194,7 @@ export default function RewardsScreen() {
                         </Text>
                       )}
                       {item.earned && item.earnedAt && (
-                        <Text className='text-[10px] text-green-600 mt-1'>
+                        <Text className='text-xs text-green-600 mt-1'>
                           Earned on{' '}
                           {new Date(item.earnedAt).toLocaleDateString()}
                         </Text>

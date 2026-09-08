@@ -205,7 +205,7 @@ export default function OrderDetail() {
             <ChevronLeft size={22} color='#111827' />
           </TouchableOpacity>
           <View className='flex-1'>
-            <Text className='text-[11px] font-bold tracking-widest text-gray-400 uppercase'>
+            <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
               Order
             </Text>
             <Text className='text-lg font-bold text-gray-900' numberOfLines={1}>
@@ -213,7 +213,7 @@ export default function OrderDetail() {
             </Text>
           </View>
           <View
-            className={`flex-row items-center gap-1.5 px-3 py-1.5 rounded-full border ${s.bg} ${s.bg.includes('emerald') ? 'border-emerald-100' : s.bg.includes('red') ? 'border-red-100' : s.bg.includes('sky') ? 'border-sky-100' : 'border-amber-100'}`}
+            className={`flex-row items-center gap-2 px-3 py-1.5 rounded-full border ${s.bg} ${s.bg.includes('emerald') ? 'border-emerald-100' : s.bg.includes('red') ? 'border-red-100' : s.bg.includes('sky') ? 'border-sky-100' : 'border-amber-100'}`}
           >
             <Icon
               size={13}
@@ -227,7 +227,7 @@ export default function OrderDetail() {
                       : '#b45309'
               }
             />
-            <Text className={`text-[11px] font-bold tracking-widest ${s.text}`}>
+            <Text className={`text-xs font-bold tracking-widest ${s.text}`}>
               {s.label}
             </Text>
           </View>
@@ -238,7 +238,7 @@ export default function OrderDetail() {
         contentContainerStyle={{
           padding: 16,
           paddingBottom: TAB_BAR_SCROLL_PADDING + 24,
-          gap: 14,
+          gap: 16,
         }}
         showsVerticalScrollIndicator={false}
       >
@@ -247,10 +247,10 @@ export default function OrderDetail() {
           <CardContent className='p-5'>
             <View className='flex-row justify-between items-start gap-4'>
               <View className='flex-1'>
-                <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase mb-1'>
+                <Text className='text-xs font-bold font-mono tracking-widest text-gray-400 uppercase mb-1'>
                   Total amount
                 </Text>
-                <Text className='text-3xl font-bold tracking-tight text-gray-900'>
+                <Text className='text-3xl font-bold font-mono tracking-tight text-gray-900'>
                   {formatCurrency(order.total)}
                 </Text>
                 <Text className='text-xs text-gray-500 mt-1'>
@@ -268,7 +268,7 @@ export default function OrderDetail() {
             <View className='h-px bg-gray-100 my-4' />
             <View className='flex-row justify-between gap-4'>
               <View className='flex-1'>
-                <Text className='text-[11px] font-bold tracking-widest text-gray-400 uppercase'>
+                <Text className='text-xs font-bold font-mono tracking-widest text-gray-400 uppercase'>
                   Subtotal
                 </Text>
                 <Text className='text-sm font-semibold text-gray-900 mt-1'>
@@ -276,7 +276,7 @@ export default function OrderDetail() {
                 </Text>
               </View>
               <View className='flex-1'>
-                <Text className='text-[11px] font-bold tracking-widest text-gray-400 uppercase'>
+                <Text className='text-xs font-bold font-mono tracking-widest text-gray-400 uppercase'>
                   Tax
                 </Text>
                 <Text className='text-sm font-semibold text-gray-900 mt-1'>
@@ -284,7 +284,7 @@ export default function OrderDetail() {
                 </Text>
               </View>
               <View className='flex-1 items-end'>
-                <Text className='text-[11px] font-bold tracking-widest text-gray-400 uppercase'>
+                <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
                   Items
                 </Text>
                 <Text className='text-sm font-bold text-gray-900 mt-1'>
@@ -304,7 +304,7 @@ export default function OrderDetail() {
             </View>
           </CardHeader>
           <CardContent className='pt-0'>
-            <View className='flex-row items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100'>
+            <View className='flex-row items-center gap-3 p-3 bg-gray-50 rounded-2xl border border-gray-100'>
               <View className='w-10 h-10 rounded-full bg-gray-900 items-center justify-center'>
                 <Text className='text-white font-bold'>
                   {(customer?.name || '?').charAt(0).toUpperCase()}
@@ -343,8 +343,8 @@ export default function OrderDetail() {
                 <Package size={16} color='#6b7280' />
                 <CardTitle>Items</CardTitle>
               </View>
-              <View className='px-2.5 py-1 rounded-full bg-gray-100'>
-                <Text className='text-xs font-bold text-gray-600'>
+              <View className='px-3 py-1 rounded-full bg-gray-100'>
+                <Text className='text-xs font-bold font-mono text-gray-600'>
                   {order.lines?.length || 0}{' '}
                   {(order.lines?.length || 0) === 1 ? 'item' : 'items'}
                 </Text>
@@ -363,9 +363,9 @@ export default function OrderDetail() {
                 return (
                   <View
                     key={line.id || i}
-                    className='flex-row gap-3 p-4 bg-white rounded-xl border border-gray-200'
+                    className='flex-row gap-3 p-4 bg-white rounded-2xl border border-gray-200'
                   >
-                    <View className='w-9 h-9 rounded-lg bg-gray-50 border border-gray-100 items-center justify-center shrink-0'>
+                    <View className='w-11 h-11 rounded-2xl bg-gray-50 border border-gray-100 items-center justify-center shrink-0'>
                       <Package size={16} color='#6b7280' />
                     </View>
                     <View className='flex-1 gap-1'>
@@ -376,8 +376,8 @@ export default function OrderDetail() {
                         {title}
                       </Text>
                       <View className='flex-row items-center gap-2 flex-wrap'>
-                        <View className='px-2 py-0.5 rounded-full bg-gray-100'>
-                          <Text className='text-[11px] font-bold text-gray-600'>
+                        <View className='px-2 py-1 rounded-full bg-gray-100'>
+                          <Text className='text-xs font-bold text-gray-600'>
                             QTY {qty}
                           </Text>
                         </View>
@@ -388,7 +388,7 @@ export default function OrderDetail() {
                       <Text className='font-bold text-gray-900 text-sm'>
                         {total}
                       </Text>
-                      <Text className='text-[11px] text-gray-400'>
+                      <Text className='text-xs text-gray-400'>
                         Line total
                       </Text>
                     </View>
@@ -396,7 +396,7 @@ export default function OrderDetail() {
                 )
               })}
               {(!order.lines || order.lines.length === 0) && (
-                <View className='p-8 items-center border border-dashed border-gray-200 rounded-xl'>
+                <View className='p-8 items-center border border-dashed border-gray-200 rounded-2xl'>
                   <Text className='text-sm text-gray-400'>No items</Text>
                 </View>
               )}
@@ -425,15 +425,15 @@ export default function OrderDetail() {
               </View>
               <View className='h-px bg-gray-100' />
               <View className='flex-row justify-between items-center'>
-                <Text className='text-sm font-bold text-gray-900'>Total</Text>
-                <Text className='text-base font-bold text-gray-900'>
+                <Text className='text-sm font-bold font-mono text-gray-900'>Total</Text>
+                <Text className='text-base font-bold font-mono text-gray-900'>
                   {formatCurrency(order.total)}
                 </Text>
               </View>
               <View className='flex-row justify-between items-center'>
                 <Text className='text-xs text-gray-500'>Payment</Text>
-                <View className='px-2.5 py-1 rounded-full bg-gray-100 border border-gray-200'>
-                  <Text className='text-[11px] font-bold tracking-widest text-gray-600'>
+                <View className='px-3 py-1 rounded-full bg-gray-100 border border-gray-200'>
+                  <Text className='text-xs font-bold tracking-widest text-gray-600'>
                     {(order.paymentMethod || 'cash').toUpperCase()}
                   </Text>
                 </View>
@@ -452,7 +452,7 @@ export default function OrderDetail() {
               <View className='flex-row gap-3'>
                 {isDraft && (
                   <TouchableOpacity
-                    className='flex-1 flex-row items-center justify-center gap-2 bg-gray-900 px-4 py-3.5 rounded-xl active:opacity-90'
+                    className='flex-1 flex-row items-center justify-center gap-2 bg-gray-900 px-4 py-4 rounded-2xl active:opacity-90'
                     onPress={() => handleUpdateStatus(OrderStatus.confirmed)}
                     disabled={isUpdating}
                   >
@@ -464,7 +464,7 @@ export default function OrderDetail() {
                 )}
                 {isConfirmed && (
                   <TouchableOpacity
-                    className='flex-1 flex-row items-center justify-center gap-2 bg-emerald-600 px-4 py-3.5 rounded-xl active:opacity-90'
+                    className='flex-1 flex-row items-center justify-center gap-2 bg-emerald-600 px-4 py-4 rounded-2xl active:opacity-90'
                     onPress={() => handleUpdateStatus(OrderStatus.fulfilled)}
                     disabled={isUpdating}
                   >
@@ -478,14 +478,14 @@ export default function OrderDetail() {
                   !isCancelled &&
                   isDraft === false &&
                   isConfirmed === false && (
-                    <View className='flex-1 bg-gray-100 border border-gray-200 px-4 py-3.5 rounded-xl items-center'>
+                    <View className='flex-1 bg-gray-100 border border-gray-200 px-4 py-4 rounded-2xl items-center'>
                       <Text className='text-gray-500 font-bold text-sm'>
                         {order.status.toUpperCase()}
                       </Text>
                     </View>
                   )}
                 {isFulfilled || isCancelled ? (
-                  <View className='flex-1 bg-gray-50 border border-gray-200 px-4 py-3.5 rounded-xl items-center'>
+                  <View className='flex-1 bg-gray-50 border border-gray-200 px-4 py-4 rounded-2xl items-center'>
                     <Text className='text-gray-400 font-bold text-sm'>
                       No further status
                     </Text>
@@ -493,7 +493,7 @@ export default function OrderDetail() {
                 ) : null}
                 {!isFulfilled && !isCancelled ? (
                   <TouchableOpacity
-                    className='flex-1 flex-row items-center justify-center gap-2 bg-white border border-red-200 px-4 py-3.5 rounded-xl active:bg-red-50'
+                    className='flex-1 flex-row items-center justify-center gap-2 bg-white border border-red-200 px-4 py-4 rounded-2xl active:bg-red-50'
                     onPress={() => handleUpdateStatus(OrderStatus.cancelled)}
                     disabled={isUpdating}
                   >
@@ -507,7 +507,7 @@ export default function OrderDetail() {
               <View className='flex-row gap-3'>
                 {!isFulfilled && !isCancelled ? (
                   <TouchableOpacity
-                    className='flex-1 flex-row items-center justify-center gap-2 bg-white border border-gray-200 px-4 py-3.5 rounded-xl active:bg-gray-50'
+                    className='flex-1 flex-row items-center justify-center gap-2 bg-white border border-gray-200 px-4 py-4 rounded-2xl active:bg-gray-50'
                     onPress={handleMpesa}
                     disabled={isInitiating}
                   >
@@ -517,7 +517,7 @@ export default function OrderDetail() {
                     </Text>
                   </TouchableOpacity>
                 ) : (
-                  <View className='flex-1 flex-row items-center justify-center gap-2 bg-gray-100 border border-gray-200 px-4 py-3.5 rounded-xl opacity-50'>
+                  <View className='flex-1 flex-row items-center justify-center gap-2 bg-gray-100 border border-gray-200 px-4 py-4 rounded-2xl opacity-50'>
                     <Smartphone size={18} color='#9ca3af' />
                     <Text className='text-gray-400 font-bold text-sm'>
                       M-Pesa disabled
@@ -525,7 +525,7 @@ export default function OrderDetail() {
                   </View>
                 )}
                 <TouchableOpacity
-                  className='flex-1 flex-row items-center justify-center gap-2 bg-white border border-gray-200 px-4 py-3.5 rounded-xl active:bg-gray-50'
+                  className='flex-1 flex-row items-center justify-center gap-2 bg-white border border-gray-200 px-4 py-4 rounded-2xl active:bg-gray-50'
                   onPress={() => router.push('/invoices' as any)}
                 >
                   <CreditCard size={18} color='#111827' />

@@ -1,16 +1,16 @@
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs'
-import { MaterialCommunityIcons } from '@expo/vector-icons'
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { Receipt, Package, BarChart3, User, Home } from 'lucide-react-native'
 
 const COLORS = {
-  surface: '#f8f9fa',
+  surface: '#F4F9F7',
   secondary: '#555f6d',
-  primary: '#630ed4',
+  primary: '#006b5f',
   homeActiveBg: '#006b5f',
   homeIdleBg: '#e7e8e9',
   onPrimary: '#ffffff',
-  borderCutout: '#f8f9fa',
+  borderCutout: '#F4F9F7',
 } as const
 
 const ICON_SIZE = 24
@@ -32,37 +32,13 @@ function TabIcon({
 
   switch (routeName) {
     case 'sales':
-      return (
-        <MaterialCommunityIcons
-          name={focused ? 'cash-register' : 'cash-register'}
-          size={ICON_SIZE}
-          color={focused ? activeColor : inactiveColor}
-        />
-      )
+      return <Receipt size={ICON_SIZE} color={focused ? activeColor : inactiveColor} />
     case 'stock':
-      return (
-        <MaterialCommunityIcons
-          name={focused ? 'package-variant' : 'package-variant'}
-          size={ICON_SIZE}
-          color={focused ? activeColor : inactiveColor}
-        />
-      )
+      return <Package size={ICON_SIZE} color={focused ? activeColor : inactiveColor} />
     case 'insights':
-      return (
-        <MaterialCommunityIcons
-          name={focused ? 'chart-line' : 'chart-line'}
-          size={ICON_SIZE}
-          color={focused ? activeColor : inactiveColor}
-        />
-      )
+      return <BarChart3 size={ICON_SIZE} color={focused ? activeColor : inactiveColor} />
     case 'profile':
-      return (
-        <MaterialCommunityIcons
-          name={focused ? 'account' : 'account-outline'}
-          size={ICON_SIZE}
-          color={focused ? activeColor : inactiveColor}
-        />
-      )
+      return <User size={ICON_SIZE} color={focused ? activeColor : inactiveColor} />
     default:
       return null
   }
@@ -143,12 +119,9 @@ export function AppTabBar({
                         pressed && styles.homePressed,
                       ]}
                     >
-                      <MaterialCommunityIcons
-                        name='home'
+                      <Home
                         size={26}
-                        color={
-                          homeFocused ? COLORS.onPrimary : COLORS.secondary
-                        }
+                        color={homeFocused ? COLORS.onPrimary : COLORS.secondary}
                       />
                     </View>
                   )}
@@ -206,13 +179,13 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
+        shadowColor: '#006b5f',
         shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.08,
+        shadowOpacity: 0.06,
         shadowRadius: 16,
       },
       android: {
-        elevation: 12,
+        elevation: 4,
       },
     }),
   },
@@ -229,9 +202,10 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'flex-end',
-    paddingVertical: 8,
+    paddingVertical: 12,
     paddingHorizontal: 4,
     maxWidth: 88,
+    minHeight: 44,
   },
   sideTabActive: {
     transform: [{ scale: 1.08 }],
@@ -285,13 +259,13 @@ const styles = StyleSheet.create({
     borderColor: COLORS.borderCutout,
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
+        shadowColor: '#006b5f',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.12,
-        shadowRadius: 8,
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
       },
       android: {
-        elevation: 6,
+        elevation: 4,
       },
     }),
   },

@@ -80,7 +80,7 @@ export default function InsightsAnalytics() {
         contentContainerStyle={{
           padding: 16,
           paddingBottom: TAB_BAR_SCROLL_PADDING + 24,
-          gap: 14,
+          gap: 16,
         }}
         showsVerticalScrollIndicator={false}
       >
@@ -92,7 +92,7 @@ export default function InsightsAnalytics() {
                 <Text className='text-sm font-semibold text-gray-700'>
                   Timeframe
                 </Text>
-                <Text className='text-[11px] font-bold tracking-widest text-gray-400 uppercase'>
+                <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
                   {timeframe}
                 </Text>
               </View>
@@ -206,14 +206,14 @@ export default function InsightsAnalytics() {
               <Card className='border border-gray-200'>
                 <CardContent className='p-4'>
                   <View className='flex-row justify-between items-start mb-2'>
-                    <Text className='text-[11px] font-bold tracking-widest text-gray-400 uppercase'>
+                    <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
                       {k.label}
                     </Text>
-                    <View className='w-7 h-7 rounded-lg bg-gray-50 border border-gray-100 items-center justify-center'>
+                    <View className='w-11 h-11 rounded-2xl bg-gray-50 border border-gray-100 items-center justify-center'>
                       <k.icon size={14} color='#6b7280' />
                     </View>
                   </View>
-                  <Text className='text-lg font-bold tracking-tight text-gray-900'>
+                  <Text className='text-lg font-bold tracking-tight text-gray-900 font-mono'>
                     {k.value}
                   </Text>
                   <Text className='text-xs text-gray-500 mt-1'>{k.sub}</Text>
@@ -287,13 +287,13 @@ export default function InsightsAnalytics() {
                 {profitQuery.data.data.map((pt, i) => (
                   <View
                     key={i}
-                    className='flex-row justify-between items-center p-3 rounded-xl bg-gray-50 border border-gray-100'
+                    className='flex-row justify-between items-center p-3 rounded-2xl bg-gray-50 border border-gray-100'
                   >
                     <Text className='text-xs font-semibold text-gray-700'>
                       {pt.date.split('T')[0].slice(5)}
                     </Text>
                     <View className='flex-row gap-3'>
-                      <Text className='text-xs font-bold text-emerald-700'>
+                      <Text className='text-xs font-bold font-mono text-emerald-700'>
                         {formatCurrency(Number(pt.profit))}
                       </Text>
                       <Text className='text-xs font-bold text-gray-500'>
@@ -344,12 +344,12 @@ export default function InsightsAnalytics() {
             ) : categoryQuery.data && categoryQuery.data.categories.length ? (
               <View className='gap-4'>
                 {categoryQuery.data.categories.map((cat, i) => (
-                  <View key={i} className='gap-1.5'>
+                  <View key={i} className='gap-2'>
                     <View className='flex-row justify-between items-center'>
                       <Text className='text-sm font-semibold text-gray-900'>
                         {cat.name}
                       </Text>
-                      <Text className='text-xs font-bold text-gray-900'>
+                      <Text className='text-xs font-bold font-mono text-gray-900'>
                         {formatCurrency(Number(cat.revenue))}{' '}
                         <Text className='font-normal text-gray-500'>
                           ({Number(cat.percentage).toFixed(1)}%)
@@ -387,7 +387,7 @@ export default function InsightsAnalytics() {
                 {customerQuery.data.segments.map((seg, i) => (
                   <View
                     key={i}
-                    className='p-3 rounded-xl bg-white border border-gray-200'
+                    className='p-3 rounded-2xl bg-white border border-gray-200'
                   >
                     <View className='flex-row justify-between'>
                       <Text className='text-sm font-bold text-gray-900'>

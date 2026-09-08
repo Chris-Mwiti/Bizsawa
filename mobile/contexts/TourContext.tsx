@@ -322,21 +322,21 @@ function TourOverlay() {
           <View className='px-6 pt-4'>
             <View className='flex-row items-center justify-between mb-3'>
               <View className='flex-row items-center gap-2'>
-                <View className='w-8 h-8 rounded-full bg-gray-900 items-center justify-center'>
+                <View className='w-11 h-11 rounded-full bg-gray-900 items-center justify-center'>
                   <HelpCircle size={16} color='white' />
                 </View>
-                <Text className='text-[11px] font-bold tracking-widest text-gray-400 uppercase'>
+                <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
                   User Journey • {currentStep + 1} / {TOUR_STEPS.length}
                 </Text>
               </View>
               <TouchableOpacity
                 onPress={skip}
-                className='w-8 h-8 rounded-full bg-gray-100 items-center justify-center'
+                className='w-11 h-11 rounded-full bg-gray-100 items-center justify-center'
               >
                 <X size={14} color='#6b7280' />
               </TouchableOpacity>
             </View>
-            <View className='flex-row gap-1.5'>
+            <View className='flex-row gap-2'>
               {TOUR_STEPS.map((_, i) => (
                 <View
                   key={i}
@@ -356,7 +356,7 @@ function TourOverlay() {
               <Icon size={24} color='white' />
             </View>
             <View>
-              <Text className='text-[11px] font-bold tracking-widest text-gray-400 uppercase'>
+              <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
                 {step.subtitle}
               </Text>
               <Text className='text-2xl font-bold tracking-tight text-gray-900 mt-1'>
@@ -367,7 +367,7 @@ function TourOverlay() {
               {step.description}
             </Text>
             {step.tips ? (
-              <View className='bg-gray-50 border border-gray-200 rounded-xl p-3 gap-2'>
+              <View className='bg-gray-50 border border-gray-200 rounded-2xl p-3 gap-2'>
                 {step.tips.map((tip, idx) => (
                   <View key={idx} className='flex-row gap-2 items-start'>
                     <View className='w-1.5 h-1.5 rounded-full bg-gray-400 mt-2' />
@@ -379,7 +379,7 @@ function TourOverlay() {
               </View>
             ) : null}
             {step.route ? (
-              <View className='flex-row items-center gap-1.5 px-3 py-2 rounded-full bg-gray-900 self-start'>
+              <View className='flex-row items-center gap-2 px-3 py-2 rounded-full bg-gray-900 self-start'>
                 <Smartphone size={12} color='white' />
                 <Text className='text-xs font-bold text-white'>
                   {step.route}
@@ -392,21 +392,21 @@ function TourOverlay() {
             {!isFirst ? (
               <TouchableOpacity
                 onPress={prev}
-                className='flex-1 py-3.5 rounded-xl border border-gray-300 items-center'
+                className='flex-1 py-4 rounded-2xl border border-gray-300 items-center'
               >
                 <Text className='font-bold text-gray-700'>Back</Text>
               </TouchableOpacity>
             ) : (
               <TouchableOpacity
                 onPress={skip}
-                className='flex-1 py-3.5 rounded-xl border border-gray-300 items-center'
+                className='flex-1 py-4 rounded-2xl border border-gray-300 items-center'
               >
                 <Text className='font-bold text-gray-700'>Skip</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity
               onPress={next}
-              className='flex-[2] py-3.5 rounded-xl bg-gray-900 items-center flex-row justify-center gap-2'
+              className='flex-[2] py-4 rounded-2xl bg-gray-900 items-center flex-row justify-center gap-2'
             >
               <Text className='font-bold text-white'>
                 {isLast ? 'Finish tour' : 'Next'}

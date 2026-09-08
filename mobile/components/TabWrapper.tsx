@@ -109,11 +109,11 @@ export const TabWrapper: React.FC<TabWrapperProps> = ({ children }) => {
             accessibilityRole='button'
             accessibilityLabel='Open Social Content Generator'
           >
-            <View className='bg-white px-3 py-2 rounded-full border border-gray-200 shadow-sm'>
+            <View className='bg-white px-3 py-2 rounded-full border border-gray-200' style={{ shadowColor: '#006b5f', shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 2 } }}>
               <Text className='text-xs font-bold text-gray-900 tracking-wide'>
                 Social Studio
               </Text>
-              <Text className='text-[11px] text-gray-500 -mt-0.5'>
+              <Text className='text-xs text-gray-500 -mt-0.5'>
                 AI content • posts
               </Text>
             </View>
@@ -149,11 +149,11 @@ export const TabWrapper: React.FC<TabWrapperProps> = ({ children }) => {
             accessibilityRole='button'
             accessibilityLabel='Open AI Coach'
           >
-            <View className='bg-white px-3 py-2 rounded-full border border-gray-200 shadow-sm'>
+            <View className='bg-white px-3 py-2 rounded-full border border-gray-200' style={{ shadowColor: '#006b5f', shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 2 } }}>
               <Text className='text-xs font-bold text-gray-900 tracking-wide'>
                 AI Coach
               </Text>
-              <Text className='text-[11px] text-gray-500 -mt-0.5'>
+              <Text className='text-xs text-gray-500 -mt-0.5'>
                 Ask • Kiswahili & English
               </Text>
             </View>
@@ -192,7 +192,7 @@ const styles = StyleSheet.create({
   drawer: {
     position: 'absolute',
     right: 16,
-    gap: 14,
+    gap: 16,
     alignItems: 'flex-end',
     zIndex: 999,
   },
@@ -206,24 +206,24 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.22,
-    shadowRadius: 5,
-    elevation: 6,
+    shadowColor: '#006b5f',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 4,
   },
   fab: {
     position: 'absolute',
-    width: 58,
-    height: 58,
-    borderRadius: 29,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.28,
-    shadowRadius: 10,
-    elevation: 8,
+    shadowColor: '#006b5f',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.14,
+    shadowRadius: 16,
+    elevation: 4,
     zIndex: 1000,
   },
   mainFab: {

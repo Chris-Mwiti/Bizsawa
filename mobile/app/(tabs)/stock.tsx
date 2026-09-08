@@ -26,6 +26,8 @@ import {
   CardTitle,
 } from '../../components/ui/Card'
 import { TAB_BAR_SCROLL_PADDING } from '../../constants/tabBar'
+import { SuccessCelebration } from '../../components/ui/SuccessCelebration'
+import { DashboardSkeleton } from '../../components/ui/Skeleton'
 import { useProducts } from '../../hooks/api/useProducts'
 import { useInventory } from '../../hooks/api/useInventory'
 import { shortId } from '../../lib/ids'
@@ -61,6 +63,9 @@ export default function StockTab() {
 
   const [searchTerm, setSearchTerm] = useState('')
   const [showItemModal, setShowItemModal] = useState(false)
+  const [inlineError, setInlineError] = useState<string | null>(null)
+  const [showSuccess, setShowSuccess] = useState(false)
+  const [successMsg, setSuccessMsg] = useState('')
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null)
   const [formState, setFormState] = useState({
     name: '',
@@ -210,21 +215,22 @@ export default function StockTab() {
     setShowItemModal(true)
   }
   const handleSaveItem = async () => {
-    if (!formState.name.trim() || !formState.category.trim())
-      return Alert.alert('Validation', 'Name and category are required.')
+    setInlineError(null)
+    if (!formState.name.trim() || !formState.category.trim()) {
+      setInlineError('Name and category are required.')
+      return
+    }
 
     // Validate variants if any: each must have name and price
     for (const v of formState.variants) {
-      if (!v.name.trim())
-        return Alert.alert(
-          'Validation',
-          'Each variant needs a name (e.g., 500ml, Red)',
-        )
-      if (!v.price || isNaN(parseFloat(v.price)))
-        return Alert.alert(
-          'Validation',
-          `Variant "${v.name}" needs a valid price`,
-        )
+      if (!v.name.trim()) {
+        setInlineError('Each variant needs a name (e.g., 500ml, Red)')
+        return
+      }
+      if (!v.price || isNaN(parseFloat(v.price))) {
+        setInlineError(`Variant "${v.name}" needs a valid price`)
+        return
+      }
     }
 
     const stock = parseInt(formState.currentStock) || 0
@@ -264,7 +270,7 @@ export default function StockTab() {
           lowStockThreshold: min,
           notes: 'Manual adjustment',
         })
-        Alert.alert('Success', 'Product updated')
+        setSuccessMsg('Product updated — stock refreshed ✨'); setShowSuccess(true)
       } else {
         const created = await createProduct({
           name: formState.name.trim(),
@@ -284,11 +290,11 @@ export default function StockTab() {
             lowStockThreshold: min,
             notes: 'Initial stock',
           })
-        Alert.alert('Success', 'Product added')
+        setSuccessMsg('Product added — ready to sell ✨'); setShowSuccess(true)
       }
       setShowItemModal(false)
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to save')
+      setInlineError(e.message || 'Failed to save')
     }
   }
   const handleDeleteItem = (item: InventoryItem) => {
@@ -300,7 +306,7 @@ export default function StockTab() {
         onPress: async () => {
           try {
             await deleteProduct(item.productId)
-            Alert.alert('Deleted', 'Removed')
+            setSuccessMsg('Product removed'); setShowSuccess(true)
           } catch (e: any) {
             Alert.alert('Error', e.message)
           }
@@ -310,12 +316,7 @@ export default function StockTab() {
   }
 
   if (isLoadingProducts || isLoadingInventory) {
-    return (
-      <View className='flex-1 bg-gray-50 items-center justify-center px-6'>
-        <ActivityIndicator color='#111827' />
-        <Text className='text-sm text-gray-500 mt-3'>Loading stock…</Text>
-      </View>
-    )
+    return <DashboardSkeleton />
   }
 
   return (
@@ -324,7 +325,7 @@ export default function StockTab() {
       <View className='px-4 pt-12 pb-4 bg-white border-b border-gray-200'>
         <View className='flex-row justify-between items-start gap-3'>
           <View className='flex-1'>
-            <Text className='text-[11px] font-bold tracking-widest text-gray-400 uppercase'>
+            <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
               Stock
             </Text>
             <Text className='text-xl font-bold tracking-tight text-gray-900 -mt-0.5'>
@@ -336,7 +337,7 @@ export default function StockTab() {
           </View>
           <TouchableOpacity
             onPress={handleOpenAddModal}
-            className='flex-row items-center gap-2 bg-gray-900 px-4 py-2.5 rounded-full'
+            className='flex-row items-center gap-2 bg-gray-900 px-4 py-3 rounded-full'
           >
             <Plus size={16} color='white' />
             <Text className='text-white text-sm font-bold'>Add</Text>
@@ -348,7 +349,7 @@ export default function StockTab() {
         contentContainerStyle={{
           padding: 16,
           paddingBottom: TAB_BAR_SCROLL_PADDING + 24,
-          gap: 14,
+          gap: 16,
         }}
         showsVerticalScrollIndicator={false}
       >
@@ -379,20 +380,20 @@ export default function StockTab() {
               <Card className='border border-gray-200'>
                 <CardContent className='p-3 items-center'>
                   <View
-                    className={`w-8 h-8 rounded-lg items-center justify-center mb-2 ${m.alert ? 'bg-amber-50 border border-amber-100' : 'bg-gray-50 border border-gray-100'}`}
+                    className={`w-11 h-11 rounded-2xl items-center justify-center mb-2 ${m.alert ? 'bg-amber-50 border border-amber-100' : 'bg-gray-50 border border-gray-100'}`}
                   >
                     <m.icon size={16} color={m.alert ? '#b45309' : '#6b7280'} />
                   </View>
                   <Text
-                    className='text-sm font-bold tracking-tight text-gray-900'
+                    className='text-sm font-bold tracking-tight text-gray-900 font-mono'
                     numberOfLines={1}
                   >
                     {m.value}
                   </Text>
-                  <Text className='text-[11px] font-bold tracking-widest text-gray-400 uppercase text-center'>
+                  <Text className='text-xs font-medium text-gray-500 text-center'>
                     {m.label}
                   </Text>
-                  <Text className='text-[11px] text-gray-500'>{m.sub}</Text>
+                  <Text className='text-xs text-gray-500'>{m.sub}</Text>
                 </CardContent>
               </Card>
             </View>
@@ -400,10 +401,10 @@ export default function StockTab() {
         </View>
 
         {/* Search */}
-        <View className='flex-row items-center gap-2 bg-white border border-gray-300 rounded-xl px-3'>
+        <View className='flex-row items-center gap-2 bg-white border border-gray-300 rounded-2xl px-3'>
           <Search size={16} color='#9ca3af' />
           <TextInput
-            className='flex-1 py-3.5 text-sm text-gray-900'
+            className='flex-1 py-4 text-sm text-gray-900'
             placeholder='Search products or category…'
             placeholderTextColor='#9ca3af'
             value={searchTerm}
@@ -465,13 +466,13 @@ export default function StockTab() {
                         <Text className='text-sm font-bold text-gray-900'>
                           {item.name}
                         </Text>
-                        <View className='px-1.5 py-0.5 rounded-full bg-white border border-gray-200'>
-                          <Text className='text-[9px] font-bold tracking-widest text-gray-500'>
+                        <View className='px-2 py-1 rounded-full bg-white border border-gray-200'>
+                          <Text className='text-xs font-bold tracking-widest text-gray-500'>
                             {shortId(item.productId, 6)}
                           </Text>
                         </View>
-                        <View className='px-2 py-0.5 rounded-full bg-gray-100 border border-gray-200'>
-                          <Text className='text-[10px] font-bold text-gray-600'>
+                        <View className='px-2 py-1 rounded-full bg-gray-100 border border-gray-200'>
+                          <Text className='text-xs font-bold text-gray-600'>
                             {item.category}
                           </Text>
                         </View>
@@ -489,9 +490,9 @@ export default function StockTab() {
                         const vcount = prod?.variants?.length || 0
                         if (vcount === 0) return null
                         return (
-                          <View className='flex-row items-center gap-1.5 mt-1'>
-                            <View className='px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200'>
-                              <Text className='text-[10px] font-bold text-amber-700'>
+                          <View className='flex-row items-center gap-2 mt-1'>
+                            <View className='px-2 py-1 rounded-full bg-amber-50 border border-amber-200'>
+                              <Text className='text-xs font-bold text-amber-700'>
                                 {vcount} variant{vcount === 1 ? '' : 's'}
                               </Text>
                             </View>
@@ -510,7 +511,7 @@ export default function StockTab() {
                       })()}
                     </View>
                     <View className='items-end'>
-                      <View className='flex-row items-center gap-1.5'>
+                      <View className='flex-row items-center gap-2'>
                         <View
                           className={`w-2.5 h-2.5 rounded-full ${st.color}`}
                         />
@@ -518,20 +519,20 @@ export default function StockTab() {
                           {item.currentStock}
                         </Text>
                       </View>
-                      <Text className='text-[11px] text-gray-400'>
+                      <Text className='text-xs text-gray-400'>
                         of {item.maximumCapacity}
                       </Text>
                       <View
-                        className={`mt-1 px-2 py-0.5 rounded-full border ${st.bg}`}
+                        className={`mt-1 px-2 py-1 rounded-full border ${st.bg}`}
                       >
-                        <Text className={`text-[10px] font-bold ${st.text}`}>
+                        <Text className={`text-xs font-bold ${st.text}`}>
                           {st.label}
                         </Text>
                       </View>
                     </View>
                   </View>
 
-                  <View className='gap-1.5'>
+                  <View className='gap-2'>
                     <View className='flex-row justify-between'>
                       <Text className='text-xs text-gray-500'>Stock level</Text>
                       <Text className='text-xs font-medium text-gray-700'>
@@ -545,10 +546,10 @@ export default function StockTab() {
                       />
                     </View>
                     <View className='flex-row justify-between'>
-                      <Text className='text-[11px] text-gray-400'>
+                      <Text className='text-xs text-gray-400'>
                         Min {item.minimumThreshold}
                       </Text>
-                      <Text className='text-[11px] font-bold text-gray-700'>
+                      <Text className='text-xs font-bold text-gray-700'>
                         Value{' '}
                         {formatCurrency(item.currentStock * item.unitPrice)}
                       </Text>
@@ -558,7 +559,7 @@ export default function StockTab() {
                   <View className='flex-row justify-end gap-2 mt-3 pt-3 border-t border-gray-100'>
                     <TouchableOpacity
                       onPress={() => handleOpenEditModal(item)}
-                      className='flex-row items-center gap-1.5 px-3 py-2 rounded-full bg-white border border-gray-200'
+                      className='flex-row items-center gap-2 px-3 py-2 rounded-full bg-white border border-gray-200'
                     >
                       <Edit size={14} color='#374151' />
                       <Text className='text-xs font-semibold text-gray-700'>
@@ -568,7 +569,7 @@ export default function StockTab() {
                     <TouchableOpacity
                       onPress={() => handleDeleteItem(item)}
                       disabled={!!isDeleting}
-                      className='flex-row items-center gap-1.5 px-3 py-2 rounded-full bg-white border border-red-200'
+                      className='flex-row items-center gap-2 px-3 py-2 rounded-full bg-white border border-red-200'
                     >
                       <Trash2 size={14} color='#dc2626' />
                       <Text className='text-xs font-bold text-red-600'>
@@ -604,7 +605,7 @@ export default function StockTab() {
         <View className='flex-1 bg-gray-50'>
           <View className='flex-row justify-between items-center p-4 bg-white border-b border-gray-200'>
             <View>
-              <Text className='text-[11px] font-bold tracking-widest text-gray-400 uppercase'>
+              <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
                 {editingItem ? 'Edit' : 'New'}
               </Text>
               <Text className='text-lg font-bold text-gray-900 -mt-0.5'>
@@ -613,18 +614,26 @@ export default function StockTab() {
             </View>
             <Pressable
               onPress={() => setShowItemModal(false)}
-              className='w-8 h-8 rounded-full bg-gray-100 items-center justify-center'
+              className='w-11 h-11 rounded-full bg-gray-100 items-center justify-center'
             >
               <Text className='font-bold text-gray-600'>✕</Text>
             </Pressable>
           </View>
-          <ScrollView contentContainerStyle={{ padding: 16, gap: 14 }}>
+          <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
+            {inlineError ? (
+              <View className='bg-red-50 border border-red-200 rounded-2xl px-4 py-3 flex-row items-center gap-2'>
+                <Text className='text-sm text-red-700 flex-1'>{inlineError}</Text>
+                <Pressable onPress={() => setInlineError(null)} className='px-3 py-1 rounded-full bg-white border border-red-200'>
+                  <Text className='text-xs font-bold text-red-700'>Dismiss</Text>
+                </Pressable>
+              </View>
+            ) : null}
             <View>
               <Text className='text-sm font-semibold text-gray-700 mb-2'>
                 Product name *
               </Text>
               <TextInput
-                className='bg-white border border-gray-300 rounded-xl px-4 py-3.5 text-sm'
+                className='bg-white border border-gray-300 rounded-2xl px-4 py-4 text-sm'
                 placeholder='e.g., Dairy Meal 50kg'
                 value={formState.name}
                 onChangeText={(t) => setFormState({ ...formState, name: t })}
@@ -635,7 +644,7 @@ export default function StockTab() {
                 Category *
               </Text>
               <TextInput
-                className='bg-white border border-gray-300 rounded-xl px-4 py-3.5 text-sm'
+                className='bg-white border border-gray-300 rounded-2xl px-4 py-4 text-sm'
                 placeholder='Type or choose — e.g., Dairy Feed'
                 value={formState.category}
                 onChangeText={(t) =>
@@ -669,7 +678,7 @@ export default function StockTab() {
                     </Pressable>
                   ))}
               </View>
-              <Text className='text-[11px] text-gray-400 mt-1'>
+              <Text className='text-xs text-gray-400 mt-1'>
                 You can create a new category — just type it. Existing
                 categories are suggested above.
               </Text>
@@ -680,7 +689,7 @@ export default function StockTab() {
                   Current stock
                 </Text>
                 <TextInput
-                  className='bg-white border border-gray-300 rounded-xl px-4 py-3.5 text-sm'
+                  className='bg-white border border-gray-300 rounded-2xl px-4 py-4 text-sm'
                   keyboardType='numeric'
                   value={formState.currentStock}
                   onChangeText={(t) =>
@@ -693,7 +702,7 @@ export default function StockTab() {
                   Unit price
                 </Text>
                 <TextInput
-                  className='bg-white border border-gray-300 rounded-xl px-4 py-3.5 text-sm'
+                  className='bg-white border border-gray-300 rounded-2xl px-4 py-4 text-sm'
                   keyboardType='numeric'
                   value={formState.unitPrice}
                   onChangeText={(t) =>
@@ -708,7 +717,7 @@ export default function StockTab() {
                   Min threshold
                 </Text>
                 <TextInput
-                  className='bg-white border border-gray-300 rounded-xl px-4 py-3.5 text-sm'
+                  className='bg-white border border-gray-300 rounded-2xl px-4 py-4 text-sm'
                   keyboardType='numeric'
                   value={formState.minimumThreshold}
                   onChangeText={(t) =>
@@ -721,7 +730,7 @@ export default function StockTab() {
                   Max capacity
                 </Text>
                 <TextInput
-                  className='bg-white border border-gray-300 rounded-xl px-4 py-3.5 text-sm'
+                  className='bg-white border border-gray-300 rounded-2xl px-4 py-4 text-sm'
                   keyboardType='numeric'
                   value={formState.maximumCapacity}
                   onChangeText={(t) =>
@@ -735,7 +744,7 @@ export default function StockTab() {
                 Supplier
               </Text>
               <TextInput
-                className='bg-white border border-gray-300 rounded-xl px-4 py-3.5 text-sm'
+                className='bg-white border border-gray-300 rounded-2xl px-4 py-4 text-sm'
                 placeholder='e.g., Kenchic Ltd'
                 value={formState.supplier}
                 onChangeText={(t) =>
@@ -750,7 +759,7 @@ export default function StockTab() {
                   SKU (optional)
                 </Text>
                 <TextInput
-                  className='bg-white border border-gray-300 rounded-xl px-4 py-3.5 text-sm'
+                  className='bg-white border border-gray-300 rounded-2xl px-4 py-4 text-sm'
                   placeholder='e.g., DAIRY-50'
                   value={formState.sku}
                   onChangeText={(t) => setFormState({ ...formState, sku: t })}
@@ -762,7 +771,7 @@ export default function StockTab() {
                   Barcode
                 </Text>
                 <TextInput
-                  className='bg-white border border-gray-300 rounded-xl px-4 py-3.5 text-sm'
+                  className='bg-white border border-gray-300 rounded-2xl px-4 py-4 text-sm'
                   placeholder='Scan or type'
                   value={formState.barcode}
                   onChangeText={(t) =>
@@ -773,15 +782,15 @@ export default function StockTab() {
             </View>
 
             {/* Variants — sizes/colors with per-variant pricing */}
-            <View className='bg-white border border-gray-200 rounded-xl p-4 gap-3'>
+            <View className='bg-white border border-gray-200 rounded-2xl p-4 gap-3'>
               <View className='flex-row justify-between items-center'>
                 <View className='flex-row items-center gap-2'>
                   <Package size={16} color='#6b7280' />
                   <Text className='text-sm font-bold text-gray-900'>
                     Variants
                   </Text>
-                  <View className='px-2 py-0.5 rounded-full bg-gray-100 border border-gray-200'>
-                    <Text className='text-[11px] font-bold text-gray-600'>
+                  <View className='px-2 py-1 rounded-full bg-gray-100 border border-gray-200'>
+                    <Text className='text-xs font-bold text-gray-600'>
                       {formState.variants.length} options
                     </Text>
                   </View>
@@ -808,7 +817,7 @@ export default function StockTab() {
                       ],
                     })
                   }
-                  className='px-3 py-1.5 rounded-full bg-gray-900 flex-row items-center gap-1.5'
+                  className='px-3 py-1.5 rounded-full bg-gray-900 flex-row items-center gap-2'
                 >
                   <Plus size={12} color='white' />
                   <Text className='text-xs font-bold text-white'>Add</Text>
@@ -822,7 +831,7 @@ export default function StockTab() {
               </Text>
 
               {formState.variants.length === 0 ? (
-                <View className='border border-dashed border-gray-200 rounded-xl py-6 items-center bg-gray-50/50'>
+                <View className='border border-dashed border-gray-200 rounded-2xl py-6 items-center bg-gray-50/50'>
                   <Text className='text-sm font-medium text-gray-500'>
                     No variants
                   </Text>
@@ -836,7 +845,7 @@ export default function StockTab() {
                   {formState.variants.map((variant, idx) => (
                     <View
                       key={idx}
-                      className='border border-gray-200 rounded-xl p-3 gap-2 bg-gray-50/50'
+                      className='border border-gray-200 rounded-2xl p-3 gap-2 bg-gray-50/50'
                     >
                       <View className='flex-row justify-between items-center'>
                         <Text className='text-xs font-bold tracking-widest text-gray-500 uppercase'>
@@ -851,7 +860,7 @@ export default function StockTab() {
                               ),
                             })
                           }
-                          className='w-7 h-7 rounded-full bg-white border border-red-100 items-center justify-center'
+                          className='w-11 h-11 rounded-full bg-white border border-red-100 items-center justify-center'
                         >
                           <Trash2 size={12} color='#dc2626' />
                         </TouchableOpacity>
@@ -862,7 +871,7 @@ export default function StockTab() {
                           Name * (e.g., 500ml, Red, Small)
                         </Text>
                         <TextInput
-                          className='bg-white border border-gray-300 rounded-xl px-3 py-2.5 text-sm'
+                          className='bg-white border border-gray-300 rounded-2xl px-3 py-3 text-sm'
                           placeholder='e.g., 1kg'
                           value={variant.name}
                           onChangeText={(t) => {
@@ -879,7 +888,7 @@ export default function StockTab() {
                             Price *
                           </Text>
                           <TextInput
-                            className='bg-white border border-gray-300 rounded-xl px-3 py-2.5 text-sm'
+                            className='bg-white border border-gray-300 rounded-2xl px-3 py-3 text-sm'
                             keyboardType='numeric'
                             placeholder='0'
                             value={variant.price}
@@ -895,7 +904,7 @@ export default function StockTab() {
                             Cost
                           </Text>
                           <TextInput
-                            className='bg-white border border-gray-300 rounded-xl px-3 py-2.5 text-sm'
+                            className='bg-white border border-gray-300 rounded-2xl px-3 py-3 text-sm'
                             keyboardType='numeric'
                             placeholder='0'
                             value={variant.cost}
@@ -914,7 +923,7 @@ export default function StockTab() {
                             SKU
                           </Text>
                           <TextInput
-                            className='bg-white border border-gray-300 rounded-xl px-3 py-2.5 text-sm'
+                            className='bg-white border border-gray-300 rounded-2xl px-3 py-3 text-sm'
                             placeholder='Optional'
                             value={variant.sku}
                             onChangeText={(t) => {
@@ -930,7 +939,7 @@ export default function StockTab() {
                             Barcode
                           </Text>
                           <TextInput
-                            className='bg-white border border-gray-300 rounded-xl px-3 py-2.5 text-sm'
+                            className='bg-white border border-gray-300 rounded-2xl px-3 py-3 text-sm'
                             placeholder='Optional'
                             value={variant.barcode}
                             onChangeText={(t) => {
@@ -949,7 +958,7 @@ export default function StockTab() {
             <TouchableOpacity
               onPress={handleSaveItem}
               disabled={!!isAdjustingStock}
-              className='bg-gray-900 py-4 rounded-xl items-center flex-row justify-center gap-2 mt-2'
+              className='bg-gray-900 py-4 rounded-2xl items-center flex-row justify-center gap-2 mt-2'
             >
               {isAdjustingStock ? (
                 <ActivityIndicator color='white' />
@@ -965,6 +974,7 @@ export default function StockTab() {
           </ScrollView>
         </View>
       </Modal>
+      <SuccessCelebration visible={showSuccess} title='Stock updated!' message={successMsg} onClose={() => setShowSuccess(false)} />
     </View>
   )
 }

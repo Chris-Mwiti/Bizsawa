@@ -53,7 +53,7 @@ export function RevenueChart({
                   }}
                 />
                 <Text
-                  className='text-[10px] text-gray-500 mt-1'
+                  className='text-xs text-gray-500 mt-1'
                   numberOfLines={1}
                 >
                   {point.date.split('T')[0].slice(5)}
@@ -68,7 +68,7 @@ export function RevenueChart({
               <Text className='text-gray-700'>
                 {point.date.split('T')[0].slice(5)}
               </Text>
-              <Text className='font-bold text-gray-900'>
+              <Text className='font-bold font-mono text-gray-900'>
                 {formatCurrency(point.revenue)}
               </Text>
             </View>

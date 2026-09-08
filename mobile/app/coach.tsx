@@ -225,7 +225,7 @@ export default function AICoachModal() {
               <TouchableOpacity
                 key={action.id}
                 onPress={() => handleQuickAction(action.query)}
-                className='bg-white border border-gray-200 rounded-lg py-2 px-3 m-1'
+                className='bg-white border border-gray-200 rounded-2xl py-2 px-3 m-1'
               >
                 <Text className='text-xs text-gray-700 font-medium'>
                   {action.label}
@@ -241,7 +241,7 @@ export default function AICoachModal() {
               className={`flex-row mb-4 ${msg.isBot ? 'justify-start' : 'justify-end'}`}
             >
               {msg.isBot && (
-                <View className='w-8 h-8 rounded-full bg-primary-600 items-center justify-center mr-2'>
+                <View className='w-11 h-11 rounded-full bg-primary-600 items-center justify-center mr-2'>
                   <Bot size={16} color='white' />
                 </View>
               )}
@@ -254,13 +254,13 @@ export default function AICoachModal() {
                   <Text className='text-sm text-white'>{msg.content}</Text>
                 )}
                 <Text
-                  className={`text-[10px] mt-1 ${msg.isBot ? 'text-gray-400' : 'text-primary-200 text-right'}`}
+                  className={`text-xs mt-1 ${msg.isBot ? 'text-gray-400' : 'text-primary-200 text-right'}`}
                 >
                   {formatTime(msg.timestamp)}
                 </Text>
               </View>
               {!msg.isBot && (
-                <View className='w-8 h-8 rounded-full bg-gray-500 items-center justify-center ml-2'>
+                <View className='w-11 h-11 rounded-full bg-gray-500 items-center justify-center ml-2'>
                   <User size={16} color='white' />
                 </View>
               )}
@@ -268,7 +268,7 @@ export default function AICoachModal() {
           ))}
           {isTyping && (
             <View className='flex-row justify-start mb-4'>
-              <View className='w-8 h-8 rounded-full bg-primary-600 items-center justify-center mr-2'>
+              <View className='w-11 h-11 rounded-full bg-primary-600 items-center justify-center mr-2'>
                 <Bot size={16} color='white' />
               </View>
               <View className='p-4 bg-white border border-gray-200 rounded-2xl rounded-tl-none'>

@@ -55,6 +55,16 @@ const migrations = schemaMigrations({
       toVersion: 3,
       steps: [
         {
+          type: 'add_columns',
+          table: 'payments',
+          columns: [{ name: 'type', type: 'string', isOptional: true }],
+        },
+      ],
+    },
+    {
+      toVersion: 4,
+      steps: [
+        {
           type: 'create_table',
           schema: tableSchema({
             name: 'payment_commands',
@@ -67,6 +77,7 @@ const migrations = schemaMigrations({
               { name: 'status', type: 'string' },
               { name: 'provider', type: 'string' },
               { name: 'type', type: 'string' },
+              { name: 'idempotency_key', type: 'string', isOptional: true },
               { name: 'sync_version', type: 'number' },
               { name: 'deleted_at', type: 'number', isOptional: true },
             ],
