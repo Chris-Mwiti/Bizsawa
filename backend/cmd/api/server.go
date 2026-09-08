@@ -104,13 +104,25 @@ func NewRouter(deps Dependencies) http.Handler {
 			r.Route("/mpesa", deps.Payments.RegisterPublicRoutes)
 		}
 
+		// Single /subscriptions mount — public callback + auth-protected upgrade/status
+		// chi panics on duplicate Mount("/subscriptions"), so register both under one Route
+		if deps.Tenancy != nil {
+			r.Route("/subscriptions", func(r chi.Router) {
+				// Daraja callback — public, no auth
+				deps.Tenancy.RegisterCallbackRoute(r)
+				// Auth-protected subscription endpoints
+				r.Group(func(r chi.Router) {
+					if deps.Auth != nil {
+						r.Use(deps.Auth.Middleware)
+					}
+					deps.Tenancy.RegisterRoutes(r)
+				})
+			})
+		}
+
 		r.Group(func(r chi.Router) {
 			if deps.Auth != nil {
 				r.Use(deps.Auth.Middleware)
-			}
-
-			if deps.Tenancy != nil {
-				r.Route("/subscriptions", deps.Tenancy.RegisterRoutes)
 			}
 
 			if deps.Users != nil {

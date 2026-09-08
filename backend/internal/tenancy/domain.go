@@ -49,3 +49,38 @@ func PlanByCode(code PlanCode) Plan {
 
 	return Plans()[0]
 }
+
+// SubscriptionPayment is isolated from business payment_commands — subscriptions are per-user, not per-business.
+type SubscriptionPayment struct {
+	ID                 uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	UserID             uuid.UUID `gorm:"type:uuid;not null;index" json:"userId"`
+	PlanCode           PlanCode  `gorm:"type:text;not null" json:"planCode"`
+	Amount             string    `gorm:"type:numeric(18,2);not null" json:"amount"`
+	Currency           string    `gorm:"type:text;not null;default:'KES'" json:"currency"`
+	Phone              string    `gorm:"type:text;not null" json:"phone"`
+	CheckoutRequestID  string    `gorm:"type:text;index" json:"checkoutRequestId"`
+	ProviderReceipt    string    `gorm:"type:text;index" json:"providerReceipt"`
+	Status             string    `gorm:"type:text;not null;default:'pending'" json:"status"`
+	FailureCode        string    `gorm:"type:text" json:"failureCode"`
+	FailureMessage     string    `gorm:"type:text" json:"failureMessage"`
+	AccountReference   string    `gorm:"type:text" json:"accountReference"`
+	IdempotencyKey     string    `gorm:"type:text;not null;unique" json:"idempotencyKey"`
+	Payload            string    `gorm:"type:jsonb;not null;default:'{}'::jsonb" json:"payload"`
+	ResultPayload      string    `gorm:"type:jsonb" json:"resultPayload"`
+	CreatedAt          time.Time `json:"createdAt"`
+	UpdatedAt          time.Time `json:"updatedAt"`
+}
+
+func (SubscriptionPayment) TableName() string { return "subscription_payments" }
+
+// Pricing — single source of truth, KES.
+func PriceForPlan(code PlanCode) string {
+	switch code {
+	case PlanPremium:
+		return "399"
+	case PlanEnterprise:
+		return "999"
+	default:
+		return "0"
+	}
+}

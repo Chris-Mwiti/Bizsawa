@@ -122,7 +122,7 @@ func (s *Service) UpdateBusiness(ctx context.Context, businessID, userID uuid.UU
 	}
 
 	if strings.TrimSpace(req.TaxPIN) != "" {
-		biz.Name = strings.TrimSpace(req.TaxPIN)
+		biz.TaxPIN = strings.TrimSpace(req.TaxPIN)
 	}
 
 	if strings.TrimSpace(req.MpesaShortcode) != "" {

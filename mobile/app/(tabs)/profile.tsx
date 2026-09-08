@@ -28,6 +28,7 @@ import {
   AlertTriangle,
   RefreshCw,
   ShieldAlert,
+  Crown,
 } from 'lucide-react-native'
 import {
   Card,
@@ -42,6 +43,8 @@ import { useTour } from '../../contexts/TourContext'
 import { useSync } from '../../sync/SyncProvider'
 import { api } from '../../lib/api'
 import { TAB_BAR_SCROLL_PADDING } from '../../constants/tabBar'
+import { useSubscription } from '../../hooks/api/useSubscription'
+import { PaywallModal } from '../../components/PaywallModal'
 
 function metadataLocation(metadata: unknown): string | null {
   if (!metadata || typeof metadata !== 'object') return null
@@ -87,6 +90,8 @@ export default function ProfileTab() {
     newPassword: '',
     confirmPassword: '',
   })
+  const { subscription, isPremium } = useSubscription()
+  const [showPaywall, setShowPaywall] = useState(false)
 
   const ownerParts = useMemo(() => {
     const name = business?.ownerName || userData?.ownerName || ''
@@ -112,10 +117,10 @@ export default function ProfileTab() {
   const openBusinessEdit = () => {
     setBusinessForm({
       name: business?.name || '',
-      phone: (business as any)?.phone || phone === 'Not set' ? '' : phone,
+      phone: (business as any)?.phone || (phone === 'Not set' ? '' : phone),
       email: (business as any)?.email || '',
       address:
-        (business as any)?.address || location === 'Not set' ? '' : location,
+        (business as any)?.address || (location === 'Not set' ? '' : location),
       taxPin: (business as any)?.taxPin || '',
       currency: (business as any)?.currency || 'KES',
     })
@@ -364,6 +369,28 @@ export default function ProfileTab() {
               <LogOut size={16} color='#dc2626' />
               <Text className='font-bold text-red-700 text-sm'>Sign out</Text>
             </TouchableOpacity>
+          </CardContent>
+        </Card>
+
+        <Card className={`border ${isPremium?'border-emerald-200 bg-emerald-50/20':'border-gray-200'}`}>
+          <CardHeader className='flex-row items-center justify-between'>
+            <View className='flex-row items-center gap-2'>
+              <Crown size={16} color={isPremium?'#059669':'#111827'} />
+              <CardTitle>Subscription {isPremium?'• Premium':`• Free`}</CardTitle>
+            </View>
+            {!isPremium && (
+              <TouchableOpacity onPress={() => setShowPaywall(true)} className='px-3 py-1.5 rounded-full bg-gray-900'>
+                <Text className='text-xs font-bold text-white'>Upgrade</Text>
+              </TouchableOpacity>
+            )}
+          </CardHeader>
+          <CardContent className='pt-0 gap-2'>
+            <View className='flex-row justify-between items-center p-3 rounded-xl bg-white border border-gray-200'>
+              <Text className='text-sm font-semibold text-gray-900'>{subscription?.planCode ? subscription.planCode.toUpperCase() : 'FREE'}</Text>
+              <Text className='text-xs text-gray-500'>{subscription?.endsAt ? `Ends ${new Date(subscription.endsAt).toLocaleDateString('en-KE')}` : isPremium ? 'Active' : '1 biz • basic reports'}</Text>
+            </View>
+            <Text className='text-xs text-gray-500'>{isPremium ? 'Premium: 5 businesses, AI + full analytics, WAHA' : 'Free: 1 business, 50 products, week analytics only. Unlock premium for KES 399/mo via M-Pesa STK — isolated from business payments.'}</Text>
+            <PaywallModal visible={showPaywall} onClose={() => setShowPaywall(false)} feature="Premium — unlock everything" />
           </CardContent>
         </Card>
 

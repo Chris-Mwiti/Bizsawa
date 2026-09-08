@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -9,6 +10,8 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/shopspring/decimal"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
@@ -95,6 +98,15 @@ func main() {
 	usersModule := users.New(gormDB)
 	authModule := auth.New(gormDB, auth.Config{SigningKey: cfg.JWT.SigningKey, Issuer: cfg.JWT.Issuer, AccessTTL: 90 * time.Minute, RefreshTTL: 30 * 24 * time.Hour}, auth.WithMembershipResolver(usersModule), auth.WithSubscriptionProvisioner(tenancyModule))
 	businessModule := business.New(gormDB, tenancyModule, usersModule, cryptoManager)
+	// Isolate subscription payments: inject mpesa STK provider into tenancy (separate from business payments)
+	mpesaClient := payments.NewMpesaClient(cfg.Mpesa, logger)
+	tenancyModule.Service().SetSTKProvider(tenancy.NewMpesaAdapter(func(ctx context.Context, phone string, amt decimal.Decimal, ref string) (string, json.RawMessage, error) {
+		res, err := mpesaClient.STKPush(ctx, payments.STKPushRequest{Phone: phone, Amount: amt, AccountReference: ref})
+		if err != nil {
+			return "", nil, err
+		}
+		return res.RequestID, res.Raw, nil
+	}))
 	productsModule := products.New(gormDB)
 	customersModule := customers.New(gormDB)
 	taxesModule := taxes.New(gormDB)
@@ -103,7 +115,7 @@ func main() {
 	expensesModule := expenses.New(gormDB, taxesModule.Service())
 	invoicesModule := invoices.New(gormDB, riverIngester, logger)
 	ordersModule := orders.New(gormDB, inventoryModule.Service(), salesModule.Service(), riverIngester, customersModule.Service(), invoicesModule.Service(), nil, logger)
-	paymentsModule := payments.New(gormDB, riverIngester, logger, payments.NewMpesaClient(cfg.Mpesa, logger), ordersModule.Service(), invoicesModule.Service())
+	paymentsModule := payments.New(gormDB, riverIngester, logger, mpesaClient, ordersModule.Service(), invoicesModule.Service())
 	// Update orders module with payments service
 	ordersModule = orders.New(gormDB, inventoryModule.Service(), salesModule.Service(), riverIngester, customersModule.Service(), invoicesModule.Service(), paymentsModule.Service(), logger)
 	authzEnforcer := authz.NewEnforcer(usersModule)
