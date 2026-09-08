@@ -9,7 +9,10 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Keyboard,
+  TouchableWithoutFeedback,
 } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
   Bot,
   Send,
@@ -75,6 +78,7 @@ const quickActions = [
 ]
 
 export default function AICoachModal() {
+  const insets = useSafeAreaInsets()
   const [messages, setMessages] = useState<Message[]>(initialMessages)
   const [inputMessage, setInputMessage] = useState('')
   const [language, setLanguage] = useState<'en' | 'sw'>('en')
@@ -168,9 +172,11 @@ export default function AICoachModal() {
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
     >
-      <View className='flex-1 bg-gray-50'>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <View className='flex-1 bg-gray-50'>
         <View className='flex-row items-center justify-between p-4 bg-white border-b border-gray-200'>
           <View className='flex-row items-center'>
             <View className='w-10 h-10 bg-primary-600 rounded-full items-center justify-center mr-3'>
@@ -218,6 +224,8 @@ export default function AICoachModal() {
           ref={scrollViewRef}
           className='flex-1 px-4 pt-4'
           contentContainerStyle={{ paddingBottom: 20 }}
+          keyboardShouldPersistTaps='handled'
+          keyboardDismissMode='interactive'
         >
           {/* Quick Actions */}
           <View className='flex-row flex-wrap justify-center mb-6'>
@@ -278,7 +286,10 @@ export default function AICoachModal() {
           )}
         </ScrollView>
 
-        <View className='p-3 bg-white border-t border-gray-200 flex-row items-center shadow-lg pb-8'>
+        <View
+          className='p-3 bg-white border-t border-gray-200 flex-row items-center shadow-lg'
+          style={{ paddingBottom: Math.max(12, insets.bottom + 8) }}
+        >
           <TouchableOpacity
             onPress={handleVoiceInput}
             className='w-10 h-10 bg-gray-100 rounded-full items-center justify-center mr-2'
@@ -308,7 +319,8 @@ export default function AICoachModal() {
             <Send size={18} color='white' />
           </TouchableOpacity>
         </View>
-      </View>
+        </View>
+      </TouchableWithoutFeedback>
     </KeyboardAvoidingView>
   )
 }

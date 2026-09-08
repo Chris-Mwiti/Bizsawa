@@ -9,6 +9,10 @@ import {
   Alert,
   ActivityIndicator,
   Pressable,
+  KeyboardAvoidingView,
+  Platform,
+  Keyboard,
+  TouchableWithoutFeedback,
 } from 'react-native'
 import {
   Package,
@@ -602,24 +606,35 @@ export default function StockTab() {
         animationType='slide'
         presentationStyle='pageSheet'
       >
-        <View className='flex-1 bg-gray-50'>
-          <View className='flex-row justify-between items-center p-4 bg-white border-b border-gray-200'>
-            <View>
-              <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
-                {editingItem ? 'Edit' : 'New'}
-              </Text>
-              <Text className='text-lg font-bold text-gray-900 -mt-0.5'>
-                {editingItem ? 'Edit item' : 'Add item'}
-              </Text>
-            </View>
-            <Pressable
-              onPress={() => setShowItemModal(false)}
-              className='w-11 h-11 rounded-full bg-gray-100 items-center justify-center'
-            >
-              <Text className='font-bold text-gray-600'>✕</Text>
-            </Pressable>
-          </View>
-          <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View className='flex-1 bg-gray-50'>
+              <View className='flex-row justify-between items-center p-4 bg-white border-b border-gray-200'>
+                <View>
+                  <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
+                    {editingItem ? 'Edit' : 'New'}
+                  </Text>
+                  <Text className='text-lg font-bold text-gray-900 -mt-0.5'>
+                    {editingItem ? 'Edit item' : 'Add item'}
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => setShowItemModal(false)}
+                  className='w-11 h-11 rounded-full bg-gray-100 items-center justify-center'
+                >
+                  <Text className='font-bold text-gray-600'>✕</Text>
+                </Pressable>
+              </View>
+              <ScrollView
+                contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 40 }}
+                keyboardShouldPersistTaps='handled'
+                keyboardDismissMode='interactive'
+                showsVerticalScrollIndicator={false}
+              >
             {inlineError ? (
               <View className='bg-red-50 border border-red-200 rounded-2xl px-4 py-3 flex-row items-center gap-2'>
                 <Text className='text-sm text-red-700 flex-1'>{inlineError}</Text>
@@ -971,8 +986,10 @@ export default function StockTab() {
                 </>
               )}
             </TouchableOpacity>
-          </ScrollView>
-        </View>
+              </ScrollView>
+            </View>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       </Modal>
       <SuccessCelebration visible={showSuccess} title='Stock updated!' message={successMsg} onClose={() => setShowSuccess(false)} />
     </View>

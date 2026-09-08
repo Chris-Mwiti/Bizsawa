@@ -1,5 +1,9 @@
 import React, { memo, useCallback, useMemo, useState } from 'react'
 import {
+  KeyboardAvoidingView,
+  Platform,
+  Keyboard,
+  TouchableWithoutFeedback,
   ActivityIndicator,
   Alert,
   FlatList,
@@ -10,6 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import {
   ChevronLeft,
@@ -158,6 +163,7 @@ const OrderItem = memo(
 OrderItem.displayName = 'OrderItem'
 
 export default function OrdersScreen() {
+  const insets = useSafeAreaInsets()
   const router = useRouter()
   const [showOrderModal, setShowOrderModal] = useState(false)
   const [showCustomerModal, setShowCustomerModal] = useState(false)
@@ -487,7 +493,9 @@ export default function OrdersScreen() {
         presentationStyle='pageSheet'
         onRequestClose={() => setShowCustomerModal(false)}
       >
-        <View className='flex-1 bg-gray-50 p-4 justify-center'>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={20}>
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View className='flex-1 bg-gray-50 p-4 justify-center' style={{ paddingBottom: insets.bottom }}>
           <Card className='border border-gray-200'>
             <CardHeader>
               <CardTitle>
@@ -522,7 +530,9 @@ export default function OrdersScreen() {
               </TouchableOpacity>
             </CardContent>
           </Card>
-        </View>
+            </View>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       </Modal>
 
       {paymentStatus.data && (

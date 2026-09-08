@@ -11,7 +11,10 @@ import {
   Platform,
   Alert,
   Share,
+  Keyboard,
+  TouchableWithoutFeedback,
 } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
   ArrowLeft,
   Sparkles,
@@ -81,6 +84,7 @@ const platforms = [
 ]
 
 export default function SocialMediaModal() {
+  const insets = useSafeAreaInsets()
   const [selectedGoal, setSelectedGoal] = useState<any>(null)
   const [selectedPlatform, setSelectedPlatform] = useState<string>('instagram')
   const [tone, setTone] = useState<string>('')
@@ -274,9 +278,11 @@ export default function SocialMediaModal() {
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
     >
-      <View className='flex-1 bg-white'>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <View className='flex-1 bg-white'>
         <View className='flex-row items-center p-4 border-b border-gray-100 mt-2'>
           <TouchableOpacity onPress={() => router.back()} className='mr-3 p-2'>
             <ArrowLeft size={20} color='#374151' />
@@ -291,7 +297,9 @@ export default function SocialMediaModal() {
 
         <ScrollView
           className='flex-1 px-4 py-4'
-          contentContainerStyle={{ paddingBottom: 40 }}
+          contentContainerStyle={{ paddingBottom: 40 + insets.bottom }}
+          keyboardShouldPersistTaps='handled'
+          keyboardDismissMode='interactive'
         >
           {errorMsg ? (
             <View className='bg-amber-50 p-3 rounded-2xl flex-row items-center mb-4 border border-amber-200'>
@@ -446,7 +454,8 @@ export default function SocialMediaModal() {
             </View>
           )}
         </ScrollView>
-      </View>
+        </View>
+      </TouchableWithoutFeedback>
     </KeyboardAvoidingView>
   )
 }

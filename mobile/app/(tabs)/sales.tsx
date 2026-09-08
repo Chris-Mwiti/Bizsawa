@@ -1,5 +1,9 @@
 import React, { useEffect, useState } from 'react'
 import {
+  KeyboardAvoidingView,
+  Platform,
+  Keyboard,
+  TouchableWithoutFeedback,
   ActivityIndicator,
   Alert,
   Modal,
@@ -10,6 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Plus, Receipt, ArrowUpRight } from 'lucide-react-native'
 import {
@@ -29,6 +34,7 @@ import { useSales } from '../../hooks/api/useSales'
 import { toNumber } from '../../lib/api-dtos'
 
 export default function SalesTab() {
+  const insets = useSafeAreaInsets()
   const router = useRouter()
   const params = useLocalSearchParams<{ action?: string }>()
   const [showSaleModal, setShowSaleModal] = useState(false)
@@ -46,7 +52,7 @@ export default function SalesTab() {
   const [inlineError, setInlineError] = useState<string | null>(null)
 
   const { products, isLoading: productsLoading } = useProducts()
-  const { data: customers = [] } = useCustomers()
+  const { data: customers = [], isLoading: customersLoading } = useCustomers() as any
   const { mutateAsync: createCustomer } = useCreateCustomer()
   const {
     sales,
@@ -332,6 +338,7 @@ export default function SalesTab() {
         title='Record Direct Sale'
         products={products}
         customers={customers}
+        customersLoading={customersLoading}
         customerId={customerId}
         setCustomerId={setCustomerId}
         paymentMethod={paymentMethod}
@@ -361,7 +368,9 @@ export default function SalesTab() {
         presentationStyle='pageSheet'
         onRequestClose={() => setShowCustomerModal(false)}
       >
-        <View className='flex-1 bg-gray-50 p-4 justify-center'>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={20}>
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View className='flex-1 bg-gray-50 p-4 justify-center' style={{ paddingBottom: insets.bottom }}>
           <Card className='border border-gray-200'>
             <CardHeader>
               <CardTitle>
@@ -396,7 +405,9 @@ export default function SalesTab() {
               </TouchableOpacity>
             </CardContent>
           </Card>
-        </View>
+            </View>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   )

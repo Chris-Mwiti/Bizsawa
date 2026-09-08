@@ -140,7 +140,7 @@ export default function InsightsOverview() {
 
   return (
     <View className='flex-1 bg-gray-50'>
-      <ScrollView
+      <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive"
         contentContainerStyle={{
           padding: 16,
           paddingBottom: TAB_BAR_SCROLL_PADDING + 24,

@@ -1,5 +1,6 @@
 import '../polyfills'
 import { useState } from 'react'
+import { View } from 'react-native'
 import { Stack } from 'expo-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import Toast from 'react-native-toast-message'
@@ -30,8 +31,10 @@ export default function RootLayout() {
           <BusinessProvider>
             <SyncProvider>
               <TourProvider>
-                <OfflineBanner />
-                <Stack screenOptions={{ headerShown: false }}>
+                <View style={{ flex: 1, backgroundColor: '#F4F9F7' }}>
+                  <OfflineBanner />
+                  <View style={{ flex: 1 }}>
+                    <Stack screenOptions={{ headerShown: false }}>
                   <Stack.Screen
                     name='auth/login'
                     options={{ headerShown: false }}
@@ -66,7 +69,9 @@ export default function RootLayout() {
                     }}
                   />
                 </Stack>
-                <Toast />
+                  </View>
+                  <Toast />
+                </View>
               </TourProvider>
             </SyncProvider>
           </BusinessProvider>
