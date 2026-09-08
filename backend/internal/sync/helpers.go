@@ -224,7 +224,7 @@ var allowedUpdateColumns = map[string]map[string]bool{
 	"invoices":         {"customer_id": true, "invoice_number": true, "order_id": true, "status": true, "subtotal": true, "tax_amount": true, "total": true, "amount_paid": true, "amount_due": true, "currency": true, "notes": true, "due_at": true, "sent_at": true, "sync_version": true, "deleted_at": true},
 	"invoice_lines":    {"invoice_id": true, "product_id": true, "description": true, "quantity": true, "unit_price": true, "line_total": true, "sync_version": true, "deleted_at": true},
 	"payments":         {"invoice_id": true, "order_id": true, "amount": true, "currency": true, "phone": true, "status": true, "provider": true, "sync_version": true, "deleted_at": true},
-	"payment_commands": {"order_id": true, "amount": true, "currency": true, "phone": true, "status": true, "provider": true, "type": true},
+	"payment_commands": {"order_id": true, "amount": true, "currency": true, "phone": true, "status": true, "provider": true, "type": true, "idempotency_key": true, "sync_version": true, "deleted_at": true},
 	"tax_rules":        {"name": true, "rate": true, "country": true, "is_default": true, "is_active": true, "sync_version": true, "deleted_at": true},
 }
 

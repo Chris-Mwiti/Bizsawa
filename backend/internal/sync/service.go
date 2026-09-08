@@ -414,6 +414,37 @@ func (s *Service) insertRecord(tx *gorm.DB, businessID uuid.UUID, userID uuid.UU
 			}
 		}
 	}
+	// Ensure idempotency_key for payment_commands (NOT NULL in DB)
+	if table == "payment_commands" {
+		if _, ok := rec["idempotency_key"]; !ok {
+			// use record id as idempotency key if provided, else generate
+			if idStr, ok := rec["id"].(string); ok && idStr != "" {
+				rec["idempotency_key"] = idStr
+			} else {
+				rec["idempotency_key"] = uuid.New().String()
+			}
+		}
+		if v, ok := rec["idempotency_key"].(string); !ok || strings.TrimSpace(v) == "" {
+			if idStr, ok := rec["id"].(string); ok && idStr != "" {
+				rec["idempotency_key"] = idStr
+			} else {
+				rec["idempotency_key"] = uuid.New().String()
+			}
+		}
+		// defaults for offline payment_commands
+		if _, ok := rec["status"]; !ok {
+			rec["status"] = "pending"
+		}
+		if _, ok := rec["provider"]; !ok {
+			rec["provider"] = "mpesa"
+		}
+		if _, ok := rec["type"]; !ok {
+			rec["type"] = "stk_push"
+		}
+		if _, ok := rec["currency"]; !ok {
+			rec["currency"] = "KES"
+		}
+	}
 
 	rec["sync_version"] = 1
 	for k, v := range rec {
