@@ -124,25 +124,25 @@ export default function InsightsExpenses() {
 
   return (
     <View className='flex-1 bg-gray-50'>
-      <ScrollView
+      <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive"
         contentContainerStyle={{
           padding: 16,
           paddingBottom: TAB_BAR_SCROLL_PADDING + 24,
-          gap: 14,
+          gap: 16,
         }}
         showsVerticalScrollIndicator={false}
       >
         {/* Hero total — impeccable: generous padding, hierarchy */}
         <Card className='border border-gray-200'>
           <CardContent className='p-5'>
-            <Text className='text-[11px] font-bold tracking-widest text-gray-400 uppercase'>
+            <Text className='text-xs font-bold font-mono tracking-widest text-gray-400 uppercase'>
               Total spend
             </Text>
             <View className='flex-row items-end justify-between mt-1'>
-              <Text className='text-3xl font-bold tracking-tight text-gray-900'>
+              <Text className='text-3xl font-bold font-mono tracking-tight text-gray-900'>
                 {formatCurrency(totalExpenses)}
               </Text>
-              <View className='w-11 h-11 rounded-xl bg-red-50 border border-red-100 items-center justify-center'>
+              <View className='w-11 h-11 rounded-2xl bg-red-50 border border-red-100 items-center justify-center'>
                 <Receipt size={20} color='#dc2626' />
               </View>
             </View>
@@ -158,14 +158,14 @@ export default function InsightsExpenses() {
             <View className='flex-row items-center gap-2'>
               <Tag size={16} color='#6b7280' />
               <CardTitle>Expenses</CardTitle>
-              <View className='ml-1 px-2 py-0.5 rounded-full bg-gray-100'>
-                <Text className='text-[11px] font-bold text-gray-600'>
+              <View className='ml-1 px-2 py-1 rounded-full bg-gray-100'>
+                <Text className='text-xs font-bold text-gray-600'>
                   {expenses.length}
                 </Text>
               </View>
             </View>
             <TouchableOpacity
-              className='flex-row items-center gap-2 bg-gray-900 px-4 py-2.5 rounded-full active:opacity-90'
+              className='flex-row items-center gap-2 bg-gray-900 px-4 py-3 rounded-full active:opacity-90'
               onPress={handleNew}
             >
               <Plus size={16} color='white' />
@@ -191,7 +191,7 @@ export default function InsightsExpenses() {
                   analytics.
                 </Text>
                 <TouchableOpacity
-                  className='mt-5 bg-white border border-gray-200 px-5 py-2.5 rounded-full'
+                  className='mt-5 bg-white border border-gray-200 px-5 py-3 rounded-full'
                   onPress={handleNew}
                 >
                   <Text className='font-bold text-gray-900 text-sm'>
@@ -204,18 +204,18 @@ export default function InsightsExpenses() {
                 {expenses.map((e) => (
                   <View
                     key={e.id}
-                    className='p-4 bg-white rounded-xl border border-gray-200'
+                    className='p-4 bg-white rounded-2xl border border-gray-200'
                   >
                     <View className='flex-row items-start justify-between gap-3'>
-                      <View className='flex-1 gap-1.5'>
+                      <View className='flex-1 gap-2'>
                         <View className='flex-row items-center gap-2 flex-wrap'>
-                          <View className='px-2 py-0.5 rounded-full bg-white border border-gray-200'>
-                            <Text className='text-[9px] font-bold tracking-widest text-gray-500'>
+                          <View className='px-2 py-1 rounded-full bg-white border border-gray-200'>
+                            <Text className='text-xs font-bold tracking-widest text-gray-500'>
                               EXP-{shortId(e.id, 6)}
                             </Text>
                           </View>
-                          <View className='px-2.5 py-1 rounded-full bg-slate-100 border border-slate-200'>
-                            <Text className='text-[11px] font-bold tracking-widest text-slate-700'>
+                          <View className='px-3 py-1 rounded-full bg-slate-100 border border-slate-200'>
+                            <Text className='text-xs font-bold tracking-widest text-slate-700'>
                               {e.category.toUpperCase()}
                             </Text>
                           </View>
@@ -240,20 +240,20 @@ export default function InsightsExpenses() {
                           </Text>
                           <Text className='text-xs text-gray-300'>•</Text>
                           <Badge className='bg-emerald-50 border border-emerald-100 px-2 py-0'>
-                            <Text className='text-[11px] font-bold text-emerald-700'>
+                            <Text className='text-xs font-bold font-mono text-emerald-700'>
                               KES {toNumber(e.amount).toLocaleString('en-KE')}
                             </Text>
                           </Badge>
                         </View>
                       </View>
                       <View className='items-end gap-2 shrink-0 ml-2'>
-                        <Text className='font-bold text-red-600 text-sm'>
+                        <Text className='font-bold font-mono text-red-600 text-sm'>
                           {formatCurrency(toNumber(e.amount))}
                         </Text>
                         <View className='flex-row gap-1'>
                           <Pressable
                             onPress={() => handleDelete(e.id)}
-                            className='w-8 h-8 rounded-full bg-red-50 border border-red-100 items-center justify-center active:bg-red-100'
+                            className='w-11 h-11 rounded-full bg-red-50 border border-red-100 items-center justify-center active:bg-red-100'
                           >
                             <Trash2 size={14} color='#dc2626' />
                           </Pressable>
@@ -278,7 +278,7 @@ export default function InsightsExpenses() {
         <View className='flex-1 bg-gray-50'>
           <View className='flex-row justify-between items-center p-4 bg-white border-b border-gray-200'>
             <View>
-              <Text className='text-[11px] font-bold tracking-widest text-gray-400 uppercase'>
+              <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
                 New
               </Text>
               <Text className='text-lg font-bold text-gray-900 -mt-0.5'>
@@ -287,14 +287,14 @@ export default function InsightsExpenses() {
             </View>
             <Pressable
               onPress={() => setShowModal(false)}
-              className='w-8 h-8 rounded-full bg-gray-100 items-center justify-center'
+              className='w-11 h-11 rounded-full bg-gray-100 items-center justify-center'
             >
               <Text className='text-gray-600 font-bold'>✕</Text>
             </Pressable>
           </View>
 
           <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
-            <View className='p-4 bg-amber-50 rounded-xl border border-amber-100'>
+            <View className='p-4 bg-amber-50 rounded-2xl border border-amber-100'>
               <Text className='text-xs font-bold text-amber-800'>
                 Required by backend
               </Text>
@@ -309,7 +309,7 @@ export default function InsightsExpenses() {
                 Category *
               </Text>
               <TextInput
-                className='border border-gray-300 rounded-xl px-4 py-3.5 bg-white text-sm'
+                className='border border-gray-300 rounded-2xl px-4 py-4 bg-white text-sm'
                 placeholder='e.g., Feed, Rent, Utilities, Transport'
                 value={formData.category}
                 onChangeText={(v) => setFormData({ ...formData, category: v })}
@@ -322,13 +322,13 @@ export default function InsightsExpenses() {
                 Amount (KES) *
               </Text>
               <TextInput
-                className='border border-gray-300 rounded-xl px-4 py-3.5 bg-white text-base'
+                className='border border-gray-300 rounded-2xl px-4 py-4 bg-white text-base'
                 placeholder='0.00'
                 keyboardType='numeric'
                 value={formData.amount}
                 onChangeText={(v) => setFormData({ ...formData, amount: v })}
               />
-              <Text className='text-[11px] text-gray-400 mt-1'>
+              <Text className='text-xs text-gray-400 mt-1'>
                 Sent as DecimalString via toDecimalString()
               </Text>
             </View>
@@ -338,7 +338,7 @@ export default function InsightsExpenses() {
                 Description
               </Text>
               <TextInput
-                className='border border-gray-300 rounded-xl px-4 py-3.5 bg-white text-sm'
+                className='border border-gray-300 rounded-2xl px-4 py-4 bg-white text-sm'
                 placeholder='Optional — e.g., 5 bags Layers Mash'
                 value={formData.description}
                 onChangeText={(v) =>
@@ -353,7 +353,7 @@ export default function InsightsExpenses() {
                 Vendor
               </Text>
               <TextInput
-                className='border border-gray-300 rounded-xl px-4 py-3.5 bg-white text-sm'
+                className='border border-gray-300 rounded-2xl px-4 py-4 bg-white text-sm'
                 placeholder='Optional — supplier / shop'
                 value={formData.vendor}
                 onChangeText={(v) => setFormData({ ...formData, vendor: v })}
@@ -365,7 +365,7 @@ export default function InsightsExpenses() {
                 Date *
               </Text>
               <View className='flex-row gap-3'>
-                <View className='flex-1 border border-gray-300 rounded-xl px-4 py-3.5 bg-white flex-row items-center gap-2'>
+                <View className='flex-1 border border-gray-300 rounded-2xl px-4 py-4 bg-white flex-row items-center gap-2'>
                   <Calendar size={16} color='#6b7280' />
                   <Text className='text-sm text-gray-900'>
                     {formData.spentAt.split('T')[0]}
@@ -378,18 +378,18 @@ export default function InsightsExpenses() {
                       spentAt: new Date().toISOString(),
                     })
                   }
-                  className='px-4 py-3.5 rounded-xl bg-white border border-gray-200'
+                  className='px-4 py-4 rounded-2xl bg-white border border-gray-200'
                 >
                   <Text className='font-bold text-sm text-gray-900'>Today</Text>
                 </Pressable>
               </View>
-              <Text className='text-[11px] text-gray-400 mt-1'>
+              <Text className='text-xs text-gray-400 mt-1'>
                 Stored as ISO spentAt — handler parses time.RFC3339
               </Text>
             </View>
 
             <TouchableOpacity
-              className='mt-2 bg-gray-900 py-4 rounded-xl items-center active:opacity-90 disabled:opacity-50'
+              className='mt-2 bg-gray-900 py-4 rounded-2xl items-center active:opacity-90 disabled:opacity-50'
               onPress={handleSubmit}
               disabled={isCreating}
             >

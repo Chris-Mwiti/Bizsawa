@@ -1,5 +1,9 @@
 import React, { memo, useCallback, useMemo, useState } from 'react'
 import {
+  KeyboardAvoidingView,
+  Platform,
+  Keyboard,
+  TouchableWithoutFeedback,
   ActivityIndicator,
   Alert,
   FlatList,
@@ -10,6 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import {
   ChevronLeft,
@@ -80,13 +85,13 @@ const OrderItem = memo(
                 </Text>
               </View>
               <View className='items-end gap-1'>
-                <Text className='text-sm font-bold tracking-tight text-gray-900'>
-                  {formatCurrency(toNumber(order.total))}
+                <Text className='text-sm font-bold tracking-tight text-gray-900 font-mono'>
+                {formatCurrency(toNumber(order.total))}
                 </Text>
                 <View
-                  className={`px-2 py-0.5 rounded-full border ${statusPill(order.status)}`}
+                  className={`px-2 py-1 rounded-full border ${statusPill(order.status)}`}
                 >
-                  <Text className='text-[11px] font-bold tracking-widest'>
+                  <Text className='text-xs font-bold tracking-widest'>
                     {order.status.toUpperCase()}
                   </Text>
                 </View>
@@ -96,7 +101,7 @@ const OrderItem = memo(
             <View className='flex-row gap-2'>
               {order.status === 'draft' && (
                 <TouchableOpacity
-                  className='flex-1 bg-gray-900 py-2.5 rounded-xl items-center'
+                  className='flex-1 bg-gray-900 py-3 rounded-2xl items-center'
                   onPress={(e) => {
                     e.stopPropagation()
                     onUpdateStatus(order, OrderStatus.confirmed)
@@ -107,7 +112,7 @@ const OrderItem = memo(
               )}
               {order.status === 'confirmed' && (
                 <TouchableOpacity
-                  className='flex-1 bg-gray-900 py-2.5 rounded-xl items-center'
+                  className='flex-1 bg-gray-900 py-3 rounded-2xl items-center'
                   onPress={(e) => {
                     e.stopPropagation()
                     onUpdateStatus(order, OrderStatus.fulfilled)
@@ -118,7 +123,7 @@ const OrderItem = memo(
               )}
               {showMpesa ? (
                 <TouchableOpacity
-                  className='w-11 h-11 rounded-xl bg-white border border-gray-200 items-center justify-center'
+                  className='w-11 h-11 rounded-2xl bg-white border border-gray-200 items-center justify-center'
                   onPress={(e) => {
                     e.stopPropagation()
                     onInitiatePayment(order)
@@ -128,13 +133,13 @@ const OrderItem = memo(
                   <Smartphone size={16} color='#111827' />
                 </TouchableOpacity>
               ) : (
-                <View className='w-11 h-11 rounded-xl bg-gray-100 border border-gray-200 items-center justify-center opacity-50'>
+                <View className='w-11 h-11 rounded-2xl bg-gray-100 border border-gray-200 items-center justify-center opacity-50'>
                   <Smartphone size={16} color='#9ca3af' />
                 </View>
               )}
               {!isFulfilled && !isCancelled && (
                 <TouchableOpacity
-                  className='w-11 h-11 rounded-xl bg-white border border-red-200 items-center justify-center'
+                  className='w-11 h-11 rounded-2xl bg-white border border-red-200 items-center justify-center'
                   onPress={(e) => {
                     e.stopPropagation()
                     onUpdateStatus(order, OrderStatus.cancelled)
@@ -145,7 +150,7 @@ const OrderItem = memo(
               )}
             </View>
             {isFulfilled && (
-              <Text className='text-[11px] text-gray-400 mt-2 text-center'>
+              <Text className='text-xs text-gray-400 mt-2 text-center'>
                 Fulfilled — M-Pesa disabled
               </Text>
             )}
@@ -158,6 +163,7 @@ const OrderItem = memo(
 OrderItem.displayName = 'OrderItem'
 
 export default function OrdersScreen() {
+  const insets = useSafeAreaInsets()
   const router = useRouter()
   const [showOrderModal, setShowOrderModal] = useState(false)
   const [showCustomerModal, setShowCustomerModal] = useState(false)
@@ -391,12 +397,12 @@ export default function OrdersScreen() {
         <View className='flex-row items-center gap-3 mb-4'>
           <TouchableOpacity
             onPress={() => router.back()}
-            className='w-8 h-8 rounded-full bg-gray-100 items-center justify-center'
+            className='w-11 h-11 rounded-full bg-gray-100 items-center justify-center'
           >
             <ChevronLeft size={18} color='#111827' />
           </TouchableOpacity>
           <View>
-            <Text className='text-[11px] font-bold tracking-widest text-gray-400 uppercase'>
+            <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
               Workspace
             </Text>
             <Text className='text-lg font-bold tracking-tight text-gray-900 -mt-0.5'>
@@ -410,16 +416,16 @@ export default function OrdersScreen() {
         <View className='flex-row bg-gray-100 rounded-full p-1'>
           <Pressable
             onPress={() => router.replace('/(tabs)/sales')}
-            className='flex-1 py-2.5 rounded-full items-center'
+            className='flex-1 py-3 rounded-full items-center'
           >
             <Text className='text-sm font-medium text-gray-500'>Sales</Text>
           </Pressable>
-          <View className='flex-1 py-2.5 rounded-full items-center bg-white shadow-sm border border-gray-200'>
+          <View className='flex-1 py-3 rounded-full items-center bg-white shadow-sm border border-gray-200'>
             <Text className='text-sm font-bold text-gray-900'>Orders</Text>
           </View>
           <Pressable
             onPress={() => router.replace('/invoices')}
-            className='flex-1 py-2.5 rounded-full items-center'
+            className='flex-1 py-3 rounded-full items-center'
           >
             <Text className='text-sm font-medium text-gray-500'>Invoices</Text>
           </Pressable>
@@ -487,7 +493,9 @@ export default function OrdersScreen() {
         presentationStyle='pageSheet'
         onRequestClose={() => setShowCustomerModal(false)}
       >
-        <View className='flex-1 bg-gray-50 p-4 justify-center'>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={20}>
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View className='flex-1 bg-gray-50 p-4 justify-center' style={{ paddingBottom: insets.bottom }}>
           <Card className='border border-gray-200'>
             <CardHeader>
               <CardTitle>
@@ -496,7 +504,7 @@ export default function OrdersScreen() {
             </CardHeader>
             <CardContent className='gap-3'>
               <TextInput
-                className='border border-gray-300 rounded-xl px-4 py-3.5 bg-white text-sm'
+                className='border border-gray-300 rounded-2xl px-4 py-4 bg-white text-sm'
                 placeholder='Customer name *'
                 value={customerForm.name}
                 onChangeText={(n) =>
@@ -504,7 +512,7 @@ export default function OrdersScreen() {
                 }
               />
               <TextInput
-                className='border border-gray-300 rounded-xl px-4 py-3.5 bg-white text-sm'
+                className='border border-gray-300 rounded-2xl px-4 py-4 bg-white text-sm'
                 placeholder='Phone'
                 keyboardType='phone-pad'
                 value={customerForm.phone}
@@ -513,7 +521,7 @@ export default function OrdersScreen() {
                 }
               />
               <TouchableOpacity
-                className='bg-gray-900 py-3.5 rounded-xl items-center mt-2'
+                className='bg-gray-900 py-4 rounded-2xl items-center mt-2'
                 onPress={handleCreateCustomer}
               >
                 <Text className='text-white font-bold text-sm'>
@@ -522,11 +530,13 @@ export default function OrdersScreen() {
               </TouchableOpacity>
             </CardContent>
           </Card>
-        </View>
+            </View>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       </Modal>
 
       {paymentStatus.data && (
-        <View className='absolute bottom-24 left-4 right-4 bg-white border border-gray-200 rounded-xl p-3 flex-row items-center gap-2 shadow-sm'>
+        <View className='absolute bottom-24 left-4 right-4 bg-white border border-gray-200 rounded-2xl p-3 flex-row items-center gap-2 shadow-sm'>
           <CheckCircle
             size={18}
             color={

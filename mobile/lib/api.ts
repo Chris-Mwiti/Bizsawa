@@ -4,7 +4,6 @@ import { Platform } from 'react-native'
 import Constants from 'expo-constants'
 import * as Device from 'expo-device'
 import type { AuthResponse } from './api-dtos'
-import { createIdempotencyKey } from './idempotency'
 
 const DEFAULT_API_PORT = 5504
 
@@ -104,11 +103,6 @@ export async function clearAuthStorage(): Promise<void> {
   } catch {}
 }
 
-function isMutatingMethod(method?: string): boolean {
-  return ['post', 'put', 'patch', 'delete'].includes(
-    (method || 'get').toLowerCase(),
-  )
-}
 
 let refreshPromise: Promise<string | null> | null = null
 
@@ -148,7 +142,6 @@ api.interceptors.request.use(
       ;(config.headers as any)['x-business-id'] = businessId
       // Fallback: also send as query ?businessId= so TenantResolution can read it even if header stripped by CORS/proxy
       // TenantResolution checks URLParam + header; we extend to query param below
-      const url = config.url || ''
       // attach as param only for analytics/sales/expenses where business context is required
       // keep existing params intact
       ;(config.params as any) = { ...(config.params as any) }

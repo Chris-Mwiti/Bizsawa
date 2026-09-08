@@ -455,6 +455,7 @@ func (r *Repository) SalesVelocity(ctx context.Context, businessID uuid.UUID, tf
 
 // UpsertSnapshot atomically replaces the stored snapshot for
 // (business, timeframe), enforcing a single materialized row.
+// Uses INSERT ... ON CONFLICT to remain idempotent under concurrent Compute() calls.
 func (r *Repository) UpsertSnapshot(ctx context.Context, s *Snapshot) error {
 	raw, err := json.Marshal(s)
 	if err != nil {
@@ -462,6 +463,7 @@ func (r *Repository) UpsertSnapshot(ctx context.Context, s *Snapshot) error {
 	}
 
 	stored := StoredSnapshot{
+		ID:          uuid.New(),
 		TenantID:    s.BusinessID,
 		BusinessID:  s.BusinessID,
 		Timeframe:   string(s.Timeframe),
@@ -469,12 +471,24 @@ func (r *Repository) UpsertSnapshot(ctx context.Context, s *Snapshot) error {
 		GeneratedAt: s.GeneratedAt,
 	}
 
+	// Prefer native UPSERT to avoid race between concurrent DELETE+CREATE transactions
+	// that hit idx_analytics_snapshots_business_timeframe (partial unique index).
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Attempt UPSERT first (handles concurrent callers)
+		err := tx.Exec(`
+			INSERT INTO analytics_snapshots (id, tenant_id, business_id, timeframe, payload, generated_at, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())
+			ON CONFLICT (business_id, timeframe) WHERE timeframe IN ('day','week','month','year')
+			DO UPDATE SET payload = EXCLUDED.payload, generated_at = EXCLUDED.generated_at, updated_at = NOW()
+		`, stored.ID, stored.TenantID, stored.BusinessID, stored.Timeframe, stored.Payload, stored.GeneratedAt).Error
+		if err == nil {
+			return nil
+		}
+		// Fallback for older schema or unexpected conflict: delete+create
 		if err := tx.Where("business_id = ? AND timeframe = ?", s.BusinessID, string(s.Timeframe)).
 			Delete(&StoredSnapshot{}).Error; err != nil {
 			return err
 		}
-
 		return tx.Create(&stored).Error
 	})
 }

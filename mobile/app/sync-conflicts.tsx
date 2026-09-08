@@ -84,8 +84,8 @@ export default function SyncConflictsScreen() {
               </CardHeader>
               <CardContent className='gap-3'>
                 <View className='flex-row gap-2'>
-                  <View className='flex-1 p-3 bg-white rounded-xl border border-gray-200'>
-                    <Text className='text-[11px] font-bold tracking-widest text-gray-400 uppercase'>
+                  <View className='flex-1 p-3 bg-white rounded-2xl border border-gray-200'>
+                    <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
                       Your version (v{c.client_version})
                     </Text>
                     <Text
@@ -95,8 +95,8 @@ export default function SyncConflictsScreen() {
                       {JSON.stringify(c.client_payload, null, 2)}
                     </Text>
                   </View>
-                  <View className='flex-1 p-3 bg-gray-50 rounded-xl border border-gray-200'>
-                    <Text className='text-[11px] font-bold tracking-widest text-gray-400 uppercase'>
+                  <View className='flex-1 p-3 bg-gray-50 rounded-2xl border border-gray-200'>
+                    <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
                       Server version (v{c.server_version})
                     </Text>
                     <Text
@@ -110,7 +110,7 @@ export default function SyncConflictsScreen() {
                 <View className='flex-row gap-3'>
                   <TouchableOpacity
                     onPress={() => resolve(c.id, 'kept_client')}
-                    className='flex-1 py-3 rounded-xl bg-gray-900 items-center'
+                    className='flex-1 py-3 rounded-2xl bg-gray-900 items-center'
                   >
                     <Text className='text-white font-bold text-sm'>
                       Keep mine
@@ -118,7 +118,7 @@ export default function SyncConflictsScreen() {
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={() => resolve(c.id, 'kept_server')}
-                    className='flex-1 py-3 rounded-xl bg-white border border-gray-200 items-center'
+                    className='flex-1 py-3 rounded-2xl bg-white border border-gray-200 items-center'
                   >
                     <Text className='font-bold text-sm text-gray-900'>
                       Keep server

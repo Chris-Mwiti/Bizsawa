@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError } from '../../lib/api'
 import type {
   Product as BackendProduct,
-  ProductRequest,
   UUID,
 } from '../../lib/api-dtos'
 import { toDecimalString, toNumber } from '../../lib/api-dtos'
@@ -72,33 +71,6 @@ function mapProduct(p: BackendProduct): Product {
       cost: v.cost,
     })),
   } as any
-}
-
-function toProductRequest(
-  input: CreateProductInput | UpdateProductInput,
-): ProductRequest {
-  const variants = input.variants
-    ?.filter((v) => v.name?.trim())
-    .map((v) => ({
-      name: v.name.trim(),
-      sku: v.sku?.trim() || undefined,
-      barcode: v.barcode?.trim() || undefined,
-      price: toDecimalString(v.price),
-      cost: toDecimalString(v.cost ?? v.price),
-      isActive: v.isActive ?? true,
-    }))
-  return {
-    name: input.name || '',
-    description: (input as any).description,
-    sku: (input as any).sku,
-    category: input.category,
-    barcode: (input as any).barcode,
-    imageUrl: input.imageUrl,
-    price: toDecimalString(input.price),
-    cost: toDecimalString(input.cost ?? input.buyingPrice ?? 0),
-    isActive: true,
-    variants: variants && variants.length ? variants : undefined,
-  }
 }
 
 export const useProducts = () => {

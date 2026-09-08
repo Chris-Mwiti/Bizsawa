@@ -10,7 +10,7 @@ import {
   ScrollView,
   Alert,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
   Eye,
   EyeOff,
@@ -24,6 +24,7 @@ import { useRouter } from 'expo-router'
 import { useAuth } from '../../contexts/AuthContext'
 
 export default function RegisterScreen() {
+  const insets = useSafeAreaInsets()
   const [formData, setFormData] = useState({
     ownerName: '',
     ownerEmail: '',
@@ -150,9 +151,15 @@ export default function RegisterScreen() {
     <SafeAreaView className='flex-1 bg-white'>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
         className='flex-1'
       >
-        <ScrollView className='flex-1 px-6'>
+        <ScrollView
+          className='flex-1 px-6'
+          keyboardShouldPersistTaps='handled'
+          keyboardDismissMode='interactive'
+          contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
+        >
           <View className='flex-1 justify-center py-8'>
             {/* Header */}
             <View className='items-center mb-6'>
@@ -181,7 +188,7 @@ export default function RegisterScreen() {
                     style={{ position: 'absolute', left: 12, top: 12 }}
                   />
                   <TextInput
-                    className={`border rounded-lg px-12 py-3 text-gray-900 ${
+                    className={`border rounded-2xl px-12 py-3 text-gray-900 ${
                       errors.ownerName ? 'border-red-500' : 'border-gray-300'
                     }`}
                     placeholder='Enter your full name'
@@ -208,7 +215,7 @@ export default function RegisterScreen() {
                     style={{ position: 'absolute', left: 12, top: 12 }}
                   />
                   <TextInput
-                    className={`border rounded-lg px-12 py-3 text-gray-900 ${
+                    className={`border rounded-2xl px-12 py-3 text-gray-900 ${
                       errors.ownerEmail ? 'border-red-500' : 'border-gray-300'
                     }`}
                     placeholder='Enter your email'
@@ -233,7 +240,7 @@ export default function RegisterScreen() {
                   WhatsApp Number
                 </Text>
                 <TextInput
-                  className={`border rounded-lg px-4 py-3 text-gray-900 ${
+                  className={`border rounded-2xl px-4 py-3 text-gray-900 ${
                     errors.whatsappNumber ? 'border-red-500' : 'border-gray-300'
                   }`}
                   placeholder='+254 XXX XXX XXX'
@@ -262,7 +269,7 @@ export default function RegisterScreen() {
                     style={{ position: 'absolute', left: 12, top: 12 }}
                   />
                   <TextInput
-                    className={`border rounded-lg px-12 py-3 text-gray-900 ${
+                    className={`border rounded-2xl px-12 py-3 text-gray-900 ${
                       errors.name ? 'border-red-500' : 'border-gray-300'
                     }`}
                     placeholder='Enter business name'
@@ -361,7 +368,7 @@ export default function RegisterScreen() {
                     style={{ position: 'absolute', left: 12, top: 12 }}
                   />
                   <TextInput
-                    className={`border rounded-lg px-12 pr-12 py-3 text-gray-900 ${
+                    className={`border rounded-2xl px-12 pr-12 py-3 text-gray-900 ${
                       errors.password ? 'border-red-500' : 'border-gray-300'
                     }`}
                     placeholder='Create password'
@@ -401,7 +408,7 @@ export default function RegisterScreen() {
                     style={{ position: 'absolute', left: 12, top: 12 }}
                   />
                   <TextInput
-                    className={`border rounded-lg px-12 pr-12 py-3 text-gray-900 ${
+                    className={`border rounded-2xl px-12 pr-12 py-3 text-gray-900 ${
                       errors.confirmPassword
                         ? 'border-red-500'
                         : 'border-gray-300'
@@ -435,7 +442,7 @@ export default function RegisterScreen() {
               <TouchableOpacity
                 onPress={handleSubmit}
                 disabled={isLoading}
-                className={`bg-primary-600 rounded-lg py-4 items-center ${
+                className={`bg-primary-600 rounded-2xl py-4 items-center ${
                   isLoading ? 'opacity-50' : ''
                 }`}
               >

@@ -46,7 +46,7 @@ export function CategoryPieChart({
               <View className='flex-row justify-between items-center'>
                 <Text className='font-medium text-gray-900'>{cat.name}</Text>
                 <View className='flex-row items-center gap-2'>
-                  <Text className='font-bold text-gray-900'>
+                  <Text className='font-bold font-mono text-gray-900'>
                     {formatCurrency(cat.revenue)}
                   </Text>
                   <Text className='text-xs text-gray-500'>

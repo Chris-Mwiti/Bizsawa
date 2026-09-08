@@ -45,13 +45,13 @@ export function ProfitChart({
           {data.map((point, i) => (
             <View
               key={i}
-              className='flex-row items-center justify-between p-3 bg-gray-50 rounded-lg'
+              className='flex-row items-center justify-between p-3 bg-gray-50 rounded-2xl'
             >
               <Text className='font-medium text-gray-900'>
                 {point.date.split('T')[0].slice(5)}
               </Text>
               <View className='flex-row gap-3'>
-                <Text className='text-green-700 font-bold'>
+                <Text className='text-green-700 font-bold font-mono'>
                   {formatCurrency(point.profit)}
                 </Text>
                 <Text className='text-blue-700 font-bold'>

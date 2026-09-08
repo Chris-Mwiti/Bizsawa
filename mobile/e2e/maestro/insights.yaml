@@ -1,0 +1,6 @@
+appId: com.bizsawa.mobile
+---
+- launchApp
+- tapOn: "Analytics"
+- tapOn: "Week"
+- assertVisible: "Revenue"

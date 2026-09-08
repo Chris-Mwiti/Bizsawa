@@ -9,7 +9,10 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Keyboard,
+  TouchableWithoutFeedback,
 } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
   Bot,
   Send,
@@ -18,12 +21,10 @@ import {
   TrendingUp,
   Globe,
   MessageCircle,
-  AlertTriangle,
   Mic,
   MicOff,
 } from 'lucide-react-native'
 import { router } from 'expo-router'
-import { useAuth } from '../contexts/AuthContext'
 import { useChat, type ChatMessage } from '../hooks/api/useChat'
 import { CoachMessageMarkdown } from '../components/CoachMessageMarkdown'
 import Toast from 'react-native-toast-message'
@@ -75,13 +76,13 @@ const quickActions = [
 ]
 
 export default function AICoachModal() {
+  const insets = useSafeAreaInsets()
   const [messages, setMessages] = useState<Message[]>(initialMessages)
   const [inputMessage, setInputMessage] = useState('')
   const [language, setLanguage] = useState<'en' | 'sw'>('en')
-  const [isListening, setIsListening] = useState(false)
+  const [isListening] = useState(false)
   const scrollViewRef = useRef<ScrollView>(null)
 
-  const { userData } = useAuth()
   const { mutateAsync: sendMessage, isPending: isTyping } = useChat()
 
   const formatTime = (date: Date) => {
@@ -168,9 +169,11 @@ export default function AICoachModal() {
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
     >
-      <View className='flex-1 bg-gray-50'>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <View className='flex-1 bg-gray-50'>
         <View className='flex-row items-center justify-between p-4 bg-white border-b border-gray-200'>
           <View className='flex-row items-center'>
             <View className='w-10 h-10 bg-primary-600 rounded-full items-center justify-center mr-3'>
@@ -218,6 +221,8 @@ export default function AICoachModal() {
           ref={scrollViewRef}
           className='flex-1 px-4 pt-4'
           contentContainerStyle={{ paddingBottom: 20 }}
+          keyboardShouldPersistTaps='handled'
+          keyboardDismissMode='interactive'
         >
           {/* Quick Actions */}
           <View className='flex-row flex-wrap justify-center mb-6'>
@@ -225,7 +230,7 @@ export default function AICoachModal() {
               <TouchableOpacity
                 key={action.id}
                 onPress={() => handleQuickAction(action.query)}
-                className='bg-white border border-gray-200 rounded-lg py-2 px-3 m-1'
+                className='bg-white border border-gray-200 rounded-2xl py-2 px-3 m-1'
               >
                 <Text className='text-xs text-gray-700 font-medium'>
                   {action.label}
@@ -241,7 +246,7 @@ export default function AICoachModal() {
               className={`flex-row mb-4 ${msg.isBot ? 'justify-start' : 'justify-end'}`}
             >
               {msg.isBot && (
-                <View className='w-8 h-8 rounded-full bg-primary-600 items-center justify-center mr-2'>
+                <View className='w-11 h-11 rounded-full bg-primary-600 items-center justify-center mr-2'>
                   <Bot size={16} color='white' />
                 </View>
               )}
@@ -254,13 +259,13 @@ export default function AICoachModal() {
                   <Text className='text-sm text-white'>{msg.content}</Text>
                 )}
                 <Text
-                  className={`text-[10px] mt-1 ${msg.isBot ? 'text-gray-400' : 'text-primary-200 text-right'}`}
+                  className={`text-xs mt-1 ${msg.isBot ? 'text-gray-400' : 'text-primary-200 text-right'}`}
                 >
                   {formatTime(msg.timestamp)}
                 </Text>
               </View>
               {!msg.isBot && (
-                <View className='w-8 h-8 rounded-full bg-gray-500 items-center justify-center ml-2'>
+                <View className='w-11 h-11 rounded-full bg-gray-500 items-center justify-center ml-2'>
                   <User size={16} color='white' />
                 </View>
               )}
@@ -268,7 +273,7 @@ export default function AICoachModal() {
           ))}
           {isTyping && (
             <View className='flex-row justify-start mb-4'>
-              <View className='w-8 h-8 rounded-full bg-primary-600 items-center justify-center mr-2'>
+              <View className='w-11 h-11 rounded-full bg-primary-600 items-center justify-center mr-2'>
                 <Bot size={16} color='white' />
               </View>
               <View className='p-4 bg-white border border-gray-200 rounded-2xl rounded-tl-none'>
@@ -278,7 +283,10 @@ export default function AICoachModal() {
           )}
         </ScrollView>
 
-        <View className='p-3 bg-white border-t border-gray-200 flex-row items-center shadow-lg pb-8'>
+        <View
+          className='p-3 bg-white border-t border-gray-200 flex-row items-center shadow-lg'
+          style={{ paddingBottom: Math.max(12, insets.bottom + 8) }}
+        >
           <TouchableOpacity
             onPress={handleVoiceInput}
             className='w-10 h-10 bg-gray-100 rounded-full items-center justify-center mr-2'
@@ -308,7 +316,8 @@ export default function AICoachModal() {
             <Send size={18} color='white' />
           </TouchableOpacity>
         </View>
-      </View>
+        </View>
+      </TouchableWithoutFeedback>
     </KeyboardAvoidingView>
   )
 }

@@ -11,7 +11,10 @@ import {
   Platform,
   Alert,
   Share,
+  Keyboard,
+  TouchableWithoutFeedback,
 } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
   ArrowLeft,
   Sparkles,
@@ -81,6 +84,7 @@ const platforms = [
 ]
 
 export default function SocialMediaModal() {
+  const insets = useSafeAreaInsets()
   const [selectedGoal, setSelectedGoal] = useState<any>(null)
   const [selectedPlatform, setSelectedPlatform] = useState<string>('instagram')
   const [tone, setTone] = useState<string>('')
@@ -274,9 +278,11 @@ export default function SocialMediaModal() {
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
     >
-      <View className='flex-1 bg-white'>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <View className='flex-1 bg-white'>
         <View className='flex-row items-center p-4 border-b border-gray-100 mt-2'>
           <TouchableOpacity onPress={() => router.back()} className='mr-3 p-2'>
             <ArrowLeft size={20} color='#374151' />
@@ -291,10 +297,12 @@ export default function SocialMediaModal() {
 
         <ScrollView
           className='flex-1 px-4 py-4'
-          contentContainerStyle={{ paddingBottom: 40 }}
+          contentContainerStyle={{ paddingBottom: 40 + insets.bottom }}
+          keyboardShouldPersistTaps='handled'
+          keyboardDismissMode='interactive'
         >
           {errorMsg ? (
-            <View className='bg-amber-50 p-3 rounded-lg flex-row items-center mb-4 border border-amber-200'>
+            <View className='bg-amber-50 p-3 rounded-2xl flex-row items-center mb-4 border border-amber-200'>
               <View className='mr-2'>
                 <AlertCircle size={16} color='#d97706' />
               </View>
@@ -312,7 +320,7 @@ export default function SocialMediaModal() {
               <TouchableOpacity
                 key={platform.id}
                 onPress={() => setSelectedPlatform(platform.id)}
-                className={`flex-1 mx-1 py-3 rounded-lg items-center ${selectedPlatform === platform.id ? platform.color : 'bg-gray-100'}`}
+                className={`flex-1 mx-1 py-3 rounded-2xl items-center ${selectedPlatform === platform.id ? platform.color : 'bg-gray-100'}`}
               >
                 <Text
                   className={`font-bold text-xs ${selectedPlatform === platform.id ? 'text-white' : 'text-gray-600'}`}
@@ -333,12 +341,12 @@ export default function SocialMediaModal() {
                 onPress={() =>
                   setSelectedGoal(selectedGoal?.id === g.id ? null : g)
                 }
-                className={`w-[48%] mb-2 p-3 rounded-xl border-2 ${selectedGoal?.id === g.id ? g.color + ' bg-gray-50' : 'border-gray-100 bg-white'}`}
+                className={`w-[48%] mb-2 p-3 rounded-2xl border-2 ${selectedGoal?.id === g.id ? g.color + ' bg-gray-50' : 'border-gray-100 bg-white'}`}
               >
                 <Text className='font-bold text-sm text-gray-800'>
                   {g.label}
                 </Text>
-                <Text className='text-[10px] text-gray-500 mt-1'>
+                <Text className='text-xs text-gray-500 mt-1'>
                   {g.sublabel}
                 </Text>
               </TouchableOpacity>
@@ -353,7 +361,7 @@ export default function SocialMediaModal() {
               <TouchableOpacity
                 key={t.id}
                 onPress={() => setTone(tone === t.id ? '' : t.id)}
-                className={`w-[31%] mb-2 py-3 rounded-lg border items-center ${tone === t.id ? 'bg-[#00C4B4] border-[#00C4B4]' : 'bg-white border-gray-200'}`}
+                className={`w-[31%] mb-2 py-3 rounded-2xl border items-center ${tone === t.id ? 'bg-[#00C4B4] border-[#00C4B4]' : 'bg-white border-gray-200'}`}
               >
                 <Text
                   className={`font-bold text-xs ${tone === t.id ? 'text-white' : 'text-gray-600'}`}
@@ -373,7 +381,7 @@ export default function SocialMediaModal() {
             value={description}
             onChangeText={setDescription}
             placeholder='e.g. My new M-Pesa payment feature...'
-            className='bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm text-gray-800 h-32 mb-6'
+            className='bg-gray-50 border border-gray-200 rounded-2xl p-4 text-sm text-gray-800 h-32 mb-6'
             textAlignVertical='top'
           />
 
@@ -382,7 +390,7 @@ export default function SocialMediaModal() {
             disabled={
               !selectedGoal || !tone || !description.trim() || isGenerating
             }
-            className={`py-4 rounded-xl items-center flex-row justify-center mb-6 shadow-sm ${!selectedGoal || !tone || !description.trim() || isGenerating ? 'bg-gray-300' : 'bg-[#00C4B4]'}`}
+            className={`py-4 rounded-2xl items-center flex-row justify-center mb-6 shadow-sm ${!selectedGoal || !tone || !description.trim() || isGenerating ? 'bg-gray-300' : 'bg-[#00C4B4]'}`}
           >
             {isGenerating ? (
               <ActivityIndicator size='small' color='white' />
@@ -400,21 +408,21 @@ export default function SocialMediaModal() {
             <View className='mt-2'>
               <View className='flex-row justify-between mb-2 items-center'>
                 <Text className='font-bold'>Preview</Text>
-                <Text className='text-[10px] text-gray-400 uppercase tracking-widest'>
+                <Text className='text-xs text-gray-400 uppercase tracking-widest'>
                   {generatedContent.platform} {generatedContent.type}
                 </Text>
               </View>
-              <View className='bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm'>
+              <View className='bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm'>
                 <View className='flex-row items-center p-3 border-b border-gray-100 justify-between'>
                   <View className='flex-row items-center'>
-                    <View className='w-8 h-8 rounded-full bg-blue-600 mr-3 items-center justify-center'>
+                    <View className='w-11 h-11 rounded-full bg-blue-600 mr-3 items-center justify-center'>
                       <Text className='text-white text-xs font-bold'>NM</Text>
                     </View>
                     <Text className='font-medium text-sm'>
                       bizsawa_official
                     </Text>
                   </View>
-                  <Text className='text-[10px] text-gray-400 bg-gray-100 px-2 py-1 rounded-sm'>
+                  <Text className='text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-sm'>
                     {generatedContent.source}
                   </Text>
                 </View>
@@ -436,7 +444,7 @@ export default function SocialMediaModal() {
               </View>
               <TouchableOpacity
                 onPress={handleShare}
-                className='mt-4 bg-gray-900 py-4 rounded-xl items-center flex-row justify-center shadow-md'
+                className='mt-4 bg-gray-900 py-4 rounded-2xl items-center flex-row justify-center shadow-md'
               >
                 <View className='mr-2'>
                   <ShareIcon size={18} color='white' />
@@ -446,7 +454,8 @@ export default function SocialMediaModal() {
             </View>
           )}
         </ScrollView>
-      </View>
+        </View>
+      </TouchableWithoutFeedback>
     </KeyboardAvoidingView>
   )
 }

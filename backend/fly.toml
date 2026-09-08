@@ -1,0 +1,64 @@
+app = "bizsawa-api"
+primary_region = "nbo"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  APP_ENV = "production"
+  APP_ADDR = ":5504"
+  # Secrets injected via `fly secrets set` — see deployment_sage.md:
+  # DATABASE_DSN, REDIS_ADDR, JWT_SIGNING_KEY, MPESA_*, CRYPTO_MASTER_KEY, CRYPTO_INDEX_SECRET, CORS_ALLOWED_ORIGINS
+
+[http_service]
+  internal_port = 5504
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+  [http_service.concurrency]
+    type = "connections"
+    hard_limit = 500
+    soft_limit = 250
+
+[[services]]
+  internal_port = 5504
+  protocol = "tcp"
+
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+    force_https = true
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
+
+  [services.concurrency]
+    type = "connections"
+    hard_limit = 500
+    soft_limit = 250
+
+  [[services.http_checks]]
+    interval = "10s"
+    timeout = "2s"
+    grace_period = "5s"
+    method = "GET"
+    path = "/health"
+    protocol = "http"
+
+[checks]
+  [checks.ready]
+    port = 5504
+    type = "http"
+    interval = "10s"
+    timeout = "2s"
+    grace_period = "5s"
+    method = "GET"
+    path = "/ready"
+
+[deploy]
+  release_command = "/app/migrate up"
+  strategy = "rolling"

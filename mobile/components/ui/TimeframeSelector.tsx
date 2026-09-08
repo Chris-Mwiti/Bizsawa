@@ -1,5 +1,5 @@
 import React from 'react'
-import { View, TouchableOpacity, Text } from 'react-native'
+import { View, TouchableOpacity } from 'react-native'
 import type { Timeframe } from '../../hooks/api/useAnalytics'
 
 export interface TimeframeSelectorProps {
@@ -19,7 +19,6 @@ const LABELS: Record<Timeframe, string> = {
 }
 
 export function TimeframeSelector({
-  value,
   onChange,
   className = '',
 }: TimeframeSelectorProps) {

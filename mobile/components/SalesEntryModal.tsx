@@ -7,7 +7,12 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
   Banknote,
   CreditCard,
@@ -49,6 +54,7 @@ export function SalesEntryModal(props: {
     name: string
     phone?: string
   }>
+  customersLoading?: boolean
   customerId: string | null
   setCustomerId: (id: string | null) => void
   paymentMethod: string
@@ -102,6 +108,7 @@ export function SalesEntryModal(props: {
 
   const formatCurrency = (amount: number) =>
     `KES ${amount.toLocaleString('en-KE')}`
+  const insets = useSafeAreaInsets()
 
   return (
     <Modal
@@ -110,17 +117,28 @@ export function SalesEntryModal(props: {
       presentationStyle='pageSheet'
       onRequestClose={props.onClose}
     >
-      <View className='flex-1 bg-gray-50'>
-        <View className='flex-row justify-between items-center p-4 bg-white border-b border-gray-200'>
-          <Text className='text-lg font-bold'>{props.title}</Text>
-          <TouchableOpacity onPress={props.onClose} className='p-2'>
-            <Text className='text-gray-500 font-bold text-lg'>X</Text>
-          </TouchableOpacity>
-        </View>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View className='flex-1 bg-gray-50'>
+            <View className='flex-row justify-between items-center p-4 bg-white border-b border-gray-200'>
+              <Text className='text-lg font-bold'>{props.title}</Text>
+              <TouchableOpacity onPress={props.onClose} className='p-2'>
+                <Text className='text-gray-500 font-bold text-lg'>X</Text>
+              </TouchableOpacity>
+            </View>
 
-        <ScrollView contentContainerStyle={{ padding: 16 }}>
+            <ScrollView
+              contentContainerStyle={{ padding: 16, paddingBottom: 16 + insets.bottom + 24 }}
+              keyboardShouldPersistTaps='handled'
+              keyboardDismissMode='interactive'
+              showsVerticalScrollIndicator={false}
+            >
           <Text className='font-bold text-gray-900 mb-2'>Customer</Text>
-          <View className='bg-white border border-gray-200 rounded-lg mb-4'>
+          <View className='bg-white border border-gray-200 rounded-2xl mb-4'>
             <TouchableOpacity
               className='p-3 border-b border-gray-100'
               onPress={props.onAddCustomer}
@@ -129,7 +147,17 @@ export function SalesEntryModal(props: {
                 + Add New Customer
               </Text>
             </TouchableOpacity>
-            {props.customers.map((customer) => (
+            {props.customersLoading && props.customers.length === 0 ? (
+              <View className='p-4 items-center gap-2'>
+                <ActivityIndicator size='small' color='#6b7280' />
+                <Text className='text-xs text-gray-500'>Loading customers…</Text>
+              </View>
+            ) : props.customers.length === 0 ? (
+              <View className='p-3'>
+                <Text className='text-xs text-gray-400 text-center'>No customers yet. Add one above.</Text>
+              </View>
+            ) : (
+              props.customers.map((customer) => (
               <TouchableOpacity
                 key={customer.id}
                 className={`p-3 border-b border-gray-100 ${props.customerId === customer.id ? 'bg-green-50' : ''}`}
@@ -142,15 +170,16 @@ export function SalesEntryModal(props: {
                   </Text>
                 ) : null}
               </TouchableOpacity>
-            ))}
+              ))
+            )}
           </View>
 
           <View className='flex-row items-center justify-between mb-2'>
             <Text className='font-bold text-gray-900'>Payment Method</Text>
             {isOffline && (
-              <View className='flex-row items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200'>
+              <View className='flex-row items-center gap-2 px-3 py-1 rounded-full bg-amber-50 border border-amber-200'>
                 <WifiOff size={12} color='#b45309' />
-                <Text className='text-[11px] font-bold tracking-widest text-amber-700'>
+                <Text className='text-xs font-bold tracking-widest text-amber-700'>
                   OFFLINE
                 </Text>
               </View>
@@ -158,7 +187,7 @@ export function SalesEntryModal(props: {
           </View>
 
           {isOffline && (
-            <View className='bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 mb-3 flex-row items-center gap-2'>
+            <View className='bg-amber-50 border border-amber-200 rounded-2xl px-3 py-3 mb-3 flex-row items-center gap-2'>
               <WifiOff size={14} color='#b45309' />
               <Text className='text-xs text-amber-800 flex-1'>
                 M-Pesa and Card require internet. Only Cash is available
@@ -185,7 +214,7 @@ export function SalesEntryModal(props: {
                 <TouchableOpacity
                   key={method.id}
                   disabled={disabled}
-                  className={`flex-1 p-3 rounded-lg flex-row items-center justify-center border ${
+                  className={`flex-1 p-3 rounded-2xl flex-row items-center justify-center border ${
                     disabled
                       ? 'bg-gray-100 border-gray-200 opacity-50'
                       : active
@@ -218,7 +247,7 @@ export function SalesEntryModal(props: {
             Tap product to see variants & prices. Beans example: same product,
             different size/price.
           </Text>
-          <View className='bg-white border border-gray-200 rounded-lg mb-3 max-h-[220px]'>
+          <View className='bg-white border border-gray-200 rounded-2xl mb-3 max-h-[220px]'>
             <ScrollView nestedScrollEnabled>
               {props.products.map((product) => {
                 const isSelected = props.selectedProductId === product.id
@@ -251,14 +280,14 @@ export function SalesEntryModal(props: {
                                 key={v.id}
                                 className='px-2 py-1 rounded-full bg-amber-50 border border-amber-100'
                               >
-                                <Text className='text-[10px] font-bold text-amber-800'>
+                                <Text className='text-xs font-bold text-amber-800'>
                                   {v.name} • {formatCurrency(toNumber(v.price))}
                                 </Text>
                               </View>
                             ))}
                             {vCount > 4 ? (
                               <View className='px-2 py-1 rounded-full bg-gray-100 border border-gray-200'>
-                                <Text className='text-[10px] text-gray-600'>
+                                <Text className='text-xs text-gray-600'>
                                   +{vCount - 4} more
                                 </Text>
                               </View>
@@ -268,7 +297,7 @@ export function SalesEntryModal(props: {
                       </View>
                       {vCount ? (
                         <View className='px-2 py-1 rounded-full bg-amber-50 border border-amber-200'>
-                          <Text className='text-[10px] font-bold text-amber-700'>
+                          <Text className='text-xs font-bold text-amber-700'>
                             {vCount} options
                           </Text>
                         </View>
@@ -293,7 +322,7 @@ export function SalesEntryModal(props: {
                 </Text>
               </View>
 
-              <View className='bg-white border border-gray-200 rounded-lg p-2 gap-2'>
+              <View className='bg-white border border-gray-200 rounded-2xl p-2 gap-2'>
                 {variants.map((variant) => {
                   const isSelected = props.selectedVariantId === variant.id
                   const vPrice = toNumber(variant.price)
@@ -303,7 +332,7 @@ export function SalesEntryModal(props: {
                     <TouchableOpacity
                       key={variant.id}
                       onPress={() => props.setSelectedVariantId?.(variant.id)}
-                      className={`p-3 rounded-xl border flex-row justify-between items-center ${
+                      className={`p-3 rounded-2xl border flex-row justify-between items-center ${
                         isSelected
                           ? 'bg-green-50 border-green-500'
                           : 'bg-gray-50 border-gray-200'
@@ -315,18 +344,18 @@ export function SalesEntryModal(props: {
                         >
                           {variant.name}
                         </Text>
-                        <View className='flex-row flex-wrap gap-1.5 mt-1'>
-                          <View className='px-1.5 py-0.5 rounded bg-white border border-gray-200'>
-                            <Text className='text-[10px] font-bold text-gray-600'>
+                        <View className='flex-row flex-wrap gap-2 mt-1'>
+                          <View className='px-2 py-1 rounded bg-white border border-gray-200'>
+                            <Text className='text-xs font-bold text-gray-600'>
                               {formatCurrency(vPrice)} each
                             </Text>
                           </View>
                           {diff !== 0 ? (
                             <View
-                              className={`px-1.5 py-0.5 rounded border ${diff > 0 ? 'bg-amber-50 border-amber-200' : 'bg-emerald-50 border-emerald-200'}`}
+                              className={`px-2 py-1 rounded border ${diff > 0 ? 'bg-amber-50 border-amber-200' : 'bg-emerald-50 border-emerald-200'}`}
                             >
                               <Text
-                                className={`text-[10px] font-bold ${diff > 0 ? 'text-amber-700' : 'text-emerald-700'}`}
+                                className={`text-xs font-bold ${diff > 0 ? 'text-amber-700' : 'text-emerald-700'}`}
                               >
                                 {diff > 0 ? '+' : ''}
                                 {formatCurrency(diff)} vs base
@@ -334,13 +363,13 @@ export function SalesEntryModal(props: {
                             </View>
                           ) : null}
                           {variant.sku ? (
-                            <Text className='text-[11px] text-gray-500'>
+                            <Text className='text-xs text-gray-500'>
                               SKU {variant.sku}
                             </Text>
                           ) : null}
                         </View>
                         {(variant as any).barcode ? (
-                          <Text className='text-[11px] text-gray-400 mt-0.5'>
+                          <Text className='text-xs text-gray-400 mt-0.5'>
                             Barcode {(variant as any).barcode}
                           </Text>
                         ) : null}
@@ -351,7 +380,7 @@ export function SalesEntryModal(props: {
                         >
                           {formatCurrency(vPrice)}
                         </Text>
-                        <Text className='text-[10px] text-gray-500'>
+                        <Text className='text-xs text-gray-500'>
                           per unit
                         </Text>
                       </View>
@@ -361,14 +390,14 @@ export function SalesEntryModal(props: {
               </View>
 
               {!props.selectedVariantId ? (
-                <View className='bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2'>
+                <View className='bg-amber-50 border border-amber-200 rounded-2xl px-3 py-2 mt-2'>
                   <Text className='text-xs text-amber-800 text-center font-medium'>
                     Beans example: 500g @ KES 250 vs 1kg @ KES 450 — pick size
                     to attribute correct price.
                   </Text>
                 </View>
               ) : (
-                <View className='bg-green-50 border border-green-200 rounded-lg px-3 py-2 mt-2 flex-row justify-between items-center'>
+                <View className='bg-green-50 border border-green-200 rounded-2xl px-3 py-2 mt-2 flex-row justify-between items-center'>
                   <Text className='text-xs text-green-800 font-medium'>
                     Selected: {selectedVariant?.name} •{' '}
                     {formatCurrency(effectivePrice)} each
@@ -386,14 +415,14 @@ export function SalesEntryModal(props: {
 
           <View className='flex-row gap-2 mb-4'>
             <TextInput
-              className='flex-1 bg-white border border-gray-300 rounded-lg p-3'
+              className='flex-1 bg-white border border-gray-300 rounded-2xl p-3'
               placeholder='Qty'
               keyboardType='numeric'
               value={props.quantity}
               onChangeText={props.setQuantity}
             />
             <TouchableOpacity
-              className={`w-14 rounded-lg items-center justify-center ${
+              className={`w-14 rounded-2xl items-center justify-center ${
                 !selectedProduct || (hasVariants && !props.selectedVariantId)
                   ? 'bg-gray-300'
                   : 'bg-green-600'
@@ -408,7 +437,7 @@ export function SalesEntryModal(props: {
           </View>
 
           {hasVariants && !props.selectedVariantId && selectedProduct ? (
-            <View className='bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3'>
+            <View className='bg-amber-50 border border-amber-200 rounded-2xl px-3 py-2 mb-3'>
               <Text className='text-xs text-amber-800 text-center'>
                 This product has variants — select one above before adding.
               </Text>
@@ -430,7 +459,7 @@ export function SalesEntryModal(props: {
               {props.draftLines.map((line, index) => (
                 <View
                   key={`${line.productId}-${line.variantId || 'base'}-${index}`}
-                  className='flex-row justify-between items-center bg-white border border-gray-100 rounded-lg p-3 mb-2'
+                  className='flex-row justify-between items-center bg-white border border-gray-100 rounded-2xl p-3 mb-2'
                 >
                   <View className='flex-1 mr-3'>
                     <Text className='font-medium' numberOfLines={1}>
@@ -438,8 +467,8 @@ export function SalesEntryModal(props: {
                     </Text>
                     {line.variantName ? (
                       <View className='flex-row items-center gap-1 mt-0.5'>
-                        <View className='px-1.5 py-0.5 rounded bg-amber-50 border border-amber-100'>
-                          <Text className='text-[10px] font-bold text-amber-700'>
+                        <View className='px-2 py-1 rounded bg-amber-50 border border-amber-100'>
+                          <Text className='text-xs font-bold text-amber-700'>
                             {line.variantName}
                           </Text>
                         </View>
@@ -461,7 +490,7 @@ export function SalesEntryModal(props: {
                     </Text>
                     <TouchableOpacity
                       onPress={() => props.removeLine?.(index)}
-                      className='w-7 h-7 rounded-full bg-red-50 border border-red-100 items-center justify-center'
+                      className='w-11 h-11 rounded-full bg-red-50 border border-red-100 items-center justify-center'
                     >
                       <Trash2 size={12} color='#dc2626' />
                     </TouchableOpacity>
@@ -470,7 +499,7 @@ export function SalesEntryModal(props: {
               ))}
             </View>
           ) : (
-            <View className='bg-white border border-dashed border-gray-200 rounded-xl py-6 items-center mb-3'>
+            <View className='bg-white border border-dashed border-gray-200 rounded-2xl py-6 items-center mb-3'>
               <Text className='text-sm text-gray-400'>Cart empty</Text>
               <Text className='text-xs text-gray-400 mt-1'>
                 Select product {hasVariants ? '+ variant' : ''} and quantity
@@ -478,14 +507,15 @@ export function SalesEntryModal(props: {
             </View>
           )}
 
-          <View className='bg-blue-50 p-4 rounded-xl border border-blue-100 my-4'>
-            <Text className='text-blue-900 font-bold text-center text-lg'>
+          <View className='bg-gray-900 p-4 rounded-2xl border border-gray-800 my-4' style={{ shadowColor: '#006b5f', shadowOpacity: 0.12, shadowRadius: 12 }}>
+            <Text className='text-white font-bold text-center text-lg font-mono'>
               Total: {formatCurrency(props.total)}
             </Text>
           </View>
 
           <TouchableOpacity
-            className='bg-gray-900 h-14 rounded-xl items-center justify-center'
+            className='bg-gray-900 h-14 rounded-full items-center justify-center'
+            style={{ shadowColor: '#006b5f', shadowOpacity: 0.12, shadowRadius: 16, shadowOffset: { width: 0, height: 4 } }}
             onPress={props.onSubmit}
             disabled={props.isSaving}
           >
@@ -495,8 +525,10 @@ export function SalesEntryModal(props: {
               <Text className='text-white font-bold text-lg'>Save</Text>
             )}
           </TouchableOpacity>
-        </ScrollView>
-      </View>
+            </ScrollView>
+          </View>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
     </Modal>
   )
 }

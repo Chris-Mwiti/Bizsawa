@@ -213,7 +213,7 @@ export default function ProfileTab() {
   return (
     <View className='flex-1 bg-gray-50'>
       <View className='px-4 pt-12 pb-4 bg-white border-b border-gray-200'>
-        <Text className='text-[11px] font-bold tracking-widest text-gray-400 uppercase'>
+        <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
           Account
         </Text>
         <Text className='text-xl font-bold tracking-tight text-gray-900 -mt-0.5'>
@@ -222,36 +222,18 @@ export default function ProfileTab() {
         <Text className='text-xs text-gray-500'>
           Dhibiti maelezo yako • Manage your details
         </Text>
-
-        <View className='flex-row bg-gray-100 rounded-full p-1 mt-4'>
-          <Pressable
-            onPress={() => router.push('/credit-preview')}
-            className='flex-1 py-2.5 rounded-full items-center'
-          >
-            <Text className='text-sm font-medium text-gray-500'>Credit</Text>
-          </Pressable>
-          <View className='flex-1 py-2.5 rounded-full items-center bg-white shadow-sm border border-gray-200'>
-            <Text className='text-sm font-bold text-gray-900'>Profile</Text>
-          </View>
-          <Pressable
-            onPress={() => router.push('/rewards')}
-            className='flex-1 py-2.5 rounded-full items-center'
-          >
-            <Text className='text-sm font-medium text-gray-500'>Rewards</Text>
-          </Pressable>
-        </View>
       </View>
 
-      <ScrollView
+      <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive"
         contentContainerStyle={{
           padding: 16,
           paddingBottom: TAB_BAR_SCROLL_PADDING + 24,
-          gap: 14,
+          gap: 16,
         }}
         showsVerticalScrollIndicator={false}
       >
         {isLoading && (
-          <View className='py-8 items-center bg-white rounded-xl border border-gray-200'>
+          <View className='py-8 items-center bg-white rounded-2xl border border-gray-200'>
             <ActivityIndicator color='#111827' />
             <Text className='text-sm text-gray-500 mt-2'>
               Loading business profile…
@@ -261,7 +243,7 @@ export default function ProfileTab() {
         {isError && (
           <Pressable
             onPress={() => refetch()}
-            className='p-4 bg-amber-50 rounded-xl border border-amber-200'
+            className='p-4 bg-amber-50 rounded-2xl border border-amber-200'
           >
             <Text className='text-sm font-semibold text-amber-900'>
               Could not load profile
@@ -272,7 +254,7 @@ export default function ProfileTab() {
 
         <Card className='border border-gray-200'>
           <CardContent className='p-5 flex-row items-center gap-4'>
-            <View className='w-14 h-14 rounded-xl bg-gray-900 items-center justify-center'>
+            <View className='w-14 h-14 rounded-2xl bg-gray-900 items-center justify-center'>
               <Text className='text-base font-bold text-white'>
                 {ownerParts.initials}
               </Text>
@@ -291,7 +273,7 @@ export default function ProfileTab() {
             </View>
             <TouchableOpacity
               onPress={openProfileEdit}
-              className='w-8 h-8 rounded-full bg-white border border-gray-200 items-center justify-center'
+              className='w-11 h-11 rounded-full bg-white border border-gray-200 items-center justify-center'
             >
               <Edit size={14} color='#111827' />
             </TouchableOpacity>
@@ -306,18 +288,18 @@ export default function ProfileTab() {
             </View>
             <TouchableOpacity
               onPress={openBusinessEdit}
-              className='w-8 h-8 rounded-full bg-gray-50 border border-gray-200 items-center justify-center'
+              className='w-11 h-11 rounded-full bg-gray-50 border border-gray-200 items-center justify-center'
             >
               <Edit size={14} color='#374151' />
             </TouchableOpacity>
           </CardHeader>
           <CardContent className='pt-0 gap-3'>
             <View className='flex-row items-center gap-3 py-2'>
-              <View className='w-8 h-8 rounded-lg bg-gray-50 border border-gray-100 items-center justify-center'>
+              <View className='w-11 h-11 rounded-2xl bg-gray-50 border border-gray-100 items-center justify-center'>
                 <Phone size={14} color='#6b7280' />
               </View>
               <View>
-                <Text className='text-[11px] font-bold tracking-widest text-gray-400 uppercase'>
+                <Text className='text-xs font-semibold text-gray-500'>
                   Phone
                 </Text>
                 <Text className='text-sm font-medium text-gray-900'>
@@ -327,11 +309,11 @@ export default function ProfileTab() {
             </View>
             <View className='h-px bg-gray-100' />
             <View className='flex-row items-center gap-3 py-2'>
-              <View className='w-8 h-8 rounded-lg bg-gray-50 border border-gray-100 items-center justify-center'>
+              <View className='w-11 h-11 rounded-2xl bg-gray-50 border border-gray-100 items-center justify-center'>
                 <Building size={14} color='#6b7280' />
               </View>
               <View>
-                <Text className='text-[11px] font-bold tracking-widest text-gray-400 uppercase'>
+                <Text className='text-xs font-semibold text-gray-500'>
                   Business type
                 </Text>
                 <Text className='text-sm font-medium text-gray-900'>
@@ -341,11 +323,11 @@ export default function ProfileTab() {
             </View>
             <View className='h-px bg-gray-100' />
             <View className='flex-row items-center gap-3 py-2'>
-              <View className='w-8 h-8 rounded-lg bg-gray-50 border border-gray-100 items-center justify-center'>
+              <View className='w-11 h-11 rounded-2xl bg-gray-50 border border-gray-100 items-center justify-center'>
                 <Calendar size={14} color='#6b7280' />
               </View>
               <View>
-                <Text className='text-[11px] font-bold tracking-widest text-gray-400 uppercase'>
+                <Text className='text-xs font-semibold text-gray-500'>
                   In business
                 </Text>
                 <Text className='text-sm font-medium text-gray-900'>
@@ -364,7 +346,7 @@ export default function ProfileTab() {
 
             <TouchableOpacity
               onPress={logout}
-              className='flex-row items-center justify-center gap-2 py-3.5 rounded-xl bg-white border border-red-200 mt-2'
+              className='flex-row items-center justify-center gap-2 py-4 rounded-2xl bg-white border border-red-200 mt-2'
             >
               <LogOut size={16} color='#dc2626' />
               <Text className='font-bold text-red-700 text-sm'>Sign out</Text>
@@ -385,7 +367,7 @@ export default function ProfileTab() {
             )}
           </CardHeader>
           <CardContent className='pt-0 gap-2'>
-            <View className='flex-row justify-between items-center p-3 rounded-xl bg-white border border-gray-200'>
+            <View className='flex-row justify-between items-center p-3 rounded-2xl bg-white border border-gray-200'>
               <Text className='text-sm font-semibold text-gray-900'>{subscription?.planCode ? subscription.planCode.toUpperCase() : 'FREE'}</Text>
               <Text className='text-xs text-gray-500'>{subscription?.endsAt ? `Ends ${new Date(subscription.endsAt).toLocaleDateString('en-KE')}` : isPremium ? 'Active' : '1 biz • basic reports'}</Text>
             </View>
@@ -402,15 +384,15 @@ export default function ProfileTab() {
             </View>
             <TouchableOpacity
               onPress={openBusinessEdit}
-              className='w-8 h-8 rounded-full bg-gray-50 border border-gray-200 items-center justify-center'
+              className='w-11 h-11 rounded-full bg-gray-50 border border-gray-200 items-center justify-center'
             >
               <Edit size={14} color='#374151' />
             </TouchableOpacity>
           </CardHeader>
           <CardContent className='pt-0'>
-            <View className='flex-row items-center justify-between p-3.5 rounded-xl bg-gray-50 border border-gray-200'>
+            <View className='flex-row items-center justify-between p-3.5 rounded-2xl bg-gray-50 border border-gray-200'>
               <View className='flex-row items-center gap-3'>
-                <View className='w-10 h-10 rounded-xl bg-emerald-600 items-center justify-center'>
+                <View className='w-10 h-10 rounded-2xl bg-emerald-600 items-center justify-center'>
                   <Text className='text-white font-bold text-xs'>MP</Text>
                 </View>
                 <View>
@@ -429,8 +411,8 @@ export default function ProfileTab() {
           <CardHeader className='flex-row items-center gap-2'>
             <ShieldAlert size={16} color={conflictCount>0?'#b45309':'#111827'} />
             <CardTitle>Sync & conflicts</CardTitle>
-            {conflictCount>0 && <View className='ml-auto bg-amber-500 rounded-full px-2.5 py-1'><Text className='text-xs font-bold text-white'>{conflictCount} conflict{conflictCount>1?'s':''}</Text></View>}
-            {conflictCount===0 && pendingCount>0 && <View className='ml-auto bg-gray-900 rounded-full px-2.5 py-1'><Text className='text-xs font-bold text-white'>{pendingCount} pending</Text></View>}
+            {conflictCount>0 && <View className='ml-auto bg-amber-500 rounded-full px-3 py-1'><Text className='text-xs font-bold text-white'>{conflictCount} conflict{conflictCount>1?'s':''}</Text></View>}
+            {conflictCount===0 && pendingCount>0 && <View className='ml-auto bg-gray-900 rounded-full px-3 py-1'><Text className='text-xs font-bold text-white'>{pendingCount} pending</Text></View>}
           </CardHeader>
           <CardContent className='pt-0 gap-3'>
             <Text className='text-xs leading-4 text-gray-600'>
@@ -439,7 +421,7 @@ export default function ProfileTab() {
             <View className='flex-row gap-2'>
               <TouchableOpacity
                 onPress={() => router.push('/sync-conflicts' as any)}
-                className={`flex-1 flex-row items-center justify-center gap-2 py-3.5 rounded-xl border ${conflictCount>0?'bg-amber-500 border-amber-600':'bg-white border-gray-200'}`}
+                className={`flex-1 flex-row items-center justify-center gap-2 py-4 rounded-2xl border ${conflictCount>0?'bg-amber-500 border-amber-600':'bg-white border-gray-200'}`}
               >
                 <AlertTriangle size={16} color={conflictCount>0?'white':'#111827'} />
                 <Text className={`text-sm font-bold ${conflictCount>0?'text-white':'text-gray-900'}`}>
@@ -448,13 +430,13 @@ export default function ProfileTab() {
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={async () => { try { await triggerSync(); Alert.alert('Sync', 'Sync completed')} catch(e:any){ Alert.alert('Sync failed', e?.message||'Failed')} }}
-                className='w-[112px] flex-row items-center justify-center gap-2 py-3.5 rounded-xl bg-gray-900'
+                className='w-[112px] flex-row items-center justify-center gap-2 py-4 rounded-2xl bg-gray-900'
               >
                 <RefreshCw size={14} color='white' />
                 <Text className='text-sm font-bold text-white'>Sync now</Text>
               </TouchableOpacity>
             </View>
-            {(pendingCount>0 || conflictCount>0) && <Text className='text-[11px] text-gray-500 text-center'>Tap Sync now to push {pendingCount} pending, or View conflicts when push returns version mismatch.</Text>}
+            {(pendingCount>0 || conflictCount>0) && <Text className='text-xs text-gray-500 text-center'>Tap Sync now to push {pendingCount} pending, or View conflicts when push returns version mismatch.</Text>}
           </CardContent>
         </Card>
 
@@ -464,7 +446,7 @@ export default function ProfileTab() {
             <CardTitle>User Journey & Tour</CardTitle>
           </CardHeader>
           <CardContent className='pt-0 gap-3'>
-            <View className='bg-white rounded-xl border border-amber-100 p-3'>
+            <View className='bg-white rounded-2xl border border-amber-100 p-3'>
               <View className='flex-row items-center gap-2 mb-1'>
                 <Sparkles size={14} color='#b45309' />
                 <Text className='text-sm font-bold text-gray-900'>
@@ -480,7 +462,7 @@ export default function ProfileTab() {
               </Text>
             </View>
 
-            <View className='flex-row items-center justify-between p-3 bg-white rounded-xl border border-gray-200'>
+            <View className='flex-row items-center justify-between p-3 bg-white rounded-2xl border border-gray-200'>
               <View>
                 <Text className='text-sm font-bold text-gray-900'>
                   Interactive tour
@@ -506,21 +488,21 @@ export default function ProfileTab() {
             <View className='flex-row gap-2'>
               <TouchableOpacity
                 onPress={startTour}
-                className='flex-1 flex-row items-center justify-center gap-2 py-3 rounded-xl bg-gray-900'
+                className='flex-1 flex-row items-center justify-center gap-2 py-3 rounded-2xl bg-gray-900'
               >
                 <Play size={14} color='white' />
                 <Text className='text-sm font-bold text-white'>Start tour</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={resetTour}
-                className='flex-1 py-3 rounded-xl bg-white border border-gray-200 items-center'
+                className='flex-1 py-3 rounded-2xl bg-white border border-gray-200 items-center'
               >
                 <Text className='text-sm font-bold text-gray-700'>
                   Reset & replay
                 </Text>
               </TouchableOpacity>
             </View>
-            <Text className='text-[11px] text-gray-500 text-center'>
+            <Text className='text-xs text-gray-500 text-center'>
               Toggle off in profile when you understand the app. Tour covers
               Sales variants, cart, Invoices settlement, Stock, Profile edits,
               navigation and offline.
@@ -541,18 +523,18 @@ export default function ProfileTab() {
             <Text className='text-lg font-bold'>Edit Business</Text>
             <TouchableOpacity
               onPress={() => setShowBusinessEdit(false)}
-              className='w-8 h-8 rounded-full bg-gray-100 items-center justify-center'
+              className='w-11 h-11 rounded-full bg-gray-100 items-center justify-center'
             >
               <Text className='font-bold'>✕</Text>
             </TouchableOpacity>
           </View>
-          <ScrollView contentContainerStyle={{ padding: 16, gap: 14 }}>
+          <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
             <View>
               <Text className='text-sm font-semibold text-gray-700 mb-2'>
                 Business name *
               </Text>
               <TextInput
-                className='bg-white border border-gray-300 rounded-xl px-4 py-3.5'
+                className='bg-white border border-gray-300 rounded-2xl px-4 py-4'
                 value={businessForm.name}
                 onChangeText={(t) =>
                   setBusinessForm({ ...businessForm, name: t })
@@ -564,7 +546,7 @@ export default function ProfileTab() {
                 Phone
               </Text>
               <TextInput
-                className='bg-white border border-gray-300 rounded-xl px-4 py-3.5'
+                className='bg-white border border-gray-300 rounded-2xl px-4 py-4'
                 keyboardType='phone-pad'
                 value={businessForm.phone}
                 onChangeText={(t) =>
@@ -577,7 +559,7 @@ export default function ProfileTab() {
                 Email
               </Text>
               <TextInput
-                className='bg-white border border-gray-300 rounded-xl px-4 py-3.5'
+                className='bg-white border border-gray-300 rounded-2xl px-4 py-4'
                 keyboardType='email-address'
                 autoCapitalize='none'
                 value={businessForm.email}
@@ -591,7 +573,7 @@ export default function ProfileTab() {
                 Address
               </Text>
               <TextInput
-                className='bg-white border border-gray-300 rounded-xl px-4 py-3.5'
+                className='bg-white border border-gray-300 rounded-2xl px-4 py-4'
                 value={businessForm.address}
                 onChangeText={(t) =>
                   setBusinessForm({ ...businessForm, address: t })
@@ -604,7 +586,7 @@ export default function ProfileTab() {
                   Currency
                 </Text>
                 <TextInput
-                  className='bg-white border border-gray-300 rounded-xl px-4 py-3.5'
+                  className='bg-white border border-gray-300 rounded-2xl px-4 py-4'
                   value={businessForm.currency}
                   onChangeText={(t) =>
                     setBusinessForm({ ...businessForm, currency: t })
@@ -616,7 +598,7 @@ export default function ProfileTab() {
                   Tax PIN
                 </Text>
                 <TextInput
-                  className='bg-white border border-gray-300 rounded-xl px-4 py-3.5'
+                  className='bg-white border border-gray-300 rounded-2xl px-4 py-4'
                   value={businessForm.taxPin}
                   onChangeText={(t) =>
                     setBusinessForm({ ...businessForm, taxPin: t })
@@ -628,7 +610,7 @@ export default function ProfileTab() {
             <TouchableOpacity
               onPress={handleSaveBusiness}
               disabled={saving}
-              className='bg-gray-900 py-4 rounded-xl items-center flex-row justify-center gap-2'
+              className='bg-gray-900 py-4 rounded-2xl items-center flex-row justify-center gap-2'
             >
               {saving ? (
                 <ActivityIndicator color='white' />
@@ -655,19 +637,19 @@ export default function ProfileTab() {
             <Text className='text-lg font-bold'>Edit Profile</Text>
             <TouchableOpacity
               onPress={() => setShowProfileEdit(false)}
-              className='w-8 h-8 rounded-full bg-gray-100 items-center justify-center'
+              className='w-11 h-11 rounded-full bg-gray-100 items-center justify-center'
             >
               <Text className='font-bold'>✕</Text>
             </TouchableOpacity>
           </View>
-          <ScrollView contentContainerStyle={{ padding: 16, gap: 14 }}>
+          <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
             <View className='flex-row gap-3'>
               <View className='flex-1'>
                 <Text className='text-sm font-semibold text-gray-700 mb-2'>
                   First name
                 </Text>
                 <TextInput
-                  className='bg-white border border-gray-300 rounded-xl px-4 py-3.5'
+                  className='bg-white border border-gray-300 rounded-2xl px-4 py-4'
                   value={profileForm.firstName}
                   onChangeText={(t) =>
                     setProfileForm({ ...profileForm, firstName: t })
@@ -679,7 +661,7 @@ export default function ProfileTab() {
                   Last name
                 </Text>
                 <TextInput
-                  className='bg-white border border-gray-300 rounded-xl px-4 py-3.5'
+                  className='bg-white border border-gray-300 rounded-2xl px-4 py-4'
                   value={profileForm.lastName}
                   onChangeText={(t) =>
                     setProfileForm({ ...profileForm, lastName: t })
@@ -692,7 +674,7 @@ export default function ProfileTab() {
                 Phone
               </Text>
               <TextInput
-                className='bg-white border border-gray-300 rounded-xl px-4 py-3.5'
+                className='bg-white border border-gray-300 rounded-2xl px-4 py-4'
                 keyboardType='phone-pad'
                 value={profileForm.phone}
                 onChangeText={(t) =>
@@ -709,7 +691,7 @@ export default function ProfileTab() {
                 Current password
               </Text>
               <TextInput
-                className='bg-white border border-gray-300 rounded-xl px-4 py-3.5'
+                className='bg-white border border-gray-300 rounded-2xl px-4 py-4'
                 secureTextEntry
                 value={passwordForm.currentPassword}
                 onChangeText={(t) =>
@@ -722,7 +704,7 @@ export default function ProfileTab() {
                 New password
               </Text>
               <TextInput
-                className='bg-white border border-gray-300 rounded-xl px-4 py-3.5'
+                className='bg-white border border-gray-300 rounded-2xl px-4 py-4'
                 secureTextEntry
                 value={passwordForm.newPassword}
                 onChangeText={(t) =>
@@ -735,7 +717,7 @@ export default function ProfileTab() {
                 Confirm new password
               </Text>
               <TextInput
-                className='bg-white border border-gray-300 rounded-xl px-4 py-3.5'
+                className='bg-white border border-gray-300 rounded-2xl px-4 py-4'
                 secureTextEntry
                 value={passwordForm.confirmPassword}
                 onChangeText={(t) =>
@@ -746,7 +728,7 @@ export default function ProfileTab() {
             <TouchableOpacity
               onPress={handleSaveProfile}
               disabled={saving}
-              className='bg-gray-900 py-4 rounded-xl items-center flex-row justify-center gap-2'
+              className='bg-gray-900 py-4 rounded-2xl items-center flex-row justify-center gap-2'
             >
               {saving ? (
                 <ActivityIndicator color='white' />

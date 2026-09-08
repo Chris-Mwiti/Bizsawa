@@ -10,6 +10,7 @@ export default class Payment extends Model {
   @field('status') status!: string
   @field('provider') provider!: string
   @field('type') type!: string
+  @field('idempotency_key') idempotencyKey?: string
   @field('sync_version') syncVersion!: number
   @field('deleted_at') deletedAt?: number
   @readonly @date('created_at') createdAt!: Date

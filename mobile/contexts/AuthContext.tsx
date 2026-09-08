@@ -295,7 +295,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
       await clearSecureAuth()
       // Keep offline cred for 7 days? On explicit logout we clear it for security
       // To keep offline login after logout, comment next lines
-      const keys: string[] = []
       // SecureStore offline creds are email-scoped; we cannot enumerate, so we keep them
       // but clear grace
       await AsyncStorage.removeItem('HAS_FINISHED_ONBOARDING')

@@ -106,7 +106,7 @@ export default function CreditPreviewScreen() {
                       <Text className='text-xs font-bold'>{c.score}</Text>
                     </View>
                     <Progress value={c.score} className='my-1' />
-                    <Text className='text-[10px] text-gray-400'>
+                    <Text className='text-xs text-gray-400'>
                       {c.detail}
                     </Text>
                   </View>
@@ -129,7 +129,7 @@ export default function CreditPreviewScreen() {
                     <Text className='text-xs font-semibold text-gray-800'>
                       {w.label}
                     </Text>
-                    <Text className='text-[11px] text-gray-600 mt-1'>
+                    <Text className='text-xs text-gray-600 mt-1'>
                       {w.description}
                     </Text>
                   </View>
@@ -147,12 +147,12 @@ export default function CreditPreviewScreen() {
                 {creditQuery.data.actionableInsights.map((a, i) => (
                   <View
                     key={i}
-                    className='mb-3 p-3 bg-blue-50 border border-blue-100 rounded-lg'
+                    className='mb-3 p-3 bg-blue-50 border border-blue-100 rounded-2xl'
                   >
                     <Text className='text-xs font-bold text-blue-900'>
                       {a.title}
                     </Text>
-                    <Text className='text-[11px] text-blue-800 mt-1'>
+                    <Text className='text-xs text-blue-800 mt-1'>
                       {a.detail}
                     </Text>
                   </View>
@@ -179,20 +179,20 @@ export default function CreditPreviewScreen() {
                 </Text>
                 <View className='flex-row justify-between text-center mb-4'>
                   <View className='items-center flex-1'>
-                    <Text className='text-2xl font-bold text-green-600'>
-                      {formatCurrency(creditQuery.data.illustrativeLoanCeiling)}
+                    <Text className='text-2xl font-bold text-green-600 font-mono'>
+                {formatCurrency(creditQuery.data.illustrativeLoanCeiling)}
                     </Text>
                     <Text className='text-xs text-gray-600'>Ceiling</Text>
                   </View>
                   <View className='items-center flex-1'>
-                    <Text className='text-lg font-bold text-green-700'>
-                      {formatCurrency(creditQuery.data.signals.totalSales90d)}
+                    <Text className='text-lg font-bold text-green-700 font-mono'>
+                {formatCurrency(creditQuery.data.signals.totalSales90d)}
                     </Text>
                     <Text className='text-xs text-gray-600'>Sales (90d)</Text>
                   </View>
                 </View>
                 <TouchableOpacity
-                  className='bg-green-600 py-3 rounded-lg items-center mb-2'
+                  className='bg-green-600 py-3 rounded-2xl items-center mb-2'
                   onPress={openSaccoResources}
                   activeOpacity={0.85}
                 >
@@ -223,7 +223,7 @@ export default function CreditPreviewScreen() {
                   .map((loan) => (
                     <View
                       key={loan.id}
-                      className='mb-3 p-3 border border-gray-200 rounded-lg bg-white'
+                      className='mb-3 p-3 border border-gray-200 rounded-2xl bg-white'
                     >
                       <Text className='text-sm font-bold text-gray-900'>
                         {loan.institution}
@@ -231,7 +231,7 @@ export default function CreditPreviewScreen() {
                       <Text className='text-xs text-gray-600'>
                         {loan.product}
                       </Text>
-                      <Text className='text-[10px] text-gray-500 mt-1'>
+                      <Text className='text-xs text-gray-500 mt-1'>
                         Up to {formatCurrency(loan.maxAmount)} ·{' '}
                         {loan.interestRate}
                       </Text>

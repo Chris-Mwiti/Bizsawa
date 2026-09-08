@@ -140,11 +140,11 @@ export default function InsightsOverview() {
 
   return (
     <View className='flex-1 bg-gray-50'>
-      <ScrollView
+      <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive"
         contentContainerStyle={{
           padding: 16,
           paddingBottom: TAB_BAR_SCROLL_PADDING + 24,
-          gap: 14,
+          gap: 16,
         }}
         showsVerticalScrollIndicator={false}
       >
@@ -178,10 +178,10 @@ export default function InsightsOverview() {
               <Card className='border border-gray-200'>
                 <CardContent className='p-4'>
                   <View className='flex-row justify-between items-start mb-2'>
-                    <Text className='text-[11px] font-bold tracking-widest text-gray-400 uppercase'>
+                    <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
                       {m.label}
                     </Text>
-                    <View className='w-7 h-7 rounded-lg bg-gray-50 border border-gray-100 items-center justify-center'>
+                    <View className='w-11 h-11 rounded-2xl bg-gray-50 border border-gray-100 items-center justify-center'>
                       <m.icon size={14} color='#6b7280' />
                     </View>
                   </View>
@@ -379,7 +379,7 @@ export default function InsightsOverview() {
                       </Text>
                       <Text className='text-xs text-gray-500'>sales</Text>
                     </View>
-                    <Text className='text-sm font-bold text-gray-900'>
+                    <Text className='text-sm font-bold font-mono text-gray-900'>
                       {formatCurrency(cat.value)}
                     </Text>
                   </View>
@@ -407,12 +407,12 @@ export default function InsightsOverview() {
                 {expenseCategories.map((cat) => (
                   <View
                     key={cat.category}
-                    className='flex-row justify-between items-center p-3 rounded-xl bg-gray-50 border border-gray-100'
+                    className='flex-row justify-between items-center p-3 rounded-2xl bg-gray-50 border border-gray-100'
                   >
                     <Text className='text-sm font-medium text-gray-900'>
                       {cat.category}
                     </Text>
-                    <Text className='text-sm font-bold text-red-700'>
+                    <Text className='text-sm font-bold font-mono text-red-700'>
                       {formatCurrency(cat.amount)}
                     </Text>
                   </View>
@@ -428,8 +428,8 @@ export default function InsightsOverview() {
 
         <Card className='border border-gray-200 bg-white'>
           <CardHeader className='flex-row items-center gap-2'>
-            <View className='w-7 h-7 rounded-full bg-gray-900 items-center justify-center'>
-              <Text className='text-white text-[10px] font-bold'>AI</Text>
+            <View className='w-11 h-11 rounded-full bg-gray-900 items-center justify-center'>
+              <Text className='text-white text-xs font-bold'>AI</Text>
             </View>
             <CardTitle>AI Insights</CardTitle>
             <Pressable
@@ -470,12 +470,12 @@ export default function InsightsOverview() {
           <CardContent className='pt-0 flex-row gap-3'>
             <TouchableOpacity
               onPress={() => setShowExpenseModal(true)}
-              className='flex-1 p-3.5 rounded-xl bg-gray-900 flex-row items-center justify-center gap-2'
+              className='flex-1 p-3.5 rounded-2xl bg-gray-900 flex-row items-center justify-center gap-2'
             >
               <Receipt size={16} color='white' />
               <Text className='text-sm font-bold text-white'>Add Expense</Text>
             </TouchableOpacity>
-            <View className='flex-1 p-3.5 rounded-xl bg-white border border-gray-200 items-center justify-center'>
+            <View className='flex-1 p-3.5 rounded-2xl bg-white border border-gray-200 items-center justify-center'>
               <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
                 Profit
               </Text>
@@ -498,18 +498,18 @@ export default function InsightsOverview() {
             <Text className='text-lg font-bold text-gray-900'>Add Expense</Text>
             <Pressable
               onPress={() => setShowExpenseModal(false)}
-              className='w-8 h-8 rounded-full bg-gray-100 items-center justify-center'
+              className='w-11 h-11 rounded-full bg-gray-100 items-center justify-center'
             >
               <Text className='font-bold'>✕</Text>
             </Pressable>
           </View>
-          <ScrollView contentContainerStyle={{ padding: 16, gap: 14 }}>
+          <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
             <View>
               <Text className='text-sm font-semibold text-gray-700 mb-2'>
                 Category *
               </Text>
               <TextInput
-                className='border border-gray-300 rounded-xl px-4 py-3.5 bg-white text-sm'
+                className='border border-gray-300 rounded-2xl px-4 py-4 bg-white text-sm'
                 placeholder='e.g., Feed, Rent'
                 value={expenseType}
                 onChangeText={setExpenseType}
@@ -520,7 +520,7 @@ export default function InsightsOverview() {
                 Description
               </Text>
               <TextInput
-                className='border border-gray-300 rounded-xl px-4 py-3.5 bg-white text-sm'
+                className='border border-gray-300 rounded-2xl px-4 py-4 bg-white text-sm'
                 placeholder='Optional'
                 value={expenseDescription}
                 onChangeText={setExpenseDescription}
@@ -531,7 +531,7 @@ export default function InsightsOverview() {
                 Amount *
               </Text>
               <TextInput
-                className='border border-gray-300 rounded-xl px-4 py-3.5 bg-white text-sm'
+                className='border border-gray-300 rounded-2xl px-4 py-4 bg-white text-sm'
                 placeholder='0.00'
                 keyboardType='numeric'
                 value={expenseAmount}
@@ -539,7 +539,7 @@ export default function InsightsOverview() {
               />
             </View>
             <TouchableOpacity
-              className='bg-gray-900 py-4 rounded-xl items-center mt-2'
+              className='bg-gray-900 py-4 rounded-2xl items-center mt-2'
               onPress={handleExpenseSubmit}
               disabled={isCreatingExpense}
             >

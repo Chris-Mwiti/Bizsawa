@@ -1,7 +1,6 @@
 package config
 
 import (
-	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -145,10 +144,9 @@ func Load() Config {
 }
 
 func env(key, fallback string) string {
-	err := godotenv.Load(".env.development")
-	if err != nil {
-		log.Fatalf("Could not load up the environment variables")
-	}
+	// Load local env files if present; ignore missing in cloud/Docker where env is injected
+	_ = godotenv.Load(".env.development")
+	_ = godotenv.Load(".env")
 
 	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
 		return value

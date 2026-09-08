@@ -1,0 +1,10 @@
+appId: com.bizsawa.mobile
+---
+- launchApp
+- assertVisible: "Welcome"
+- tapOn: "Log in"
+- assertVisible: "Email"
+- inputText: "e2e@bizsawa.test"
+- tapOn: "Password"
+- inputText: "Test1234!"
+- tapOn: "Continue"

@@ -111,7 +111,7 @@ export default function OnboardingScreen() {
         <View className='mb-6 max-w-sm'>
           <View className='flex-row items-center bg-[#50616b]/5 self-start px-3 py-1.5 rounded-full mb-4 border border-[#73787b]/20'>
             <View className='w-1.5 h-1.5 bg-[#006b5f] rounded-full mr-2' />
-            <Text className='text-[10px] font-bold text-[#43474b] tracking-widest uppercase'>
+            <Text className='text-xs font-bold text-[#43474b] tracking-widest uppercase'>
               {item.badge}
             </Text>
           </View>
@@ -135,7 +135,7 @@ export default function OnboardingScreen() {
           }}
         >
           <View className='flex-row items-start gap-4'>
-            <View className='w-12 h-12 bg-[#006b5f]/5 rounded-xl items-center justify-center shrink-0'>
+            <View className='w-12 h-12 bg-[#006b5f]/5 rounded-2xl items-center justify-center shrink-0'>
               <IconComponent size={24} color='#006b5f' />
             </View>
             <View className='flex-1'>

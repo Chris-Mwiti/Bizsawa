@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react'
 import {
-  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Keyboard,
+  TouchableWithoutFeedback,
   Alert,
   Modal,
   Pressable,
@@ -10,6 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Plus, Receipt, ArrowUpRight } from 'lucide-react-native'
 import {
@@ -18,8 +22,9 @@ import {
   CardHeader,
   CardTitle,
 } from '../../components/ui/Card'
-import { Badge } from '../../components/ui/Badge'
 import { SalesEntryModal, DraftLine } from '../../components/SalesEntryModal'
+import { SuccessCelebration } from '../../components/ui/SuccessCelebration'
+import { DashboardSkeleton } from '../../components/ui/Skeleton'
 import { TAB_BAR_SCROLL_PADDING } from '../../constants/tabBar'
 import { useCustomers, useCreateCustomer } from '../../hooks/api/useCustomers'
 import { useProducts } from '../../hooks/api/useProducts'
@@ -27,6 +32,7 @@ import { useSales } from '../../hooks/api/useSales'
 import { toNumber } from '../../lib/api-dtos'
 
 export default function SalesTab() {
+  const insets = useSafeAreaInsets()
   const router = useRouter()
   const params = useLocalSearchParams<{ action?: string }>()
   const [showSaleModal, setShowSaleModal] = useState(false)
@@ -40,9 +46,11 @@ export default function SalesTab() {
     null,
   )
   const [quantity, setQuantity] = useState('1')
+  const [showSuccess, setShowSuccess] = useState(false)
+  const [inlineError, setInlineError] = useState<string | null>(null)
 
   const { products, isLoading: productsLoading } = useProducts()
-  const { data: customers = [] } = useCustomers()
+  const { data: customers = [], isLoading: customersLoading } = useCustomers() as any
   const { mutateAsync: createCustomer } = useCreateCustomer()
   const {
     sales,
@@ -146,8 +154,11 @@ export default function SalesTab() {
   }
 
   const handleCreateSale = async () => {
-    if (draftLines.length === 0)
-      return Alert.alert('Validation', 'Add at least one product.')
+    if (draftLines.length === 0) {
+      setInlineError('Add at least one product to record a sale.')
+      return
+    }
+    setInlineError(null)
     try {
       await createSale({
         customerId,
@@ -162,24 +173,14 @@ export default function SalesTab() {
       setShowSaleModal(false)
       resetDraft()
       await refetchSales()
-      Alert.alert('Success', 'Sale recorded')
+      setShowSuccess(true)
     } catch (error: any) {
-      Alert.alert(
-        'Error',
-        error.friendlyMessage || error.message || 'Failed to record sale.',
-      )
+      setInlineError(error.friendlyMessage || error.message || 'Failed to record sale.')
     }
   }
 
   if (productsLoading) {
-    return (
-      <View className='flex-1 bg-gray-50 items-center justify-center px-6'>
-        <ActivityIndicator color='#111827' />
-        <Text className='text-gray-500 mt-3 text-sm'>
-          Loading sales workspace…
-        </Text>
-      </View>
-    )
+    return <DashboardSkeleton />
   }
 
   return (
@@ -187,7 +188,7 @@ export default function SalesTab() {
       {/* Header — impeccable ink */}
       <View className='px-4 pt-12 pb-4 bg-white border-b border-gray-200'>
         <View className='items-start mb-4'>
-          <Text className='text-[11px] font-bold tracking-widest text-gray-400 uppercase'>
+          <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
             Workspace
           </Text>
           <Text className='text-xl font-bold tracking-tight text-gray-900 -mt-0.5'>
@@ -199,40 +200,48 @@ export default function SalesTab() {
         </View>
 
         <View className='flex-row bg-gray-100 rounded-full p-1'>
-          <View className='flex-1 py-2.5 rounded-full items-center bg-white shadow-sm border border-gray-200'>
+          <View className='flex-1 py-3 rounded-full items-center bg-white shadow-sm border border-gray-200'>
             <Text className='font-bold text-gray-900 text-sm'>Sales</Text>
           </View>
           <Pressable
             onPress={() => router.push('/orders')}
-            className='flex-1 py-2.5 rounded-full items-center'
+            className='flex-1 py-3 rounded-full items-center'
           >
             <Text className='font-medium text-gray-500 text-sm'>Orders</Text>
           </Pressable>
           <Pressable
             onPress={() => router.push('/invoices')}
-            className='flex-1 py-2.5 rounded-full items-center'
+            className='flex-1 py-3 rounded-full items-center'
           >
             <Text className='font-medium text-gray-500 text-sm'>Invoices</Text>
           </Pressable>
         </View>
       </View>
 
+      {inlineError ? (
+        <View className='mx-4 mt-3 bg-red-50 border border-red-200 rounded-2xl px-4 py-3 flex-row items-center gap-2'>
+          <Text className='text-sm text-red-700 flex-1'>{inlineError}</Text>
+          <Pressable onPress={() => setInlineError(null)} className='px-3 py-1 rounded-full bg-white border border-red-200'>
+            <Text className='text-xs font-bold text-red-700'>Dismiss</Text>
+          </Pressable>
+        </View>
+      ) : null}
       <ScrollView
         contentContainerStyle={{
           padding: 16,
-          paddingBottom: TAB_BAR_SCROLL_PADDING + 24,
-          gap: 14,
+          paddingBottom: TAB_BAR_SCROLL_PADDING + 96,
+          gap: 16,
         }}
         showsVerticalScrollIndicator={false}
       >
         {/* Metrics — restrained */}
         <View className='flex-row gap-3'>
           <Card className='flex-1 border border-gray-200'>
-            <CardContent className='p-4'>
-              <Text className='text-[11px] font-bold tracking-widest text-gray-400 uppercase'>
+            <CardContent className='p-6'>
+              <Text className='text-xs font-medium text-gray-500'>
                 Today
               </Text>
-              <Text className='text-lg font-bold tracking-tight text-gray-900 mt-1'>
+              <Text className='text-lg font-bold tracking-tight text-gray-900 mt-1 font-mono'>
                 {formatCurrency(todaysRevenue)}
               </Text>
               <View className='flex-row items-center gap-1 mt-1'>
@@ -242,11 +251,11 @@ export default function SalesTab() {
             </CardContent>
           </Card>
           <Card className='flex-1 border border-gray-200'>
-            <CardContent className='p-4'>
-              <Text className='text-[11px] font-bold tracking-widest text-gray-400 uppercase'>
+            <CardContent className='p-6'>
+              <Text className='text-xs font-medium text-gray-500'>
                 Transactions
               </Text>
-              <Text className='text-lg font-bold tracking-tight text-gray-900 mt-1'>
+              <Text className='text-lg font-bold tracking-tight text-gray-900 mt-1 font-mono'>
                 {todaysSales.length}
               </Text>
               <Text className='text-xs text-gray-500 mt-1'>
@@ -256,19 +265,11 @@ export default function SalesTab() {
           </Card>
         </View>
 
-        <TouchableOpacity
-          onPress={() => setShowSaleModal(true)}
-          className='bg-gray-900 py-3.5 rounded-xl flex-row items-center justify-center gap-2 active:opacity-90'
-        >
-          <Plus size={18} color='white' />
-          <Text className='text-white font-bold text-[14px]'>Record Sale</Text>
-        </TouchableOpacity>
-
         {/* List — consistent card language */}
         {sales.length === 0 ? (
           <Card className='border border-dashed border-gray-300'>
             <CardContent className='items-center py-12'>
-              <View className='w-12 h-12 rounded-xl bg-gray-50 border border-gray-200 items-center justify-center mb-3'>
+              <View className='w-12 h-12 rounded-2xl bg-gray-50 border border-gray-200 items-center justify-center mb-3'>
                 <Receipt size={20} color='#9ca3af' />
               </View>
               <Text className='font-bold text-gray-900'>No sales today</Text>
@@ -281,7 +282,7 @@ export default function SalesTab() {
           <View className='gap-3'>
             {sales.map((sale) => (
               <Card key={sale.id} className='border border-gray-200'>
-                <CardContent className='p-4'>
+                <CardContent className='p-6'>
                   <View className='flex-row justify-between gap-3'>
                     <View className='flex-1'>
                       <Text
@@ -295,11 +296,11 @@ export default function SalesTab() {
                       </Text>
                     </View>
                     <View className='items-end gap-1'>
-                      <Text className='text-sm font-bold tracking-tight text-gray-900'>
+                      <Text className='text-sm font-bold tracking-tight text-gray-900 font-mono'>
                         {formatCurrency(toNumber(sale.total))}
                       </Text>
-                      <View className='px-2 py-0.5 rounded-full bg-gray-100 border border-gray-200'>
-                        <Text className='text-[11px] font-bold text-gray-600 tracking-wide'>
+                      <View className='px-2 py-1 rounded-full bg-gray-100 border border-gray-200'>
+                        <Text className='text-xs font-bold text-gray-600 tracking-wide'>
                           {String(sale.status).toUpperCase()}
                         </Text>
                       </View>
@@ -312,11 +313,30 @@ export default function SalesTab() {
         )}
       </ScrollView>
 
+      {/* Thumb-zone sticky CTA per mobile-app-ui-design:32 */}
+      <View className='absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-4 py-4' style={{ paddingBottom: 16 + 8 }}>
+        <TouchableOpacity
+          onPress={() => setShowSaleModal(true)}
+          className='bg-gray-900 py-4 rounded-full flex-row items-center justify-center gap-2 active:opacity-90'
+          style={{ shadowColor: '#006b5f', shadowOpacity: 0.12, shadowRadius: 16, shadowOffset: { width: 0, height: 4 } }}
+        >
+          <Plus size={18} color='white' />
+          <Text className='text-white font-bold text-sm'>Record Sale</Text>
+        </TouchableOpacity>
+      </View>
+
+      <SuccessCelebration
+        visible={showSuccess}
+        title='Sale recorded! ✨'
+        message={`KES ${total.toLocaleString('en-KE')} added to today's revenue. Keep the momentum!`}
+        onClose={() => setShowSuccess(false)}
+      />
       <SalesEntryModal
         visible={showSaleModal}
         title='Record Direct Sale'
         products={products}
         customers={customers}
+        customersLoading={customersLoading}
         customerId={customerId}
         setCustomerId={setCustomerId}
         paymentMethod={paymentMethod}
@@ -346,7 +366,9 @@ export default function SalesTab() {
         presentationStyle='pageSheet'
         onRequestClose={() => setShowCustomerModal(false)}
       >
-        <View className='flex-1 bg-gray-50 p-4 justify-center'>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={20}>
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View className='flex-1 bg-gray-50 p-4 justify-center' style={{ paddingBottom: insets.bottom }}>
           <Card className='border border-gray-200'>
             <CardHeader>
               <CardTitle>
@@ -355,7 +377,7 @@ export default function SalesTab() {
             </CardHeader>
             <CardContent className='gap-3'>
               <TextInput
-                className='border border-gray-300 rounded-xl px-4 py-3.5 bg-white text-sm'
+                className='border border-gray-300 rounded-2xl px-4 py-4 bg-white text-sm'
                 placeholder='Customer name *'
                 value={customerForm.name}
                 onChangeText={(name) =>
@@ -363,7 +385,7 @@ export default function SalesTab() {
                 }
               />
               <TextInput
-                className='border border-gray-300 rounded-xl px-4 py-3.5 bg-white text-sm'
+                className='border border-gray-300 rounded-2xl px-4 py-4 bg-white text-sm'
                 placeholder='Phone (optional)'
                 keyboardType='phone-pad'
                 value={customerForm.phone}
@@ -372,7 +394,7 @@ export default function SalesTab() {
                 }
               />
               <TouchableOpacity
-                className='bg-gray-900 py-3.5 rounded-xl items-center mt-2'
+                className='bg-gray-900 py-4 rounded-2xl items-center mt-2'
                 onPress={handleCreateCustomer}
               >
                 <Text className='text-white font-bold text-sm'>
@@ -381,7 +403,9 @@ export default function SalesTab() {
               </TouchableOpacity>
             </CardContent>
           </Card>
-        </View>
+            </View>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   )

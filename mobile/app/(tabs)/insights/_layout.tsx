@@ -32,16 +32,16 @@ export default function InsightsLayout() {
           <View className='flex-row items-start justify-between gap-3'>
             <View className='flex-1'>
               <View className='flex-row items-center gap-2'>
-                <View className='w-7 h-7 rounded-lg bg-gray-900 items-center justify-center'>
+                <View className='w-11 h-11 rounded-2xl bg-gray-900 items-center justify-center'>
                   <BarChart3 size={14} color='white' />
                 </View>
-                <Text className='text-[11px] font-bold tracking-widest text-gray-400 uppercase'>
+                <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
                   Insights
                 </Text>
                 {activeBusiness?.name ? (
-                  <View className='ml-1 px-2 py-0.5 rounded-full bg-gray-50 border border-gray-200'>
+                  <View className='ml-1 px-2 py-1 rounded-full bg-gray-50 border border-gray-200'>
                     <Text
-                      className='text-[10px] font-bold text-gray-600'
+                      className='text-xs font-bold text-gray-600'
                       numberOfLines={1}
                     >
                       {activeBusiness.name.slice(0, 18)}
@@ -49,7 +49,7 @@ export default function InsightsLayout() {
                   </View>
                 ) : null}
               </View>
-              <Text className='text-[20px] font-bold tracking-tight text-gray-900 mt-1'>
+              <Text className='text-lg font-bold tracking-tight text-gray-900 mt-1'>
                 {active === 'analytics'
                   ? 'Analytics'
                   : active === 'expenses'
@@ -111,9 +111,9 @@ export default function InsightsLayout() {
                     borderRadius: 999,
                     borderWidth: active === t.key ? 1 : 0,
                     borderColor: active === t.key ? '#e5e7eb' : 'transparent',
-                    shadowColor: active === t.key ? '#000' : 'transparent',
+                    shadowColor: active === t.key ? '#006b5f' : 'transparent',
                     shadowOpacity: active === t.key ? 0.06 : 0,
-                    shadowRadius: 4,
+                    shadowRadius: 8,
                     elevation: active === t.key ? 1 : 0,
                   }}
                 >

@@ -22,14 +22,14 @@ export function BarChart({
   const yTop = max
   const yMid = (max + min) / 2
   return (
-    <View className='gap-1.5'>
+    <View className='gap-2'>
       {/* y-scale */}
       <View className='flex-row justify-between px-1'>
-        <Text className='text-[9px] font-bold text-gray-400'>{Math.round(yTop).toLocaleString('en-KE')}</Text>
-        <Text className='text-[9px] text-gray-300'>KES</Text>
-        <Text className='text-[9px] font-bold text-gray-400'>{Math.round(yMid).toLocaleString('en-KE')}</Text>
+        <Text className='text-xs font-bold text-gray-400'>{Math.round(yTop).toLocaleString('en-KE')}</Text>
+        <Text className='text-xs text-gray-300'>KES</Text>
+        <Text className='text-xs font-bold text-gray-400'>{Math.round(yMid).toLocaleString('en-KE')}</Text>
       </View>
-      <View className='flex-row items-end gap-1.5' style={{ height }}>
+      <View className='flex-row items-end gap-2' style={{ height }}>
         {data.map((d, i) => {
           const isZero = d.value === 0
           const hPct = (d.value - min) / range * 100
@@ -43,7 +43,7 @@ export function BarChart({
               >
                 {/* value label — always show for explicitness, 0 in muted, non-zero in strong */}
                 <Text
-                  className={`text-[9px] font-bold mb-1 ${isZero ? 'text-gray-300' : 'text-gray-600'}`}
+                  className={`text-xs font-bold mb-1 ${isZero ? 'text-gray-300' : 'text-gray-600'}`}
                   numberOfLines={1}
                 >
                   {showValues || isZero
@@ -68,7 +68,7 @@ export function BarChart({
                 />
               </View>
               <Text
-                className={`text-[10px] font-bold ${isZero ? 'text-gray-400' : 'text-gray-600'}`}
+                className={`text-xs font-bold ${isZero ? 'text-gray-400' : 'text-gray-600'}`}
                 numberOfLines={1}
               >
                 {d.label}
@@ -124,7 +124,7 @@ export function LineChart({
   const formatVal = (v: number) => (v === 0 ? '0' : v > 1000 || v < -1000 ? `${(v/1000).toFixed(1)}k` : String(Math.round(v)))
 
   return (
-    <View className='bg-white rounded-xl overflow-hidden'>
+    <View className='bg-white rounded-2xl overflow-hidden'>
       <Svg width={w} height={height} className='bg-white'>
         {/* y-axis labels */}
         {[0, 0.5, 1].map((t) => {
@@ -199,7 +199,7 @@ export function LineChart({
         {points.map((p, i) => (
           <Text
             key={i}
-            className={`text-[9px] font-bold ${p.value === 0 ? 'text-gray-400' : 'text-gray-500'}`}
+            className={`text-xs font-bold ${p.value === 0 ? 'text-gray-400' : 'text-gray-500'}`}
             style={{ width: chartW / points.length, textAlign: 'center' }}
             numberOfLines={1}
           >
@@ -292,7 +292,7 @@ export function SwitchableLineCard({
           ))}
         </Tabs.List>
       </Tabs>
-      <View className='bg-white rounded-xl border border-gray-200 p-2'>
+      <View className='bg-white rounded-2xl border border-gray-200 p-2'>
         <View className='flex-row justify-between items-center px-2 py-1'>
           <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
             {label} • 7 days • 0 = no sales
@@ -306,7 +306,7 @@ export function SwitchableLineCard({
           data={data.length ? data : [{ label: '—', value: 0 }]}
           color={color}
         />
-        <Text className='text-[10px] text-gray-400 text-center mt-1'>Dots on baseline = 0 • value above each point</Text>
+        <Text className='text-xs text-gray-400 text-center mt-1'>Dots on baseline = 0 • value above each point</Text>
       </View>
     </View>
   )

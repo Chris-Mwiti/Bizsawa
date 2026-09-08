@@ -27,8 +27,8 @@ import {
   Card,
   CardContent,
   CardHeader,
-  CardTitle,
 } from '../../components/ui/Card'
+import { DashboardSkeleton } from '../../components/ui/Skeleton'
 import { useAuth } from '../../contexts/AuthContext'
 import { useAnalytics } from '../../hooks/api/useAnalytics'
 import { useProducts } from '../../hooks/api/useProducts'
@@ -123,14 +123,7 @@ export default function Dashboard() {
   })
 
   if (isBusinessLoading || isOverviewLoading || productsLoading) {
-    return (
-      <View className='flex-1 bg-gray-50 items-center justify-center px-6'>
-        <ActivityIndicator size='large' color='#111827' />
-        <Text className='text-sm text-gray-500 mt-3'>
-          {!hasBusiness ? 'Finding your business…' : 'Loading overview…'}
-        </Text>
-      </View>
-    )
+    return <DashboardSkeleton />
   }
 
   return (
@@ -139,16 +132,16 @@ export default function Dashboard() {
       contentContainerStyle={{
         padding: 16,
         paddingBottom: TAB_BAR_SCROLL_PADDING + 24,
-        gap: 14,
+        gap: 16,
       }}
       showsVerticalScrollIndicator={false}
     >
       {/* Header — ink, restrained */}
       <View className='pt-2 pb-1'>
-        <Text className='text-[11px] font-bold tracking-widest text-gray-400 uppercase'>
+        <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
           {today}
         </Text>
-        <Text className='text-[22px] font-bold tracking-tight text-gray-900 mt-1'>
+        <Text className='text-lg font-bold tracking-tight text-gray-900 mt-1'>
           Good morning, {firstName}
         </Text>
         <Text className='text-sm text-gray-500 mt-1'>
@@ -164,7 +157,7 @@ export default function Dashboard() {
             <Pressable
               key={p.label}
               onPress={() => router.push(p.href)}
-              className='px-3.5 py-2 bg-white border border-gray-200 rounded-full'
+              className='px-4 py-2 bg-white border border-gray-200 rounded-full'
             >
               <Text className='text-xs font-semibold text-gray-700'>
                 {p.label}
@@ -178,17 +171,17 @@ export default function Dashboard() {
       <View className='flex-row gap-3'>
         <TouchableOpacity
           onPress={() => router.push('/(tabs)/sales?action=new-sale')}
-          className='flex-1 bg-gray-900 py-3.5 rounded-xl flex-row items-center justify-center gap-2 active:opacity-90'
+          className='flex-1 bg-gray-900 py-4 rounded-2xl flex-row items-center justify-center gap-2 active:opacity-90'
         >
           <Plus size={18} color='white' />
-          <Text className='text-white font-bold text-[14px]'>Add Sale</Text>
+          <Text className='text-white font-bold text-sm'>Add Sale</Text>
         </TouchableOpacity>
         <TouchableOpacity
           onPress={() => router.push('/(tabs)/insights/expenses')}
-          className='flex-1 bg-white border border-gray-200 py-3.5 rounded-xl flex-row items-center justify-center gap-2'
+          className='flex-1 bg-white border border-gray-200 py-4 rounded-2xl flex-row items-center justify-center gap-2'
         >
           <Plus size={18} color='#111827' />
-          <Text className='text-gray-900 font-bold text-[14px]'>
+          <Text className='text-gray-900 font-bold text-sm'>
             Add Expense
           </Text>
         </TouchableOpacity>
@@ -228,7 +221,7 @@ export default function Dashboard() {
               <CardContent className='p-4'>
                 <View className='flex-row items-start justify-between mb-2'>
                   <View
-                    className={`w-8 h-8 rounded-lg items-center justify-center ${m.alert ? 'bg-amber-50 border border-amber-100' : 'bg-gray-50 border border-gray-100'}`}
+                    className={`w-11 h-11 rounded-2xl items-center justify-center ${m.alert ? 'bg-amber-50 border border-amber-100' : 'bg-gray-50 border border-gray-100'}`}
                   >
                     <m.icon size={16} color={m.alert ? '#b45309' : '#6b7280'} />
                   </View>
@@ -236,11 +229,11 @@ export default function Dashboard() {
                     <ArrowUpRight size={14} color='#6b7280' />
                   )}
                 </View>
-                <Text className='text-[11px] font-bold tracking-widest text-gray-400 uppercase'>
+                <Text className='text-xs font-medium text-gray-500'>
                   {m.label}
                 </Text>
                 <Text
-                  className='text-[16px] font-bold tracking-tight text-gray-900 mt-1'
+                  className='text-base font-bold tracking-tight text-gray-900 mt-1 font-mono'
                   numberOfLines={1}
                 >
                   {m.value}
@@ -257,7 +250,7 @@ export default function Dashboard() {
         <CardHeader className='flex-row justify-between items-center'>
           <Text className='text-sm font-bold text-gray-900'>Weekly growth</Text>
           <View
-            className={`px-2.5 py-1 rounded-full ${weeklyGrowth >= 0 ? 'bg-emerald-50 border border-emerald-100' : 'bg-red-50 border border-red-100'}`}
+            className={`px-3 py-1 rounded-full ${weeklyGrowth >= 0 ? 'bg-emerald-50 border border-emerald-100' : 'bg-red-50 border border-red-100'}`}
           >
             <Text
               className={`text-xs font-bold ${weeklyGrowth >= 0 ? 'text-emerald-700' : 'text-red-700'}`}
@@ -316,8 +309,8 @@ export default function Dashboard() {
                       {p.name}
                     </Text>
                     <View className='flex-row items-center gap-2 mt-1'>
-                      <View className='px-1.5 py-0.5 rounded-full bg-gray-100 border border-gray-200'>
-                        <Text className='text-[10px] font-bold text-gray-600'>
+                      <View className='px-2 py-1 rounded-full bg-gray-100 border border-gray-200'>
+                        <Text className='text-xs font-bold text-gray-600'>
                           {p.category}
                         </Text>
                       </View>
@@ -326,7 +319,7 @@ export default function Dashboard() {
                       </Text>
                     </View>
                   </View>
-                  <Text className='text-sm font-bold text-gray-900'>
+                  <Text className='text-sm font-bold text-gray-900 font-mono'>
                     {formatCurrency(p.revenue)}
                   </Text>
                 </View>
@@ -346,8 +339,8 @@ export default function Dashboard() {
       <Card className='border border-gray-200'>
         <CardHeader className='flex-row items-center justify-between'>
           <View className='flex-row items-center gap-2'>
-            <View className='w-7 h-7 rounded-full bg-gray-900 items-center justify-center'>
-              <Text className='text-white text-[10px] font-bold'>AI</Text>
+            <View className='w-11 h-11 rounded-full bg-gray-900 items-center justify-center'>
+              <Text className='text-white text-xs font-bold'>AI</Text>
             </View>
             <Text className='text-sm font-bold text-gray-900'>AI Insights</Text>
           </View>
@@ -369,7 +362,7 @@ export default function Dashboard() {
               <Text className='text-sm leading-5 text-gray-700'>
                 {aiInsights.summary}
               </Text>
-              <Text className='text-[11px] font-bold tracking-widest text-gray-400 uppercase mt-3'>
+              <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase mt-3'>
                 {aiInsights.trends?.length || 0} trends
               </Text>
             </View>
@@ -399,8 +392,8 @@ export default function Dashboard() {
           <View className='flex-row items-center gap-2'>
             <Lightbulb size={16} color='#111827' />
             <Text className='text-sm font-bold text-gray-900'>Growth tips</Text>
-            <View className='px-1.5 py-0.5 rounded-full bg-white border border-gray-200'>
-              <Text className='text-[10px] font-bold text-gray-600'>
+            <View className='px-2 py-1 rounded-full bg-white border border-gray-200'>
+              <Text className='text-xs font-bold text-gray-600'>
                 {displayTips.length}
               </Text>
             </View>
@@ -415,7 +408,7 @@ export default function Dashboard() {
           <View className='p-4 gap-4'>
             {displayTips.map((tip, i) => (
               <View key={i} className='flex-row gap-3'>
-                <View className='w-8 h-8 rounded-lg bg-white border border-gray-200 items-center justify-center shrink-0'>
+                <View className='w-11 h-11 rounded-2xl bg-white border border-gray-200 items-center justify-center shrink-0'>
                   <tip.icon size={14} color='#111827' />
                 </View>
                 <View className='flex-1'>
@@ -424,10 +417,10 @@ export default function Dashboard() {
                       {tip.title}
                     </Text>
                     <View
-                      className={`px-1.5 py-0.5 rounded-full ${tip.impact === 'High' ? 'bg-gray-900' : 'bg-white border border-gray-200'}`}
+                      className={`px-2 py-1 rounded-full ${tip.impact === 'High' ? 'bg-gray-900' : 'bg-white border border-gray-200'}`}
                     >
                       <Text
-                        className={`text-[10px] font-bold ${tip.impact === 'High' ? 'text-white' : 'text-gray-600'}`}
+                        className={`text-xs font-bold ${tip.impact === 'High' ? 'text-white' : 'text-gray-600'}`}
                       >
                         {tip.impact}
                       </Text>

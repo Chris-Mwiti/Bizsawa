@@ -9,7 +9,6 @@ import {
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useAuth } from '../contexts/AuthContext'
-import AsyncStorage from '@react-native-async-storage/async-storage'
 
 export default function Index() {
   const [isAppReady, setIsAppReady] = useState(false)
