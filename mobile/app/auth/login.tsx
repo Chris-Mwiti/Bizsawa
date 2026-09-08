@@ -10,7 +10,7 @@ import {
   ScrollView,
   Alert,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
   Eye,
   EyeOff,
@@ -40,6 +40,7 @@ import {
 } from '../../lib/offlineAuth'
 
 export default function LoginScreen() {
+  const insets = useSafeAreaInsets()
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -160,9 +161,15 @@ export default function LoginScreen() {
     <SafeAreaView className='flex-1 bg-white'>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
         className='flex-1'
       >
-        <ScrollView className='flex-1 px-6'>
+        <ScrollView
+          className='flex-1 px-6'
+          keyboardShouldPersistTaps='handled'
+          keyboardDismissMode='interactive'
+          contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
+        >
           <View className='flex-1 justify-center py-12'>
             {/* Header */}
             <View className='items-center mb-8'>

@@ -8,8 +8,12 @@ import {
   ActivityIndicator,
   Alert,
   Pressable,
+  KeyboardAvoidingView,
+  Platform,
+  Keyboard,
+  TouchableWithoutFeedback,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import {
   ArrowLeft,
@@ -33,6 +37,7 @@ const STEPS = [
 
 export default function BusinessSetup() {
   const router = useRouter()
+  const insets = useSafeAreaInsets()
   const { createBusiness } = useBusinessContext()
   const [step, setStep] = useState(0)
   const [isSaving, setIsSaving] = useState(false)
@@ -172,10 +177,19 @@ export default function BusinessSetup() {
         </View>
       </View>
 
-      <ScrollView
-        className='flex-1 px-6'
-        contentContainerStyle={{ paddingVertical: 16, gap: 16 }}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <ScrollView
+            className='flex-1 px-6'
+            contentContainerStyle={{ paddingVertical: 16, gap: 16, paddingBottom: 16 + insets.bottom }}
+            keyboardShouldPersistTaps='handled'
+            keyboardDismissMode='interactive'
+            showsVerticalScrollIndicator={false}
+          >
         {step === 0 && (
           <View className='gap-4'>
             <View>
@@ -391,9 +405,14 @@ export default function BusinessSetup() {
             </View>
           </View>
         )}
-      </ScrollView>
+          </ScrollView>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
 
-      <View className='px-6 py-4 border-t border-gray-100 bg-white flex-row gap-3'>
+      <View
+        className='px-6 border-t border-gray-100 bg-white flex-row gap-3'
+        style={{ paddingTop: 16, paddingBottom: Math.max(16, insets.bottom + 12) }}
+      >
         {step > 0 ? (
           <TouchableOpacity
             onPress={back}
