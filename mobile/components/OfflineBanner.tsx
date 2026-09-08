@@ -6,7 +6,9 @@ import {
   Animated,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import NetInfo from '@react-native-community/netinfo'
 import {
   WifiOff,
@@ -25,6 +27,7 @@ import { useRouter } from 'expo-router'
 
 export function OfflineBanner() {
   const router = (() => { try { return useRouter() } catch { return null as any } })()
+  const insets = useSafeAreaInsets()
   const [isConnected, setIsConnected] = useState<boolean | null>(true)
   const [showOfflineCapabilities, setShowOfflineCapabilities] = useState(true)
   const [showRecovery, setShowRecovery] = useState(false)
@@ -189,19 +192,26 @@ export function OfflineBanner() {
     )
   }
 
+  // Inline mode: flows in layout, pushes content down instead of overlaying
+  const topPadding = Math.max(insets.top, Platform.OS === 'ios' ? 12 : 8)
   return (
     <Animated.View
       style={{
         transform: [{ translateY: slideAnim }],
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        zIndex: 9999,
+        position: 'relative',
+        zIndex: 1,
+        width: '100%',
+        // Collapse when hidden via height animation - keep transform for slide
+        opacity: slideAnim.interpolate({
+          inputRange: [-100, 0],
+          outputRange: [0, 1],
+          extrapolate: 'clamp',
+        }) as any,
       }}
-      className='px-4 pt-12 pb-3'
+      className='px-4 pb-3'
       pointerEvents='auto'
     >
+      <View style={{ height: topPadding }} />
       <View
         className={`rounded-2xl border px-4 py-3 shadow-sm ${
           isOffline

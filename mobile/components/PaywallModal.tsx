@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
-import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, Alert } from 'react-native'
+import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Keyboard, TouchableWithoutFeedback, ScrollView } from 'react-native'
 import { Modal } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Crown, Smartphone, Check } from 'lucide-react-native'
 import { useSubscription, PlanCode } from '../hooks/api/useSubscription'
 
@@ -22,6 +23,7 @@ export function PaywallModal({
   feature?: string
   onSuccess?: () => void
 }) {
+  const insets = useSafeAreaInsets()
   const { initiateUpgrade, getPayment, refetch } = useSubscription()
   const [phone, setPhone] = useState('')
   const [paymentId, setPaymentId] = useState<string | null>(null)
@@ -60,7 +62,15 @@ export function PaywallModal({
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <View className="flex-1 bg-gray-50 p-4 gap-4">
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={20}>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <ScrollView
+            className="flex-1 bg-gray-50"
+            contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 16 + insets.bottom }}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+            showsVerticalScrollIndicator={false}
+          >
         <View className="flex-row justify-between items-center bg-white p-4 rounded-2xl border border-gray-200">
           <View className="flex-row items-center gap-2">
             <View className="w-11 h-11 rounded-2xl bg-gray-900 items-center justify-center"><Crown size={16} color="white" /></View>
@@ -100,7 +110,9 @@ export function PaywallModal({
           </TouchableOpacity>
           <Text className="text-xs text-center text-gray-400">Sandbox: use test phone 254708374149 • prod uses real Paybill</Text>
         </View>
-      </View>
+          </ScrollView>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
     </Modal>
   )
 }

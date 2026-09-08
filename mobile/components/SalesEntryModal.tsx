@@ -7,7 +7,12 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
   Banknote,
   CreditCard,
@@ -49,6 +54,7 @@ export function SalesEntryModal(props: {
     name: string
     phone?: string
   }>
+  customersLoading?: boolean
   customerId: string | null
   setCustomerId: (id: string | null) => void
   paymentMethod: string
@@ -102,6 +108,7 @@ export function SalesEntryModal(props: {
 
   const formatCurrency = (amount: number) =>
     `KES ${amount.toLocaleString('en-KE')}`
+  const insets = useSafeAreaInsets()
 
   return (
     <Modal
@@ -110,15 +117,26 @@ export function SalesEntryModal(props: {
       presentationStyle='pageSheet'
       onRequestClose={props.onClose}
     >
-      <View className='flex-1 bg-gray-50'>
-        <View className='flex-row justify-between items-center p-4 bg-white border-b border-gray-200'>
-          <Text className='text-lg font-bold'>{props.title}</Text>
-          <TouchableOpacity onPress={props.onClose} className='p-2'>
-            <Text className='text-gray-500 font-bold text-lg'>X</Text>
-          </TouchableOpacity>
-        </View>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View className='flex-1 bg-gray-50'>
+            <View className='flex-row justify-between items-center p-4 bg-white border-b border-gray-200'>
+              <Text className='text-lg font-bold'>{props.title}</Text>
+              <TouchableOpacity onPress={props.onClose} className='p-2'>
+                <Text className='text-gray-500 font-bold text-lg'>X</Text>
+              </TouchableOpacity>
+            </View>
 
-        <ScrollView contentContainerStyle={{ padding: 16 }}>
+            <ScrollView
+              contentContainerStyle={{ padding: 16, paddingBottom: 16 + insets.bottom + 24 }}
+              keyboardShouldPersistTaps='handled'
+              keyboardDismissMode='interactive'
+              showsVerticalScrollIndicator={false}
+            >
           <Text className='font-bold text-gray-900 mb-2'>Customer</Text>
           <View className='bg-white border border-gray-200 rounded-2xl mb-4'>
             <TouchableOpacity
@@ -129,7 +147,17 @@ export function SalesEntryModal(props: {
                 + Add New Customer
               </Text>
             </TouchableOpacity>
-            {props.customers.map((customer) => (
+            {props.customersLoading && props.customers.length === 0 ? (
+              <View className='p-4 items-center gap-2'>
+                <ActivityIndicator size='small' color='#6b7280' />
+                <Text className='text-xs text-gray-500'>Loading customers…</Text>
+              </View>
+            ) : props.customers.length === 0 ? (
+              <View className='p-3'>
+                <Text className='text-xs text-gray-400 text-center'>No customers yet. Add one above.</Text>
+              </View>
+            ) : (
+              props.customers.map((customer) => (
               <TouchableOpacity
                 key={customer.id}
                 className={`p-3 border-b border-gray-100 ${props.customerId === customer.id ? 'bg-green-50' : ''}`}
@@ -142,7 +170,8 @@ export function SalesEntryModal(props: {
                   </Text>
                 ) : null}
               </TouchableOpacity>
-            ))}
+              ))
+            )}
           </View>
 
           <View className='flex-row items-center justify-between mb-2'>
@@ -496,8 +525,10 @@ export function SalesEntryModal(props: {
               <Text className='text-white font-bold text-lg'>Save</Text>
             )}
           </TouchableOpacity>
-        </ScrollView>
-      </View>
+            </ScrollView>
+          </View>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
     </Modal>
   )
 }
