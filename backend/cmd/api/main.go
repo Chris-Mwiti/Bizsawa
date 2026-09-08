@@ -17,6 +17,7 @@ import (
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverdatabasesql"
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
+	"github.com/riverqueue/river/rivermigrate"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/Codecx-Org/FinAI/backend/internal/analytics"
@@ -84,6 +85,20 @@ func main() {
 		os.Exit(1)
 	}
 	defer pgxPool.Close()
+
+	// River schema — auto-migrate river_queue/river_job tables (idempotent)
+	{
+		migrator, err := rivermigrate.New(riverpgxv5.New(pgxPool), nil)
+		if err != nil {
+			logger.Error("river migrator initialization failed", "err", err)
+			os.Exit(1)
+		}
+		if _, err := migrator.Migrate(ctx, rivermigrate.DirectionUp, nil); err != nil {
+			logger.Error("river migrate up failed", "err", err)
+			os.Exit(1)
+		}
+		logger.Info("river migrations applied")
+	}
 
 	redisClient := cache.NewRedis(cfg.Redis)
 	defer redisClient.Close()
