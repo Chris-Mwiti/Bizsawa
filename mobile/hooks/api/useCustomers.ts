@@ -81,6 +81,14 @@ export const useCustomers = () => {
     return () => sub.unsubscribe()
   }, [bid])
 
+  // Trigger background sync hydration when business becomes active so Watermelon local is populated
+  useEffect(() => {
+    if (!bid) return
+    // fire-and-forget sync pull; local observer will update when pull completes
+    import('../../sync/client').then((m) => m.syncNow().catch(() => {}))
+    // also ensure server fetch runs via query below
+  }, [bid])
+
   const getCustomers = useQuery({
     queryKey: ['customers', bid],
     queryFn: async () => {
@@ -88,79 +96,42 @@ export const useCustomers = () => {
       return res.data.customers || []
     },
     enabled: !!bid,
+    // keep stale data while refetching so UI doesn't flicker empty
+    staleTime: 30 * 1000,
   })
 
-  // Merge server + pending local (offline creates must appear immediately)
-  return useQuery({
-    queryKey: ['customers', bid, 'offline'],
-    queryFn: async () => {
-      const server = getCustomers.data as any[] | undefined
-      if (server === undefined) return local
-      if (!local.length) return server
-      const ids = new Set(server.map((s: any) => s.id))
-      const pending = local.filter((l: any) => !ids.has(l.id))
-      return pending.length ? [...server, ...pending] : server
-    },
-    enabled: !isLocalLoading,
-  }) as any as { data: Customer[] }
-}
-
-// Compatibility wrapper for existing call sites: useCustomers() previously returned Query, now we keep same shape
-export const useCustomersQuery = () => {
-  const { activeBusinessId } = (() => {
-    try {
-      return useBusinessContext() as any
-    } catch {
-      return { activeBusinessId: null }
-    }
-  })()
-  const bid = activeBusinessId || ''
-  const [local, setLocal] = useState<Customer[]>([])
-  const [loading, setLoading] = useState(true)
-  useEffect(() => {
-    if (!bid) {
-      setLocal([])
-      setLoading(false)
-      return
-    }
-    const col: any = (database as any).get('customers')
-    const sub = col
-      .query(Q.where('business_id', bid))
-      .observe()
-      .subscribe((rows: any[]) => {
-        setLocal(rows.map(mapRawToCustomer))
-        setLoading(false)
-      })
-    return () => sub.unsubscribe()
-  }, [bid])
-
-  const q = useQuery({
-    queryKey: ['customers', bid],
-    queryFn: async () => {
-      const res = await api.get<{ customers: Customer[] }>('/customers')
-      return res.data.customers || []
-    },
-    enabled: !!bid,
-  })
-  // Merge server + pending
+  // Merge server + pending local reactively (not via separate query, so it updates when either changes)
   const merged = (() => {
-    const server = q.data as any[] | undefined
+    const server = getCustomers.data as any[] | undefined
     if (server === undefined) return local
     if (!local.length) return server
     const ids = new Set(server.map((s: any) => s.id))
     const pending = local.filter((l: any) => !ids.has(l.id))
     return pending.length ? [...server, ...pending] : server
   })()
+
+  // If local has data, we are not loading even if server is still fetching; only loading when both empty
+  const isLoading = isLocalLoading || (getCustomers.isLoading && merged.length === 0)
+
+  // Expose Query-like shape expected by callers: { data, isLoading, refetch, error, isFetching }
   return {
     data: merged,
-    isLoading:
-      q.isLoading && !local.length && merged.length === 0
-        ? true
-        : loading && !q.data
-          ? true
-          : false,
-    refetch: q.refetch,
-    error: q.error,
+    isLoading,
+    isFetching: getCustomers.isFetching,
+    error: getCustomers.error,
+    refetch: getCustomers.refetch,
+  } as any as { data: Customer[]; isLoading: boolean; refetch: () => any }
+}
+
+// Compatibility wrapper — delegate to useCustomers so both hooks share sync + merge logic
+export const useCustomersQuery = () => {
+  const res: any = useCustomers()
+  return {
+    data: res.data,
+    isLoading: res.isLoading,
+    isFetching: res.isFetching,
+    error: res.error,
+    refetch: res.refetch,
   } as any
 }
 
