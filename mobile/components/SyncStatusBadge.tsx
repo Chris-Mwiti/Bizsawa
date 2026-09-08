@@ -43,17 +43,7 @@ export function SyncStatusBadge({
 
 export function GlobalSyncIndicator() {
   const { state, lastSyncAt } = useSync()
-  const label =
-    state === 'syncing'
-      ? 'Syncing…'
-      : state === 'online'
-        ? lastSyncAt
-          ? 'Synced'
-          : 'Online'
-        : state === 'conflict'
-          ? 'Conflicts'
-          : 'Offline'
-  return (
+ return (
     <SyncStatusBadge
       status={state === 'online' && lastSyncAt ? 'synced' : (state as any)}
     />

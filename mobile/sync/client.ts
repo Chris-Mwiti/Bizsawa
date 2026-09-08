@@ -3,7 +3,6 @@ import NetInfo from '@react-native-community/netinfo'
 import { database } from '../db/database'
 import { api } from '../lib/api'
 import { v4 as uuidv4 } from 'uuid'
-import { toNumber } from '../lib/api-dtos'
 import { Q } from '@nozbe/watermelondb'
 
 // One-time repair for corrupted local rows — now destructive for synced data to avoid pushing "0" to server
@@ -343,7 +342,7 @@ export async function syncNow() {
   } catch {}
   await synchronize({
     database: database as any,
-    pullChanges: async ({ lastPulledAt, schemaVersion, migration }) => {
+    pullChanges: async ({ lastPulledAt, schemaVersion }) => {
       const since = lastPulledAt ? String(lastPulledAt) : '0'
       console.log('[Sync] pull start since=', since, 'schemaVersion=', schemaVersion)
       try {
@@ -567,11 +566,6 @@ export async function syncNow() {
         } catch (e) {
           console.warn('[Sync] failed to persist conflicts locally', e)
         }
-        // Trigger navigation hint via global event — SyncProvider will pick up via refreshCounts and redirect
-        try {
-          const { getConflictsCount } = await import('./client')
-          // no-op, counts will be refreshed by SyncProvider interval; also emit via fetch
-        } catch {}
       }
     },
     // Version-counter conflict → conflicts table (§4), not last-write-wins (§10)
@@ -620,7 +614,6 @@ export async function syncNow() {
   })
   // Invalidate analytics so insights re-fetches fresh snapshot after sync applied sales/expenses
   try {
-    const { QueryClient } = await import('@tanstack/react-query').catch(()=>({QueryClient:null} as any))
     // need global client — stored on window or import from lib; fallback to fetch trigger
     const { api: api2 } = await import('../lib/api').catch(()=>({api:null} as any))
     if (api2) {

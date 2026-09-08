@@ -1,0 +1,12 @@
+appId: com.bizsawa.mobile
+---
+- launchApp
+- tapOn: "Stock"
+# simulate offline: airplane toggle via maestro (requires device)
+- setAirplaneMode: true
+- tapOn: "Add product"
+- inputText: "Offline Prod"
+- tapOn: "Save"
+- setAirplaneMode: false
+- tapOn: "Sync now"
+- assertVisible: "Offline Prod"

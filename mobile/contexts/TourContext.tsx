@@ -50,150 +50,152 @@ export const TOUR_STEPS: TourStep[] = [
   {
     id: 'welcome',
     title: 'Welcome to BizSawa',
-    subtitle: 'Your offline-first business companion',
+    subtitle: 'Your shop, sorted — even offline',
     description:
-      'BizSawa helps you run sales, orders, invoices and stock even without internet. This 60-second tour shows what happens when you tap each button and how to navigate.',
+      'BizSawa helps you make sales, take orders, send invoices and track stock — with or without internet. Take a quick 60-second look to see where everything is.',
     icon: Sparkles,
     color: '#111827',
     bg: 'bg-gray-900',
     tips: [
-      'Works offline — data syncs when you reconnect',
-      'All amounts in KES, variant prices per size/color',
-      'Tap "Next" to explore, or "Skip" anytime',
+      'Works without internet — updates when you are back online',
+      'All prices show in Kenya Shillings (KES)',
+      'Tap Next to continue or Skip anytime',
     ],
   },
   {
     id: 'sales',
-    title: 'Sales — Record & Variants',
-    subtitle: 'Tap "Record Sale" → pick product → pick variant',
+    title: 'Make a Sale',
+    subtitle: 'Add items, pick a size, and save',
     description:
-      'Business owner creates products with variants (e.g., Beans 500g @ KES 250, 1kg @ KES 450). When you tap Sales → Record Sale, choose Beans, then variant chips appear with price/SKU. Price is taken from variant, not base. Cart shows variant badge (+trash to remove single item, not whole cart). Total is variant price × qty. Works offline; syncs later.',
+      'Selling is simple. Tap Record Sale, choose a product like Beans, pick the size you want to sell — for example 500g or 1kg — and the price updates on its own. Choose how many you are selling, check your cart, and tap Save. You can sell even without internet.',
     icon: ShoppingCart,
     color: '#059669',
     bg: 'bg-emerald-600',
     route: '/(tabs)/sales',
     tips: [
-      'Product row shows "3 variants • from KES 250" preview chips',
-      'Variant selector enforces choice for variant products',
-      'Cart trash removes one line; Reset clears all',
+      'See all sizes and prices at a glance',
+      'Pick a size and the price changes automatically',
+      'Remove one item without clearing the whole cart',
     ],
   },
   {
     id: 'orders',
-    title: 'Orders — Lifecycle',
-    subtitle: 'Draft → Confirmed → Fulfilled',
+    title: 'Track Orders',
+    subtitle: 'From new order to delivery',
     description:
-      'Create Order picks customer, payment method, product+variant like Sales. Order statuses: draft (new), confirmed (inventory reserved), fulfilled (sale auto-created), cancelled. M-Pesa disabled when fulfilled. Tap order to see detail, confirm/fulfill there.',
+      'Take orders the same way you make sales. Choose a customer, how they will pay, and what they want. You can follow each order from New to Confirmed to Completed, so you always know what needs your attention.',
     icon: Package,
     color: '#0369a1',
     bg: 'bg-sky-600',
     route: '/orders',
-    tips: ['Variant price flows to order line', 'Pay via M-Pesa or Cash'],
+    tips: ['See what each customer ordered', 'Accept M-Pesa or Cash', 'Follow each order until it is done'],
   },
   {
     id: 'invoices',
-    title: 'Invoices — Names & Settlement',
-    subtitle: 'Customer & product names, not IDs',
+    title: 'Send Invoices',
+    subtitle: 'Clear bills for your customers',
     description:
-      'List shows invoiceNumber, status badge, customerName (not UUID), total/due, due date. Detail shows customer avatar+phone, lines with productName (resolved via productMap, not UUID description), and summary. Record Payment opens modal: amount is distributed FIFO to oldest unpaid invoices for that customer — works for cash & M-Pesa via worker. Example: customer has INV-001 (due 1st) KES 1000 and INV-002 KES 500, paying KES 1200 settles INV-001 fully + KES 200 to INV-002.',
+      'Create neat invoices with customer names, products and amounts. When a customer pays, the payment is automatically used for their oldest unpaid bill first — so you do not have to do the maths. It works the same for cash and M-Pesa.',
     icon: FileText,
     color: '#7c3aed',
     bg: 'bg-violet-600',
     route: '/invoices',
     tips: [
-      'Backend joins customers/products for names',
-      'Offline: lookup via Watermelon cache',
-      'Worker settles FIFO for both cash/mpesa',
+      'See names, not confusing codes',
+      'One payment can clear several bills',
+      'See at a glance what is still owed',
     ],
   },
   {
     id: 'stock',
-    title: 'Stock — Products with Variants',
-    subtitle: 'Define sizes/colors once, sell by variant',
+    title: 'Manage Your Stock',
+    subtitle: 'Add products and their sizes',
     description:
-      'Stock → Add: name*, category*, stock, price, SKU/barcode, supplier, then Variants section: Add → name (e.g., 500ml, Red), price*, cost, SKU/barcode. Variants are separate rows in product_variants table, synced. List shows product + variant count badge (e.g., "3 variants") and from price. Edit retains variants.',
+      'Add a product once, then add its options if it comes in different sizes or colours. For example, add Beans once, then add 500g and 1kg with their own prices. In your list you will see how many options each product has and the starting price.',
     icon: Building2,
     color: '#b45309',
     bg: 'bg-amber-600',
     route: '/(tabs)/stock',
     tips: [
-      'Variant price overrides base when selling',
-      'Leave Variants empty for single-price product',
+      'Each size can have its own price',
+      'Leave sizes empty if a product has one price',
     ],
   },
   {
     id: 'analytics',
-    title: 'Analytics — Timeframe & KPIs',
-    subtitle: 'Day / Week / Month / Year — ink pills',
+    title: 'See How Your Business Is Doing',
+    subtitle: 'Your numbers, made simple',
     description:
-      'Insights → Analytics: Tamagui Tabs Day/Week/Month/Year (activationMode manual) with single GET /analytics?timeframe. 2×2 KPIs: Total revenue (+growth), Total profit (margin), Categories tracked, Segments cohorts. Below: Revenue bar (last 7), Trend switchable line (sales/revenue/profit), Profit & margin chips, Category sales pie (top 6), Category performance bars, Customer segments growth + AOV. All DecimalString → KES via toNumber.',
+      'Check your sales, profit, best-selling products and customer groups. Choose Today, This Week, This Month or This Year to see totals, trends and what is selling best.',
     icon: BarChart3,
     color: '#0f766e',
     bg: 'bg-teal-700',
     route: '/(tabs)/insights/analytics',
     tips: [
-      'Tap timeframe pill — queries refetch Snapshot',
-      'Revenue bar slices last 7 dates',
-      'Pie shows top 6 categories by revenue',
+      'Switch between Today, Week, Month and Year',
+      'See your top products',
+      'Understand who buys the most',
     ],
   },
   {
     id: 'expenses',
-    title: 'Expenses — Spend Tracking',
-    subtitle: 'Category • Amount • Date* → offline-first',
+    title: 'Track What You Spend',
+    subtitle: 'Keep costs under control',
     description:
-      'Insights → Expenses (also Overview quick Add): Hero Total spend KES + count. List: EXP-shortId, category pill, vendor, description, spentAt (en-KE), KES badge + delete. Tap Add → Category* Amount* Description Vendor Date* (Today sets ISO). Writes to Watermelon expenses with sync_version=1 → syncNow; offline count included. Overview aggregates expenses for weekly profit & expense breakdown pie.',
+      'Add what you spent with a category, amount and date. See your total spend and each expense with who you paid. Your profit is simply sales minus these expenses.',
     icon: Receipt,
     color: '#dc2626',
     bg: 'bg-red-600',
     route: '/(tabs)/insights/expenses',
     tips: [
-      'Category + amount + spentAt required by handler',
-      'Offline adds appear instantly, sync later',
-      'Overview shows profit = revenue − expenses',
+      'Add a category, amount and date to save',
+      'New expenses appear right away, even offline',
+      'See your profit clearly',
     ],
   },
   {
     id: 'profile',
-    title: 'Profile — Edit Credentials',
-    subtitle: 'Business & personal, offline queued',
+    title: 'Your Business & Account',
+    subtitle: 'Keep your details up to date',
     description:
-      'Profile header shows initials, business name, location. Business information card (phone, type, years) and M-Pesa card each have Edit pencil. Tap Edit Business → name/phone/email/address/taxPin/currency. Tap avatar Edit → first/last name, phone, and change password (current+new). All edits queue offline via AsyncStorage pending and sync on reconnect (BusinessContext).',
+      'See your business name and location at the top. Tap Edit to update business details like phone or address, and tap your avatar to update your name or password. Changes are saved even when offline and update when you are back online.',
     icon: User,
     color: '#111827',
     bg: 'bg-gray-900',
     route: '/(tabs)/profile',
     tips: [
-      'Offline edits show optimistic update',
-      'Password change needs current password',
+      'Update business info in one tap',
+      'Change your password when you need to',
     ],
   },
   {
     id: 'navigation',
-    title: 'Navigation',
-    subtitle: 'Tabs + headers + back',
+    title: 'Get Around Easily',
+    subtitle: 'Find everything quickly',
     description:
-      'Bottom tabs: Sales/Stock/Profile. Top segmented control inside Sales screen switches Sales↔Orders↔Invoices. Headers have back chevron (router.back). Orders accessible via Sales tab or direct /orders. Profile has Credit/Profile/Rewards pills. OfflineBanner sticks to top when offline or when back online with pending changes (pending/conflicts).',
+      'Use the bottom menu to move between Sales, Stock and Profile. Inside Sales you can quickly switch between Sales, Orders and Invoices at the top. Use the back arrow to go back, and pull down to refresh.',
     icon: MapPin,
     color: '#6b7280',
     bg: 'bg-gray-600',
     tips: [
-      'Swipe between onboarding steps; dots indicate progress',
-      'Pull-to-refresh on Invoices triggers manualSync',
+      'The bottom menu is always there',
+      'Switch sections with one tap',
+      'Pull down to refresh your data',
     ],
   },
   {
     id: 'offline',
-    title: 'Offline & Auth',
-    subtitle: 'Secure offline login + business capture',
+    title: 'Works Offline Too',
+    subtitle: 'Stay safe, always in control',
     description:
-      'Login caches SHA256(email:password) in expo-secure-store (Keychain) with 7-day grace. Offline → login verifies against cache, no server hash needed; biometric/PIN can unlock. Business onboarding is 4-step wizard (core → location → currency/tax → M-Pesa) capturing all backend-required fields (name*, slug auto, phone, currency KES, timezone Africa/Nairobi, taxPin, mpesa). Offline business creation queued in AsyncStorage pending and synced via BusinessContext when online.',
+      'Log in once while you have internet, and you can still use BizSawa for 7 days without it. Create businesses, make sales and add expenses offline — everything is saved safely on your phone and updates when you reconnect. Your information stays protected.',
     icon: WifiOff,
     color: '#c2410c',
     bg: 'bg-orange-600',
     tips: [
-      'First online login enables 7-day offline',
-      'Offline business appears optimistic, synced later',
+      'Log in once, use offline for 7 days',
+      'Everything you do offline is saved',
+      'Updates automatically when you are back online',
     ],
   },
 ]
@@ -307,6 +309,21 @@ function TourOverlay() {
   const isLast = currentStep === TOUR_STEPS.length - 1
   const isFirst = currentStep === 0
 
+  const friendlyRouteName = (route?: string) => {
+    if (!route) return null
+    const map: Record<string, string> = {
+      '/(tabs)/sales': 'Sales',
+      '/orders': 'Orders',
+      '/invoices': 'Invoices',
+      '/(tabs)/stock': 'Stock',
+      '/(tabs)/insights/analytics': 'Insights',
+      '/(tabs)/insights/expenses': 'Expenses',
+      '/(tabs)/profile': 'Profile',
+    }
+    return map[route] || route.replace('/(tabs)/', '').replace('/', '')
+  }
+  const friendlyName = friendlyRouteName(step.route)
+
   return (
     <Modal
       visible={isActive}
@@ -326,7 +343,7 @@ function TourOverlay() {
                   <HelpCircle size={16} color='white' />
                 </View>
                 <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
-                  User Journey • {currentStep + 1} / {TOUR_STEPS.length}
+                  Step {currentStep + 1} of {TOUR_STEPS.length}
                 </Text>
               </View>
               <TouchableOpacity
@@ -378,11 +395,11 @@ function TourOverlay() {
                 ))}
               </View>
             ) : null}
-            {step.route ? (
+            {friendlyName ? (
               <View className='flex-row items-center gap-2 px-3 py-2 rounded-full bg-gray-900 self-start'>
                 <Smartphone size={12} color='white' />
                 <Text className='text-xs font-bold text-white'>
-                  {step.route}
+                  Find it in {friendlyName}
                 </Text>
               </View>
             ) : null}

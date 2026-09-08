@@ -18,7 +18,7 @@ import {
   Award,
 } from 'lucide-react-native'
 import { Card, CardContent } from '../components/ui/Card'
-import { useAchievements, Achievement } from '../hooks/api/useAchievements'
+import { useAchievements } from '../hooks/api/useAchievements'
 import { TAB_BAR_SCROLL_PADDING } from '../constants/tabBar'
 
 export default function RewardsScreen() {

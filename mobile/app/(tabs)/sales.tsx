@@ -4,7 +4,6 @@ import {
   Platform,
   Keyboard,
   TouchableWithoutFeedback,
-  ActivityIndicator,
   Alert,
   Modal,
   Pressable,
@@ -23,7 +22,6 @@ import {
   CardHeader,
   CardTitle,
 } from '../../components/ui/Card'
-import { Badge } from '../../components/ui/Badge'
 import { SalesEntryModal, DraftLine } from '../../components/SalesEntryModal'
 import { SuccessCelebration } from '../../components/ui/SuccessCelebration'
 import { DashboardSkeleton } from '../../components/ui/Skeleton'

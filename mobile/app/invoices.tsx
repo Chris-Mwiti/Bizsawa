@@ -20,7 +20,7 @@ import {
   XCircle,
 } from 'lucide-react-native'
 import { router } from 'expo-router'
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
+import { Card, CardContent} from '../components/ui/Card'
 import { useInvoices } from '../hooks/api/useInvoices'
 import { useCustomers } from '../hooks/api/useCustomers'
 import { TAB_BAR_SCROLL_PADDING } from '../constants/tabBar'

@@ -21,12 +21,10 @@ import {
   TrendingUp,
   Globe,
   MessageCircle,
-  AlertTriangle,
   Mic,
   MicOff,
 } from 'lucide-react-native'
 import { router } from 'expo-router'
-import { useAuth } from '../contexts/AuthContext'
 import { useChat, type ChatMessage } from '../hooks/api/useChat'
 import { CoachMessageMarkdown } from '../components/CoachMessageMarkdown'
 import Toast from 'react-native-toast-message'
@@ -82,10 +80,9 @@ export default function AICoachModal() {
   const [messages, setMessages] = useState<Message[]>(initialMessages)
   const [inputMessage, setInputMessage] = useState('')
   const [language, setLanguage] = useState<'en' | 'sw'>('en')
-  const [isListening, setIsListening] = useState(false)
+  const [isListening] = useState(false)
   const scrollViewRef = useRef<ScrollView>(null)
 
-  const { userData } = useAuth()
   const { mutateAsync: sendMessage, isPending: isTyping } = useChat()
 
   const formatTime = (date: Date) => {

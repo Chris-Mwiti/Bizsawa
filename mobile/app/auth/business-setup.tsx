@@ -164,7 +164,6 @@ export default function BusinessSetup() {
         </View>
         <View className='flex-row gap-2'>
           {STEPS.map((s, i) => {
-            const Icon = s.icon
             const active = i === step
             const done = i < step
             return (

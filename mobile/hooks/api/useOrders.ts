@@ -159,7 +159,6 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
         (s, l) => s + toNumber(l.unitPrice) * toNumber(l.quantity),
         0,
       )
-      const now = nowMillis()
       await (database as any).write(async () => {
         const col: any = (database as any).get('orders')
         await col.create((rec: any) => {

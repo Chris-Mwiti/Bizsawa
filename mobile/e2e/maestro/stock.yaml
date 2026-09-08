@@ -1,0 +1,9 @@
+appId: com.bizsawa.mobile
+---
+- launchApp
+- tapOn: "Stock"
+- tapOn: "Add product"
+- assertVisible: "Product name"
+- inputText: "Maestro Prod"
+- tapOn: "Save"
+- assertVisible: "Maestro Prod"

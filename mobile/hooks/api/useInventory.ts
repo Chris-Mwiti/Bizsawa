@@ -75,7 +75,7 @@ export const useInventory = () => {
   const bid = activeBusinessId || ''
   const [localInv, setLocalInv] = useState<InventoryItem[]>([])
   const [localMov, setLocalMov] = useState<StockMovement[]>([])
-  const [loading, setLoading] = useState(true)
+  const [_, setLoading] = useState(true)
   useEffect(() => {
     if (!bid) {
       setLocalInv([])
@@ -116,17 +116,6 @@ export const useInventory = () => {
     },
     enabled: !!bid,
   })
-  const getLowStockItems = useQuery({
-    queryKey: ['inventory', 'low-stock', bid],
-    queryFn: async () => {
-      const res = await api.get<{ items: any[] }>('/inventory/low-stock')
-      return (res.data.items || []).map((r: any) => ({
-        ...r,
-        quantity: toNumber(r.quantity),
-      }))
-    },
-    enabled: false,
-  })
   const getStockMovements = useQuery({
     queryKey: ['inventory', 'movements', bid],
     queryFn: async () => {
@@ -134,11 +123,6 @@ export const useInventory = () => {
       return (res.data.movements || []).map(mapRawMovement)
     },
     enabled: !!bid,
-  })
-  const getValuation = useQuery({
-    queryKey: ['inventory', 'valuation', bid],
-    queryFn: async () => [] as any,
-    enabled: false,
   })
 
   const adjustStock = useMutation({

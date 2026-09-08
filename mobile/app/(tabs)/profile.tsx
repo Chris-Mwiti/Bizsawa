@@ -222,24 +222,6 @@ export default function ProfileTab() {
         <Text className='text-xs text-gray-500'>
           Dhibiti maelezo yako • Manage your details
         </Text>
-
-        <View className='flex-row bg-gray-100 rounded-full p-1 mt-4'>
-          <Pressable
-            onPress={() => router.push('/credit-preview')}
-            className='flex-1 py-3 rounded-full items-center'
-          >
-            <Text className='text-sm font-medium text-gray-500'>Credit</Text>
-          </Pressable>
-          <View className='flex-1 py-3 rounded-full items-center bg-white shadow-sm border border-gray-200'>
-            <Text className='text-sm font-bold text-gray-900'>Profile</Text>
-          </View>
-          <Pressable
-            onPress={() => router.push('/rewards')}
-            className='flex-1 py-3 rounded-full items-center'
-          >
-            <Text className='text-sm font-medium text-gray-500'>Rewards</Text>
-          </Pressable>
-        </View>
       </View>
 
       <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive"

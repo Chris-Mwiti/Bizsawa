@@ -11,7 +11,12 @@
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
     "lint:fix": "eslint . --ext .js,.jsx,.ts,.tsx --fix",
     "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,md}\"",
-    "format:check": "prettier --check \"**/*.{js,jsx,ts,tsx,json,md}\""
+    "format:check": "prettier --check \"**/*.{js,jsx,ts,tsx,json,md}\"",
+    "build:android:preview": "eas build --platform android --profile preview",
+    "build:android:production": "eas build --platform android --profile production",
+    "test:e2e:api": "vitest run e2e/api",
+    "test:e2e:maestro": "maestro test e2e/maestro",
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@morrowdigital/watermelondb-expo-plugin": "^2.4.0-beta.0",
@@ -67,7 +72,8 @@
     "prettier": "3.6.2",
     "prettier-plugin-tailwindcss": "^0.8.0",
     "tailwindcss": "^3.4.19",
-    "typescript": "~5.9.2"
+    "typescript": "~5.9.2",
+    "vitest": "^3.2.4"
   },
   "overrides": {
     "react": "19.1.0",

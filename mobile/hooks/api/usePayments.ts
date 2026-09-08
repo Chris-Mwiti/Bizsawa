@@ -111,7 +111,6 @@ export const useInitiatePayment = () => {
       const amountStr = toDecimalString(data.amount)
       if (toNumber(amountStr) <= 0) throw new Error('Amount must be positive')
       const id = uuidv4()
-      const now = nowMillis()
       // Offline-first: always write locally, then sync
       await (database as any).write(async () => {
         const col: any = (database as any).get('payment_commands')

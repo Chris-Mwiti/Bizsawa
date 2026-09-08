@@ -4,7 +4,6 @@ import type {
   InvoiceListItem,
   InvoiceDetail,
   UUID,
-  DecimalString,
 } from '../../lib/api-dtos'
 import { toDecimalString, toNumber } from '../../lib/api-dtos'
 import { database } from '../../db/database'
@@ -25,19 +24,7 @@ export interface CreateInvoiceInput {
   }>
   notes?: string
 }
-function toInvoiceRequest(input: CreateInvoiceInput) {
-  return {
-    customerId: input.customerId,
-    dueAt: input.dueAt,
-    lines: input.lines.map((l) => ({
-      description: l.description,
-      quantity: toDecimalString(l.quantity),
-      unitPrice: toDecimalString(l.unitPrice),
-      taxRuleId: l.taxRuleId,
-    })),
-    notes: input.notes,
-  }
-}
+
 function mapRaw(raw: any): InvoiceListItem {
   const src: any = raw?._raw ? raw._raw : raw
   const get = (snake: string, camel: string) =>
@@ -158,7 +145,6 @@ export const useInvoices = () => {
         0,
       )
       const total = subtotal
-      const now = nowMillis()
       const dueAt = data.dueAt
         ? toMillis(data.dueAt)
         : nowMillis() + 7 * 86400000

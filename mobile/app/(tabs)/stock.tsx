@@ -27,7 +27,6 @@ import {
   Card,
   CardContent,
   CardHeader,
-  CardTitle,
 } from '../../components/ui/Card'
 import { TAB_BAR_SCROLL_PADDING } from '../../constants/tabBar'
 import { SuccessCelebration } from '../../components/ui/SuccessCelebration'
