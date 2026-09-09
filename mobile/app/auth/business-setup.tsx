@@ -154,7 +154,7 @@ export default function BusinessSetup() {
   }
 
   return (
-    <SafeAreaView className='flex-1 bg-white'>
+    <SafeAreaView edges={['top']} className='flex-1 bg-white'>
       <View className='px-6 pt-6 pb-4 border-b border-gray-100'>
         <View className='flex-row items-center justify-between mb-4'>
           <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
@@ -184,7 +184,7 @@ export default function BusinessSetup() {
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
           <ScrollView
             className='flex-1 px-6'
-            contentContainerStyle={{ paddingVertical: 16, gap: 16, paddingBottom: 16 + insets.bottom }}
+            contentContainerStyle={{ paddingTop: 16, paddingBottom: 32, gap: 16 }}
             keyboardShouldPersistTaps='handled'
             keyboardDismissMode='interactive'
             showsVerticalScrollIndicator={false}
@@ -408,14 +408,26 @@ export default function BusinessSetup() {
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
 
+      {/* Thumb-zone CTA: lifted off bottom edge + min 48dp hit target. Was flush to edge (16 + insets.bottom+12) → hard thumb reach */}
       <View
         className='px-6 border-t border-gray-100 bg-white flex-row gap-3'
-        style={{ paddingTop: 16, paddingBottom: Math.max(16, insets.bottom + 12) }}
+        style={{
+          paddingTop: 16,
+          paddingBottom: Math.max(24, insets.bottom + 20),
+          // subtle lift + shadow so bar feels floating, not glued to nav
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.06,
+          shadowRadius: 12,
+          elevation: 8,
+        }}
       >
         {step > 0 ? (
           <TouchableOpacity
             onPress={back}
             className='flex-1 py-4 rounded-2xl border border-gray-300 items-center flex-row justify-center gap-2'
+            style={{ minHeight: 56 }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <ArrowLeft size={16} color='#374151' />
             <Text className='font-bold text-gray-700'>Back</Text>
@@ -427,6 +439,8 @@ export default function BusinessSetup() {
           <TouchableOpacity
             onPress={next}
             className='flex-1 py-4 rounded-2xl bg-gray-900 items-center flex-row justify-center gap-2'
+            style={{ minHeight: 56 }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Text className='font-bold text-white'>Next</Text>
             <ArrowRight size={16} color='white' />
@@ -436,6 +450,8 @@ export default function BusinessSetup() {
             onPress={handleCreate}
             disabled={isSaving}
             className='flex-1 py-4 rounded-2xl bg-emerald-600 items-center flex-row justify-center gap-2'
+            style={{ minHeight: 56, opacity: isSaving ? 0.85 : 1 }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             {isSaving ? (
               <ActivityIndicator color='white' />
