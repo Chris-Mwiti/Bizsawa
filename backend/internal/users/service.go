@@ -45,7 +45,7 @@ type CreateProfileRequest struct {
 
 func (s *Service) AddOwner(ctx context.Context, businessID, userID uuid.UUID) error {
 	now := time.Now().UTC()
-	return s.repo.CreateMember(ctx, &BusinessMember{BaseModel: shareddb.BaseModel{TenantID: businessID}, BusinessID: businessID, UserID: userID, Role: "OWNER", IsActive: true, InvitedBy: userID, InvitedAt: now, JoinedAt: &now})
+	return s.repo.CreateMember(ctx, &BusinessMember{TenantModel: shareddb.TenantModel{TenantID: businessID}, BusinessID: businessID, UserID: userID, Role: "OWNER", IsActive: true, InvitedBy: userID, InvitedAt: now, JoinedAt: &now})
 }
 
 func (s *Service) InviteMember(ctx context.Context, businessID, invitedBy uuid.UUID, req InviteMemberRequest) (*BusinessMember, error) {
@@ -54,7 +54,7 @@ func (s *Service) InviteMember(ctx context.Context, businessID, invitedBy uuid.U
 	}
 
 	member := &BusinessMember{
-		BaseModel: shareddb.BaseModel{
+		TenantModel: shareddb.TenantModel{
 			TenantID: businessID,
 		},
 		BusinessID: businessID,
@@ -99,7 +99,7 @@ func (s *Service) GetOrCreateProfile(ctx context.Context, userID uuid.UUID, busi
 	}
 
 	profile = &UserProfile{
-		BaseModel: shareddb.BaseModel{
+		TenantModel: shareddb.TenantModel{
 			TenantID: businessId,
 		},
 		UserID:   userID,
@@ -116,7 +116,7 @@ func (s *Service) GetOrCreateProfile(ctx context.Context, userID uuid.UUID, busi
 
 func (s *Service) CreateProfile(ctx context.Context, businessId uuid.UUID, userID uuid.UUID, req CreateProfileRequest) (*UserProfile, error) {
 	profile := &UserProfile{
-		BaseModel: shareddb.BaseModel{
+		TenantModel: shareddb.TenantModel{
 			TenantID: businessId,
 		},
 		UserID:    userID,
