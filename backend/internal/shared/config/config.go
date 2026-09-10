@@ -17,6 +17,7 @@ type Config struct {
 	Redis           RedisConfig
 	CORS            CORSConfig
 	JWT             JWTConfig
+	Google          GoogleConfig
 	MCP             MCPConfig
 	WhatsApp        WhatsAppConfig
 	Crypto          CryptoConfig
@@ -67,6 +68,18 @@ type CryptoConfig struct {
 	IndexSecret string
 }
 
+type GoogleConfig struct {
+	// Better-Auth parity: Agents_Documents/BetterAuth/GoogleSocialLogin.md
+	// baseURL avoids redirect_uri_mismatch; clientIds array handles web/ios/android audiences
+	BaseURL              string
+	ClientIDs            []string // GOOGLE_CLIENT_ID or GOOGLE_WEB_CLIENT_ID, GOOGLE_IOS_CLIENT_ID, GOOGLE_ANDROID_CLIENT_ID
+	ClientSecret         string
+	HD                   string // hosted domain restriction, e.g. "company.com" or "*" for any workspace
+	Prompt               string // e.g. "select_account" or "select_account consent"
+	AccessType           string // "offline" to obtain refresh_token
+	IncludeGrantedScopes bool
+}
+
 type MpesaConfig struct {
 	BaseURL                string
 	ConsumerKey            string
@@ -104,6 +117,15 @@ func Load() Config {
 		JWT: JWTConfig{
 			Issuer:     env("JWT_ISSUER", "bizsawa"),
 			SigningKey: env("JWT_SIGNING_KEY", "change-me"),
+		},
+		Google: GoogleConfig{
+			BaseURL:              env("BETTER_AUTH_URL", env("GOOGLE_BASE_URL", "")),
+			ClientIDs:            googleClientIDs(),
+			ClientSecret:         env("GOOGLE_CLIENT_SECRET", ""),
+			HD:                   env("GOOGLE_HD", ""),
+			Prompt:               env("GOOGLE_PROMPT", "select_account"),
+			AccessType:           env("GOOGLE_ACCESS_TYPE", "offline"),
+			IncludeGrantedScopes: boolEnv("GOOGLE_INCLUDE_GRANTED_SCOPES", true),
 		},
 		MCP: MCPConfig{
 			Addr:                  env("MCP_ADDR", ":5574"),
@@ -209,6 +231,46 @@ func durationEnv(key string, fallback time.Duration) time.Duration {
 	}
 
 	return parsed
+}
+
+func googleClientIDs() []string {
+	// Support both single GOOGLE_CLIENT_ID and cross-platform array per Better-Auth docs
+	single := strings.TrimSpace(os.Getenv("GOOGLE_CLIENT_ID"))
+	web := strings.TrimSpace(os.Getenv("GOOGLE_WEB_CLIENT_ID"))
+	ios := strings.TrimSpace(os.Getenv("GOOGLE_IOS_CLIENT_ID"))
+	android := strings.TrimSpace(os.Getenv("GOOGLE_ANDROID_CLIENT_ID"))
+	var ids []string
+	if single != "" {
+		ids = append(ids, single)
+	}
+	if web != "" {
+		ids = append(ids, web)
+	}
+	if ios != "" {
+		ids = append(ids, ios)
+	}
+	if android != "" {
+		ids = append(ids, android)
+	}
+	// Also support comma-separated GOOGLE_CLIENT_IDS
+	if envIDs := strings.TrimSpace(os.Getenv("GOOGLE_CLIENT_IDS")); envIDs != "" {
+		for _, p := range strings.Split(envIDs, ",") {
+			p = strings.TrimSpace(p)
+			if p != "" {
+				ids = append(ids, p)
+			}
+		}
+	}
+	// Deduplicate
+	seen := map[string]bool{}
+	out := []string{}
+	for _, id := range ids {
+		if !seen[id] {
+			seen[id] = true
+			out = append(out, id)
+		}
+	}
+	return out
 }
 
 func listEnv(key string, fallback []string) []string {

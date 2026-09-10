@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/authz"
+	"github.com/Codecx-Org/FinAI/backend/internal/shared/config"
 )
 
 type MembershipResolver interface {
@@ -24,6 +25,7 @@ type Service struct {
 	tokens        *TokenService
 	memberships   MembershipResolver
 	subscriptions SubscriptionProvisioner
+	googleCfg     *config.GoogleConfig
 }
 
 func NewService(repo *Repository, tokens *TokenService, memberships MembershipResolver, subscriptions SubscriptionProvisioner) *Service {

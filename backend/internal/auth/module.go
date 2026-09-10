@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 
 	sharedhttp "github.com/Codecx-Org/FinAI/backend/internal/shared/http"
+	"github.com/Codecx-Org/FinAI/backend/internal/shared/config"
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/middleware"
 )
 
@@ -25,6 +26,7 @@ type Option func(*options)
 type options struct {
 	memberships   MembershipResolver
 	subscriptions SubscriptionProvisioner
+	googleCfg     *config.GoogleConfig
 }
 
 func WithMembershipResolver(resolver MembershipResolver) Option {
@@ -33,6 +35,10 @@ func WithMembershipResolver(resolver MembershipResolver) Option {
 
 func WithSubscriptionProvisioner(provisioner SubscriptionProvisioner) Option {
 	return func(opts *options) { opts.subscriptions = provisioner }
+}
+
+func WithGoogleConfig(cfg config.GoogleConfig) Option {
+	return func(opts *options) { opts.googleCfg = &cfg }
 }
 
 func New(db *gorm.DB, cfg Config, opts ...Option) *Module {
@@ -44,6 +50,9 @@ func New(db *gorm.DB, cfg Config, opts ...Option) *Module {
 	repo := NewRepository(db)
 	tokens := NewTokenService(cfg)
 	svc := NewService(repo, tokens, options.memberships, options.subscriptions)
+	if options.googleCfg != nil {
+		svc.WithGoogleConfig(*options.googleCfg)
+	}
 
 	return &Module{repo: repo, tokens: tokens, svc: svc}
 }
@@ -53,6 +62,27 @@ func (m *Module) RegisterRoutes(r chi.Router) {
 	r.Post("/register", h.Register)
 	r.Post("/login", h.Login)
 	r.Post("/refresh", h.Refresh)
+	// Google SSO — better-auth parity: idToken flow (mobile) + callback (web)
+	// POST /auth/google  {idToken:{token, accessToken}} per GoogleSocialLogin.md
+	r.Post("/google", h.GoogleLogin)
+	r.Post("/google/callback", h.GoogleLogin)
+	r.Get("/google", h.GoogleRedirect)
+	r.Get("/google/callback", h.GoogleCallback)
+
+	// Email OTP — better-auth EmailOTP plugin parity: Agents_Documents/BetterAuth/EmailOTP.md
+	// sendVerificationOTP covers sign-in, email-verification, forget-password
+	r.Post("/email-otp/send-verification-otp", h.SendVerificationOTP)
+	r.Post("/email-otp/check-verification-otp", h.CheckVerificationOTP)
+	r.Post("/email-otp/verify-email", h.VerifyEmailOTP)
+	r.Post("/sign-in/email-otp", h.SignInEmailOTP)
+	r.Post("/email-otp/request-password-reset", h.RequestPasswordResetOTP)
+	r.Post("/email-otp/reset-password", h.ResetPasswordOTP)
+
+	// Backward-compat aliases per EmailPassword.md / EmailOTP.md deprecated paths
+	r.Post("/otp/send", h.SendVerificationOTP)
+	r.Post("/otp/verify", h.CheckVerificationOTP)
+	r.Post("/forgot-password", h.RequestPasswordResetOTP)
+	r.Post("/reset-password-otp", h.ResetPasswordOTP)
 }
 
 func (m *Module) Middleware(next http.Handler) http.Handler {
