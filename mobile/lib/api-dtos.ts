@@ -180,14 +180,21 @@ export interface LineRequest {
 export interface Order {
   id: UUID
   businessId: UUID
+  tenantId?: UUID
   customerId?: UUID | null
   status: 'draft' | 'confirmed' | 'fulfilled' | 'cancelled' | 'refunded'
   subtotal: DecimalString
   taxAmount: DecimalString
   total: DecimalString
   paymentMethod: string
+  paymentStatus?: string
+  idempotencyKey?: string
+  confirmedAt?: ISODateTime | null
+  fulfilledAt?: ISODateTime | null
   createdAt: ISODateTime
   updatedAt: ISODateTime
+  deletedAt?: ISODateTime | null
+  syncVersion?: number
   lines?: Array<LineRequest & { id: UUID; lineTotal: DecimalString }>
 }
 
