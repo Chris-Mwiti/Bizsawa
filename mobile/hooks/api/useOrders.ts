@@ -197,10 +197,17 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
 
   const updateOrder = useMutation({
     mutationFn: async ({ id, data }: { id: UUID; data: UpdateOrderInput }) => {
-      // Defensive: ensure status is valid string, avoid "type is undefined" from enum misuse
-      const newStatus = data?.status ? String(data.status).trim().toLowerCase() : null
+      if (!id) throw new Error('Order id is required')
+      if (!data || typeof data !== 'object') throw new Error('Update data is required — did you pass undefined?')
+      // DTO-safe: normalize status and guard against legacy {type} payloads; use optional chaining to avoid "cannot read property 'type' of undefined"
+      const rawStatus = (data as any)?.status
+      const newStatus = rawStatus ? String(rawStatus).trim().toLowerCase() : null
       if (newStatus && !['draft', 'confirmed', 'fulfilled', 'cancelled', 'refunded'].includes(newStatus)) {
-        throw new Error(`Invalid status: ${String(data.status)}`)
+        throw new Error(`Invalid status: ${String(rawStatus)}`)
+      }
+      // Legacy guard: callers mistakenly passing {type:'confirmed'} instead of {status}
+      if (newStatus === null && (data as any)?.type !== undefined) {
+        throw new Error('Invalid payload: `type` is not a valid order field — did you mean `status`?')
       }
       let shouldCreateSale = false
       await (database as any).write(async () => {
@@ -211,13 +218,20 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
             r.status = newStatus
             // bump sync version for conflict detection (§4)
             r.syncVersion = (r.syncVersion || 1) + 1
+            // DTO-safe: use model fields (schema v5) — ensures _changed tracks correctly and avoids column.type crash
+            if (newStatus === 'confirmed' && !r.confirmedAt) {
+              try { r.confirmedAt = Date.now() } catch { try { r._raw.confirmed_at = Date.now() } catch {} }
+            }
+            if (newStatus === 'fulfilled' && !r.fulfilledAt) {
+              try { r.fulfilledAt = Date.now() } catch { try { r._raw.fulfilled_at = Date.now() } catch {} }
+            }
+            if (newStatus === 'confirmed' || newStatus === 'fulfilled') {
+              try { r.paymentStatus = newStatus === 'fulfilled' ? 'fulfilled' : 'confirmed' } catch {}
+            }
           })
           if (newStatus === 'fulfilled' && prevStatus !== 'fulfilled') {
             shouldCreateSale = true
           }
-        } else if (newStatus === null && (data as any).type !== undefined) {
-          // Guard against legacy callers passing {type} instead of {status}
-          throw new Error('type is undefined — did you mean status?')
         }
         // Offline fulfillment mirrors backend FulfillOrder -> CreateFromOrder: create sale + sale_lines locally
         if (shouldCreateSale) {

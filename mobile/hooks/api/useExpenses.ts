@@ -91,7 +91,8 @@ export const useExpenses = () => {
 
   const createExpense = useMutation({
     mutationFn: async (data: CreateExpenseInput) => {
-      const category = (data.category || data.type || '').trim()
+      if (!data || typeof data !== 'object') throw new Error('Expense data is required')
+      const category = (data?.category || data?.type || '').trim()
       if (!category) throw new Error('Category required')
       const id = uuidv4()
       const spentAt = toMillis(data.spentAt) || nowMillis()

@@ -179,11 +179,12 @@ export const useProducts = () => {
           rec.cost = toDecimalString(data.cost ?? data.buyingPrice ?? 0)
           rec.isActive = true
           rec.syncVersion = 1
-          if ((data as any).description)
-            rec._raw.description = (data as any).description.trim()
-          if ((data as any).sku) rec._raw.sku = (data as any).sku.trim()
-          if ((data as any).barcode)
-            rec._raw.barcode = (data as any).barcode.trim()
+          // DTO-safe: model now has description/sku/barcode/imageUrl — use field setters so _changed is tracked correctly
+          if ((data as any).description !== undefined) rec.description = (data as any).description?.trim() || null
+          if ((data as any).sku !== undefined) rec.sku = (data as any).sku?.trim() || null
+          if ((data as any).barcode !== undefined) rec.barcode = (data as any).barcode?.trim() || null
+          if ((data as any).imageUrl !== undefined) rec.imageUrl = (data as any).imageUrl?.trim() || null
+          if ((data as any).taxRuleId !== undefined) rec.taxRuleId = (data as any).taxRuleId || null
         })
         // Create variants locally — they sync via product_variants table
         if (data.variants?.length) {
@@ -235,12 +236,11 @@ export const useProducts = () => {
           if (data.price !== undefined) r.price = toDecimalString(data.price)
           if (data.cost !== undefined || data.buyingPrice !== undefined)
             r.cost = toDecimalString((data.cost ?? data.buyingPrice) as any)
-          if ((data as any).description !== undefined)
-            r._raw.description = (data as any).description?.trim() || null
-          if ((data as any).sku !== undefined)
-            r._raw.sku = (data as any).sku?.trim() || null
-          if ((data as any).barcode !== undefined)
-            r._raw.barcode = (data as any).barcode?.trim() || null
+          if ((data as any).description !== undefined) r.description = (data as any).description?.trim() || null
+          if ((data as any).sku !== undefined) r.sku = (data as any).sku?.trim() || null
+          if ((data as any).barcode !== undefined) r.barcode = (data as any).barcode?.trim() || null
+          if ((data as any).imageUrl !== undefined) r.imageUrl = (data as any).imageUrl?.trim() || null
+          if ((data as any).taxRuleId !== undefined) r.taxRuleId = (data as any).taxRuleId || null
           r.syncVersion = (r.syncVersion || 1) + 1
         })
         // Replace variants: delete existing, create new (offline-first)
@@ -278,12 +278,41 @@ export const useProducts = () => {
 
   const deleteProduct = useMutation({
     mutationFn: async (id: UUID) => {
+      if (!id) throw new Error('Product id is required')
       await (database as any).write(async () => {
         const rec: any = await (database as any).get('products').find(id)
         await rec.update((r: any) => {
           r.deletedAt = Date.now()
         })
         await rec.markAsDeleted()
+        // Cascade: delete variants + inventory to avoid FK orphans and ensure push sync sends correct deletes
+        try {
+          const vcol: any = (database as any).get('product_variants')
+          const variants: any[] = await vcol.query(Q.where('product_id', id)).fetch()
+          for (const v of variants) {
+            try {
+              await v.update((r: any) => { r.deletedAt = Date.now() })
+              await v.markAsDeleted()
+            } catch {}
+          }
+        } catch {}
+        try {
+          const invCol: any = (database as any).get('inventory_items')
+          const invs: any[] = await invCol.query(Q.where('product_id', id)).fetch()
+          for (const inv of invs) {
+            try {
+              await inv.update((r: any) => { r.deletedAt = Date.now() })
+              await inv.markAsDeleted()
+            } catch {}
+          }
+        } catch {}
+        // Note: stock_movements are history — keep them; they validate FK but push will fail if parent deleted before child;
+        // cascade delete ensures product delete is pushed after variants/inventory deletes due to syncableTables order (product_variants before inventory, products first)
+        // To avoid FK violation 23503 on push, we rely on backend's validateFKs which checks parent exists AND deleted_at IS NULL;
+        // since we soft-delete product first, variants still reference deleted product → they would fail FK if pushed after product.
+        // Order in push is products → product_variants → inventory_items (backend syncableTables order), so product delete pushed first,
+        // then variants delete. That's safe because delete is soft-delete (exists but deleted_at NOT NULL) — validateFKs only checks for insert/update, not delete.
+        // So cascade here is for local completeness.
       })
       import('../../sync/client').then((m) => m.syncNow().catch(() => {}))
     },
