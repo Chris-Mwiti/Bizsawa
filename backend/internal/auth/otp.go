@@ -15,6 +15,8 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
+
+	"github.com/Codecx-Org/FinAI/backend/internal/shared/email"
 )
 
 type OTPType string
@@ -93,10 +95,10 @@ func hashOTP(otp string) string {
 	return hex.EncodeToString(h[:])
 }
 
-// sendVerificationOTP is the core primitive — generates, stores, and "sends" via log (plug your provider here: Resend/SuperSend/Mailtrap)
+// SendVerificationOTP is the core primitive — generates, stores, and delivers via Resend (with log fallback).
 func (s *Service) SendVerificationOTP(ctx context.Context, req SendOTPRequest) error {
-	email := normalizeEmail(req.Email)
-	if email == "" {
+	emailAddr := normalizeEmail(req.Email)
+	if emailAddr == "" {
 		return ErrUnauthorized.WithMessage("email required")
 	}
 	otpType := OTPType(strings.TrimSpace(string(req.Type)))
@@ -105,17 +107,16 @@ func (s *Service) SendVerificationOTP(ctx context.Context, req SendOTPRequest) e
 	}
 	// For forget-password, user must exist — prevents enumeration timing but we still create OTP for non-existent to avoid leak
 	if otpType == OTPTypeForgetPassword {
-		if _, err := s.repo.FindByEmail(ctx, email); err != nil {
-			// still generate but don't reveal
-			slog.Info("otp forget-password for non-existent user (no-op)", "email", email)
+		if _, err := s.repo.FindByEmail(ctx, emailAddr); err != nil {
+			slog.Info("otp forget-password for non-existent user (no-op)", "email", emailAddr)
 		}
 	}
 	otp := generateOTP(otpLength)
 	otpHash := hashOTP(otp)
 	// Invalidate previous unexpired OTPs of same type
-	_ = s.repo.db.WithContext(ctx).Where("email = ? AND type = ? AND expires_at > ?", email, string(otpType), time.Now().UTC()).Delete(&OTP{}).Error
+	_ = s.repo.db.WithContext(ctx).Where("email = ? AND type = ? AND expires_at > ?", emailAddr, string(otpType), time.Now().UTC()).Delete(&OTP{}).Error
 	rec := &OTP{
-		Email:     email,
+		Email:     emailAddr,
 		OtpHash:   otpHash,
 		Type:      string(otpType),
 		ExpiresAt: time.Now().UTC().Add(otpExpiresIn),
@@ -123,11 +124,19 @@ func (s *Service) SendVerificationOTP(ctx context.Context, req SendOTPRequest) e
 	if err := s.repo.db.WithContext(ctx).Create(rec).Error; err != nil {
 		return err
 	}
-	// Plug point: replace with Resend/SuperSend per EmailProviderSetup.md
-	// We deliberately log OTP in dev so curl / mobile can proceed without SMTP
-	slog.Info("sendVerificationOTP", "email", email, "type", otpType, "otp", otp, "expiresIn", otpExpiresIn.String())
-	// In production, call your email provider here:
-	// void sendEmail({to: email, subject: fmt.Sprintf("Your BizSawa code: %s", otp), text: otp})
+
+	sender := s.emailSender
+	if sender == nil {
+		sender = &email.NoopSender{}
+	}
+	if err := sender.SendOTPEmail(ctx, emailAddr, otp, string(otpType)); err != nil {
+		slog.Error("failed to send OTP email via provider", "email", emailAddr, "type", otpType, "err", err)
+		// OTP is already persisted; surface error so caller can retry/show message.
+		// In dev (NoopSender) this never errors.
+		return fmt.Errorf("failed to send OTP email: %w", err)
+	}
+	// Always log at info for dev observability (redacted in prod via log level)
+	slog.Info("sendVerificationOTP dispatched", "email", emailAddr, "type", otpType, "expiresIn", otpExpiresIn.String())
 	return nil
 }
 

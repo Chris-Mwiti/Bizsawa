@@ -22,6 +22,7 @@ type Config struct {
 	WhatsApp        WhatsAppConfig
 	Crypto          CryptoConfig
 	Mpesa           MpesaConfig
+	Email           EmailConfig
 }
 
 type DatabaseConfig struct {
@@ -96,6 +97,13 @@ type MpesaConfig struct {
 	DefaultTransactionDesc string
 }
 
+type EmailConfig struct {
+	Provider string // "resend" | "log" (default: resend if API key set, else log)
+	ResendAPIKey string
+	FromEmail    string
+	FromName     string
+}
+
 func Load() Config {
 	return Config{
 		Env:             env("APP_ENV", "development"),
@@ -161,6 +169,12 @@ func Load() Config {
 			C2BConfirmationURL:     env("MPESA_C2B_CONFIRMATION_URL", ""),
 			C2BValidationURL:       env("MPESA_C2B_VALIDATION_URL", ""),
 			DefaultTransactionDesc: env("MPESA_DEFAULT_TRANSACTION_DESC", "BizSawa payment"),
+		},
+		Email: EmailConfig{
+			Provider:     env("EMAIL_PROVIDER", ""),
+			ResendAPIKey: env("RESEND_API_KEY", ""),
+			FromEmail:    env("EMAIL_FROM_ADDRESS", env("RESEND_FROM_EMAIL", "noreply@bizsawa.com")),
+			FromName:     env("EMAIL_FROM_NAME", "BizSawa"),
 		},
 	}
 }

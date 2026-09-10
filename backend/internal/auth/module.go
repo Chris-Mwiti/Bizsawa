@@ -12,6 +12,7 @@ import (
 
 	sharedhttp "github.com/Codecx-Org/FinAI/backend/internal/shared/http"
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/config"
+	"github.com/Codecx-Org/FinAI/backend/internal/shared/email"
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/middleware"
 )
 
@@ -27,6 +28,7 @@ type options struct {
 	memberships   MembershipResolver
 	subscriptions SubscriptionProvisioner
 	googleCfg     *config.GoogleConfig
+	emailSender   email.Sender
 }
 
 func WithMembershipResolver(resolver MembershipResolver) Option {
@@ -41,6 +43,10 @@ func WithGoogleConfig(cfg config.GoogleConfig) Option {
 	return func(opts *options) { opts.googleCfg = &cfg }
 }
 
+func WithEmailSender(sender email.Sender) Option {
+	return func(opts *options) { opts.emailSender = sender }
+}
+
 func New(db *gorm.DB, cfg Config, opts ...Option) *Module {
 	options := options{}
 	for _, opt := range opts {
@@ -52,6 +58,9 @@ func New(db *gorm.DB, cfg Config, opts ...Option) *Module {
 	svc := NewService(repo, tokens, options.memberships, options.subscriptions)
 	if options.googleCfg != nil {
 		svc.WithGoogleConfig(*options.googleCfg)
+	}
+	if options.emailSender != nil {
+		svc.WithEmailSender(options.emailSender)
 	}
 
 	return &Module{repo: repo, tokens: tokens, svc: svc}
