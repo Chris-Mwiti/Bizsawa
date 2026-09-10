@@ -85,6 +85,20 @@ const migrations = schemaMigrations({
         },
       ],
     },
+    {
+      toVersion: 5,
+      steps: [
+        {
+          type: 'add_columns',
+          table: 'orders',
+          columns: [
+            { name: 'payment_status', type: 'string', isOptional: true },
+            { name: 'confirmed_at', type: 'number', isOptional: true },
+            { name: 'fulfilled_at', type: 'number', isOptional: true },
+          ],
+        },
+      ],
+    },
   ],
 })
 

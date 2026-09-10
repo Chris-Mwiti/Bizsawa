@@ -10,7 +10,10 @@ export default class Order extends Model {
   @field('tax_amount') taxAmount!: string
   @field('total') total!: string
   @field('payment_method') paymentMethod!: string
+  @field('payment_status') paymentStatus?: string
   @field('idempotency_key') idempotencyKey?: string
+  @field('confirmed_at') confirmedAt?: number
+  @field('fulfilled_at') fulfilledAt?: number
   @field('sync_version') syncVersion!: number
   @field('deleted_at') deletedAt?: number
   @readonly @date('created_at') createdAt!: Date
