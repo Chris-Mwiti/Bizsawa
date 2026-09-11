@@ -285,6 +285,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
       const response = await api.post<AuthResponse>('/auth/google', payload)
       await applyAuth(response.data)
     } catch (e: any) {
+      console.error('[Auth] Google login error', { code: e?.code, message: e?.message, friendly: e?.friendlyMessage, response: e?.response?.data })
       // Fallback: web redirect flow via backend (better-auth baseURL)
       if (e?.code === 'SIGN_IN_CANCELLED' || e?.code === '12501') throw new Error('Google sign-in cancelled')
       if (e?.response?.data || e?.friendlyMessage) {
