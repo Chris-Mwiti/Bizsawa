@@ -170,6 +170,7 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
           rec.taxAmount = toDecimalString(0)
           rec.total = toDecimalString(total)
           rec.paymentMethod = req.paymentMethod || 'cash'
+          rec.paymentStatus = 'pending'
           rec.syncVersion = 1
         })
         const lineCol: any = (database as any).get('order_lines')
