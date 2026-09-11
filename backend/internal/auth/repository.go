@@ -29,6 +29,36 @@ func (r *Repository) FindByEmail(ctx context.Context, email string) (*User, erro
 	return &user, nil
 }
 
+func (r *Repository) FindByProviderAccountID(ctx context.Context, provider, providerAccountID string) (*User, error) {
+	var user User
+	err := r.db.WithContext(ctx).Where("provider = ? AND provider_account_id = ?", provider, providerAccountID).First(&user).Error
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+func (r *Repository) FindAccount(ctx context.Context, provider, providerAccountID string) (*Account, error) {
+	var acc Account
+	err := r.db.WithContext(ctx).Where("provider = ? AND provider_account_id = ?", provider, providerAccountID).First(&acc).Error
+	if err != nil {
+		return nil, err
+	}
+	return &acc, nil
+}
+
+func (r *Repository) UpsertAccount(ctx context.Context, acc *Account) error {
+	// better-auth parity: linkSocial semantics — create or update tokens
+	var existing Account
+	err := r.db.WithContext(ctx).Where("provider = ? AND provider_account_id = ?", acc.Provider, acc.ProviderAccountID).First(&existing).Error
+	if err == nil {
+		acc.ID = existing.ID
+		acc.CreatedAt = existing.CreatedAt
+		return r.db.WithContext(ctx).Save(acc).Error
+	}
+	return r.db.WithContext(ctx).Create(acc).Error
+}
+
 func (r *Repository) FindByID(ctx context.Context, id uuid.UUID) (*User, error) {
 	var user User
 

@@ -30,6 +30,7 @@ require (
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/lib/pq v1.12.3 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
+	github.com/resend/resend-go/v2 v2.28.0 // indirect
 	github.com/riverqueue/river v0.41.0 // indirect
 	github.com/riverqueue/river/riverdriver v0.41.0 // indirect
 	github.com/riverqueue/river/riverdriver/riverdatabasesql v0.41.0 // indirect

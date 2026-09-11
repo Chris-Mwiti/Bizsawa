@@ -132,10 +132,19 @@ export default function RegisterScreen() {
 
       Alert.alert(
         'Account created',
-        'Now complete your business profile (takes 1 minute).',
+        'Verify your email to secure your account, then set up your business.',
         [
           {
-            text: 'Continue',
+            text: 'Verify email',
+            onPress: () =>
+              router.replace({
+                pathname: '/auth/verify-email',
+                params: { email: formData.ownerEmail },
+              } as any),
+          },
+          {
+            text: 'Skip for now',
+            style: 'cancel',
             onPress: () => router.replace('/auth/business-setup'),
           },
         ],

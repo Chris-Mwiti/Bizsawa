@@ -269,6 +269,19 @@ export default function LoginScreen() {
                 )}
               </View>
 
+              {/* Forgot password */}
+              <TouchableOpacity
+                onPress={() =>
+                  router.push({
+                    pathname: '/auth/forgot-password',
+                    params: formData.email ? { email: formData.email } : undefined,
+                  } as any)
+                }
+                className='self-end mt-3'
+              >
+                <Text className='text-primary-600 font-semibold text-sm'>Forgot password?</Text>
+              </TouchableOpacity>
+
               {/* Login Button */}
               <TouchableOpacity
                 onPress={handleSubmit}
@@ -287,6 +300,20 @@ export default function LoginScreen() {
                     <ArrowRight size={20} color='white' />
                   </View>
                 )}
+              </TouchableOpacity>
+
+              {/* OTP sign-in */}
+              <TouchableOpacity
+                onPress={() =>
+                  router.push({
+                    pathname: '/auth/verify-otp',
+                    params: formData.email ? { email: formData.email } : undefined,
+                  } as any)
+                }
+                className='border border-gray-900 rounded-2xl mt-3 py-4 items-center bg-white flex-row justify-center gap-2'
+              >
+                <Mail size={16} color='#111827' />
+                <Text className='text-gray-900 font-semibold'>Sign in with email code</Text>
               </TouchableOpacity>
 
               {/* Divider */}

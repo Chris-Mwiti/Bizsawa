@@ -12,8 +12,14 @@ export default class Product extends Model {
   static table = 'products'
 
   @field('business_id') businessId!: string
+  @field('tenant_id') tenantId!: string
   @text('name') name!: string
+  @text('description') description?: string
+  @field('sku') sku?: string
   @text('category') category!: string
+  @field('barcode') barcode?: string
+  @field('image_url') imageUrl?: string
+  @field('tax_rule_id') taxRuleId?: string
   @field('price') price!: string
   @field('cost') cost!: string
   @field('is_active') isActive!: boolean

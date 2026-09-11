@@ -335,6 +335,40 @@ export async function syncNow() {
   const syncStart = Date.now()
   try {
   await repairCorruptedLocal()
+  // Global _changed clean for ALL pending rows (prevents `schema.columns[col].type` crash on push/fetchLocalChanges)
+  // Previous clean only touched IDs in pull — pending creates that never pulled (e.g. offline product deletes) stayed polluted.
+  try {
+    for (const tbl of PENDING_TABLES) {
+      try {
+        const col: any = (database as any).collections?.get?.(tbl) || (database as any).get?.(tbl)
+        if (!col) continue
+        const tableSchema: any = (col as any).schema || (database as any).schema?.tables?.[tbl]
+        if (!tableSchema) continue
+        const knownCols = new Set<string>(['id'])
+        try {
+          const cols: any[] = tableSchema.columnArray || Object.values(tableSchema.columns || {})
+          for (const c of cols) if (c?.name) knownCols.add(c.name)
+        } catch {}
+        try { for (const k of Object.keys(tableSchema.columns || {})) knownCols.add(k) } catch {}
+        const all: any[] = await col.query().fetch().catch(() => [] as any[])
+        for (const rec of all) {
+          const raw = rec._raw
+          if (!raw?._changed) continue
+          const parts = String(raw._changed).split(',').map((s:string)=>s.trim()).filter(Boolean)
+          if (!parts.length) continue
+          const cleaned = parts.filter((p:string) => knownCols.has(p) && p !== 'undefined' && p !== 'null' && p !== '')
+          if (cleaned.length !== parts.length) {
+            console.warn(`[Sync] global clean _changed ${tbl}#${raw.id} ${JSON.stringify(parts)}→${JSON.stringify(cleaned)}`)
+            try {
+              await (database as any).write(async () => {
+                await rec.update((r:any)=> { r._raw._changed = cleaned.join(',') })
+              })
+            } catch (e:any){ console.warn(`[Sync] global clean failed ${tbl}#${raw.id}`, e?.message) }
+          }
+        }
+      } catch {}
+    }
+  } catch (e){ console.warn('[Sync] global _changed clean failed', (e as any)?.message) }
   // Pre-pull pending diagnostic
   try {
     const pre = await getPendingChangesDebug()

@@ -55,6 +55,13 @@ interface AuthContextType {
   login: (credentials: LoginRequest) => Promise<void>
   loginWithGoogle: () => Promise<void>
   loginWithBiometrics: (email: string) => Promise<void>
+  // Email OTP — BetterAuth EmailOTP plugin parity (Agents_Documents/BetterAuth/EmailOTP.md)
+  sendVerificationOtp: (email: string, type: 'sign-in' | 'email-verification' | 'forget-password') => Promise<void>
+  checkVerificationOtp: (email: string, type: 'sign-in' | 'email-verification' | 'forget-password', otp: string) => Promise<boolean>
+  signInWithOtp: (email: string, otp: string) => Promise<void>
+  verifyEmailWithOtp: (email: string, otp: string) => Promise<void>
+  requestPasswordResetOtp: (email: string) => Promise<void>
+  resetPasswordWithOtp: (email: string, otp: string, newPassword: string) => Promise<void>
   register: (
     data: Partial<RegisterRequest> & Record<string, unknown>,
   ) => Promise<AuthResponse>
@@ -247,9 +254,44 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
   }
 
   const loginWithGoogle = async () => {
-    throw new Error(
-      'Google login is not available until the backend exposes /auth/google.',
-    )
+    // Better-Auth parity: GoogleSocialLogin.md Cross-Platform Sign In
+    // Mobile: native SDK -> idToken -> POST /auth/google {idToken:{token, accessToken}}
+    // Web fallback: GET /auth/google redirect handled by backend (baseURL + /callback)
+    try {
+      const { GoogleSignin } = await import('@react-native-google-signin/google-signin')
+      // Configure from env — supports web/ios/android clientIds array per BetterAuth docs
+      try {
+        const Constants: any = await import('expo-constants').then((m) => m.default || m)
+        const webId = Constants?.expoConfig?.extra?.googleWebClientId || process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID
+        if (webId) {
+          GoogleSignin.configure({
+            webClientId: webId,
+            offlineAccess: true, // accessType offline per GoogleSocialLogin.md
+            forceCodeForRefreshToken: true,
+          })
+        }
+      } catch {}
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true })
+      const res: any = await GoogleSignin.signIn()
+      const idToken = res?.data?.idToken || res?.idToken
+      const accessToken = res?.data?.accessToken || undefined
+      if (!idToken) throw new Error('Google sign-in failed: missing idToken')
+      // Business scoping: if user already selected business before SSO, pass it for role hydration
+      const businessId = (await AsyncStorage.getItem(AUTH_STORAGE_KEYS.businessId)) || undefined
+      const payload: any = {
+        idToken: { token: idToken, accessToken },
+        businessId: businessId || undefined,
+      }
+      const response = await api.post<AuthResponse>('/auth/google', payload)
+      await applyAuth(response.data)
+    } catch (e: any) {
+      // Fallback: web redirect flow via backend (better-auth baseURL)
+      if (e?.code === 'SIGN_IN_CANCELLED' || e?.code === '12501') throw new Error('Google sign-in cancelled')
+      if (e?.response?.data || e?.friendlyMessage) {
+        throw new Error(e.friendlyMessage || e.response?.data?.error?.message || e.message)
+      }
+      throw new Error(e.message || 'Google login failed')
+    }
   }
 
   const register = async (
@@ -289,6 +331,28 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
     }))
   }
 
+  // Email OTP — forget-password & verification (EmailOTP.md)
+  const sendVerificationOtp = async (email: string, type: 'sign-in' | 'email-verification' | 'forget-password') => {
+    await api.post('/auth/email-otp/send-verification-otp', { email, type })
+  }
+  const checkVerificationOtp = async (email: string, type: 'sign-in' | 'email-verification' | 'forget-password', otp: string) => {
+    const res = await api.post<{ valid: boolean }>('/auth/email-otp/check-verification-otp', { email, type, otp })
+    return res.data.valid
+  }
+  const signInWithOtp = async (email: string, otp: string) => {
+    const res = await api.post<AuthResponse>('/auth/sign-in/email-otp', { email, otp })
+    await applyAuth(res.data, email, undefined as any)
+  }
+  const verifyEmailWithOtp = async (email: string, otp: string) => {
+    await api.post('/auth/email-otp/verify-email', { email, otp })
+  }
+  const requestPasswordResetOtp = async (email: string) => {
+    await api.post('/auth/email-otp/request-password-reset', { email })
+  }
+  const resetPasswordWithOtp = async (email: string, otp: string, newPassword: string) => {
+    await api.post('/auth/email-otp/reset-password', { email, otp, password: newPassword })
+  }
+
   const logout = async () => {
     try {
       await clearAuthStorage()
@@ -318,6 +382,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
       login,
       loginWithGoogle,
       loginWithBiometrics,
+      sendVerificationOtp,
+      checkVerificationOtp,
+      signInWithOtp,
+      verifyEmailWithOtp,
+      requestPasswordResetOtp,
+      resetPasswordWithOtp,
       register,
       setSelectedBusinessAuth,
       logout,

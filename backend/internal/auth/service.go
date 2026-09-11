@@ -9,6 +9,8 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/authz"
+	"github.com/Codecx-Org/FinAI/backend/internal/shared/config"
+	"github.com/Codecx-Org/FinAI/backend/internal/shared/email"
 )
 
 type MembershipResolver interface {
@@ -24,6 +26,8 @@ type Service struct {
 	tokens        *TokenService
 	memberships   MembershipResolver
 	subscriptions SubscriptionProvisioner
+	googleCfg     *config.GoogleConfig
+	emailSender   email.Sender
 }
 
 func NewService(repo *Repository, tokens *TokenService, memberships MembershipResolver, subscriptions SubscriptionProvisioner) *Service {
@@ -33,6 +37,12 @@ func NewService(repo *Repository, tokens *TokenService, memberships MembershipRe
 		memberships:   memberships,
 		subscriptions: subscriptions,
 	}
+}
+
+// WithEmailSender injects the email provider (Resend/Noop). Optional — falls back to Noop if nil.
+func (s *Service) WithEmailSender(sender email.Sender) *Service {
+	s.emailSender = sender
+	return s
 }
 
 type RegisterRequest struct {
