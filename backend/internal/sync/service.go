@@ -414,6 +414,23 @@ func (s *Service) insertRecord(tx *gorm.DB, businessID uuid.UUID, userID uuid.UU
 			}
 		}
 	}
+	// Ensure required NOT NULL columns for orders (schema drift: mobile sends NULL for payment_status)
+	if table == "orders" {
+		if v, ok := rec["status"]; !ok || v == nil || strings.TrimSpace(fmt.Sprint(v)) == "" || strings.EqualFold(fmt.Sprint(v), "null") {
+			rec["status"] = "draft"
+		}
+		if v, ok := rec["payment_status"]; !ok || v == nil || strings.TrimSpace(fmt.Sprint(v)) == "" || strings.EqualFold(fmt.Sprint(v), "null") || strings.EqualFold(fmt.Sprint(v), "undefined") {
+			rec["payment_status"] = "pending"
+		}
+		if v, ok := rec["payment_method"]; !ok || v == nil || strings.TrimSpace(fmt.Sprint(v)) == "" {
+			rec["payment_method"] = "cash"
+		}
+		for _, col := range []string{"subtotal", "tax_amount", "total"} {
+			if _, ok := rec[col]; !ok || rec[col] == nil {
+				rec[col] = "0"
+			}
+		}
+	}
 	// Ensure idempotency_key for payment_commands (NOT NULL in DB)
 	if table == "payment_commands" {
 		if _, ok := rec["idempotency_key"]; !ok {
