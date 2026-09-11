@@ -58,7 +58,7 @@ interface AuthContextType {
   // Email OTP — BetterAuth EmailOTP plugin parity (Agents_Documents/BetterAuth/EmailOTP.md)
   sendVerificationOtp: (email: string, type: 'sign-in' | 'email-verification' | 'forget-password') => Promise<void>
   checkVerificationOtp: (email: string, type: 'sign-in' | 'email-verification' | 'forget-password', otp: string) => Promise<boolean>
-  signInWithOtp: (email: string, otp: string) => Promise<void>
+  signInWithOtp: (email: string, otp: string, name?: string, image?: string) => Promise<void>
   verifyEmailWithOtp: (email: string, otp: string) => Promise<void>
   requestPasswordResetOtp: (email: string) => Promise<void>
   resetPasswordWithOtp: (email: string, otp: string, newPassword: string) => Promise<void>
@@ -339,8 +339,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
     const res = await api.post<{ valid: boolean }>('/auth/email-otp/check-verification-otp', { email, type, otp })
     return res.data.valid
   }
-  const signInWithOtp = async (email: string, otp: string) => {
-    const res = await api.post<AuthResponse>('/auth/sign-in/email-otp', { email, otp })
+  const signInWithOtp = async (email: string, otp: string, name?: string, image?: string) => {
+    const payload: any = { email, otp }
+    if (name?.trim()) payload.name = name.trim()
+    if (image?.trim()) payload.image = image.trim()
+    const res = await api.post<AuthResponse>('/auth/sign-in/email-otp', payload)
     await applyAuth(res.data, email, undefined as any)
   }
   const verifyEmailWithOtp = async (email: string, otp: string) => {
