@@ -87,6 +87,9 @@ func (m *Module) RegisterRoutes(r chi.Router) {
 	r.Post("/email-otp/request-password-reset", h.RequestPasswordResetOTP)
 	r.Post("/email-otp/reset-password", h.ResetPasswordOTP)
 
+	// Email existence check for login OTP flow — if !exists, client alerts to sign up instead of sending code
+	r.Get("/check-email", h.CheckEmailExists)
+	r.Post("/check-email", h.CheckEmailExists)
 	// Backward-compat aliases per EmailPassword.md / EmailOTP.md deprecated paths
 	r.Post("/otp/send", h.SendVerificationOTP)
 	r.Post("/otp/verify", h.CheckVerificationOTP)

@@ -143,6 +143,21 @@ func (s *Service) Refresh(ctx context.Context, req RefreshRequest) (*AuthRespons
 	return s.issue(ctx, token.UserID, token.TenantID, token.BusinessID, token.Roles)
 }
 
+func (s *Service) CheckEmailExists(ctx context.Context, email string) (bool, error) {
+	email = normalizeEmail(email)
+	if email == "" {
+		return false, nil
+	}
+	_, err := s.repo.FindByEmail(ctx, email)
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return false, nil
+	}
+	return false, err
+}
+
 func (s *Service) issue(ctx context.Context, userID, tenantID, businessID uuid.UUID, roles []string) (*AuthResponse, error) {
 	access, err := s.tokens.IssueAccessToken(userID, tenantID, businessID, roles)
 	if err != nil {
