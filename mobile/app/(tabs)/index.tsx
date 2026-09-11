@@ -67,13 +67,17 @@ export default function Dashboard() {
     isAIInsightsLoading,
     fetchAIInsights,
     expenseAnalytics,
-  } = useAnalytics()
+    getRevenueAnalytics,
+    getCategoryAnalytics,
+  } = useAnalytics() as any
   const { products, isLoading: productsLoading } = useProducts()
   const { data: expensesData } = expenseAnalytics('week')
+  const { data: revenueAnalytics } = getRevenueAnalytics('week') as { data?: { totalRevenue: number; growthRate: number; data: Array<{ revenue: number }> } }
+  const { data: categoryAnalytics } = getCategoryAnalytics('week') as { data?: { categories: Array<{ name: string; revenue: number; percentage: number; trend: string }> } }
 
   const formatCurrency = (amount: number) =>
     `KES ${amount.toLocaleString('en-KE')}`
-  const weeklyRevenue = weeklyOverview.reduce((sum, day) => sum + day.sales, 0)
+  const weeklyRevenue = revenueAnalytics?.totalRevenue ?? weeklyOverview.reduce((sum, day) => sum + day.sales, 0)
   const weeklyExpenses = (expensesData || []).reduce(
     (sum, e) => sum + e.amount,
     0,
@@ -84,9 +88,9 @@ export default function Dashboard() {
   const inventoryAlerts = lowStockItems.length
 
   const weeklyGrowth = useMemo(() => {
-    // fallback until profit series wired
-    return 8
-  }, [])
+    const g = Number(revenueAnalytics?.growthRate ?? 0)
+    return Number.isFinite(g) ? Math.round(g * 10) / 10 : 0
+  }, [revenueAnalytics?.growthRate])
 
   const displayTips = useMemo(() => {
     if (aiInsights?.recommendations?.length) {
@@ -101,16 +105,30 @@ export default function Dashboard() {
   }, [aiInsights])
 
   const topProducts = useMemo(() => {
+    // Prefer real analytics categories (revenue by product/category) when available
+    if (categoryAnalytics?.categories?.length) {
+      return [...categoryAnalytics.categories]
+        .sort((a, b) => (b.revenue || 0) - (a.revenue || 0))
+        .slice(0, 4)
+        .map((c) => ({
+          name: c.name,
+          sold: undefined as unknown as number,
+          revenue: c.revenue,
+          category: `${Math.round(c.percentage || 0)}% • ${c.trend}`,
+        }))
+    }
+    // Fallback: products sorted by price*stock as proxy for value (avoid dummy stockQuantity ranking when backend has no sales yet)
+    if (!products.length) return []
     return [...products]
-      .sort((a, b) => (b.stockQuantity || 0) - (a.stockQuantity || 0))
+      .sort((a, b) => (b.price || 0) - (a.price || 0))
       .slice(0, 4)
       .map((p) => ({
         name: p.name,
         sold: p.stockQuantity,
-        revenue: p.stockQuantity * p.price,
+        revenue: (p.stockQuantity || 0) * (p.price || 0),
         category: p.category || 'Uncat.',
       }))
-  }, [products])
+  }, [products, categoryAnalytics])
 
   const firstName =
     userData?.ownerName?.split(' ')[0] ||
@@ -291,7 +309,7 @@ export default function Dashboard() {
               Top products
             </Text>
           </View>
-          <Text className='text-xs text-gray-400'>by stock</Text>
+          <Text className='text-xs text-gray-400'>{categoryAnalytics?.categories?.length ? 'by revenue' : 'by value'}</Text>
         </CardHeader>
         <CardContent className='pt-0'>
           {topProducts.length ? (
@@ -310,13 +328,15 @@ export default function Dashboard() {
                     </Text>
                     <View className='flex-row items-center gap-2 mt-1'>
                       <View className='px-2 py-1 rounded-full bg-gray-100 border border-gray-200'>
-                        <Text className='text-xs font-bold text-gray-600'>
+                        <Text className='text-xs font-bold text-gray-600' numberOfLines={1}>
                           {p.category}
                         </Text>
                       </View>
-                      <Text className='text-xs text-gray-500'>
-                        {p.sold} in stock
-                      </Text>
+                      {typeof p.sold === 'number' && (
+                        <Text className='text-xs text-gray-500'>
+                          {p.sold} in stock
+                        </Text>
+                      )}
                     </View>
                   </View>
                   <Text className='text-sm font-bold text-gray-900 font-mono'>

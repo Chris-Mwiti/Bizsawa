@@ -94,35 +94,36 @@ export default function ProfileTab() {
   const [showPaywall, setShowPaywall] = useState(false)
 
   const ownerParts = useMemo(() => {
-    const name = business?.ownerName || userData?.ownerName || ''
-    const parts = name.trim().split(/\s+/)
+    const name = (business?.ownerName || userData?.ownerName || business?.name || '').trim()
+    const parts = name.split(/\s+/).filter(Boolean)
     return {
-      first: parts[0] || '—',
+      first: parts[0] || business?.name?.split(/\s+/)[0] || '—',
       last: parts.slice(1).join(' '),
-      initials: `${(parts[0]?.[0] || '?').toUpperCase()}${(parts[1]?.[0] || '?').toUpperCase()}`,
+      initials: `${(parts[0]?.[0] || business?.name?.[0] || '?').toUpperCase()}${(parts[1]?.[0] || '?').toUpperCase()}`,
     }
-  }, [business?.ownerName, userData?.ownerName])
+  }, [business?.ownerName, userData?.ownerName, business?.name])
 
   const businessName = business?.name || userData?.name || '—'
-  const phone =
-    business?.ownerPhone?.trim() ||
-    business?.whatsappNumber?.trim() ||
-    'Not set'
-  const mpesaDisplay =
-    business?.whatsappNumber?.trim() || business?.ownerPhone?.trim() || '—'
-  const location = metadataLocation(business?.metadata) || 'Not set'
-  const businessType = business?.businessType?.trim() || '—'
-  const years = business?.yearsInBusiness?.trim() || '—'
+  // Backend Business fields: phone, email, address, taxPin, currency, timezone, slug, mpesaPaymentType
+  const phone = business?.phone?.trim() || (business as any)?.ownerPhone?.trim() || (business as any)?.whatsappNumber?.trim() || 'Not set'
+  const email = business?.email?.trim() || (business as any)?.ownerEmail?.trim() || 'Not set'
+  const address = business?.address?.trim() || metadataLocation(business?.metadata) || 'Not set'
+  const taxPin = (business?.taxPin || '').trim() || 'Not set'
+  const currency = (business?.currency || 'KES').trim()
+  const timezone = (business?.timezone || 'Africa/Nairobi').trim()
+  const slug = (business?.slug || '').trim() || '—'
+  const mpesaPaymentType = (business?.mpesaPaymentType || '').trim() || 'Not set'
+  const mpesaDisplay = phone && phone !== 'Not set' ? phone : '—'
+  const createdAt = business?.createdAt ? new Date(business.createdAt).toLocaleDateString('en-KE', { year: 'numeric', month: 'short', day: 'numeric' }) : '—'
 
   const openBusinessEdit = () => {
     setBusinessForm({
       name: business?.name || '',
-      phone: (business as any)?.phone || (phone === 'Not set' ? '' : phone),
-      email: (business as any)?.email || '',
-      address:
-        (business as any)?.address || (location === 'Not set' ? '' : location),
-      taxPin: (business as any)?.taxPin || '',
-      currency: (business as any)?.currency || 'KES',
+      phone: phone === 'Not set' ? '' : phone,
+      email: email === 'Not set' ? '' : email,
+      address: address === 'Not set' ? '' : address,
+      taxPin: taxPin === 'Not set' ? '' : taxPin,
+      currency: currency || 'KES',
     })
     setShowBusinessEdit(true)
   }
@@ -267,7 +268,7 @@ export default function ProfileTab() {
               <View className='flex-row items-center gap-1 mt-1'>
                 <MapPin size={12} color='#9ca3af' />
                 <Text className='text-xs text-gray-500' numberOfLines={1}>
-                  {location}
+                  {address}
                 </Text>
               </View>
             </View>
@@ -298,13 +299,9 @@ export default function ProfileTab() {
               <View className='w-11 h-11 rounded-2xl bg-gray-50 border border-gray-100 items-center justify-center'>
                 <Phone size={14} color='#6b7280' />
               </View>
-              <View>
-                <Text className='text-xs font-semibold text-gray-500'>
-                  Phone
-                </Text>
-                <Text className='text-sm font-medium text-gray-900'>
-                  {phone}
-                </Text>
+              <View className='flex-1'>
+                <Text className='text-xs font-semibold text-gray-500'>Phone</Text>
+                <Text className='text-sm font-medium text-gray-900'>{phone}</Text>
               </View>
             </View>
             <View className='h-px bg-gray-100' />
@@ -312,37 +309,64 @@ export default function ProfileTab() {
               <View className='w-11 h-11 rounded-2xl bg-gray-50 border border-gray-100 items-center justify-center'>
                 <Building size={14} color='#6b7280' />
               </View>
-              <View>
-                <Text className='text-xs font-semibold text-gray-500'>
-                  Business type
-                </Text>
-                <Text className='text-sm font-medium text-gray-900'>
-                  {businessType}
-                </Text>
+              <View className='flex-1'>
+                <Text className='text-xs font-semibold text-gray-500'>Email</Text>
+                <Text className='text-sm font-medium text-gray-900' numberOfLines={1}>{email}</Text>
               </View>
             </View>
             <View className='h-px bg-gray-100' />
             <View className='flex-row items-center gap-3 py-2'>
               <View className='w-11 h-11 rounded-2xl bg-gray-50 border border-gray-100 items-center justify-center'>
-                <Calendar size={14} color='#6b7280' />
+                <MapPin size={14} color='#6b7280' />
               </View>
-              <View>
-                <Text className='text-xs font-semibold text-gray-500'>
-                  In business
-                </Text>
-                <Text className='text-sm font-medium text-gray-900'>
-                  {years === '—' ? 'Not set' : `${years} years`}
-                </Text>
+              <View className='flex-1'>
+                <Text className='text-xs font-semibold text-gray-500'>Address</Text>
+                <Text className='text-sm font-medium text-gray-900' numberOfLines={2}>{address}</Text>
               </View>
             </View>
-            {business?.ownerEmail ? (
-              <>
-                <View className='h-px bg-gray-100' />
-                <Text className='text-xs text-gray-500'>
-                  Email • {business.ownerEmail}
-                </Text>
-              </>
-            ) : null}
+            <View className='h-px bg-gray-100' />
+            <View className='flex-row gap-3 py-2'>
+              <View className='flex-1 flex-row items-center gap-3'>
+                <View className='w-11 h-11 rounded-2xl bg-gray-50 border border-gray-100 items-center justify-center'>
+                  <Calendar size={14} color='#6b7280' />
+                </View>
+                <View>
+                  <Text className='text-xs font-semibold text-gray-500'>Currency</Text>
+                  <Text className='text-sm font-medium text-gray-900'>{currency}</Text>
+                </View>
+              </View>
+              <View className='flex-1 flex-row items-center gap-3'>
+                <View className='w-11 h-11 rounded-2xl bg-gray-50 border border-gray-100 items-center justify-center'>
+                  <Building size={14} color='#6b7280' />
+                </View>
+                <View>
+                  <Text className='text-xs font-semibold text-gray-500'>Tax PIN</Text>
+                  <Text className='text-sm font-medium text-gray-900'>{taxPin}</Text>
+                </View>
+              </View>
+            </View>
+            <View className='h-px bg-gray-100' />
+            <View className='flex-row gap-3 py-2'>
+              <View className='flex-1'>
+                <Text className='text-xs font-semibold text-gray-500'>Slug</Text>
+                <Text className='text-sm font-medium text-gray-900'>{slug}</Text>
+              </View>
+              <View className='flex-1'>
+                <Text className='text-xs font-semibold text-gray-500'>Timezone</Text>
+                <Text className='text-sm font-medium text-gray-900' numberOfLines={1}>{timezone}</Text>
+              </View>
+            </View>
+            <View className='h-px bg-gray-100' />
+            <View className='flex-row items-center justify-between py-2'>
+              <View>
+                <Text className='text-xs font-semibold text-gray-500'>M-Pesa type</Text>
+                <Text className='text-sm font-medium text-gray-900 capitalize'>{mpesaPaymentType}</Text>
+              </View>
+              <View className='items-end'>
+                <Text className='text-xs font-semibold text-gray-500'>Member since</Text>
+                <Text className='text-sm font-medium text-gray-900'>{createdAt}</Text>
+              </View>
+            </View>
 
             <TouchableOpacity
               onPress={logout}
