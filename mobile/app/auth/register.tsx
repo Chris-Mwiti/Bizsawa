@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import {
   View,
   Text,
@@ -16,466 +16,464 @@ import {
   EyeOff,
   Lock,
   User,
-  Building,
-  ArrowRight,
   Mail,
+  Smartphone,
+  ArrowRight,
+  RefreshCw,
+  ShieldCheck,
 } from 'lucide-react-native'
 import { useRouter } from 'expo-router'
 import { useAuth } from '../../contexts/AuthContext'
+import { api } from '../../lib/api'
+
+type Mode = 'otp' | 'password'
 
 export default function RegisterScreen() {
   const insets = useSafeAreaInsets()
+  const router = useRouter()
+  const {
+    register,
+    loginWithGoogle,
+    sendVerificationOtp,
+    signInWithOtp,
+  } = useAuth()
+
+  const [mode, setMode] = useState<Mode>('otp')
+
+  // OTP sign-up state
+  const [otpName, setOtpName] = useState('')
+  const [otpEmail, setOtpEmail] = useState('')
+  const [otpCode, setOtpCode] = useState('')
+  const [otpSent, setOtpSent] = useState(false)
+  const [isSendingOtp, setIsSendingOtp] = useState(false)
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false)
+  const [otpCooldown, setOtpCooldown] = useState(0)
+  const [otpError, setOtpError] = useState('')
+  const otpInputRef = useRef<TextInput>(null)
+
+  // Password sign-up state
   const [formData, setFormData] = useState({
     ownerName: '',
     ownerEmail: '',
     whatsappNumber: '',
     password: '',
     confirmPassword: '',
-    name: '',
-    businessType: '',
-    yearsInBusiness: '',
   })
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoadingPassword, setIsLoadingPassword] = useState(false)
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-  const { register } = useAuth()
-  const router = useRouter()
+  useEffect(() => {
+    if (otpCooldown <= 0) return
+    const t = setTimeout(() => setOtpCooldown((c) => c - 1), 1000)
+    return () => clearTimeout(t)
+  }, [otpCooldown])
 
-  const businessTypes = [
-    'Retail Shop',
-    'Restaurant',
-    'Service Business',
-    'Manufacturing',
-    'Agriculture',
-    'Technology',
-    'Other',
-  ]
+  const validateEmail = (v: string) => /\S+@\S+\.\S+/.test(v)
 
-  const yearsOptions = [
-    'Less than 1 year',
-    '1-2 years',
-    '3-5 years',
-    '6-10 years',
-    'More than 10 years',
-  ]
+  const handleGoogle = async () => {
+    setIsGoogleLoading(true)
+    try {
+      await loginWithGoogle()
+      // After Google auth, check if business exists
+      try {
+        const res = await api.get<{ businesses: any[] }>('/businesses')
+        const hasBusiness = Array.isArray(res.data.businesses) && res.data.businesses.length > 0
+        if (!hasBusiness) {
+          router.replace('/auth/business-setup')
+        } else {
+          router.replace('/(tabs)')
+        }
+      } catch {
+        router.replace('/auth/business-setup')
+      }
+    } catch (e: any) {
+      Alert.alert('Google sign-up failed', e.message || 'Try again')
+    } finally {
+      setIsGoogleLoading(false)
+    }
+  }
 
-  const validateForm = () => {
+  const handleSendOtp = async () => {
+    if (!otpName.trim()) {
+      setOtpError('Full name is required')
+      return
+    }
+    if (!validateEmail(otpEmail.trim())) {
+      setOtpError('Enter a valid email address')
+      return
+    }
+    setOtpError('')
+    setIsSendingOtp(true)
+    try {
+      await sendVerificationOtp(otpEmail.trim().toLowerCase(), 'sign-in')
+      setOtpSent(true)
+      setOtpCooldown(60)
+      Alert.alert('Code sent', `We sent a 6-digit code to ${otpEmail.trim()}. It expires in 5 minutes.`)
+      setTimeout(() => otpInputRef.current?.focus(), 300)
+    } catch (e: any) {
+      setOtpError(e.message || 'Failed to send code')
+      Alert.alert('Failed to send', e.message || 'Try again')
+    } finally {
+      setIsSendingOtp(false)
+    }
+  }
+
+  const handleVerifyOtp = async () => {
+    if (!otpName.trim()) {
+      setOtpError('Full name is required')
+      return
+    }
+    if (!validateEmail(otpEmail.trim())) {
+      setOtpError('Enter a valid email address')
+      return
+    }
+    if (!/^\d{6}$/.test(otpCode.trim())) {
+      setOtpError('Enter the 6-digit code')
+      return
+    }
+    setOtpError('')
+    setIsVerifyingOtp(true)
+    try {
+      await signInWithOtp(otpEmail.trim().toLowerCase(), otpCode.trim(), otpName.trim())
+
+      // Store pending prefill for business-setup
+      const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default
+      const pending = {
+        name: '',
+        phone: '',
+        email: otpEmail.trim().toLowerCase(),
+      }
+      await AsyncStorage.setItem('bizsawa_pending_business_prefill', JSON.stringify(pending))
+
+      // After OTP sign-up, new user has no business -> go to business-setup
+      // Check just in case user already has business (re-login via OTP)
+      try {
+        const res = await api.get<{ businesses: any[] }>('/businesses')
+        const hasBusiness = Array.isArray(res.data.businesses) && res.data.businesses.length > 0
+        if (hasBusiness) {
+          router.replace('/(tabs)')
+        } else {
+          router.replace('/auth/business-setup')
+        }
+      } catch {
+        router.replace('/auth/business-setup')
+      }
+    } catch (e: any) {
+      const msg = e.message || 'Invalid or expired code'
+      setOtpError(msg)
+      Alert.alert('Verification failed', msg)
+    } finally {
+      setIsVerifyingOtp(false)
+    }
+  }
+
+  const validatePasswordForm = () => {
     const newErrors: Record<string, string> = {}
-
-    if (!formData.ownerName.trim()) {
-      newErrors.ownerName = 'Owner name is required'
-    }
-
-    if (!formData.ownerEmail) {
-      newErrors.ownerEmail = 'Email is required'
-    } else if (!/\S+@\S+\.\S+/.test(formData.ownerEmail)) {
-      newErrors.ownerEmail = 'Please enter a valid email address'
-    }
-
-    if (!formData.whatsappNumber) {
-      newErrors.whatsappNumber = 'WhatsApp number is required'
-    } else if (
-      !/^\d{10,15}$/.test(formData.whatsappNumber.replace(/\D/g, ''))
-    ) {
+    if (!formData.ownerName.trim()) newErrors.ownerName = 'Full name is required'
+    if (!formData.ownerEmail) newErrors.ownerEmail = 'Email is required'
+    else if (!validateEmail(formData.ownerEmail)) newErrors.ownerEmail = 'Please enter a valid email address'
+    if (!formData.whatsappNumber) newErrors.whatsappNumber = 'WhatsApp number is required'
+    else if (!/^\d{10,15}$/.test(formData.whatsappNumber.replace(/\D/g, '')))
       newErrors.whatsappNumber = 'Please enter a valid phone number'
-    }
-
-    if (!formData.name.trim()) {
-      newErrors.name = 'Business name is required'
-    }
-
-    if (!formData.password) {
-      newErrors.password = 'Password is required'
-    } else if (formData.password.length < 6) {
-      newErrors.password = 'Password must be at least 6 characters'
-    }
-
-    if (formData.password !== formData.confirmPassword) {
-      newErrors.confirmPassword = 'Passwords do not match'
-    }
-
+    if (!formData.password) newErrors.password = 'Password is required'
+    else if (formData.password.length < 6) newErrors.password = 'Password must be at least 6 characters'
+    if (formData.password !== formData.confirmPassword) newErrors.confirmPassword = 'Passwords do not match'
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
 
-  const handleSubmit = async () => {
-    if (!validateForm()) return
-
-    setIsLoading(true)
-
+  const handlePasswordSubmit = async () => {
+    if (!validatePasswordForm()) return
+    setIsLoadingPassword(true)
     try {
       await register({
         ownerName: formData.ownerName,
         ownerEmail: formData.ownerEmail,
         whatsappNumber: formData.whatsappNumber,
         password: formData.password,
-        name: formData.name,
-        businessType: formData.businessType,
-        yearsInBusiness: formData.yearsInBusiness,
       })
 
-      // Store pending business name for onboarding wizard
       const pending = {
-        name: formData.name,
+        name: '',
         phone: formData.whatsappNumber,
         email: formData.ownerEmail,
       }
-      const AsyncStorage = (
-        await import('@react-native-async-storage/async-storage')
-      ).default
-      await AsyncStorage.setItem(
-        'bizsawa_pending_business_prefill',
-        JSON.stringify(pending),
-      )
+      const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default
+      await AsyncStorage.setItem('bizsawa_pending_business_prefill', JSON.stringify(pending))
 
-      Alert.alert(
-        'Account created',
-        'Verify your email to secure your account, then set up your business.',
-        [
-          {
-            text: 'Verify email',
-            onPress: () =>
-              router.replace({
-                pathname: '/auth/verify-email',
-                params: { email: formData.ownerEmail },
-              } as any),
-          },
-          {
-            text: 'Skip for now',
-            style: 'cancel',
-            onPress: () => router.replace('/auth/business-setup'),
-          },
-        ],
-      )
+      // Auto-send verification code for password users
+      try {
+        await sendVerificationOtp(formData.ownerEmail.trim().toLowerCase(), 'email-verification')
+      } catch {}
+
+      Alert.alert('Account created', 'We sent a verification code to your email. Verify to secure your account, then set up your business.', [
+        {
+          text: 'Verify email',
+          onPress: () => router.replace({ pathname: '/auth/verify-email', params: { email: formData.ownerEmail } } as any),
+        },
+        {
+          text: 'Skip for now',
+          style: 'cancel',
+          onPress: () => router.replace('/auth/business-setup'),
+        },
+      ])
     } catch (error: any) {
-      Alert.alert('Registration Failed', error.message)
+      Alert.alert('Registration failed', error.message)
     } finally {
-      setIsLoading(false)
+      setIsLoadingPassword(false)
     }
   }
 
   return (
-    <SafeAreaView className='flex-1 bg-white'>
+    <SafeAreaView className="flex-1 bg-white">
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-        className='flex-1'
+        className="flex-1"
       >
         <ScrollView
-          className='flex-1 px-6'
-          keyboardShouldPersistTaps='handled'
-          keyboardDismissMode='interactive'
+          className="flex-1 px-6"
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
           contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
         >
-          <View className='flex-1 justify-center py-8'>
+          <View className="flex-1 justify-center py-6">
             {/* Header */}
-            <View className='items-center mb-6'>
-              <View className='w-20 h-20 bg-primary-600 rounded-full items-center justify-center mb-4'>
-                <Text className='text-white text-2xl font-bold'>BS</Text>
+            <View className="items-center mb-6">
+              <View className="w-16 h-16 bg-primary-600 rounded-full items-center justify-center mb-3">
+                <Text className="text-white text-2xl font-bold">BS</Text>
               </View>
-              <Text className='text-3xl font-bold text-gray-900 mb-2'>
-                Create Account
-              </Text>
-              <Text className='text-gray-500 text-center'>
-                Join BizSawa and grow your business
-              </Text>
+              <Text className="text-3xl font-bold text-gray-900 mb-1">Create Account</Text>
+              <Text className="text-gray-500 text-center">Join BizSawa and grow your business</Text>
             </View>
 
-            {/* Form */}
-            <View className='space-y-4'>
-              {/* Owner Name */}
-              <View>
-                <Text className='text-gray-700 font-medium mb-2'>
-                  Full Name
-                </Text>
-                <View className='relative mb-3'>
-                  <User
-                    size={20}
-                    color='#6b7280'
-                    style={{ position: 'absolute', left: 12, top: 12 }}
-                  />
-                  <TextInput
-                    className={`border rounded-2xl px-12 py-3 text-gray-900 ${
-                      errors.ownerName ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    placeholder='Enter your full name'
-                    value={formData.ownerName}
-                    onChangeText={(text) =>
-                      setFormData({ ...formData, ownerName: text })
-                    }
-                  />
-                </View>
-                {errors.ownerName && (
-                  <Text className='text-red-500 text-sm mt-1'>
-                    {errors.ownerName}
-                  </Text>
-                )}
-              </View>
+            {/* Google */}
+            <TouchableOpacity
+              onPress={handleGoogle}
+              disabled={isGoogleLoading}
+              className="flex-row items-center justify-center border border-gray-300 rounded-2xl py-4 bg-white mb-4"
+              style={{ opacity: isGoogleLoading ? 0.7 : 1 }}
+            >
+              {isGoogleLoading ? (
+                <ActivityIndicator color="#111827" />
+              ) : (
+                <Text className="text-gray-800 font-semibold text-[15px]">Continue with Google</Text>
+              )}
+            </TouchableOpacity>
 
-              {/* Email */}
-              <View className='mb-3'>
-                <Text className='text-gray-700 font-medium mb-2'>Email</Text>
-                <View className='relative'>
-                  <Mail
-                    size={20}
-                    color='#6b7280'
-                    style={{ position: 'absolute', left: 12, top: 12 }}
-                  />
-                  <TextInput
-                    className={`border rounded-2xl px-12 py-3 text-gray-900 ${
-                      errors.ownerEmail ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    placeholder='Enter your email'
-                    value={formData.ownerEmail}
-                    onChangeText={(text) =>
-                      setFormData({ ...formData, ownerEmail: text })
-                    }
-                    keyboardType='email-address'
-                    autoCapitalize='none'
-                  />
-                </View>
-                {errors.ownerEmail && (
-                  <Text className='text-red-500 text-sm mt-1'>
-                    {errors.ownerEmail}
-                  </Text>
-                )}
-              </View>
+            <View className="flex-row items-center my-4">
+              <View className="flex-1 h-[1px] bg-gray-200" />
+              <Text className="mx-3 text-gray-400 text-xs font-bold tracking-widest">OR</Text>
+              <View className="flex-1 h-[1px] bg-gray-200" />
+            </View>
 
-              {/* WhatsApp Number */}
-              <View className='mb-3'>
-                <Text className='text-gray-700 font-medium mb-2'>
-                  WhatsApp Number
-                </Text>
-                <TextInput
-                  className={`border rounded-2xl px-4 py-3 text-gray-900 ${
-                    errors.whatsappNumber ? 'border-red-500' : 'border-gray-300'
-                  }`}
-                  placeholder='+254 XXX XXX XXX'
-                  value={formData.whatsappNumber}
-                  onChangeText={(text) =>
-                    setFormData({ ...formData, whatsappNumber: text })
-                  }
-                  keyboardType='phone-pad'
-                />
-                {errors.whatsappNumber && (
-                  <Text className='text-red-500 text-sm mt-1'>
-                    {errors.whatsappNumber}
-                  </Text>
-                )}
-              </View>
-
-              {/* Business Name */}
-              <View className='mb-3'>
-                <Text className='text-gray-700 font-medium mb-2'>
-                  Business Name
-                </Text>
-                <View className='relative'>
-                  <Building
-                    size={20}
-                    color='#6b7280'
-                    style={{ position: 'absolute', left: 12, top: 12 }}
-                  />
-                  <TextInput
-                    className={`border rounded-2xl px-12 py-3 text-gray-900 ${
-                      errors.name ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    placeholder='Enter business name'
-                    value={formData.name}
-                    onChangeText={(text) =>
-                      setFormData({ ...formData, name: text })
-                    }
-                  />
-                </View>
-                {errors.name && (
-                  <Text className='text-red-500 text-sm mt-1'>
-                    {errors.name}
-                  </Text>
-                )}
-              </View>
-
-              {/* Business Type */}
-              <View className='mb-3'>
-                <Text className='text-gray-700 font-medium mb-2'>
-                  Business Type
-                </Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  className='flex-row space-x-2'
-                >
-                  {businessTypes.map((type) => (
-                    <TouchableOpacity
-                      key={type}
-                      onPress={() =>
-                        setFormData({ ...formData, businessType: type })
-                      }
-                      className={`px-4 py-2 rounded-full border ${
-                        formData.businessType === type
-                          ? 'bg-primary-600 border-primary-600'
-                          : 'bg-white border-gray-300'
-                      }`}
-                    >
-                      <Text
-                        className={`text-sm ${
-                          formData.businessType === type
-                            ? 'text-white'
-                            : 'text-gray-700'
-                        }`}
-                      >
-                        {type}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-
-              {/* Years in Business */}
-              <View className='mb-3'>
-                <Text className='text-gray-700 font-medium mb-2'>
-                  Years in Business
-                </Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  className='flex-row space-x-2'
-                >
-                  {yearsOptions.map((years) => (
-                    <TouchableOpacity
-                      key={years}
-                      onPress={() =>
-                        setFormData({ ...formData, yearsInBusiness: years })
-                      }
-                      className={`px-4 py-2 rounded-full border ${
-                        formData.yearsInBusiness === years
-                          ? 'bg-primary-600 border-primary-600'
-                          : 'bg-white border-gray-300'
-                      }`}
-                    >
-                      <Text
-                        className={`text-sm ${
-                          formData.yearsInBusiness === years
-                            ? 'text-white'
-                            : 'text-gray-700'
-                        }`}
-                      >
-                        {years}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-
-              {/* Password */}
-              <View className='mb-3'>
-                <Text className='text-gray-700 font-medium mb-2'>Password</Text>
-                <View className='relative'>
-                  <Lock
-                    size={20}
-                    color='#6b7280'
-                    style={{ position: 'absolute', left: 12, top: 12 }}
-                  />
-                  <TextInput
-                    className={`border rounded-2xl px-12 pr-12 py-3 text-gray-900 ${
-                      errors.password ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    placeholder='Create password'
-                    value={formData.password}
-                    onChangeText={(text) =>
-                      setFormData({ ...formData, password: text })
-                    }
-                    secureTextEntry={!showPassword}
-                  />
-                  <TouchableOpacity
-                    onPress={() => setShowPassword(!showPassword)}
-                    style={{ position: 'absolute', right: 12, top: 12 }}
-                  >
-                    {showPassword ? (
-                      <EyeOff size={20} color='#6b7280' />
-                    ) : (
-                      <Eye size={20} color='#6b7280' />
-                    )}
-                  </TouchableOpacity>
-                </View>
-                {errors.password && (
-                  <Text className='text-red-500 text-sm mt-1'>
-                    {errors.password}
-                  </Text>
-                )}
-              </View>
-
-              {/* Confirm Password */}
-              <View className='mb-6'>
-                <Text className='text-gray-700 font-medium mb-2'>
-                  Confirm Password
-                </Text>
-                <View className='relative'>
-                  <Lock
-                    size={20}
-                    color='#6b7280'
-                    style={{ position: 'absolute', left: 12, top: 12 }}
-                  />
-                  <TextInput
-                    className={`border rounded-2xl px-12 pr-12 py-3 text-gray-900 ${
-                      errors.confirmPassword
-                        ? 'border-red-500'
-                        : 'border-gray-300'
-                    }`}
-                    placeholder='Confirm password'
-                    value={formData.confirmPassword}
-                    onChangeText={(text) =>
-                      setFormData({ ...formData, confirmPassword: text })
-                    }
-                    secureTextEntry={!showConfirmPassword}
-                  />
-                  <TouchableOpacity
-                    onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-                    style={{ position: 'absolute', right: 12, top: 12 }}
-                  >
-                    {showConfirmPassword ? (
-                      <EyeOff size={20} color='#6b7280' />
-                    ) : (
-                      <Eye size={20} color='#6b7280' />
-                    )}
-                  </TouchableOpacity>
-                </View>
-                {errors.confirmPassword && (
-                  <Text className='text-red-500 text-sm mt-1'>
-                    {errors.confirmPassword}
-                  </Text>
-                )}
-              </View>
-
-              {/* Register Button */}
+            {/* Mode switch */}
+            <View className="flex-row bg-gray-100 rounded-2xl p-1 mb-6">
               <TouchableOpacity
-                onPress={handleSubmit}
-                disabled={isLoading}
-                className={`bg-primary-600 rounded-2xl py-4 items-center ${
-                  isLoading ? 'opacity-50' : ''
-                }`}
+                onPress={() => setMode('otp')}
+                className={`flex-1 py-3 rounded-xl items-center flex-row justify-center gap-2 ${mode === 'otp' ? 'bg-white shadow-sm border border-gray-200' : ''}`}
               >
-                {isLoading ? (
-                  <ActivityIndicator color='white' size='small' />
-                ) : (
-                  <View className='flex-row items-center'>
-                    <Text className='text-white font-semibold text-lg mr-2'>
-                      Create Account
-                    </Text>
-                    <ArrowRight size={20} color='white' />
-                  </View>
-                )}
+                <ShieldCheck size={16} color={mode === 'otp' ? '#111827' : '#6b7280'} />
+                <Text className={`font-bold text-sm ${mode === 'otp' ? 'text-gray-900' : 'text-gray-500'}`}>Email code</Text>
               </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setMode('password')}
+                className={`flex-1 py-3 rounded-xl items-center flex-row justify-center gap-2 ${mode === 'password' ? 'bg-white shadow-sm border border-gray-200' : ''}`}
+              >
+                <Lock size={16} color={mode === 'password' ? '#111827' : '#6b7280'} />
+                <Text className={`font-bold text-sm ${mode === 'password' ? 'text-gray-900' : 'text-gray-500'}`}>Password</Text>
+              </TouchableOpacity>
+            </View>
 
-              {/* Login Link */}
-              <View className='flex-row justify-center mt-6'>
-                <Text className='text-gray-600'>Already have an account? </Text>
-                <TouchableOpacity onPress={() => router.replace('/auth/login')}>
-                  <Text className='text-primary-600 font-semibold'>
-                    Sign In
+            {mode === 'otp' ? (
+              <View className="gap-4">
+                <Text className="text-xs text-gray-500 text-center -mt-2 mb-2">
+                  We&apos;ll create your account and send a 6-digit code. No password needed. After verification you&apos;ll set up your business.
+                </Text>
+
+                <View>
+                  <Text className="text-gray-700 font-medium mb-2">Full Name *</Text>
+                  <View className="relative">
+                    <User size={18} color="#6b7280" style={{ position: 'absolute', left: 12, top: 14 }} />
+                    <TextInput
+                      className={`border rounded-2xl px-11 py-3.5 text-gray-900 ${otpError && !otpName.trim() ? 'border-red-500' : 'border-gray-300'}`}
+                      placeholder="Enter your full name"
+                      value={otpName}
+                      onChangeText={(t) => { setOtpName(t); if (otpError) setOtpError('') }}
+                    />
+                  </View>
+                </View>
+
+                <View>
+                  <Text className="text-gray-700 font-medium mb-2">Email *</Text>
+                  <View className="relative">
+                    <Mail size={18} color="#6b7280" style={{ position: 'absolute', left: 12, top: 14 }} />
+                    <TextInput
+                      className={`border rounded-2xl px-11 py-3.5 text-gray-900 ${otpError && !validateEmail(otpEmail) ? 'border-red-500' : 'border-gray-300'}`}
+                      placeholder="you@example.com"
+                      value={otpEmail}
+                      onChangeText={(t) => { setOtpEmail(t); if (otpError) setOtpError('') }}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                    />
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  onPress={handleSendOtp}
+                  disabled={isSendingOtp || otpCooldown > 0}
+                  className={`rounded-2xl py-3.5 items-center flex-row justify-center gap-2 ${otpCooldown > 0 ? 'bg-gray-100 border border-gray-200' : 'bg-gray-900'}`}
+                  style={{ opacity: isSendingOtp ? 0.6 : 1 }}
+                >
+                  {isSendingOtp ? <ActivityIndicator color={otpCooldown > 0 ? '#111827' : 'white'} /> : <RefreshCw size={16} color={otpCooldown > 0 ? '#111827' : 'white'} />}
+                  <Text className={`font-bold ${otpCooldown > 0 ? 'text-gray-700' : 'text-white'}`}>
+                    {otpCooldown > 0 ? `Resend in ${otpCooldown}s` : otpSent ? 'Resend code' : 'Send verification code'}
                   </Text>
                 </TouchableOpacity>
+
+                {otpSent && (
+                  <>
+                    <View className="h-[1px] bg-gray-100 my-1" />
+                    <View>
+                      <Text className="text-gray-700 font-medium mb-2">6-digit code *</Text>
+                      <TextInput
+                        ref={otpInputRef}
+                        className={`border rounded-2xl px-4 py-4 text-center text-2xl tracking-[10px] font-bold text-gray-900 ${otpError ? 'border-red-500' : 'border-gray-300'}`}
+                        placeholder="------"
+                        placeholderTextColor="#9ca3af"
+                        value={otpCode}
+                        onChangeText={(t) => {
+                          const v = t.replace(/[^0-9]/g, '').slice(0, 6)
+                          setOtpCode(v)
+                          if (otpError) setOtpError('')
+                        }}
+                        keyboardType="number-pad"
+                        maxLength={6}
+                      />
+                      <Text className="text-xs text-gray-500 mt-2 text-center">Code expires in 5 minutes. Check spam folder if missing.</Text>
+                      {otpError ? <Text className="text-red-500 text-sm mt-2 text-center">{otpError}</Text> : null}
+                    </View>
+
+                    <TouchableOpacity
+                      onPress={handleVerifyOtp}
+                      disabled={isVerifyingOtp || otpCode.length !== 6}
+                      className={`rounded-2xl py-4 items-center ${otpCode.length === 6 ? 'bg-emerald-600' : 'bg-gray-200'}`}
+                      style={{ opacity: isVerifyingOtp ? 0.7 : 1 }}
+                    >
+                      {isVerifyingOtp ? <ActivityIndicator color="white" /> : <Text className={`font-bold text-lg ${otpCode.length === 6 ? 'text-white' : 'text-gray-500'}`}>Verify & Continue</Text>}
+                    </TouchableOpacity>
+                  </>
+                )}
+                {!otpSent && otpError ? <Text className="text-red-500 text-sm text-center">{otpError}</Text> : null}
               </View>
+            ) : (
+              <View className="gap-4">
+                <View>
+                  <Text className="text-gray-700 font-medium mb-2">Full Name *</Text>
+                  <View className="relative">
+                    <User size={18} color="#6b7280" style={{ position: 'absolute', left: 12, top: 14 }} />
+                    <TextInput
+                      className={`border rounded-2xl px-11 py-3.5 text-gray-900 ${errors.ownerName ? 'border-red-500' : 'border-gray-300'}`}
+                      placeholder="Enter your full name"
+                      value={formData.ownerName}
+                      onChangeText={(t) => setFormData({ ...formData, ownerName: t })}
+                    />
+                  </View>
+                  {errors.ownerName && <Text className="text-red-500 text-sm mt-1">{errors.ownerName}</Text>}
+                </View>
+
+                <View>
+                  <Text className="text-gray-700 font-medium mb-2">Email *</Text>
+                  <View className="relative">
+                    <Mail size={18} color="#6b7280" style={{ position: 'absolute', left: 12, top: 14 }} />
+                    <TextInput
+                      className={`border rounded-2xl px-11 py-3.5 text-gray-900 ${errors.ownerEmail ? 'border-red-500' : 'border-gray-300'}`}
+                      placeholder="you@example.com"
+                      value={formData.ownerEmail}
+                      onChangeText={(t) => setFormData({ ...formData, ownerEmail: t })}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                    />
+                  </View>
+                  {errors.ownerEmail && <Text className="text-red-500 text-sm mt-1">{errors.ownerEmail}</Text>}
+                </View>
+
+                <View>
+                  <Text className="text-gray-700 font-medium mb-2">WhatsApp Number *</Text>
+                  <View className="relative">
+                    <Smartphone size={18} color="#6b7280" style={{ position: 'absolute', left: 12, top: 14 }} />
+                    <TextInput
+                      className={`border rounded-2xl px-11 py-3.5 text-gray-900 ${errors.whatsappNumber ? 'border-red-500' : 'border-gray-300'}`}
+                      placeholder="+254 XXX XXX XXX"
+                      value={formData.whatsappNumber}
+                      onChangeText={(t) => setFormData({ ...formData, whatsappNumber: t })}
+                      keyboardType="phone-pad"
+                    />
+                  </View>
+                  {errors.whatsappNumber && <Text className="text-red-500 text-sm mt-1">{errors.whatsappNumber}</Text>}
+                </View>
+
+                <View>
+                  <Text className="text-gray-700 font-medium mb-2">Password *</Text>
+                  <View className="relative">
+                    <Lock size={18} color="#6b7280" style={{ position: 'absolute', left: 12, top: 14 }} />
+                    <TextInput
+                      className={`border rounded-2xl px-11 pr-11 py-3.5 text-gray-900 ${errors.password ? 'border-red-500' : 'border-gray-300'}`}
+                      placeholder="At least 6 characters"
+                      value={formData.password}
+                      onChangeText={(t) => setFormData({ ...formData, password: t })}
+                      secureTextEntry={!showPassword}
+                    />
+                    <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={{ position: 'absolute', right: 12, top: 14 }}>
+                      {showPassword ? <EyeOff size={18} color="#6b7280" /> : <Eye size={18} color="#6b7280" />}
+                    </TouchableOpacity>
+                  </View>
+                  {errors.password && <Text className="text-red-500 text-sm mt-1">{errors.password}</Text>}
+                </View>
+
+                <View>
+                  <Text className="text-gray-700 font-medium mb-2">Confirm Password *</Text>
+                  <View className="relative">
+                    <Lock size={18} color="#6b7280" style={{ position: 'absolute', left: 12, top: 14 }} />
+                    <TextInput
+                      className={`border rounded-2xl px-11 pr-11 py-3.5 text-gray-900 ${errors.confirmPassword ? 'border-red-500' : 'border-gray-300'}`}
+                      placeholder="Repeat password"
+                      value={formData.confirmPassword}
+                      onChangeText={(t) => setFormData({ ...formData, confirmPassword: t })}
+                      secureTextEntry={!showConfirmPassword}
+                    />
+                    <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)} style={{ position: 'absolute', right: 12, top: 14 }}>
+                      {showConfirmPassword ? <EyeOff size={18} color="#6b7280" /> : <Eye size={18} color="#6b7280" />}
+                    </TouchableOpacity>
+                  </View>
+                  {errors.confirmPassword && <Text className="text-red-500 text-sm mt-1">{errors.confirmPassword}</Text>}
+                </View>
+
+                <TouchableOpacity
+                  onPress={handlePasswordSubmit}
+                  disabled={isLoadingPassword}
+                  className={`bg-primary-600 rounded-2xl py-4 items-center ${isLoadingPassword ? 'opacity-50' : ''}`}
+                >
+                  {isLoadingPassword ? (
+                    <ActivityIndicator color="white" size="small" />
+                  ) : (
+                    <View className="flex-row items-center">
+                      <Text className="text-white font-semibold text-lg mr-2">Create Account</Text>
+                      <ArrowRight size={20} color="white" />
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
+
+            <View className="flex-row justify-center mt-6">
+              <Text className="text-gray-600">Already have an account? </Text>
+              <TouchableOpacity onPress={() => router.replace('/auth/login')}>
+                <Text className="text-primary-600 font-semibold">Sign In</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </ScrollView>

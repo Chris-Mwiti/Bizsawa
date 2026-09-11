@@ -14,6 +14,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Mail, ArrowLeft, RefreshCw, ShieldCheck } from 'lucide-react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useAuth } from '../../contexts/AuthContext'
+import { api } from '../../lib/api'
 
 export default function VerifyOtpScreen() {
   const insets = useSafeAreaInsets()
@@ -29,12 +30,26 @@ export default function VerifyOtpScreen() {
   const [error, setError] = useState('')
 
   const otpRef = useRef<TextInput>(null)
+  const hasAutoSentRef = useRef(false)
 
   useEffect(() => {
     if (cooldown <= 0) return
     const t = setTimeout(() => setCooldown((c) => c - 1), 1000)
     return () => clearTimeout(t)
   }, [cooldown])
+
+  // Auto-send OTP if navigated with email (login screen's "Sign in with email code")
+  useEffect(() => {
+    if (hasAutoSentRef.current) return
+    const e = String(params.email ?? '').trim()
+    if (e && /\S+@\S+\.\S+/.test(e) && !isSending && cooldown === 0) {
+      hasAutoSentRef.current = true
+      // Defer to next tick to allow UI to mount
+      setTimeout(() => {
+        handleSend()
+      }, 400)
+    }
+  }, [params.email])
 
   const validateEmail = (v: string) => /\S+@\S+\.\S+/.test(v)
 
@@ -72,7 +87,27 @@ export default function VerifyOtpScreen() {
     setIsVerifying(true)
     try {
       await signInWithOtp(email.trim().toLowerCase(), code)
-      router.replace('/(tabs)')
+      // Business-aware redirect: new OTP users have no business yet → business-setup
+      try {
+        const res = await api.get<{ businesses: any[] }>('/businesses')
+        const hasBusiness = Array.isArray(res.data.businesses) && res.data.businesses.length > 0
+        if (hasBusiness) {
+          router.replace('/(tabs)')
+        } else {
+          // Ensure pending prefill for business-setup
+          const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default
+          const existing = await AsyncStorage.getItem('bizsawa_pending_business_prefill')
+          if (!existing) {
+            await AsyncStorage.setItem(
+              'bizsawa_pending_business_prefill',
+              JSON.stringify({ name: '', phone: '', email: email.trim().toLowerCase() }),
+            )
+          }
+          router.replace('/auth/business-setup')
+        }
+      } catch {
+        router.replace('/auth/business-setup')
+      }
     } catch (e: any) {
       const msg = e.message || 'Invalid or expired code'
       setError(msg)
