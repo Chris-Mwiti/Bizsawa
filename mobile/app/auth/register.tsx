@@ -25,6 +25,7 @@ import {
 import { useRouter } from 'expo-router'
 import { useAuth } from '../../contexts/AuthContext'
 import { api } from '../../lib/api'
+import { Tabs } from 'tamagui'
 
 type Mode = 'otp' | 'password'
 
@@ -250,19 +251,15 @@ export default function RegisterScreen() {
               <Text className="text-gray-500 text-center">Join BizSawa and grow your business</Text>
             </View>
 
-            {/* Google */}
+            {/* Google — temporarily disabled: silent callback failure after consent */}
             <TouchableOpacity
-              onPress={handleGoogle}
-              disabled={isGoogleLoading}
-              className="flex-row items-center justify-center border border-gray-300 rounded-2xl py-4 bg-white mb-4"
-              style={{ opacity: isGoogleLoading ? 0.7 : 1 }}
+              onPress={() => Alert.alert('Temporarily disabled', 'Google sign-up is paused while we fix the OAuth callback. Please use Email code or Password.')}
+              disabled={true}
+              className="flex-row items-center justify-center border border-gray-200 rounded-2xl py-4 bg-gray-100 opacity-60 mb-4"
             >
-              {isGoogleLoading ? (
-                <ActivityIndicator color="#111827" />
-              ) : (
-                <Text className="text-gray-800 font-semibold text-[15px]">Continue with Google</Text>
-              )}
+              <Text className="text-gray-400 font-semibold text-[15px]">Continue with Google — disabled</Text>
             </TouchableOpacity>
+            <Text className="text-xs text-gray-400 text-center mb-4 -mt-2">Re-enabling soon after mobile ↔ /api/v1/auth/google callback logging is fixed.</Text>
 
             <View className="flex-row items-center my-4">
               <View className="flex-1 h-[1px] bg-gray-200" />
@@ -270,23 +267,59 @@ export default function RegisterScreen() {
               <View className="flex-1 h-[1px] bg-gray-200" />
             </View>
 
-            {/* Mode switch */}
-            <View className="flex-row bg-gray-100 rounded-2xl p-1 mb-6">
-              <TouchableOpacity
-                onPress={() => setMode('otp')}
-                className={`flex-1 py-3 rounded-xl items-center flex-row justify-center gap-2 ${mode === 'otp' ? 'bg-white shadow-sm border border-gray-200' : ''}`}
+            {/* Mode switch — Tamagui Tabs (fixes hang from re-mounting large form on TouchableOpacity switch) */}
+            <Tabs
+              value={mode}
+              onValueChange={(v) => setMode(v as Mode)}
+              orientation="horizontal"
+              activationMode="manual"
+              flexDirection="column"
+              marginBottom={18}
+            >
+              <Tabs.List
+                backgroundColor="#f3f4f6"
+                borderRadius={16}
+                padding={4}
+                gap={4}
+                flexDirection="row"
+                width="100%"
               >
-                <ShieldCheck size={16} color={mode === 'otp' ? '#111827' : '#6b7280'} />
-                <Text className={`font-bold text-sm ${mode === 'otp' ? 'text-gray-900' : 'text-gray-500'}`}>Email code</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setMode('password')}
-                className={`flex-1 py-3 rounded-xl items-center flex-row justify-center gap-2 ${mode === 'password' ? 'bg-white shadow-sm border border-gray-200' : ''}`}
-              >
-                <Lock size={16} color={mode === 'password' ? '#111827' : '#6b7280'} />
-                <Text className={`font-bold text-sm ${mode === 'password' ? 'text-gray-900' : 'text-gray-500'}`}>Password</Text>
-              </TouchableOpacity>
-            </View>
+                <Tabs.Tab
+                  value="otp"
+                  flex={1}
+                  justifyContent="center"
+                  alignItems="center"
+                  flexDirection="row"
+                  gap={6}
+                  paddingVertical={10}
+                  borderRadius={12}
+                  backgroundColor={mode === 'otp' ? 'white' : 'transparent'}
+                  borderWidth={mode === 'otp' ? 1 : 0}
+                  borderColor={mode === 'otp' ? '#e5e7eb' : 'transparent'}
+                  pressStyle={{ backgroundColor: mode === 'otp' ? 'white' : '#e5e7eb' }}
+                >
+                  <ShieldCheck size={16} color={mode === 'otp' ? '#111827' : '#6b7280'} />
+                  <Text style={{ fontWeight: '700', fontSize: 13, color: mode === 'otp' ? '#111827' : '#6b7280' }}>Email code</Text>
+                </Tabs.Tab>
+                <Tabs.Tab
+                  value="password"
+                  flex={1}
+                  justifyContent="center"
+                  alignItems="center"
+                  flexDirection="row"
+                  gap={6}
+                  paddingVertical={10}
+                  borderRadius={12}
+                  backgroundColor={mode === 'password' ? 'white' : 'transparent'}
+                  borderWidth={mode === 'password' ? 1 : 0}
+                  borderColor={mode === 'password' ? '#e5e7eb' : 'transparent'}
+                  pressStyle={{ backgroundColor: mode === 'password' ? 'white' : '#e5e7eb' }}
+                >
+                  <Lock size={16} color={mode === 'password' ? '#111827' : '#6b7280'} />
+                  <Text style={{ fontWeight: '700', fontSize: 13, color: mode === 'password' ? '#111827' : '#6b7280' }}>Password</Text>
+                </Tabs.Tab>
+              </Tabs.List>
+            </Tabs>
 
             {mode === 'otp' ? (
               <View className="gap-4">

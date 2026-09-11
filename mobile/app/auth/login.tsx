@@ -354,16 +354,17 @@ export default function LoginScreen() {
                 </TouchableOpacity>
               )}
 
-              {/* Google Login Button */}
+              {/* Google Login Button — temporarily disabled: callback goes silent after consent, tracking in server logs */}
               <TouchableOpacity
-                onPress={handleGoogleSubmit}
-                disabled={isLoading}
-                className='flex-row items-center justify-center border border-gray-300 rounded-2xl py-4 bg-white'
+                onPress={() => Alert.alert('Temporarily disabled', 'Google sign-in is paused while we fix the OAuth callback. Please use email/password or email code.')}
+                disabled={true}
+                className='flex-row items-center justify-center border border-gray-200 rounded-2xl py-4 bg-gray-100 opacity-60'
               >
-                <Text className='text-gray-700 font-semibold text-lg'>
-                  Continue with Google
+                <Text className='text-gray-400 font-semibold text-lg'>
+                  Continue with Google — disabled
                 </Text>
               </TouchableOpacity>
+              <Text className='text-xs text-gray-400 text-center mt-2'>We’ll re-enable after fixing the silent callback error (mobile ↔ /api/v1/auth/google).</Text>
 
               {isOffline && !offlineAvailable && formData.email ? (
                 <View className='bg-amber-50 border border-amber-200 rounded-2xl px-3 py-3 mt-4'>
