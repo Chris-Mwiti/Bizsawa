@@ -153,9 +153,14 @@ api.interceptors.request.use(
         ;(config.params as any).businessId = businessId
       }
     } else {
-      console.warn(
-        '[api] X-Business-ID missing — BusinessContext not hydrated, analytics will 403 if queried',
-      )
+      // Only warn for tenant-scoped routes; auth/OTP & public routes don't need business context
+      const url = config.url || ''
+      const isAuthOrPublic = url.includes('/auth/') || url.includes('/public') || url.includes('/health') || url.includes('/status')
+      if (!isAuthOrPublic) {
+        console.warn(
+          '[api] X-Business-ID missing — BusinessContext not hydrated, analytics will 403 if queried',
+        )
+      }
     }
 
     console.debug(

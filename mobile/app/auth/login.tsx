@@ -34,6 +34,7 @@ try {
   LocalAuthentication = null
 }
 import { useAuth } from '../../contexts/AuthContext'
+import { api } from '../../lib/api'
 import {
   hasOfflineCredential,
   getOfflineGraceDaysLeft,
@@ -104,7 +105,13 @@ export default function LoginScreen() {
 
     try {
       await login(formData)
-      router.replace('/(tabs)')
+      try {
+        const res = await api.get<{ businesses: any[] }>('/businesses')
+        const hasBusiness = Array.isArray(res.data.businesses) && res.data.businesses.length > 0
+        router.replace(hasBusiness ? '/(tabs)' : '/auth/business-setup')
+      } catch {
+        router.replace('/(tabs)')
+      }
     } catch (error: any) {
       Alert.alert('Login Failed', error.message)
     } finally {
@@ -116,7 +123,18 @@ export default function LoginScreen() {
     setIsLoading(true)
     try {
       await loginWithGoogle()
-      router.replace('/(tabs)')
+      // Business-aware redirect: new Google users have no business yet
+      try {
+        const res = await api.get<{ businesses: any[] }>('/businesses')
+        const hasBusiness = Array.isArray(res.data.businesses) && res.data.businesses.length > 0
+        if (hasBusiness) {
+          router.replace('/(tabs)')
+        } else {
+          router.replace('/auth/business-setup')
+        }
+      } catch {
+        router.replace('/auth/business-setup')
+      }
     } catch (error: any) {
       Alert.alert('Google Login Failed', error.message)
     } finally {
