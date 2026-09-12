@@ -129,7 +129,9 @@ export default function StockTab() {
       lastRestocked: p.lastRestockedAt
         ? new Date(p.lastRestockedAt).toLocaleDateString()
         : new Date(p.createdAt).toLocaleDateString(),
-    }
+      _status: (p as any)._status,
+      _changed: (p as any)._changed,
+    } as any
   })
 
   const formatCurrency = (amount: number) =>
@@ -223,6 +225,9 @@ export default function StockTab() {
       setInlineError('Name and category are required.')
       return
     }
+    // Offline-first UX: check connectivity for immediate feedback
+    const net = await (await import('@react-native-community/netinfo')).default.fetch().catch(() => ({ isConnected: true } as any))
+    const isOffline = !net.isConnected
 
     // Validate variants if any: each must have name and price
     for (const v of formState.variants) {
@@ -273,7 +278,11 @@ export default function StockTab() {
           lowStockThreshold: min,
           notes: 'Manual adjustment',
         })
-        setSuccessMsg('Product updated — stock refreshed ✨'); setShowSuccess(true)
+        if (isOffline) {
+          setSuccessMsg('Updated offline — will sync when online 📱'); setShowSuccess(true)
+        } else {
+          setSuccessMsg('Product updated — stock refreshed ✨'); setShowSuccess(true)
+        }
       } else {
         const created = await createProduct({
           name: formState.name.trim(),
@@ -293,7 +302,11 @@ export default function StockTab() {
             lowStockThreshold: min,
             notes: 'Initial stock',
           })
-        setSuccessMsg('Product added — ready to sell ✨'); setShowSuccess(true)
+        if (isOffline) {
+          setSuccessMsg('Saved offline — will sync when online 📱'); setShowSuccess(true)
+        } else {
+          setSuccessMsg('Product added — ready to sell ✨'); setShowSuccess(true)
+        }
       }
       setShowItemModal(false)
     } catch (e: any) {
@@ -479,6 +492,12 @@ export default function StockTab() {
                             {item.category}
                           </Text>
                         </View>
+                        {(item as any)._status === 'created' || (item as any)._status === 'updated' ? (
+                          <View className='px-2 py-1 rounded-full bg-amber-50 border border-amber-200 flex-row items-center gap-1'>
+                            <View className='w-1.5 h-1.5 rounded-full bg-amber-500' />
+                            <Text className='text-xs font-bold text-amber-700'>Pending</Text>
+                          </View>
+                        ) : null}
                       </View>
                       <Text className='text-xs text-gray-500 mt-1'>
                         Supplier • {item.supplier} • Last {item.lastRestocked}
