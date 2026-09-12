@@ -278,10 +278,22 @@ func (s *Service) PushWithUser(ctx context.Context, businessID uuid.UUID, userID
 				// If versions match → apply, else conflict
 				if clientVersion != serverVersion {
 					clientBytes, _ := json.Marshal(rec)
+					// Sanitize client payload: remove NUL bytes that would break UTF8 jsonb insert
+					clientBytes = json.RawMessage(strings.ReplaceAll(string(clientBytes), "\x00", ""))
 
+					var srvJSONString string
 					var srvJSON json.RawMessage
-
-					tx.Raw(fmt.Sprintf(`SELECT to_jsonb(t) FROM %s t WHERE id = ?`, table), id).Scan(&srvJSON)
+					// Use ::text to avoid driver jsonb -> []uint8 scan mismatch (was: Scan error converting []uint8 to uint8)
+					if err := tx.Raw(fmt.Sprintf(`SELECT to_jsonb(t)::text FROM %s t WHERE id = ?`, table), id).Scan(&srvJSONString).Error; err != nil {
+						// fallback: empty object if scan fails
+						srvJSONString = "{}"
+					}
+					// Remove NUL bytes (0x00) that cause "invalid byte sequence for encoding UTF8: 0x00" on conflicts insert
+					srvJSONString = strings.ReplaceAll(srvJSONString, "\x00", "")
+					srvJSON = json.RawMessage(srvJSONString)
+					if len(srvJSON) == 0 {
+						srvJSON = json.RawMessage("{}")
+					}
 
 					conf := Conflict{
 						ID:            uuid.New(),
@@ -411,6 +423,23 @@ func (s *Service) insertRecord(tx *gorm.DB, businessID uuid.UUID, userID uuid.UU
 				rec["staff_id"] = userID.String()
 			} else {
 				rec["staff_id"] = businessID.String()
+			}
+		}
+	}
+	// Ensure required NOT NULL columns for orders (schema drift: mobile sends NULL for payment_status)
+	if table == "orders" {
+		if v, ok := rec["status"]; !ok || v == nil || strings.TrimSpace(fmt.Sprint(v)) == "" || strings.EqualFold(fmt.Sprint(v), "null") {
+			rec["status"] = "draft"
+		}
+		if v, ok := rec["payment_status"]; !ok || v == nil || strings.TrimSpace(fmt.Sprint(v)) == "" || strings.EqualFold(fmt.Sprint(v), "null") || strings.EqualFold(fmt.Sprint(v), "undefined") {
+			rec["payment_status"] = "pending"
+		}
+		if v, ok := rec["payment_method"]; !ok || v == nil || strings.TrimSpace(fmt.Sprint(v)) == "" {
+			rec["payment_method"] = "cash"
+		}
+		for _, col := range []string{"subtotal", "tax_amount", "total"} {
+			if _, ok := rec[col]; !ok || rec[col] == nil {
+				rec[col] = "0"
 			}
 		}
 	}

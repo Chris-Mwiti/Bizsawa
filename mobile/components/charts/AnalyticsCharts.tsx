@@ -320,15 +320,29 @@ export function PieChart({
   data: Array<{ name: string; value: number; color?: string }>
   size?: number
 }) {
-  const total = data.reduce((s, d) => s + d.value, 0) || 1
+  const total = data.reduce((s, d) => s + d.value, 0) || 0
+  // Don't render a fake pie when total is 0 — caller shows "No category data"
+  if (total === 0) {
+    return (
+      <View className='items-center justify-center' style={{ width: size, height: size }}>
+        <View className='w-20 h-20 rounded-full bg-gray-100 border border-gray-200 items-center justify-center'>
+          <Text className='text-xs font-bold text-gray-400'>No data</Text>
+        </View>
+      </View>
+    )
+  }
+  // Vibrant, high-contrast palette — sky/emerald/amber/rose/violet/pink/cyan + slate — distinct on white
   const palette = [
-    '#111827',
-    '#0f766e',
-    '#1d4ed8',
-    '#b45309',
-    '#be185d',
-    '#6d28d9',
-    '#0e7490',
+    '#0ea5e9', // sky-500
+    '#10b981', // emerald-500
+    '#f59e0b', // amber-500
+    '#ef4444', // red-500
+    '#8b5cf6', // violet-500
+    '#ec4899', // pink-500
+    '#06b6d4', // cyan-500
+    '#6366f1', // indigo-500
+    '#84cc16', // lime-500
+    '#f97316', // orange-500
   ]
   let acc = 0
   const segments = data.map((d, i) => {
@@ -355,18 +369,18 @@ export function PieChart({
           if (s.pct < 0.5) return null
           const d = `M ${s.cx} ${s.cy} L ${s.x1} ${s.y1} A ${s.r} ${s.r} 0 ${s.largeArc} 1 ${s.x2} ${s.y2} Z`
           return (
-            <Path key={i} d={d} fill={s.color} stroke='white' strokeWidth={2} />
+            <Path key={i} d={d} fill={s.color} stroke='white' strokeWidth={2.5} />
           )
         })}
-        <Circle cx={size / 2} cy={size / 2} r={size * 0.22} fill='white' />
+        <Circle cx={size / 2} cy={size / 2} r={size * 0.24} fill='white' stroke='#f3f4f6' strokeWidth={1} />
         <G>
           <SvgText
             x={size / 2}
-            y={size / 2 - 4}
+            y={size / 2 - 5}
             textAnchor='middle'
-            fontSize={10}
+            fontSize={9}
             fontWeight='700'
-            fill='#6b7280'
+            fill='#9ca3af'
           >
             TOTAL
           </SvgText>
@@ -374,7 +388,7 @@ export function PieChart({
             x={size / 2}
             y={size / 2 + 10}
             textAnchor='middle'
-            fontSize={11}
+            fontSize={12}
             fontWeight='800'
             fill='#111827'
           >
@@ -384,12 +398,21 @@ export function PieChart({
           </SvgText>
         </G>
       </Svg>
-      <View className='flex-1 gap-2'>
-        {segments.slice(0, 5).map((s, i) => (
-          <View key={i} className='flex-row items-center gap-2'>
+      <View className='flex-1 gap-2.5'>
+        {segments.slice(0, 6).map((s, i) => (
+          <View key={i} className='flex-row items-center gap-2.5'>
             <View
-              style={{ backgroundColor: s.color }}
-              className='w-2.5 h-2.5 rounded-full'
+              style={{
+                backgroundColor: s.color,
+                width: 12,
+                height: 12,
+                borderRadius: 6,
+                borderWidth: 1,
+                borderColor: 'white',
+                shadowColor: s.color,
+                shadowOpacity: 0.25,
+                shadowRadius: 2,
+              }}
             />
             <Text
               className='text-xs font-semibold text-gray-900 flex-1'
@@ -397,14 +420,14 @@ export function PieChart({
             >
               {s.name}
             </Text>
-            <Text className='text-xs font-bold text-gray-600'>
+            <Text className='text-xs font-bold text-gray-700'>
               {s.pct.toFixed(1)}%
             </Text>
           </View>
         ))}
-        {segments.length > 5 && (
+        {segments.length > 6 && (
           <Text className='text-xs text-gray-400'>
-            +{segments.length - 5} more
+            +{segments.length - 6} more • {segments.slice(6).reduce((acc, cur) => acc + cur.pct, 0).toFixed(1)}%
           </Text>
         )}
       </View>

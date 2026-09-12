@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ScrollView,
   View,
@@ -30,7 +30,7 @@ import {
 import { useOrders, OrderStatus } from '../../hooks/api/useOrders'
 import { useCustomers } from '../../hooks/api/useCustomers'
 import { useProducts } from '../../hooks/api/useProducts'
-import { useInitiatePayment } from '../../hooks/api/usePayments'
+import { useInitiatePayment, usePaymentStatus } from '../../hooks/api/usePayments'
 import { TAB_BAR_SCROLL_PADDING } from '../../constants/tabBar'
 import { toNumber } from '../../lib/api-dtos'
 import { shortId } from '../../lib/ids'
@@ -89,6 +89,9 @@ export default function OrderDetail() {
   const { products } = useProducts()
   const { mutateAsync: initiatePayment, isPending: isInitiating } =
     useInitiatePayment()
+  const [paymentId, setPaymentId] = useState<string | null>(null)
+  const paymentStatus = usePaymentStatus(paymentId || undefined, !!paymentId)
+  const autoConfirmedRef = useRef(false)
 
   const query = getOrder(id)
   const order: any = query.data
@@ -112,23 +115,15 @@ export default function OrderDetail() {
 
   const handleUpdateStatus = async (status: OrderStatus) => {
     try {
-      const customer = order?.customerId
-        ? customers.find((c: any) => c.id === order.customerId)
-        : undefined
-      if (
-        status === OrderStatus.confirmed &&
-        order.paymentMethod === 'mpesa' &&
-        customer?.phone
-      ) {
-        await updateOrder({
-          id,
-          data: { status, customerPhone: customer.phone },
-        })
-      } else {
-        await updateOrder({ id, data: { status } })
+      if (!id || typeof id !== 'string') {
+        Alert.alert('Error', 'Order id missing')
+        return
       }
+      // Always send only {status} — customerPhone is not an orders column (was silently dropped and caused sync confusion)
+      await updateOrder({ id: id as any, data: { status } })
       query.refetch()
     } catch (e: any) {
+      console.error('[OrderDetail] updateOrder failed', e)
       Alert.alert(
         'Error',
         e.friendlyMessage || e.message || 'Failed to update order',
@@ -145,6 +140,15 @@ export default function OrderDetail() {
         'Missing phone',
         'This order needs a customer phone before M-Pesa.',
       )
+    // Prevent double charge: if already confirmed/fulfilled or already have pending payment, don't re-send
+    if (String(order.status) !== 'draft') {
+      Alert.alert('Already processed', `Order is already ${order.status} — M-Pesa not needed.`)
+      return
+    }
+    if (paymentId && paymentStatus.data?.status === 'pending') {
+      Alert.alert('Payment pending', 'An M-Pesa request is already pending for this order.')
+      return
+    }
     try {
       const payment = await initiatePayment({
         orderId: id,
@@ -152,9 +156,11 @@ export default function OrderDetail() {
         amount: order.total,
         currency: 'KES',
       })
+      setPaymentId(payment.id)
+      autoConfirmedRef.current = false
       Alert.alert(
         'Payment sent',
-        `M-Pesa request sent (${payment.id.slice(0, 8)}…)`,
+        `M-Pesa request sent (${payment.id.slice(0, 8)}…) — order will auto-confirm on success.`,
       )
     } catch (e: any) {
       Alert.alert(
@@ -163,6 +169,21 @@ export default function OrderDetail() {
       )
     }
   }
+
+  // Auto-confirm draft → confirmed when M-Pesa succeeds (prevents double charges)
+  useEffect(() => {
+    const status = paymentStatus.data?.status
+    if (!paymentId || autoConfirmedRef.current) return
+    if ((status === 'succeeded' || status === 'success' || status === 'completed') && String(order?.status) === 'draft') {
+      autoConfirmedRef.current = true
+      updateOrder({ id: id as any, data: { status: OrderStatus.confirmed } })
+        .then(() => {
+          Alert.alert('Payment confirmed', 'M-Pesa succeeded — order moved to Confirmed.')
+          query.refetch()
+        })
+        .catch((e: any) => console.error('[OrderDetail] auto-confirm failed', e))
+    }
+  }, [paymentStatus.data?.status, order?.status, paymentId, id])
 
   if (isLoading)
     return (

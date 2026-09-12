@@ -4,6 +4,8 @@ import type { Business as BackendBusiness, UUID } from '../../lib/api-dtos'
 import { useBusinessContext } from '../../contexts/BusinessContext'
 
 export interface Business extends BackendBusiness {
+  // Back-compat aliases — backend no longer returns these synthetic fields,
+  // but profile previously read them. Keep optional so old UI doesn't crash.
   ownerName?: string
   ownerEmail?: string
   whatsappNumber?: string | null
@@ -16,10 +18,12 @@ export interface Business extends BackendBusiness {
 function mapBusiness(business: BackendBusiness): Business {
   return {
     ...business,
+    // Keep aliases for older profile code (phone/email) — ensures phone/email always surface
     ownerEmail: business.email,
     whatsappNumber: business.phone,
     ownerPhone: business.phone,
-    metadata: { address: business.address },
+    // Preserve metadata.address for legacy location helper
+    metadata: business.address ? { address: business.address } : null,
   }
 }
 

@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useMemo, useState } from 'react'
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   KeyboardAvoidingView,
   Platform,
@@ -177,6 +177,8 @@ export default function OrdersScreen() {
   )
   const [quantity, setQuantity] = useState('1')
   const [paymentId, setPaymentId] = useState<string | null>(null)
+  const [paymentOrderId, setPaymentOrderId] = useState<string | null>(null)
+  const autoConfirmRef = useRef(false)
 
   const { products, isLoading: productsLoading } = useProducts()
   const { data: customers = [] } = useCustomers()
@@ -309,34 +311,30 @@ export default function OrdersScreen() {
   }
   const handleUpdateStatus = useCallback(
     async (order: Order, status: OrderStatus) => {
-      const customer = order.customerId
-        ? customers.find((i) => i.id === order.customerId)
-        : undefined
-      if (
-        status === OrderStatus.confirmed &&
-        order.paymentMethod == 'mpesa' &&
-        customer?.phone
-      ) {
-        try {
-          await updateOrder({
-            id: order.id,
-            data: { status, customerPhone: customer?.phone },
-          })
-        } catch {
-          Alert.alert('Error', 'Failed to update order')
-        }
+      if (!order?.id) {
+        Alert.alert('Error', 'Order id missing')
         return
       }
       try {
+        // Only status is needed — customerPhone is not an orders column
         await updateOrder({ id: order.id, data: { status } })
-      } catch {
-        Alert.alert('Error', 'Failed to update order')
+      } catch (e: any) {
+        console.error('[Orders] updateOrder failed', e)
+        Alert.alert('Error', e?.message || 'Failed to update order')
       }
     },
-    [customers, updateOrder],
+    [updateOrder],
   )
   const handleInitiateOrderPayment = useCallback(
     async (order: Order) => {
+      if (String(order.status) !== 'draft') {
+        Alert.alert('Already processed', `Order is already ${order.status} — M-Pesa not needed.`)
+        return
+      }
+      if (paymentId && paymentStatus.data?.status === 'pending' && paymentOrderId === order.id) {
+        Alert.alert('Payment pending', 'An M-Pesa request is already pending for this order.')
+        return
+      }
       const customer = order.customerId
         ? customers.find((i) => i.id === order.customerId)
         : undefined
@@ -352,10 +350,30 @@ export default function OrdersScreen() {
         currency: 'KES',
       })
       setPaymentId(payment.id)
-      Alert.alert('Payment sent', 'M-Pesa request sent.')
+      setPaymentOrderId(order.id)
+      autoConfirmRef.current = false
+      Alert.alert('Payment sent', 'M-Pesa request sent — order will auto-confirm on success.')
     },
-    [customers, initiatePayment],
+    [customers, initiatePayment, paymentId, paymentStatus.data?.status, paymentOrderId],
   )
+
+  // Auto-confirm draft → confirmed when M-Pesa succeeds (prevents double charge)
+  useEffect(() => {
+    const status = paymentStatus.data?.status
+    if (!paymentId || !paymentOrderId || autoConfirmRef.current) return
+    if (status === 'succeeded' || status === 'success' || status === 'completed') {
+      const target = orders.find((o) => o.id === paymentOrderId)
+      if (target && String(target.status) === 'draft') {
+        autoConfirmRef.current = true
+        updateOrder({ id: paymentOrderId as any, data: { status: OrderStatus.confirmed } })
+          .then(() => Alert.alert('Payment confirmed', 'M-Pesa succeeded — order moved to Confirmed.'))
+          .catch((e: any) => console.error('[Orders] auto-confirm failed', e))
+      }
+    }
+    if (status === 'failed') {
+      autoConfirmRef.current = true
+    }
+  }, [paymentStatus.data?.status, paymentId, paymentOrderId, orders])
 
   const handlePressOrder = useCallback(
     (order: Order) => router.push(`/orders/${order.id}` as any),

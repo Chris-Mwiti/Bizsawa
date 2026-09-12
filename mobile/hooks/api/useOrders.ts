@@ -170,6 +170,7 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
           rec.taxAmount = toDecimalString(0)
           rec.total = toDecimalString(total)
           rec.paymentMethod = req.paymentMethod || 'cash'
+          rec.paymentStatus = 'pending'
           rec.syncVersion = 1
         })
         const lineCol: any = (database as any).get('order_lines')
@@ -197,22 +198,31 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
 
   const updateOrder = useMutation({
     mutationFn: async ({ id, data }: { id: UUID; data: UpdateOrderInput }) => {
-      if (!id) throw new Error('Order id is required')
-      if (!data || typeof data !== 'object') throw new Error('Update data is required — did you pass undefined?')
+      if (!id || typeof id !== 'string') throw new Error('Order id is required')
+      // Normalize undefined/null data to empty object to avoid "can't access value of type undefined"
+      const safeData: any = data && typeof data === 'object' ? data : {}
       // DTO-safe: normalize status and guard against legacy {type} payloads; use optional chaining to avoid "cannot read property 'type' of undefined"
-      const rawStatus = (data as any)?.status
+      const rawStatus = safeData?.status
       const newStatus = rawStatus ? String(rawStatus).trim().toLowerCase() : null
       if (newStatus && !['draft', 'confirmed', 'fulfilled', 'cancelled', 'refunded'].includes(newStatus)) {
         throw new Error(`Invalid status: ${String(rawStatus)}`)
       }
       // Legacy guard: callers mistakenly passing {type:'confirmed'} instead of {status}
-      if (newStatus === null && (data as any)?.type !== undefined) {
+      if (newStatus === null && safeData?.type !== undefined) {
         throw new Error('Invalid payload: `type` is not a valid order field — did you mean `status`?')
       }
+      // Drop non-order fields like customerPhone that were previously sent and caused silent sync drop
+      if ('customerPhone' in safeData) delete safeData.customerPhone
       let shouldCreateSale = false
       await (database as any).write(async () => {
-        const rec: any = await (database as any).get('orders').find(id)
-        const prevStatus = String(rec.status || '').toLowerCase()
+        let rec: any
+        try {
+          rec = await (database as any).get('orders').find(id)
+        } catch (e: any) {
+          throw new Error(`Order not found locally: ${id} — ${e?.message || 'not found'}`)
+        }
+        if (!rec) throw new Error(`Order ${id} not found`)
+        const prevStatus = String(rec.status ?? rec._raw?.status ?? '').toLowerCase()
         if (newStatus) {
           await rec.update((r: any) => {
             r.status = newStatus

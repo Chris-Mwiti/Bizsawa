@@ -61,6 +61,24 @@ export default function VerifyOtpScreen() {
     setError('')
     setIsSending(true)
     try {
+      // Login OTP: require existing account — don't send if email not registered
+      try {
+        const check = await api.get<{ exists: boolean }>(`/auth/check-email`, { params: { email: email.trim().toLowerCase() } })
+        if (check.data && check.data.exists === false) {
+          Alert.alert(
+            'No account found',
+            `No account exists for ${email.trim()}. Would you like to create one?`,
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Sign Up', onPress: () => router.replace('/auth/register' as any) },
+            ],
+          )
+          setError('No account found — please sign up')
+          return
+        }
+      } catch {
+        // if check fails, fall through and try to send anyway (backend will handle)
+      }
       await sendVerificationOtp(email.trim().toLowerCase(), 'sign-in')
       setCooldown(60)
       Alert.alert('Code sent', `We sent a 6-digit code to ${email.trim()}. It expires in 5 minutes.`)
