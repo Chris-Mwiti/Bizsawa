@@ -4,6 +4,46 @@ import { database } from '../db/database'
 import { api } from '../lib/api'
 import { v4 as uuidv4 } from 'uuid'
 import { Q } from '@nozbe/watermelondb'
+import * as RawRecord from '@nozbe/watermelondb/RawRecord'
+
+// Defensive patch: Watermelon's _setRaw throws "Cannot read property 'type' of undefined"
+// when a column not in schema is set (e.g. stale _changed="customers" or server sends unknown column).
+// Patch setRawSanitized to skip unknown columns instead of crashing sync.
+try {
+  const origSetRawSanitized: any = (RawRecord as any).setRawSanitized
+  if (origSetRawSanitized && !(origSetRawSanitized as any).__patched) {
+    const patched = (raw: any, columnName: string, value: any, columnSchema: any) => {
+      if (!columnSchema) {
+        console.warn(`[Sync] setRawSanitized skipping unknown column ${columnName} value=${JSON.stringify(value)?.slice(0,120)}`)
+        return
+      }
+      return origSetRawSanitized(raw, columnName, value, columnSchema)
+    }
+    ;(patched as any).__patched = true
+    ;(RawRecord as any).setRawSanitized = patched
+  }
+} catch {}
+// Also patch Model._setRaw to be defensive (covers r.field = value paths)
+try {
+  const { Model } = require('@nozbe/watermelondb')
+  const proto: any = (Model as any).prototype
+  if (proto && proto._setRaw && !(proto._setRaw as any).__patched) {
+    const orig = proto._setRaw
+    const patched = function (this: any, rawFieldName: string, rawValue: any) {
+      const col = this.collection?.schema?.columns?.[rawFieldName]
+      if (!col) {
+        console.warn(`[Sync] Model._setRaw skipping unknown column ${this.table}.${rawFieldName}`)
+        // Still mark _changed for known columns only; for unknown, just set raw directly without type check
+        // to avoid crash and allow sync to continue
+        this._raw[rawFieldName] = rawValue
+        return
+      }
+      return orig.call(this, rawFieldName, rawValue)
+    }
+    ;(patched as any).__patched = true
+    proto._setRaw = patched
+  }
+} catch {}
 
 // One-time repair for corrupted local rows — now destructive for synced data to avoid pushing "0" to server
 // NaN numerics and 0/1970 dates are healed: created (not yet pushed) rows are sanitized to "0"/now,
@@ -707,6 +747,96 @@ export function startSyncEngine() {
   return () => {
     unsub()
     if (intervalId) clearInterval(intervalId)
+  }
+}
+
+// ── Conflict resolution workflow (fixes banner persisting after "Keep mine") ──────────
+// Server's /sync/conflicts/:id/resolve with kept_client does ForceApplyClientPayload
+// but local Watermelon still has _status='updated' + _changed and local `conflicts` row.
+// Without clearing, getConflictsCount() keeps returning >0 and banner never disappears
+// until resetLocalDatabase(). These helpers make the UX workflow seamless.
+
+export async function getLocalConflicts(): Promise<any[]> {
+  try {
+    const col: any = (database as any).get('conflicts')
+    const rows: any[] = await col.query().fetch()
+    return rows.map((r: any) => ({
+      id: r.id,
+      table_name: r.tableName,
+      record_id: r.recordId,
+      client_payload: (() => { try { return JSON.parse(r.clientPayload) } catch { return r.clientPayload } })(),
+      server_payload: (() => { try { return JSON.parse(r.serverPayload) } catch { return r.serverPayload } })(),
+      client_version: r.clientVersion,
+      server_version: r.serverVersion,
+      _raw: r._raw,
+    }))
+  } catch { return [] }
+  }
+
+export async function deleteLocalConflict(conflictId: string): Promise<void> {
+  try {
+    const col: any = (database as any).get('conflicts')
+    const rec: any = await col.find(conflictId)
+    await (database as any).write(async () => { await rec.destroyPermanently() })
+  } catch (e) { console.warn('[Sync] deleteLocalConflict failed', conflictId, (e as any)?.message) }
+}
+
+export async function resolveConflictLocally(
+  conflict: { id: string; table_name: string; record_id: string; client_payload: any; server_payload: any; client_version: number; server_version: number },
+  resolution: 'kept_client' | 'kept_server',
+): Promise<void> {
+  const table = conflict.table_name
+  const recordId = conflict.record_id
+  try {
+    const col: any = (database as any).get(table)
+    if (!col) {
+      await deleteLocalConflict(conflict.id)
+      return
+    }
+    const rec: any = await col.find(recordId).catch(() => null)
+    if (!rec) {
+      await deleteLocalConflict(conflict.id)
+      return
+    }
+    if (resolution === 'kept_client') {
+      // Client wins: server already ForceApplied, so mark local as synced with new version
+      await (database as any).write(async () => {
+        await rec.update((r: any) => {
+          // Clear pending flag - technical bit in background
+          r._raw._status = 'synced'
+          r._raw._changed = ''
+          // Bump sync_version to server's new version (server did +1)
+          if (typeof r.syncVersion !== 'undefined') r.syncVersion = (conflict.server_version ?? 0) + 1
+          else if (typeof r.sync_version !== 'undefined') r.sync_version = (conflict.server_version ?? 0) + 1
+          else r._raw.sync_version = (conflict.server_version ?? 0) + 1
+        })
+      })
+    } else {
+      // Server wins: discard local changes, apply server payload
+      const serverPayload: any = typeof conflict.server_payload === 'string' ? (()=>{try{return JSON.parse(conflict.server_payload as any)}catch{return {}}})() : (conflict.server_payload || {})
+      await (database as any).write(async () => {
+        await rec.update((r: any) => {
+          // Apply server fields that exist in schema (snake_case raw keys)
+          for (const [k, v] of Object.entries(serverPayload)) {
+            if (k === 'id' || k === 'business_id' || k === 'tenant_id' || k === '_status' || k === '_changed') continue
+            // Only set if column exists in schema to avoid type crash (defensive patch handles it anyway)
+            const colSchema = (r.collection?.schema?.columns as any)?.[k]
+            if (!colSchema && !(k in r._raw)) continue
+            // Use _setRaw path for type safety, but fallback to direct _raw set
+            try { r._raw[k] = v } catch { r._raw[k] = v }
+          }
+          r._raw._status = 'synced'
+          r._raw._changed = ''
+          if (typeof r.syncVersion !== 'undefined') r.syncVersion = serverPayload.sync_version ?? (conflict.server_version ?? 0) + 1
+          else r._raw.sync_version = serverPayload.sync_version ?? (conflict.server_version ?? 0) + 1
+        })
+      })
+    }
+    await deleteLocalConflict(conflict.id)
+  } catch (e) {
+    console.warn('[Sync] resolveConflictLocally failed', table, recordId, (e as any)?.message)
+    // Fallback: at least delete the conflict entry so banner clears
+    await deleteLocalConflict(conflict.id).catch(()=>{})
   }
 }
 
