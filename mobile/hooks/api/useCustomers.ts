@@ -49,6 +49,9 @@ function mapRawToCustomer(raw: any): Customer {
       : null,
     createdAt: toISO(get('created_at', 'createdAt')),
     updatedAt: toISO(get('updated_at', 'updatedAt')),
+    // Offline UX: expose Watermelon sync status so UI can show "Pending" badge
+    _status: src._status ?? raw._status,
+    _changed: src._changed ?? raw._changed,
   } as any
 }
 

@@ -112,6 +112,9 @@ export const useProducts = () => {
                 barcode: r._raw?.barcode || '',
                 imageUrl: r._raw?.image_url || '',
                 variants: [],
+                _status: r._raw?._status,
+                _changed: r._raw?._changed,
+                syncVersion: r._raw?.sync_version ?? r.syncVersion,
               }) as any,
           ),
         )
