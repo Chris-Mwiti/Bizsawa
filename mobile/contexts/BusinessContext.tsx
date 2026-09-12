@@ -78,6 +78,39 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
     setActiveRole(role)
   }
 
+  // Offline-first hydration: load last selected business from AsyncStorage so
+  // activeBusinessId is available immediately when offline (before API succeeds).
+  // Without this, useProducts/useCustomers etc. filter by business_id='' and
+  // offline-created rows (with real business_id) are invisible → user thinks entry not captured.
+  const hydrateFromStorage = async (): Promise<Business | null> => {
+    try {
+      const [savedId, savedStr, savedRole] = await Promise.all([
+        AsyncStorage.getItem(AUTH_STORAGE_KEYS.businessId),
+        AsyncStorage.getItem(AUTH_STORAGE_KEYS.business),
+        AsyncStorage.getItem(AUTH_STORAGE_KEYS.role),
+      ])
+      if (savedStr) {
+        const parsed = JSON.parse(savedStr) as Business
+        // Ensure id matches savedId if present
+        // @todo-fix: This might present as a bottleneck in the future while doing hotswapping of businesses
+        const biz = parsed.id === savedId ? parsed : { ...parsed, id: savedId || parsed.id } as Business
+        setActiveBusiness(biz)
+        setBusinesses((prev) => (prev.length ? prev : [biz]))
+        if (savedRole) setActiveRole(savedRole as Role)
+        else if (biz.id) resolveRole(biz.id).then(setActiveRole).catch(() => {})
+        return biz
+      }
+      if (savedId) {
+        // business object missing but id exists — create minimal stub so queries have bid
+        const stub = { id: savedId, name: 'Business' } as unknown as Business
+        setActiveBusiness(stub)
+        // try to enrich from businesses list later
+        return stub
+      }
+    } catch {}
+    return null
+  }
+
   const refreshBusinesses = async () => {
     if (!isAuthenticated) return
     setIsLoading(true)
@@ -94,6 +127,16 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
         items[0] ||
         null
       if (selected) await selectBusiness(selected)
+      else {
+        // No server business but we have a local pending one — keep hydrated
+        await hydrateFromStorage()
+      }
+    } catch (e) {
+      // Offline or API failure — fallback to local storage so offline writes are visible
+      const hydrated = await hydrateFromStorage()
+      if (!hydrated) {
+        console.warn('[BusinessContext] refreshBusinesses failed offline and no local business found', (e as any)?.message)
+      }
     } finally {
       setIsLoading(false)
     }
@@ -235,7 +278,8 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (isAuthenticated) {
-      void refreshBusinesses()
+      // Hydrate immediately from storage so offline observers have correct bid
+      void hydrateFromStorage().then(() => void refreshBusinesses())
     } else {
       setBusinesses([])
       setActiveBusiness(null)
