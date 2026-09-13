@@ -23,6 +23,8 @@ import {
   Clock,
   Package,
   User,
+  Printer,
+  Share2,
 } from 'lucide-react-native'
 import {
   Card,
@@ -35,6 +37,12 @@ import { useCustomers } from '../../hooks/api/useCustomers'
 import { useProducts } from '../../hooks/api/useProducts'
 import { TAB_BAR_SCROLL_PADDING } from '../../constants/tabBar'
 import { toNumber } from '../../lib/api-dtos'
+import { useBusinessContext } from '../../contexts/BusinessContext'
+import { buildInvoiceHtml, invoiceShareText } from '../../lib/invoicePdf'
+import * as Print from 'expo-print'
+import * as Sharing from 'expo-sharing'
+import * as FileSystem from 'expo-file-system'
+import { Linking, Share } from 'react-native'
 
 function formatDate(iso: string) {
   const d = new Date(iso)
@@ -117,6 +125,9 @@ export default function InvoiceDetail() {
   } = useInvoices() as any
   const { data: customers = [] } = useCustomers()
   const { products } = useProducts()
+  const { activeBusiness } = useBusinessContext()
+  const [isPrinting, setIsPrinting] = useState(false)
+  const [isDownloading, setIsDownloading] = useState(false)
 
   const query = getInvoice(id)
   const invoice = query.data
@@ -220,8 +231,114 @@ export default function InvoiceDetail() {
       )
     }
   }
-  const handleDownloadPDF = () =>
-    Alert.alert('PDF', 'PDF download would open here')
+  const buildPdfHtml = () => {
+    if (!invoice) return ''
+    return buildInvoiceHtml({
+      invoiceNumber: invoice.invoiceNumber,
+      status: invoice.status,
+      subtotal: (invoice as any).subtotal,
+      taxAmount: (invoice as any).taxAmount,
+      total: (invoice as any).total,
+      amountPaid: (invoice as any).amountPaid,
+      amountDue: (invoice as any).amountDue,
+      currency: (invoice as any).currency || 'KES',
+      dueAt: (invoice as any).dueAt,
+      createdAt: (invoice as any).createdAt,
+      notes: (invoice as any).notes,
+      customerName: customer?.name || (invoice as any).customerName || 'Customer',
+      customerPhone: customer?.phone || (invoice as any).customerPhone || '',
+      lines: (invoice.lines || []).map((l: any) => ({
+        description: l.description,
+        productName: l.productId ? (productMap.get(l.productId) || l.description) : l.description,
+        quantity: l.quantity,
+        unitPrice: l.unitPrice,
+        lineTotal: l.lineTotal,
+      })),
+      business: {
+        name: activeBusiness?.name || 'Business Shop',
+        phone: activeBusiness?.phone || '',
+        email: activeBusiness?.email || '',
+        address: activeBusiness?.address || '',
+        taxPin: (activeBusiness as any)?.taxPin || '',
+      },
+    })
+  }
+
+  const handlePrint = async () => {
+    try {
+      setIsPrinting(true)
+      const html = buildPdfHtml()
+      await Print.printAsync({ html })
+    } catch (e: any) {
+      Alert.alert('Print failed', e?.message || 'Could not print')
+    } finally { setIsPrinting(false) }
+  }
+
+  const handleDownloadPDF = async () => {
+    try {
+      setIsDownloading(true)
+      const html = buildPdfHtml()
+      const { uri } = await Print.printToFileAsync({ html, base64: false })
+      // Move to document directory with proper name for sharing/downloading
+      const fileName = `${invoice.invoiceNumber || 'invoice'}.pdf`
+      // FileSystem: use legacy API fallback
+      const dest = (FileSystem as any).documentDirectory + fileName
+      try { await (FileSystem as any).moveAsync({ from: uri, to: dest }) } catch {}
+      const target = (await (FileSystem as any).getInfoAsync(dest)).exists ? dest : uri
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(target, { mimeType: 'application/pdf', dialogTitle: `Invoice ${invoice.invoiceNumber}`, UTI: 'com.adobe.pdf' })
+      } else {
+        Alert.alert('Saved', `PDF ready at ${target}`)
+      }
+    } catch (e: any) {
+      Alert.alert('Download failed', e?.message || 'Could not generate PDF')
+    } finally { setIsDownloading(false) }
+  }
+
+  const handleShareWhatsAppNative = async () => {
+    try {
+      const html = buildPdfHtml()
+      const { uri } = await Print.printToFileAsync({ html })
+      const text = invoiceShareText({
+        invoiceNumber: invoice.invoiceNumber,
+        status: invoice.status,
+        subtotal: (invoice as any).subtotal,
+        taxAmount: (invoice as any).taxAmount,
+        total: (invoice as any).total,
+        amountPaid: (invoice as any).amountPaid,
+        amountDue: (invoice as any).amountDue,
+        currency: (invoice as any).currency || 'KES',
+        dueAt: (invoice as any).dueAt,
+        createdAt: (invoice as any).createdAt,
+        notes: (invoice as any).notes,
+        customerName: customer?.name || (invoice as any).customerName || 'Customer',
+        customerPhone: customer?.phone || (invoice as any).customerPhone || '',
+        lines: [],
+        business: { name: activeBusiness?.name || 'Business Shop', phone: activeBusiness?.phone, email: activeBusiness?.email, address: activeBusiness?.address, taxPin: (activeBusiness as any)?.taxPin },
+      })
+      // Try to share file via system sheet — user can pick WhatsApp
+      if (await Sharing.isAvailableAsync()) {
+        // Share file first; if user picks WhatsApp it attaches
+        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Share via WhatsApp', UTI: 'com.adobe.pdf' })
+      }
+      // Also offer to open WhatsApp with text
+      const encoded = encodeURIComponent(text + `\n\n*Amount due: KES ${toNumber((invoice as any).amountDue).toLocaleString('en-KE')}*`)
+      const waUrl = `whatsapp://send?text=${encoded}`
+      const can = await Linking.canOpenURL(waUrl)
+      if (can) {
+        // Ask user if they want to open WhatsApp with caption
+        Alert.alert('Share via WhatsApp', 'PDF ready. Open WhatsApp to send caption?', [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Open WhatsApp', onPress: () => Linking.openURL(waUrl) },
+        ])
+      } else {
+        // Fallback: generic share sheet with text
+        await Share.share({ message: text })
+      }
+    } catch (e: any) {
+      Alert.alert('Share failed', e?.message || 'Could not share')
+    }
+  }
 
   if (isLoading)
     return (
@@ -573,7 +690,7 @@ export default function InvoiceDetail() {
           </Card>
         )}
 
-        {/* Actions — 2x2 grid, not crowded flex-1 */}
+        {/* Actions — print / download / share via native WhatsApp (not WAHA) */}
         <Card className='border border-gray-200'>
           <CardHeader>
             <CardTitle>Actions</CardTitle>
@@ -589,7 +706,7 @@ export default function InvoiceDetail() {
                   >
                     <MessageSquare size={18} color='white' />
                     <Text className='text-white font-bold text-sm'>
-                      {isSendingWhatsApp ? 'Sharing…' : 'WhatsApp'}
+                      {isSendingWhatsApp ? 'Sharing…' : 'WhatsApp (Server)'}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -609,12 +726,32 @@ export default function InvoiceDetail() {
               <View className='flex-row gap-3'>
                 <TouchableOpacity
                   className='flex-1 flex-row items-center justify-center gap-2 bg-white border border-gray-200 px-4 py-4 rounded-2xl active:bg-gray-50'
+                  onPress={handlePrint}
+                  disabled={isPrinting}
+                >
+                  <Printer size={18} color='#111827' />
+                  <Text className='text-gray-900 font-bold text-sm'>
+                    {isPrinting ? 'Printing…' : 'Print'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  className='flex-1 flex-row items-center justify-center gap-2 bg-white border border-gray-200 px-4 py-4 rounded-2xl active:bg-gray-50'
                   onPress={handleDownloadPDF}
+                  disabled={isDownloading}
                 >
                   <Download size={18} color='#111827' />
                   <Text className='text-gray-900 font-bold text-sm'>
-                    Download PDF
+                    {isDownloading ? 'Saving…' : 'Download'}
                   </Text>
+                </TouchableOpacity>
+              </View>
+              <View className='flex-row gap-3'>
+                <TouchableOpacity
+                  className='flex-1 flex-row items-center justify-center gap-2 bg-[#25D366] px-4 py-4 rounded-2xl active:opacity-90'
+                  onPress={handleShareWhatsAppNative}
+                >
+                  <Share2 size={18} color='white' />
+                  <Text className='text-white font-bold text-sm'>Share via WhatsApp</Text>
                 </TouchableOpacity>
                 {!isPaid && !isCancelled && (
                   <TouchableOpacity
@@ -633,6 +770,7 @@ export default function InvoiceDetail() {
                   No further actions — invoice is {invoice.status}
                 </Text>
               )}
+              <Text className='text-xs text-center text-gray-400'>From: <Text className='font-bold'>{activeBusiness?.name || 'Your Shop'}</Text> — printed header uses business shop title</Text>
             </View>
           </CardContent>
         </Card>
