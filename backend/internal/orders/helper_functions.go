@@ -68,6 +68,11 @@ func buildPaymentPayload(order *Order, customerPhone string) models.InitiateRequ
 		provider = order.PaymentMethod
 	}
 
+	payload := map[string]any{}
+	if order.CustomerID != nil {
+		payload["customerId"] = order.CustomerID.String()
+	}
+
 	return models.InitiateRequest{
 		Provider:         provider,
 		OrderID:          order.ID.String(),
@@ -76,6 +81,7 @@ func buildPaymentPayload(order *Order, customerPhone string) models.InitiateRequ
 		Amount:           order.Total,
 		Currency:         "KES",
 		Phone:            customerPhone,
+		Payload:          payload,
 	}
 }
 
