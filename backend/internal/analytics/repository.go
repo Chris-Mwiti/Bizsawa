@@ -453,6 +453,111 @@ func (r *Repository) SalesVelocity(ctx context.Context, businessID uuid.UUID, tf
 	}, nil
 }
 
+// TaxSummary aggregates VAT (16%) for KRA filing.
+func (r *Repository) TaxSummary(ctx context.Context, businessID uuid.UUID, tf Timeframe, now time.Time) (*TaxSummary, error) {
+	w := resolveWindow(tf, now)
+	type totRow struct {
+		TotalTax     string `json:"totalTax"`
+		TaxableSales string `json:"taxableSales"`
+		TotalSales   string `json:"totalSales"`
+		Count        int    `json:"count"`
+	}
+	var tot totRow
+	err := r.db.WithContext(ctx).Raw(
+		`SELECT COALESCE(SUM(tax_amount),0)::text AS total_tax,
+		        COALESCE(SUM(subtotal),0)::text AS taxable_sales,
+		        COALESCE(SUM(total),0)::text AS total_sales,
+		        COUNT(*) AS count
+		 FROM sales WHERE business_id = ? AND sold_at >= ? AND status <> 'void'`,
+		businessID, w.lower,
+	).Scan(&tot).Error
+	if err != nil {
+		return nil, err
+	}
+	// By product: allocate tax proportionally as line_total*0.16 (line_total is pre-tax subtotal)
+	type prodRow struct {
+		ProductID string `json:"productId"`
+		Name      string `json:"name"`
+		Category  string `json:"category"`
+		Revenue   string `json:"revenue"`
+		Quantity  string `json:"quantity"`
+	}
+	var prodRows []prodRow
+	_ = r.db.WithContext(ctx).Raw(
+		`SELECT sl.product_id::text AS product_id,
+		        COALESCE(p.name,'Unknown') AS name,
+		        COALESCE(p.category,'Uncategorized') AS category,
+		        COALESCE(SUM(sl.line_total),0)::text AS revenue,
+		        COALESCE(SUM(sl.quantity),0)::text AS quantity
+		 FROM sale_lines sl
+		 JOIN sales s ON s.id = sl.sale_id AND s.status <> 'void'
+		 LEFT JOIN products p ON p.id = sl.product_id
+		 WHERE sl.business_id = ? AND s.sold_at >= ?
+		 GROUP BY sl.product_id, p.name, p.category
+		 ORDER BY revenue DESC`,
+		businessID, w.lower,
+	).Scan(&prodRows).Error
+
+	byProd := make([]TaxByProduct, 0, len(prodRows))
+	for _, pr := range prodRows {
+		rev := decFromString(pr.Revenue)
+		tax := rev.Mul(decimal.NewFromFloat(0.16)).Round(2)
+		byProd = append(byProd, TaxByProduct{
+			ProductID: pr.ProductID,
+			Name:      pr.Name,
+			Category:  pr.Category,
+			Revenue:   rev,
+			TaxAmount: tax,
+			Quantity:  decFromString(pr.Quantity),
+		})
+	}
+	// By category
+	type catRow struct {
+		Category string `json:"category"`
+		Revenue  string `json:"revenue"`
+		Count    int    `json:"count"`
+	}
+	var catRows []catRow
+	_ = r.db.WithContext(ctx).Raw(
+		`SELECT COALESCE(p.category,'Uncategorized') AS category,
+		        COALESCE(SUM(sl.line_total),0)::text AS revenue,
+		        COUNT(*) AS count
+		 FROM sale_lines sl
+		 JOIN sales s ON s.id = sl.sale_id AND s.status <> 'void'
+		 LEFT JOIN products p ON p.id = sl.product_id
+		 WHERE sl.business_id = ? AND s.sold_at >= ?
+		 GROUP BY category ORDER BY revenue DESC`,
+		businessID, w.lower,
+	).Scan(&catRows).Error
+
+	byCat := make([]TaxByCategory, 0, len(catRows))
+	for _, cr := range catRows {
+		rev := decFromString(cr.Revenue)
+		tax := rev.Mul(decimal.NewFromFloat(0.16)).Round(2)
+		byCat = append(byCat, TaxByCategory{
+			Category:  cr.Category,
+			Revenue:   rev,
+			TaxAmount: tax,
+			Count:     cr.Count,
+		})
+	}
+
+	totalTax := decFromString(tot.TotalTax)
+	// KRA payable = total VAT collected (output VAT). If business has input VAT from expenses, could subtract, but v1 = output only.
+	return &TaxSummary{
+		Timeframe:        tf,
+		TotalTax:         totalTax,
+		TaxableSales:     decFromString(tot.TaxableSales),
+		TotalSales:       decFromString(tot.TotalSales),
+		TransactionCount: tot.Count,
+		ByProduct:        byProd,
+		ByCategory:       byCat,
+		KRAPayable:       totalTax,
+		VATRate:          0.16,
+		GeneratedAt:      now,
+	}, nil
+}
+
 // UpsertSnapshot atomically replaces the stored snapshot for
 // (business, timeframe), enforcing a single materialized row.
 // Uses INSERT ... ON CONFLICT to remain idempotent under concurrent Compute() calls.

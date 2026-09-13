@@ -419,6 +419,13 @@ func (s *Service) GetAIInsights(ctx context.Context, businessID uuid.UUID, tf Ti
 func itoa(n int) string { return fmt.Sprintf("%d", n) }
 func formatFloat(f float64) string { return fmt.Sprintf("%.1f", f) }
 
+func (s *Service) TaxSummary(ctx context.Context, businessID uuid.UUID, tf Timeframe) (*TaxSummary, error) {
+	if !tf.Valid() {
+		tf = TimeframeMonth
+	}
+	return s.repo.TaxSummary(ctx, businessID, tf, time.Now().UTC())
+}
+
 // Get returns the latest pre-computed snapshot, computing it on-demand if
 // none exists yet or if stale (TTL). Stale snapshots are recomputed synchronously
 // so insights reflect recent sales/expenses without waiting for background jobs.

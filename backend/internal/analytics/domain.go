@@ -127,6 +127,36 @@ type CustomerSummary struct {
 	LTV      decimal.Decimal            `json:"ltv"`
 }
 
+// TaxBreakdown captures VAT collected for KRA filing (16% VAT on taxable sales).
+type TaxByProduct struct {
+	ProductID string          `json:"productId"`
+	Name      string          `json:"name"`
+	Category  string          `json:"category"`
+	TaxAmount decimal.Decimal `json:"taxAmount"`
+	Revenue   decimal.Decimal `json:"revenue"`
+	Quantity  decimal.Decimal `json:"quantity"`
+}
+
+type TaxByCategory struct {
+	Category  string          `json:"category"`
+	TaxAmount decimal.Decimal `json:"taxAmount"`
+	Revenue   decimal.Decimal `json:"revenue"`
+	Count     int             `json:"count"`
+}
+
+type TaxSummary struct {
+	Timeframe        Timeframe       `json:"timeframe"`
+	TotalTax         decimal.Decimal `json:"totalTax"`
+	TaxableSales     decimal.Decimal `json:"taxableSales"`
+	TotalSales       decimal.Decimal `json:"totalSales"`
+	TransactionCount int             `json:"transactionCount"`
+	ByProduct        []TaxByProduct  `json:"byProduct"`
+	ByCategory       []TaxByCategory `json:"byCategory"`
+	KRAPayable       decimal.Decimal `json:"kraPayable"`
+	VATRate          float64         `json:"vatRate"`
+	GeneratedAt      time.Time       `json:"generatedAt"`
+}
+
 // StoredSnapshot is the GORM persistence model for analytics_snapshots.
 type StoredSnapshot struct {
 	ID          uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
