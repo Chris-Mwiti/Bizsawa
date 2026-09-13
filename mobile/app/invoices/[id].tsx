@@ -41,7 +41,9 @@ import { useBusinessContext } from '../../contexts/BusinessContext'
 import { buildInvoiceHtml, invoiceShareText } from '../../lib/invoicePdf'
 import * as Print from 'expo-print'
 import * as Sharing from 'expo-sharing'
-import * as FileSystem from 'expo-file-system'
+// SDK 54: expo-file-system ~19.0.24 moved classic APIs to /legacy
+// New File API lives at 'expo-file-system' (Paths, File), legacy keeps documentDirectory/moveAsync/getInfoAsync
+import * as FileSystem from 'expo-file-system/legacy'
 import { Linking, Share } from 'react-native'
 
 function formatDate(iso: string) {
@@ -278,17 +280,28 @@ export default function InvoiceDetail() {
     try {
       setIsDownloading(true)
       const html = buildPdfHtml()
-      const { uri } = await Print.printToFileAsync({ html, base64: false })
-      // Move to document directory with proper name for sharing/downloading
-      const fileName = `${invoice.invoiceNumber || 'invoice'}.pdf`
-      // FileSystem: use legacy API fallback
-      const dest = (FileSystem as any).documentDirectory + fileName
-      try { await (FileSystem as any).moveAsync({ from: uri, to: dest }) } catch {}
-      const target = (await (FileSystem as any).getInfoAsync(dest)).exists ? dest : uri
+      const { uri } = await Print.printToFileAsync({ html })
+      // SDK 54: expo-file-system ~19.0.24 uses documentDirectory + moveAsync
+      const safeName = (invoice.invoiceNumber || 'invoice').replace(/[^a-zA-Z0-9-_]/g, '_')
+      const fileName = `${safeName}.pdf`
+      let targetUri = uri
+
+      if (FileSystem.documentDirectory) {
+        const dest = `${FileSystem.documentDirectory}${fileName}`
+        try {
+          await FileSystem.moveAsync({ from: uri, to: dest })
+          const info = await FileSystem.getInfoAsync(dest)
+          if (info.exists) targetUri = dest
+        } catch {
+          // move can fail if file exists or permission issue — fallback to original uri
+          targetUri = uri
+        }
+      }
+
       if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(target, { mimeType: 'application/pdf', dialogTitle: `Invoice ${invoice.invoiceNumber}`, UTI: 'com.adobe.pdf' })
+        await Sharing.shareAsync(targetUri, { mimeType: 'application/pdf', dialogTitle: `Invoice ${invoice.invoiceNumber}`, UTI: 'com.adobe.pdf' })
       } else {
-        Alert.alert('Saved', `PDF ready at ${target}`)
+        Alert.alert('Saved', `PDF ready at ${targetUri}`)
       }
     } catch (e: any) {
       Alert.alert('Download failed', e?.message || 'Could not generate PDF')
