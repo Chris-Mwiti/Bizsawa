@@ -458,16 +458,57 @@ func (s *Service) PDF(ctx context.Context, businessID, invoiceID uuid.UUID) ([]b
 		return nil, err
 	}
 
-	return deterministicPDF(inv), nil
+	// Enrich with business shop header (owner shop as invoice source)
+	var business struct {
+		Name    string `gorm:"column:name"`
+		Phone   string `gorm:"column:phone"`
+		Email   string `gorm:"column:email"`
+		Address string `gorm:"column:address"`
+		TaxPIN  string `gorm:"column:tax_pin"`
+	}
+	_ = s.repo.db.WithContext(ctx).Table("businesses").Select("name, phone, email, address, tax_pin").Where("id = ?", businessID).First(&business).Error
+
+	return deterministicPDF(inv, business), nil
 }
 
-func deterministicPDF(inv *Invoice) []byte {
+func deterministicPDF(inv *Invoice, business struct {
+	Name    string `gorm:"column:name"`
+	Phone   string `gorm:"column:phone"`
+	Email   string `gorm:"column:email"`
+	Address string `gorm:"column:address"`
+	TaxPIN  string `gorm:"column:tax_pin"`
+}) []byte {
 	var b bytes.Buffer
 
 	lines := append([]InvoiceLine(nil), inv.Lines...)
 	sort.Slice(lines, func(i, j int) bool { return lines[i].ID.String() < lines[j].ID.String() })
+	// Minimal compliant PDF with business shop as source title
 	b.WriteString("%PDF-1.4\n% BizSawa Invoice\n")
-
+	shopTitle := business.Name
+	if shopTitle == "" {
+		shopTitle = "Business Shop"
+	}
+	b.WriteString(fmt.Sprintf("%% Title: %s — Invoice %s\n", shopTitle, inv.InvoiceNumber))
+	b.WriteString(fmt.Sprintf("From: %s\n", shopTitle))
+	if business.Address != "" {
+		b.WriteString(fmt.Sprintf("Address: %s\n", business.Address))
+	}
+	if business.Phone != "" {
+		b.WriteString(fmt.Sprintf("Phone: %s\n", business.Phone))
+	}
+	if business.Email != "" {
+		b.WriteString(fmt.Sprintf("Email: %s\n", business.Email))
+	}
+	if business.TaxPIN != "" {
+		b.WriteString(fmt.Sprintf("KRA PIN: %s\n", business.TaxPIN))
+	}
+	if inv.CustomerName != "" {
+		b.WriteString(fmt.Sprintf("Bill To: %s", inv.CustomerName))
+		if inv.CustomerPhone != "" {
+			b.WriteString(fmt.Sprintf(" (%s)", inv.CustomerPhone))
+		}
+		b.WriteString("\n")
+	}
 	b.WriteString(
 		fmt.Sprintf("Invoice: %s\nStatus: %s\nSubtotal: %s\nTax: %s\nTotal: %s\nPaid: %s\nDue: %s\n",
 			inv.InvoiceNumber,
@@ -481,9 +522,13 @@ func deterministicPDF(inv *Invoice) []byte {
 	)
 
 	for _, line := range lines {
+		name := line.ProductName
+		if name == "" {
+			name = line.Description
+		}
 		b.WriteString(
 			fmt.Sprintf("Line: %s | %s | %s | %s\n",
-				line.Description,
+				name,
 				line.Quantity.String(),
 				line.UnitPrice.StringFixed(2),
 				line.LineTotal.StringFixed(2),

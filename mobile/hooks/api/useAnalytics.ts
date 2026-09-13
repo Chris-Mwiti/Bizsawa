@@ -43,6 +43,19 @@ export interface ProfitAnalyticsDataPoint {
   margin: number
 }
 
+export interface TaxSummary {
+  timeframe: string
+  totalTax: any
+  taxableSales: any
+  totalSales: any
+  transactionCount: number
+  byProduct: Array<{ productId: string; name: string; category: string; taxAmount: any; revenue: any; quantity: any }>
+  byCategory: Array<{ category: string; taxAmount: any; revenue: any; count: number }>
+  kraPayable: any
+  vatRate: number
+  generatedAt: string
+}
+
 export interface AIInsights {
   summary: string
   trends: Array<{
@@ -431,6 +444,26 @@ export const useAnalytics = () => {
     retry: (count, err: any) => (err?.response?.status === 403 ? false : count < 2),
   })
 
+  const getTaxSummary = (timeframe: Timeframe = 'month') =>
+    useQuery<TaxSummary>({
+      queryKey: ['analytics', 'tax', timeframe, activeBusinessId],
+      queryFn: async () => {
+        const cacheKey = `${SNAPSHOT_CACHE_PREFIX}tax_${activeBusinessId}_${timeframe}`
+        try {
+          const res = await api.get<TaxSummary>('/analytics/tax', { params: { timeframe: backendTimeframe(timeframe) } })
+          AsyncStorage.setItem(cacheKey, JSON.stringify(res.data)).catch(() => {})
+          return res.data
+        } catch (e) {
+          const cached = await AsyncStorage.getItem(cacheKey)
+          if (cached) { try { return JSON.parse(cached) as TaxSummary } catch {} }
+          throw e
+        }
+      },
+      enabled,
+      staleTime: 60 * 1000,
+      retry: (count, err: any) => (err?.response?.status === 403 ? false : count < 2),
+    })
+
   const defaultTimeframe: Timeframe = 'week'
   // Build 7-day overview from the same canonical snapshot — fixes "single bar" bug where overview previously showed one aggregated "This week" bar.
   const _revenueWeekForOverview = getRevenueAnalytics('week')
@@ -464,6 +497,7 @@ export const useAnalytics = () => {
     getProfitAnalytics,
     getCategoryAnalytics,
     getCustomerAnalytics,
+    getTaxSummary,
     weeklyOverview,
     isOverviewLoading,
     // keep legacy sales summary query for backward compat but not used for overview anymore

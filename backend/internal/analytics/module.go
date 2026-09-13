@@ -56,6 +56,7 @@ func (m *Module) enqueue(businessID uuid.UUID, tf Timeframe) error {
 func (m *Module) RegisterRoutes(r chi.Router) {
 	h := Handler{svc: m.svc, enqueue: m.enqueue}
 	r.Get("/", h.Get)
+	r.Get("/tax", h.TaxSummary)
 	r.Get("/ai-insights", h.AIInsights)
 	r.Post("/refresh", h.Refresh)
 }
