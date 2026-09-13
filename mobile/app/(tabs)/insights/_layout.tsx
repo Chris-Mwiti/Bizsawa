@@ -5,11 +5,12 @@ import { useBusinessContext } from '../../../contexts/BusinessContext'
 import { Tabs } from 'tamagui'
 import { BarChart3 } from 'lucide-react-native'
 
-type TabKey = 'overview' | 'analytics' | 'expenses'
+type TabKey = 'overview' | 'analytics' | 'tax' | 'expenses'
 
 const TABS: { key: TabKey; label: string; href: string }[] = [
   { key: 'overview', label: 'Overview', href: '/(tabs)/insights/overview' },
   { key: 'analytics', label: 'Analytics', href: '/(tabs)/insights/analytics' },
+  { key: 'tax', label: 'Tax', href: '/(tabs)/insights/tax' },
   { key: 'expenses', label: 'Expenses', href: '/(tabs)/insights/expenses' },
 ]
 
@@ -20,6 +21,8 @@ export default function InsightsLayout() {
 
   const active: TabKey = pathname.includes('/analytics')
     ? 'analytics'
+    : pathname.includes('/tax')
+      ? 'tax'
     : pathname.includes('/expenses')
       ? 'expenses'
       : 'overview'
@@ -52,6 +55,8 @@ export default function InsightsLayout() {
               <Text className='text-lg font-bold tracking-tight text-gray-900 mt-1'>
                 {active === 'analytics'
                   ? 'Analytics'
+                  : active === 'tax'
+                    ? 'Tax'
                   : active === 'expenses'
                     ? 'Expenses'
                     : 'Overview'}
@@ -62,6 +67,8 @@ export default function InsightsLayout() {
               >
                 {active === 'analytics'
                   ? 'Revenue, profit & segments • tap timeframe to filter'
+                  : active === 'tax'
+                    ? 'VAT 16% • products, categories & KRA payable'
                   : active === 'expenses'
                     ? 'Spend by category • add & delete'
                     : 'Weekly growth & cash flow • at a glance'}
