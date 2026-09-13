@@ -144,7 +144,8 @@ export const useInvoices = () => {
         (s, l) => s + toNumber(l.unitPrice) * toNumber(l.quantity),
         0,
       )
-      const total = subtotal
+      const tax = Math.round(subtotal * 0.16 * 100) / 100
+      const total = Math.round((subtotal + tax) * 100) / 100
       const dueAt = data.dueAt
         ? toMillis(data.dueAt)
         : nowMillis() + 7 * 86400000
@@ -157,7 +158,7 @@ export const useInvoices = () => {
           rec.invoiceNumber = number
           rec.status = 'draft'
           rec.subtotal = toDecimalString(subtotal)
-          rec.taxAmount = toDecimalString(0)
+          rec.taxAmount = toDecimalString(tax)
           rec.total = toDecimalString(total)
           rec.amountPaid = toDecimalString(0)
           rec.amountDue = toDecimalString(total)

@@ -534,6 +534,15 @@ func (s *Service) emitCommand(ctx context.Context, tx *sql.Tx, cmd *PaymentComma
 		"currency":   cmd.Currency,
 		"phone":      cmd.Phone,
 	}
+	// Propagate customerId from stored JSON payload (for FIFO settlement)
+	if len(cmd.Payload) > 0 {
+		var p map[string]any
+		if err := json.Unmarshal(cmd.Payload, &p); err == nil {
+			if cid, ok := p["customerId"]; ok {
+				payload["customerId"] = cid
+			}
+		}
+	}
 
 	maps.Copy(payload, extras)
 

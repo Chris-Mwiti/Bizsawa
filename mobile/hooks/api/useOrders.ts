@@ -155,10 +155,13 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
     mutationFn: async (data: CreateOrderInput) => {
       const req = toCreateOrderRequest(data)
       const id = uuidv4()
-      const total = req.lines.reduce(
+      const subtotal = req.lines.reduce(
         (s, l) => s + toNumber(l.unitPrice) * toNumber(l.quantity),
         0,
       )
+      // Backend tax is 16% — mirror exactly to avoid sync_version conflicts (§ tax divergence fix)
+      const tax = Math.round(subtotal * 0.16 * 100) / 100
+      const total = Math.round((subtotal + tax) * 100) / 100
       await (database as any).write(async () => {
         const col: any = (database as any).get('orders')
         await col.create((rec: any) => {
@@ -166,8 +169,8 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
           rec.businessId = bid
           rec.customerId = req.customerId || null
           rec.status = 'draft'
-          rec.subtotal = toDecimalString(total)
-          rec.taxAmount = toDecimalString(0)
+          rec.subtotal = toDecimalString(subtotal)
+          rec.taxAmount = toDecimalString(tax)
           rec.total = toDecimalString(total)
           rec.paymentMethod = req.paymentMethod || 'cash'
           rec.paymentStatus = 'pending'
@@ -211,9 +214,113 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
       if (newStatus === null && safeData?.type !== undefined) {
         throw new Error('Invalid payload: `type` is not a valid order field — did you mean `status`?')
       }
-      // Drop non-order fields like customerPhone that were previously sent and caused silent sync drop
+      const customerPhoneForConfirm = safeData?.customerPhone as string | undefined
       if ('customerPhone' in safeData) delete safeData.customerPhone
+
+      // Online-first: try REST endpoints directly when connected so backend transactional
+      // Confirm → invoice + inventory + payment init runs on server (fixes sync bypass)
+      if (newStatus && ['confirmed', 'fulfilled', 'cancelled'].includes(newStatus)) {
+        try {
+          const { default: NetInfo } = await import('@react-native-community/netinfo')
+          const net: any = await NetInfo.fetch()
+          if (net.isConnected) {
+            const { generateIdempotencyKey, clearIdempotencyKey, OperationId } = await import('../../lib/idempotency')
+            if (newStatus === 'confirmed') {
+              const opId = OperationId.confirmOrder(id)
+              const key = await generateIdempotencyKey(opId)
+              // Resolve phone locally if not provided
+              let phone = customerPhoneForConfirm
+              if (!phone) {
+                try {
+                  const rec: any = await (database as any).get('orders').find(id)
+                  const cid = rec.customerId || rec._raw?.customer_id
+                  if (cid) {
+                    const cRec: any = await (database as any).get('customers').find(cid).catch(() => null)
+                    phone = cRec?.phone || cRec?._raw?.phone
+                  }
+                } catch {}
+              }
+              const res = await api.post(`/orders/${id}/confirm`, phone ? { customerPhone: phone } : {}, { headers: { 'X-Idempotency-Key': key } })
+              await clearIdempotencyKey(opId)
+              // Mirror server state locally: update order status + invoice will arrive via pull, but optimistically mark synced
+              try {
+                await (database as any).write(async () => {
+                  const rec: any = await (database as any).get('orders').find(id)
+                  await rec.update((r: any) => {
+                    r.status = 'confirmed'
+                    r.paymentStatus = 'confirmed'
+                    if (!r.confirmedAt) try { r.confirmedAt = Date.now() } catch { try { r._raw.confirmed_at = Date.now() } catch {} }
+                    // heal totals from server if diverged
+                    const srv: any = (res.data as any)?.data || res.data
+                    if (srv?.total) r.total = toDecimalString(srv.total)
+                    if (srv?.subtotal) r.subtotal = toDecimalString(srv.subtotal)
+                    if (srv?.taxAmount || srv?.tax_amount) r.taxAmount = toDecimalString(srv.taxAmount || srv.tax_amount)
+                    r._raw._status = 'synced'
+                    r._raw._changed = ''
+                  })
+                })
+              } catch {}
+              // Trigger pull to fetch server-created invoice
+              import('../../sync/client').then((m) => m.syncNow().catch(() => {}))
+              queryClient.invalidateQueries({ queryKey: ['orders'] })
+              queryClient.invalidateQueries({ queryKey: ['invoices'] })
+              return res.data as any
+            }
+            if (newStatus === 'fulfilled') {
+              const opId = OperationId.fulfillOrder(id)
+              const key = await generateIdempotencyKey(opId)
+              const res = await api.post(`/orders/${id}/fulfill`, {}, { headers: { 'X-Idempotency-Key': key } })
+              await clearIdempotencyKey(opId)
+              try {
+                await (database as any).write(async () => {
+                  const rec: any = await (database as any).get('orders').find(id)
+                  await rec.update((r: any) => {
+                    r.status = 'fulfilled'
+                    r.paymentStatus = 'fulfilled'
+                    if (!r.fulfilledAt) try { r.fulfilledAt = Date.now() } catch { try { r._raw.fulfilled_at = Date.now() } catch {} }
+                    r._raw._status = 'synced'
+                    r._raw._changed = ''
+                  })
+                })
+              } catch {}
+              import('../../sync/client').then((m) => m.syncNow().catch(() => {}))
+              queryClient.invalidateQueries({ queryKey: ['orders'] })
+              queryClient.invalidateQueries({ queryKey: ['sales'] })
+              return res.data as any
+            }
+            if (newStatus === 'cancelled') {
+              const opId = OperationId.cancelOrder(id)
+              const key = await generateIdempotencyKey(opId)
+              const res = await api.post(`/orders/${id}/cancel`, {}, { headers: { 'X-Idempotency-Key': key } })
+              await clearIdempotencyKey(opId)
+              try {
+                await (database as any).write(async () => {
+                  const rec: any = await (database as any).get('orders').find(id)
+                  await rec.update((r: any) => { r.status = 'cancelled'; r._raw._status = 'synced'; r._raw._changed = '' })
+                })
+              } catch {}
+              queryClient.invalidateQueries({ queryKey: ['orders'] })
+              return res.data as any
+            }
+          }
+        } catch (e: any) {
+          // Fall through to offline path if REST fails (network, 5xx, not found)
+          const status = e?.response?.status
+          if (status && status >= 400 && status < 500 && status !== 408 && status !== 429) {
+            // For 4xx (e.g. already confirmed 409) surface error but also heal local
+            if (status === 409 || status === 404) {
+              console.warn('[Orders] REST confirm failed with', status, e?.response?.data)
+              // fall through to local update to keep UI consistent
+            } else {
+              throw e
+            }
+          }
+          console.warn('[Orders] REST update failed — falling back to local Watermelon', e?.message)
+        }
+      }
+
       let shouldCreateSale = false
+      let shouldCreateInvoice = false
       await (database as any).write(async () => {
         let rec: any
         try {
@@ -239,8 +346,62 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
               try { r.paymentStatus = newStatus === 'fulfilled' ? 'fulfilled' : 'confirmed' } catch {}
             }
           })
+          if (newStatus === 'confirmed' && prevStatus !== 'confirmed') {
+            shouldCreateInvoice = true
+          }
           if (newStatus === 'fulfilled' && prevStatus !== 'fulfilled') {
             shouldCreateSale = true
+          }
+        }
+        // Offline confirm mirrors backend Confirm → CreateInvoice: create local invoice immediately
+        if (shouldCreateInvoice) {
+          const invoicesCol: any = (database as any).get('invoices')
+          const existingByOrder: any[] = await invoicesCol.query(Q.where('order_id', id)).fetch().catch(() => [] as any[])
+          if (existingByOrder.length === 0) {
+            const orderLinesCol: any = (database as any).get('order_lines')
+            const lines: any[] = await orderLinesCol.query(Q.where('order_id', id)).fetch()
+            const invoiceId = uuidv4()
+            const invoiceNumber = `INV-${invoiceId.slice(0, 6).toUpperCase()}`
+            const subtotal = toNumber(rec.subtotal ?? rec._raw?.subtotal ?? '0')
+            const tax = toNumber(rec.taxAmount ?? rec._raw?.tax_amount ?? '0')
+            const total = toNumber(rec.total ?? rec._raw?.total ?? '0')
+            const dueAt = Date.now() + 5 * 86400000
+            await invoicesCol.create((inv: any) => {
+              inv._raw.id = invoiceId
+              inv.businessId = bid
+              inv.customerId = rec.customerId || rec._raw?.customer_id || null
+              inv.orderId = id
+              inv.invoiceNumber = invoiceNumber
+              inv.status = 'draft'
+              inv.subtotal = toDecimalString(subtotal || total / 1.16 || 0)
+              inv.taxAmount = toDecimalString(tax)
+              inv.total = toDecimalString(total)
+              inv.amountPaid = toDecimalString(0)
+              inv.amountDue = toDecimalString(total)
+              inv.currency = 'KES'
+              inv.notes = `Invoice for order ${id.slice(0, 8)}`
+              inv.dueAt = dueAt
+              inv.syncVersion = 1
+            })
+            const invoiceLinesCol: any = (database as any).get('invoice_lines')
+            for (const ol of lines) {
+              const prodId = ol.productId || ol._raw?.product_id
+              const qty = toDecimalString(ol.quantity ?? ol._raw?.quantity)
+              const price = toDecimalString(ol.unitPrice ?? ol._raw?.unit_price)
+              const lineTotal = toDecimalString(toNumber(qty) * toNumber(price))
+              const desc = prodId ? `Product ${String(prodId).slice(0, 6)}` : 'Item'
+              await invoiceLinesCol.create((il: any) => {
+                il._raw.id = uuidv4()
+                il.businessId = bid
+                il.invoiceId = invoiceId
+                il.productId = prodId || null
+                il.description = desc
+                il.quantity = qty
+                il.unitPrice = price
+                il.lineTotal = lineTotal
+                il.syncVersion = 1
+              })
+            }
           }
         }
         // Offline fulfillment mirrors backend FulfillOrder -> CreateFromOrder: create sale + sale_lines locally
@@ -299,6 +460,7 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
       import('../../sync/client').then((m) => m.syncNow().catch(() => {}))
       queryClient.invalidateQueries({ queryKey: ['orders'] })
       queryClient.invalidateQueries({ queryKey: ['sales'] })
+      queryClient.invalidateQueries({ queryKey: ['invoices'] })
       return { id } as any
     },
   })

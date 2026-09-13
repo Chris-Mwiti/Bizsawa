@@ -2,6 +2,7 @@ package analytics
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -297,6 +298,126 @@ func expectedBuckets(w window, tf Timeframe, now time.Time) []string {
 	}
 	return out
 }
+
+// AIInsights is the structured JSON rendered by mobile AI Insights cards.
+// Frontend expects {summary, trends:[{title,description,sentiment}], recommendations:[{action,reason,priority}]}.
+type AIInsights struct {
+	Summary         string           `json:"summary"`
+	Trends          []AITrend         `json:"trends"`
+	Recommendations []AIRecommendation `json:"recommendations"`
+	GeneratedAt     time.Time        `json:"generated_at"`
+	Timeframe       Timeframe        `json:"timeframe"`
+}
+
+type AITrend struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Sentiment   string `json:"sentiment"` // positive|negative|neutral
+}
+
+type AIRecommendation struct {
+	Action   string `json:"action"`
+	Reason   string `json:"reason"`
+	Priority string `json:"priority"` // High|Medium|Low
+}
+
+// GetAIInsights builds structured insights from the snapshot. No LLM required for v0;
+// if OPENAI_API_KEY is set, a future iteration can call callLLMSynthesis with the snapshot JSON.
+func (s *Service) GetAIInsights(ctx context.Context, businessID uuid.UUID, tf Timeframe) (*AIInsights, error) {
+	if !tf.Valid() {
+		tf = TimeframeMonth
+	}
+	snap, err := s.Get(ctx, businessID, tf)
+	if err != nil {
+		return nil, err
+	}
+	// Build trends from snapshot
+	trends := []AITrend{}
+	recs := []AIRecommendation{}
+
+	// Revenue trend
+	if snap.Revenue != nil {
+		total := snap.Revenue.TotalRevenue
+		if total.IsZero() && snap.Revenue.Transactions == 0 {
+			trends = append(trends, AITrend{Title: "No revenue yet", Description: "No sales recorded in this period. Record a sale to see trends.", Sentiment: "neutral"})
+			recs = append(recs, AIRecommendation{Action: "Record your first sale", Reason: "Sales drive all insights — add a product and create a sale", Priority: "High"})
+		} else {
+			trends = append(trends, AITrend{Title: "Revenue tracked", Description: "KES " + total.String() + " across " + itoa(snap.Revenue.Transactions) + " transactions in this " + string(tf), Sentiment: "positive"})
+			if snap.Revenue.Transactions < 5 {
+				recs = append(recs, AIRecommendation{Action: "Increase sales frequency", Reason: "Only " + itoa(snap.Revenue.Transactions) + " transactions — more data improves accuracy", Priority: "Medium"})
+			}
+		}
+	}
+	// Profit
+	if snap.Profit != nil && !snap.Profit.TotalProfit.IsZero() {
+		if snap.Profit.AvgMargin < 10 {
+			trends = append(trends, AITrend{Title: "Thin margin", Description: "Average margin " + formatFloat(snap.Profit.AvgMargin) + "% — costs close to revenue", Sentiment: "negative"})
+			recs = append(recs, AIRecommendation{Action: "Review pricing and costs", Reason: "Margin below 10% — consider raising prices or negotiating supplier costs", Priority: "High"})
+		} else if snap.Profit.AvgMargin > 30 {
+			trends = append(trends, AITrend{Title: "Healthy margin", Description: "Average margin " + formatFloat(snap.Profit.AvgMargin) + "% — strong profitability", Sentiment: "positive"})
+		}
+	}
+	// Categories
+	if len(snap.Categories) > 0 {
+		top := snap.Categories[0]
+		pct := 0.0
+		// Find top category percentage via TopProducts or Categories
+		if len(top.Name) > 0 {
+			trends = append(trends, AITrend{Title: "Top category: " + top.Name, Description: "Leading revenue driver this " + string(tf), Sentiment: "neutral"})
+		}
+		_ = pct
+		hasUncat := false
+		for _, c := range snap.Categories {
+			if c.Name == "Uncategorized" {
+				hasUncat = true
+				break
+			}
+		}
+		if hasUncat {
+			recs = append(recs, AIRecommendation{Action: "Categorize products", Reason: "Uncategorized revenue hides which products drive sales", Priority: "Medium"})
+		}
+	}
+	// Low stock via TopProducts
+	if len(snap.TopProducts) == 0 {
+		recs = append(recs, AIRecommendation{Action: "Add products and stock", Reason: "No top products — inventory may be empty", Priority: "High"})
+	}
+	// Expenses
+	if snap.Expenses != nil && len(snap.Expenses) > 0 {
+		// Find largest expense category
+		var maxCat string
+		var maxAmt decimal.Decimal
+		for _, e := range snap.Expenses {
+			if e.Amount.GreaterThan(maxAmt) {
+				maxAmt = e.Amount
+				maxCat = e.Category
+			}
+		}
+		if maxCat != "" {
+			trends = append(trends, AITrend{Title: "Largest expense: " + maxCat, Description: "KES " + maxAmt.String() + " in this period", Sentiment: "negative"})
+			recs = append(recs, AIRecommendation{Action: "Audit " + maxCat + " spend", Reason: "Biggest outflow — check if it can be trimmed", Priority: "Medium"})
+		}
+	}
+	if len(trends) == 0 {
+		trends = append(trends, AITrend{Title: "Steady", Description: "No strong trends in this window — try a longer timeframe (month/year).", Sentiment: "neutral"})
+	}
+	if len(recs) == 0 {
+		recs = append(recs, AIRecommendation{Action: "Review weekly", Reason: "Check back after more sales — insights improve with data", Priority: "Low"})
+	}
+	if len(trends) > 4 {
+		trends = trends[:4]
+	}
+	if len(recs) > 3 {
+		recs = recs[:3]
+	}
+	summary := "In this " + string(tf) + ", revenue KES " + snap.Revenue.TotalRevenue.String() + " with margin " + formatFloat(snap.Profit.AvgMargin) + "%. " + recs[0].Action + "."
+	if len(snap.Categories) > 1 {
+		summary = "Revenue KES " + snap.Revenue.TotalRevenue.String() + " across " + itoa(len(snap.Categories)) + " categories. Top: " + snap.Categories[0].Name + ". " + recs[0].Action + "."
+	}
+	return &AIInsights{Summary: summary, Trends: trends, Recommendations: recs, GeneratedAt: snap.GeneratedAt, Timeframe: tf}, nil
+}
+
+func itoa(n int) string { return fmt.Sprintf("%d", n) }
+func formatFloat(f float64) string { return fmt.Sprintf("%.1f", f) }
 
 // Get returns the latest pre-computed snapshot, computing it on-demand if
 // none exists yet or if stale (TTL). Stale snapshots are recomputed synchronously

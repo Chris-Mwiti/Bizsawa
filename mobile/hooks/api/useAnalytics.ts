@@ -406,20 +406,34 @@ export const useAnalytics = () => {
     })
 
   const getAIInsights = useQuery<AIInsights>({
-    queryKey: ['analytics', 'ai-insights'],
-    queryFn: async () => ({
-      summary:
-        'AI insights are unavailable until the backend exposes an AI endpoint.',
-      trends: [],
-      recommendations: [],
-    }),
-    staleTime: Infinity,
+    queryKey: ['analytics', 'ai-insights', activeBusinessId],
+    queryFn: async () => {
+      const cacheKey = `${SNAPSHOT_CACHE_PREFIX}ai_${activeBusinessId}`
+      try {
+        const res = await api.get<AIInsights>('/analytics/ai-insights', {
+          params: { timeframe: 'month' },
+        })
+        AsyncStorage.setItem(cacheKey, JSON.stringify(res.data)).catch(() => {})
+        return res.data
+      } catch (e) {
+        const cached = await AsyncStorage.getItem(cacheKey)
+        if (cached) {
+          try {
+            return JSON.parse(cached) as AIInsights
+          } catch {}
+        }
+        throw e
+      }
+    },
+    enabled,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
+    retry: (count, err: any) => (err?.response?.status === 403 ? false : count < 2),
   })
 
   const defaultTimeframe: Timeframe = 'week'
   // Build 7-day overview from the same canonical snapshot — fixes "single bar" bug where overview previously showed one aggregated "This week" bar.
   const _revenueWeekForOverview = getRevenueAnalytics('week')
-  const _profitWeekForOverview = getProfitAnalytics('week')
   const weeklyOverview: WeeklyOverview[] = (() => {
     const data = (_revenueWeekForOverview.data as any)?.data as Array<{ date: string; revenue: number; transactions: number }> | undefined
     if (data && data.length) {

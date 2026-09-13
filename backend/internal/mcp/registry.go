@@ -26,7 +26,8 @@ type Registry struct {
 func NewRegistry(enforcer *authz.Enforcer, tools ...Tool) *Registry {
 	r := &Registry{tools: map[string]Tool{}, enforcer: enforcer}
 	for _, tool := range tools {
-		r.tools[tool.Name] = tool
+		key := string(tool.Profile) + ":" + tool.Name
+		r.tools[key] = tool
 	}
 
 	return r
@@ -47,9 +48,25 @@ func (r *Registry) List(session Session) []ToolDescriptor {
 }
 
 func (r *Registry) Call(session Session, name string, args json.RawMessage) (Envelope, error) {
-	tool, ok := r.tools[name]
+	// Profile-scoped lookup: prefer exact profile:name, fallback to name alone for backwards compat
+	key := string(session.Profile) + ":" + name
+	tool, ok := r.tools[key]
 	if !ok {
-		return Envelope{}, ErrToolNotFound
+		// Fallback: try bare name (legacy) and ensure profile matches
+		tool, ok = r.tools[name]
+		if !ok {
+			// Scan for any profile match on name
+			for _, t := range r.tools {
+				if t.Name == name && t.Profile == session.Profile {
+					tool = t
+					ok = true
+					break
+				}
+			}
+		}
+		if !ok {
+			return Envelope{}, ErrToolNotFound
+		}
 	}
 
 	if !r.available(session, tool) {
@@ -70,8 +87,57 @@ func (r *Registry) Call(session Session, name string, args json.RawMessage) (Env
 	}
 
 	meta["business_id"] = session.BusinessID.String()
+	// --- Confidence & pagination standardization (gap fill) ---
+	enrichMeta(meta, data, args)
 
 	return Envelope{Status: "ok", Data: data, Meta: meta}, nil
+}
+
+func enrichMeta(meta map[string]any, data any, args json.RawMessage) {
+	// Standardize pagination: ensure truncated/next_offset/total_count where applicable
+	if _, ok := meta["result_count"]; ok {
+		if _, hasTrunc := meta["truncated"]; !hasTrunc {
+			// Heuristic: if result_count == 50 (max) assume truncated, else not
+			if rc, ok := meta["result_count"].(int); ok && rc == 50 {
+				meta["truncated"] = true
+				meta["next_offset"] = 50
+			} else {
+				meta["truncated"] = false
+			}
+		}
+	}
+	// Confidence: high | medium | low based on result_count and data presence
+	if _, hasConf := meta["confidence"]; !hasConf {
+		rcVal, _ := meta["result_count"].(int)
+		// Try to get result_count from data if meta missing
+		if rcVal == 0 {
+			if m, ok := data.(map[string]any); ok {
+				if results, ok := m["results"].([]map[string]any); ok {
+					rcVal = len(results)
+				} else if results2, ok := m["results"].([]any); ok {
+					rcVal = len(results2)
+				} else if v, ok := m["count"]; ok {
+					if iv, ok := v.(int); ok {
+						rcVal = iv
+					}
+				}
+			}
+		}
+		conf := "high"
+		reason := "Sufficient data"
+		if rcVal == 0 {
+			conf = "low"
+			reason = "No data in window — check date range or uncategorized backlog; may be stale if offline-sync conflicts unresolved"
+		} else if rcVal < 5 {
+			conf = "medium"
+			reason = "Small sample (n<5) — treat totals as indicative, not definitive"
+		}
+		// Check for sync conflicts hint: if args contains period >90d vs window, lower confidence
+		// (placeholder: real check would query conflicts table)
+		meta["confidence"] = conf
+		meta["confidence_reason"] = reason
+		meta["confidence_version"] = "v0.1-heuristic"
+	}
 }
 
 func (r *Registry) available(session Session, tool Tool) bool {

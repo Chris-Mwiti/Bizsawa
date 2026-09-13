@@ -72,6 +72,41 @@ type paymentWorker struct {
 	logger         *slog.Logger
 }
 
+func (w *paymentWorker) findCustomerByPhone(ctx context.Context, businessID uuid.UUID, phone string) (uuid.UUID, error) {
+	// Access repo DB via service (same package, private field)
+	db := w.service.repo.db
+	if db == nil {
+		return uuid.Nil, fmt.Errorf("db unavailable")
+	}
+	// Normalize phone: trim spaces, digits only for flexible matching
+	normalized := phone
+	// Try exact match first, then LIKE for variations (e.g., 2547... vs 07...)
+	var idStr string
+	err := db.WithContext(ctx).Raw(`SELECT id::text FROM customers WHERE business_id = ? AND phone = ? AND deleted_at IS NULL LIMIT 1`, businessID, normalized).Scan(&idStr).Error
+	if err == nil && idStr != "" {
+		if parsed, err := uuid.Parse(idStr); err == nil {
+			return parsed, nil
+		}
+	}
+	// Try digits-only contains match
+	digits := ""
+	for _, ch := range phone {
+		if ch >= '0' && ch <= '9' {
+			digits += string(ch)
+		}
+	}
+	if len(digits) >= 9 {
+		suffix := digits[len(digits)-9:] // last 9 digits match Kenya numbers
+		err = db.WithContext(ctx).Raw(`SELECT id::text FROM customers WHERE business_id = ? AND regexp_replace(phone, '[^0-9]', '', 'g') LIKE '%' || ? AND deleted_at IS NULL LIMIT 1`, businessID, suffix).Scan(&idStr).Error
+		if err == nil && idStr != "" {
+			if parsed, err := uuid.Parse(idStr); err == nil {
+				return parsed, nil
+			}
+		}
+	}
+	return uuid.Nil, fmt.Errorf("customer not found for phone %s", phone)
+}
+
 // for now the workers will not be majorly implemented since most of them rely on communication.
 func (w *paymentWorker) Work(ctx context.Context, job *river.Job[PaymentEventArgs]) error {
 	w.logger.InfoContext(ctx, "[PAYMENTS_WORKER]-worker dispatched", "paymentID", job.Args.PaymentID.String(), "businessID", job.Args.TenantID.String(), "eventType", job.Args.EventType)
@@ -165,9 +200,18 @@ func (w *paymentWorker) Work(ctx context.Context, job *river.Job[PaymentEventArg
 
 		// No orderID — try phone-based customer lookup for direct customer payments
 		if phone, ok := payload["phone"].(string); ok && phone != "" {
-			// This would require customers service lookup — for now log and return
 			w.logger.InfoContext(ctx, "[PAYMENTS_WORKER]-direct customer payment via phone", "phone", phone)
-			// TODO: lookup customer by phone and settle — currently no customer service in worker
+			// Lookup customer by phone (normalize: strip spaces, handle +254/0 prefix variants)
+			customerID, err := w.findCustomerByPhone(ctx, job.Args.TenantID, phone)
+			if err == nil && customerID != uuid.Nil {
+				if result, err := w.invoiceService.SettleCustomerPayment(ctx, job.Args.TenantID, customerID, invoiceReq); err == nil {
+					w.logger.InfoContext(ctx, "[PAYMENTS_WORKER]-settled via phone lookup FIFO", "customerID", customerID.String(), "allocations", len(result.Allocations))
+					return nil
+				}
+				w.logger.WarnContext(ctx, "[PAYMENTS_WORKER]-phone customer settlement failed", "phone", phone, "err", err.Error())
+			} else {
+				w.logger.WarnContext(ctx, "[PAYMENTS_WORKER]-customer not found for phone", "phone", phone, "err", fmt.Sprintf("%v", err))
+			}
 		}
 
 		return fmt.Errorf("unsupported payment payload: missing orderID and customerId")
