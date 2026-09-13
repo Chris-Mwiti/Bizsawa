@@ -37,6 +37,26 @@ func (h Handler) Get(w http.ResponseWriter, r *http.Request) {
 	sharedhttp.JSON(w, http.StatusOK, snap)
 }
 
+// AIInsights returns structured JSON for mobile AI Insights cards.
+// Frontend expects {summary, trends:[{title,description,sentiment}], recommendations:[{action,reason,priority}]} — not markdown.
+func (h Handler) AIInsights(w http.ResponseWriter, r *http.Request) {
+	bid, ok := middleware.BusinessIDFromCtx(r.Context())
+	if !ok {
+		sharedhttp.Error(w, errBusinessRequired())
+		return
+	}
+	tf := Timeframe(r.URL.Query().Get("timeframe"))
+	if !tf.Valid() {
+		tf = TimeframeMonth
+	}
+	insights, err := h.svc.GetAIInsights(r.Context(), bid, tf)
+	if err != nil {
+		sharedhttp.Error(w, err)
+		return
+	}
+	sharedhttp.JSON(w, http.StatusOK, insights)
+}
+
 // Refresh enqueues a background recomputation job and returns 202.
 func (h Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	bid, ok := middleware.BusinessIDFromCtx(r.Context())
