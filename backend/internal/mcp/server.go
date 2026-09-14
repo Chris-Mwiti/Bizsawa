@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -30,6 +31,7 @@ func (s *Server) Router() http.Handler {
 	r := chi.NewRouter()
 	r.Use(chimiddleware.RequestID)
 	r.Use(chimiddleware.RealIP)
+	r.Use(chimiddleware.Logger)
 	r.Use(chimiddleware.Recoverer)
 	r.Use(chimiddleware.Timeout(60 * time.Second))
 
@@ -100,6 +102,7 @@ func (s *Server) handleProfile(profile Profile) http.HandlerFunc {
 }
 
 func (s *Server) dispatch(r *http.Request, session Session, req RPCRequest) RPCResponse {
+	slog.Info("mcp dispatch", "method", req.Method, "profile", session.Profile, "business", session.BusinessID.String(), "user", session.UserID.String(), "id", req.ID)
 	resp := RPCResponse{JSONRPC: "2.0", ID: req.ID}
 
 	switch req.Method {
@@ -129,6 +132,7 @@ func (s *Server) dispatch(r *http.Request, session Session, req RPCRequest) RPCR
 		envelope.Meta["latency_ms"] = latency
 
 		if err != nil {
+			slog.Error("mcp tool call failed", "tool", call.Name, "profile", session.Profile, "err", err, "latency_ms", latency)
 			code, payload := ErrorPayload(err)
 			if errors.Is(err, ErrToolNotFound) {
 				payload.Message = "Not found: " + payload.Message
@@ -143,6 +147,7 @@ func (s *Server) dispatch(r *http.Request, session Session, req RPCRequest) RPCR
 			return resp
 		}
 
+		slog.Info("mcp tool call", "tool", call.Name, "profile", session.Profile, "latency_ms", latency)
 		body, _ := json.Marshal(envelope)
 		resp.Result = CallResponse{Content: []ContentBlock{{Type: "text", Text: string(body)}}}
 	default:
