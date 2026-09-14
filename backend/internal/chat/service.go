@@ -207,6 +207,8 @@ func truncate(s string, max int) string {
 }
 
 // heuristicChat maintains UX without API key, still exercises MCP tool filtering and monitoring (Monitoring_MCP.md).
+// Now renders plain-language, layered answer (headline → driving data → next step) per systemPrompt guidelines,
+// never dumps raw JSON to the end user.
 func (s *Service) heuristicChat(ctx context.Context, session mcp.Session, msg string, messages []ChatMessage, descriptors []mcp.ToolDescriptor, lang string) (ChatResponse, error) {
 	lower := strings.ToLower(msg)
 
@@ -219,12 +221,11 @@ func (s *Service) heuristicChat(ctx context.Context, session mcp.Session, msg st
 		called = append(called, name)
 
 		if err != nil {
-			parts = append(parts, fmt.Sprintf("- %s: error %v", name, err))
+			parts = append(parts, formatHeuristicError(name, err, lang))
 			return
 		}
 
-		b, _ := json.MarshalIndent(env.Data, "", "  ")
-		parts = append(parts, fmt.Sprintf("- %s:\n```json\n%s\n```", name, truncate(string(b), 1200)))
+		parts = append(parts, formatHeuristicData(name, env.Data, lang))
 	}
 
 	switch {
@@ -258,11 +259,16 @@ func (s *Service) heuristicChat(ctx context.Context, session mcp.Session, msg st
 	}
 
 	if len(parts) == 0 {
-		// fallback to knowledge RAG
+		// fallback to knowledge RAG — render as plain sentence, no JSON
 		env, _ := s.registry.Call(session, "search_business_knowledge", json.RawMessage(fmt.Sprintf(`{"query":%q,"max_results":3}`, msg)))
 		if env.Data != nil {
-			b, _ := json.Marshal(env.Data)
-			parts = append(parts, fmt.Sprintf("Knowledge: %s", truncate(string(b), 800)))
+			if m, ok := env.Data.(map[string]any); ok {
+				if results, ok := m["results"].([]any); ok && len(results) > 0 {
+					parts = append(parts, langMsg(lang, "knowledge_found"))
+				} else {
+					parts = append(parts, langMsg(lang, "knowledge_empty"))
+				}
+			}
 		}
 
 		if len(parts) == 0 {
@@ -279,30 +285,218 @@ func (s *Service) heuristicChat(ctx context.Context, session mcp.Session, msg st
 		}
 	}
 
-	intro := langMsg(lang, "intro")
+	// Layered structure per systemPromptEN: headline → driving data → next step + caveat
+	headline := buildHeuristicHeadline(lower, parts, lang)
 	body := strings.Join(parts, "\n\n")
-	answer := fmt.Sprintf("%s\n\n%s\n\n%s", intro, body, langMsg(lang, "outro"))
+	caveat := ""
+	if len(called) > 0 {
+		caveat = langMsg(lang, "caveat")
+	}
+	answer := fmt.Sprintf("%s\n\n%s\n\n%s", headline, body, caveat)
+	if strings.TrimSpace(caveat) == "" {
+		answer = fmt.Sprintf("%s\n\n%s\n\n%s", headline, body, langMsg(lang, "outro"))
+	} else {
+		answer = fmt.Sprintf("%s\n\n%s\n\n%s\n\n%s", headline, body, langMsg(lang, "outro"), caveat)
+	}
 
 	return ChatResponse{Response: answer, History: append(append([]ChatMessage{}, messages[1:]...), ChatMessage{Role: "assistant", Content: answer}), Success: true, BusinessID: session.BusinessID.String()}, nil
 }
 
 func langMsg(lang, key string) string {
 	en := map[string]string{
-		"intro":   "Here is what I found from your business data (via MCP tools):",
-		"outro":   "Need a deeper dive? Ask e.g. 'Show top products last week' or 'Which customers owe invoices?'",
-		"no_tool": "I can help with sales, stock, expenses, customers, invoices. Available tools: %s",
+		"intro":           "Here is what I found from your business data (via MCP tools):",
+		"outro":           "Need a deeper dive? Ask e.g. 'Show top products last week' or 'Which customers owe invoices?'",
+		"no_tool":         "I can help with sales, stock, expenses, customers, invoices. Available tools: %s",
+		"knowledge_found": "I checked your business knowledge base and found relevant guidance for your question.",
+		"knowledge_empty": "I didn't find a direct knowledge article for this, but I can still help with your sales, stock, or invoice data.",
+		"caveat":          "Note: This summary is based on the data returned right now. If the period is short, treat it as a snapshot, not a trend — confirm any tax decision with KRA/your accountant.",
 	}
 	sw := map[string]string{
-		"intro":   "Hapa ni muhtasari kutoka data ya biashara yako (kupitia zana za MCP):",
-		"outro":   "Unahitaji uchambuzi zaidi? Uliza 'Onyesha bidhaa zinazouza sana wiki iliyopita'",
-		"no_tool": "Naweza kusaidia na mauzo, akiba, gharama, wateja, ankara. Zana: %s",
+		"intro":           "Hapa ni muhtasari kutoka data ya biashara yako (kupitia zana za MCP):",
+		"outro":           "Unahitaji uchambuzi zaidi? Uliza 'Onyesha bidhaa zinazouza sana wiki iliyopita'",
+		"no_tool":         "Naweza kusaidia na mauzo, akiba, gharama, wateja, ankara. Zana: %s",
+		"knowledge_found": "Nimeangalia maktaba ya maarifa ya biashara yako na nimepata mwongozo unaohusiana.",
+		"knowledge_empty": "Sikupata makala ya moja kwa moja, lakini naweza kusaidia na data ya mauzo, akiba, au ankara.",
+		"caveat":          "Kumbuka: Muhtasari huu unatokana na data ya sasa. Ikiwa kipindi ni kifupi, chukulia kama picha ya muda, si mwenendo — thibitisha maamuzi ya kodi na KRA/mhasibu wako.",
 	}
 
 	if lang == "sw" {
-		return sw[key]
+		if v, ok := sw[key]; ok {
+			return v
+		}
+		return en[key]
 	}
 
 	return en[key]
+}
+
+func buildHeuristicHeadline(lower string, parts []string, lang string) string {
+	// Derive headline from first data part, plain language, rounded KES
+	if len(parts) == 0 {
+		return langMsg(lang, "intro")
+	}
+	first := parts[0]
+	// first is already plain sentence; use as headline prefix
+	if lang == "sw" {
+		return "Muhtasari: " + first
+	}
+	return first
+}
+
+func formatHeuristicError(name string, err error, lang string) string {
+	if lang == "sw" {
+		return fmt.Sprintf("Kwa %s, data haikupatikana: %v. Jaribu tena baadae.", name, err)
+	}
+	return fmt.Sprintf("For %s, I couldn't fetch data: %v. Try again shortly.", name, err)
+}
+
+func formatHeuristicData(name string, data any, lang string) string {
+	m, ok := data.(map[string]any)
+	if !ok {
+		return truncate(fmt.Sprintf("%v", data), 600)
+	}
+
+	switch name {
+	case "summarize_sales":
+		count := toInt(m["count"])
+		total := toStr(m["total"])
+		subtotal := toStr(m["subtotal"])
+		currency := toStr(m["currency"])
+		if currency == "" {
+			currency = "KES"
+		}
+		if count == 0 {
+			if lang == "sw" {
+				return fmt.Sprintf("Mauzo: Hakuna mauzo katika kipindi hiki. Jumla ni %s 0.", currency)
+			}
+			return fmt.Sprintf("Sales: No sales in this period. Total is %s 0.", currency)
+		}
+		if lang == "sw" {
+			return fmt.Sprintf("Mauzo: Miamala %d yenye jumla ya %s %s (bila ushuru %s %s). Hii ndiyo chanzo kikuu cha kipato chako kwa kipindi hiki.", count, currency, total, currency, subtotal)
+		}
+		return fmt.Sprintf("Sales: %d transactions totaling about %s %s (subtotal %s %s before tax). This is your revenue for the selected period, rounded for quick reading.", count, currency, total, currency, subtotal)
+	case "list_sales_by_product":
+		results, _ := m["results"].([]any)
+		if len(results) == 0 {
+			return langMsg(lang, "knowledge_empty")
+		}
+		lines := []string{}
+		for i, r := range results {
+			if i >= 3 {
+				break
+			}
+			if rm, ok := r.(map[string]any); ok {
+				lines = append(lines, fmt.Sprintf("%v — %s %v (%v sales)", rm["key"], toStr(rm["currency"]), toStr(rm["total"]), toInt(rm["count"])))
+			}
+		}
+		if lang == "sw" {
+			return "Bidhaa zinazoongoza: " + strings.Join(lines, "; ")
+		}
+		return "Top products: " + strings.Join(lines, "; ")
+	case "summarize_expenses_by_category":
+		results, _ := m["results"].([]any)
+		if len(results) == 0 {
+			if lang == "sw" {
+				return "Gharama: Hakuna gharama zilizorekodiwa katika kipindi hiki."
+			}
+			return "Expenses: No expenses recorded in this period."
+		}
+		lines := []string{}
+		var top string
+		for i, r := range results {
+			if rm, ok := r.(map[string]any); ok {
+				if i == 0 {
+					top = fmt.Sprintf("%v (%s %v)", rm["category"], toStr(rm["currency"]), toStr(rm["amount"]))
+				}
+				lines = append(lines, fmt.Sprintf("%v: %s %v", rm["category"], toStr(rm["currency"]), toStr(rm["amount"])))
+				if i >= 2 {
+					break
+				}
+			}
+		}
+		if lang == "sw" {
+			return fmt.Sprintf("Gharama kwa kategoria: %s. Kubwa zaidi ni %s.", strings.Join(lines, ", "), top)
+		}
+		return fmt.Sprintf("Expenses by category: %s. Largest is %s.", strings.Join(lines, ", "), top)
+	case "list_low_stock_items":
+		results, _ := m["results"].([]any)
+		if len(results) == 0 {
+			if lang == "sw" {
+				return "Akiba: Hakuna bidhaa iliyo chini ya kiwango cha tahadhari. Hali ni nzuri."
+			}
+			return "Stock: No items are below the low-stock threshold. You're well stocked."
+		}
+		if lang == "sw" {
+			return fmt.Sprintf("Akiba ya chini: Bidhaa %d ziko chini ya kiwango. Jaza mapema ili usikose mauzo.", len(results))
+		}
+		return fmt.Sprintf("Low stock: %d items are below threshold. Consider restocking soon to avoid missed sales.", len(results))
+	case "get_inventory_valuation":
+		results, _ := m["results"].([]any)
+		if lang == "sw" {
+			return fmt.Sprintf("Thamani ya akiba: Bidhaa %d zimehesabiwa. Hii inakusaidia kujua mtaji uliopo stokini.", len(results))
+		}
+		return fmt.Sprintf("Inventory: %d products counted. This reflects the quantity currently on hand.", len(results))
+	case "search_customers":
+		results, _ := m["results"].([]any)
+		if len(results) == 0 {
+			if lang == "sw" {
+				return "Wateja: Hakuna mteja aliyepatikana na utafutaji huu."
+			}
+			return "Customers: No matches for that search. Try a different name or phone fragment."
+		}
+		names := []string{}
+		for i, r := range results {
+			if i >= 3 {
+				break
+			}
+			if rm, ok := r.(map[string]any); ok {
+				names = append(names, toStr(rm["name"]))
+			}
+		}
+		if lang == "sw" {
+			return "Wateja waliopatikana: " + strings.Join(names, ", ")
+		}
+		return "Found customers: " + strings.Join(names, ", ")
+	case "list_invoices":
+		results, _ := m["results"].([]any)
+		if len(results) == 0 {
+			if lang == "sw" {
+				return "Ankara: Hakuna ankara katika kipindi hiki."
+			}
+			return "Invoices: No invoices in this period."
+		}
+		if lang == "sw" {
+			return fmt.Sprintf("Ankara: %d zimepatikana. Angalia ankara zinazodaiwa kwa ufuatiliaji.", len(results))
+		}
+		return fmt.Sprintf("Invoices: Found %d invoices. Check overdue ones for follow-up.", len(results))
+	default:
+		// Fallback: short, no JSON dump
+		return truncate(fmt.Sprintf("%s: %d records found.", name, toInt(m["result_count"])), 400)
+	}
+}
+
+func toStr(v any) string {
+	if v == nil {
+		return ""
+	}
+	return fmt.Sprintf("%v", v)
+}
+
+func toInt(v any) int {
+	switch x := v.(type) {
+	case int:
+		return x
+	case int64:
+		return int(x)
+	case float64:
+		return int(x)
+	case string:
+		var i int
+		fmt.Sscanf(x, "%d", &i)
+		return i
+	default:
+		return 0
+	}
 }
 
 func needsTool(msg string) bool {
