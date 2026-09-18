@@ -25,6 +25,7 @@ import {
   cacheOfflineCredential,
   verifyOfflineCredential,
   getOfflineCredential,
+  decodeJwtExp,
 } from '../lib/offlineAuth'
 import type {
   AuthResponse,
@@ -122,14 +123,72 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
       const storedUserId =
         secure?.userId || (await AsyncStorage.getItem(AUTH_STORAGE_KEYS.userId))
 
-      if (access && refresh && storedUserId) {
+      if (!access || !refresh || !storedUserId) {
+        setIsAuthenticated(false)
+        return
+      }
+
+      // Online detection — offline we deliberately do NOT auto-authenticate
+      // (security: cold start while offline must force manual password/biometric).
+      // Tokens remain stored so LoginScreen can still do offline credential check.
+      let isConnected: boolean | null = true
+      try {
+        const net = await NetInfo.fetch()
+        isConnected = net.isConnected
+      } catch {}
+      if (isConnected === false) {
         setUserId(storedUserId)
         setAuthTokens({ access, refresh })
         setUserData(await loadBusinessBackCompat(storedUserId))
-        setIsAuthenticated(true)
+        setIsAuthenticated(false)
+        return
       }
+
+      // Online: validate accessToken expiry locally before marking authenticated
+      const expMs = decodeJwtExp(access)
+      const isExpired = expMs !== null && Date.now() > expMs
+      const isNearExpiry = expMs !== null && expMs - Date.now() < 60 * 1000
+
+      if (isExpired || isNearExpiry) {
+        try {
+          const response = await api.post<AuthResponse>('/auth/refresh', {
+            refreshToken: refresh,
+          })
+          // Persist rotated tokens (no email/password needed for offline cache refresh)
+          await persistAuthResponse(response.data)
+          await persistSecureAuth({
+            accessToken: response.data.accessToken,
+            refreshToken: response.data.refreshToken,
+            userId: response.data.userId,
+          })
+          setUserId(response.data.userId)
+          setAuthTokens({
+            access: response.data.accessToken,
+            refresh: response.data.refreshToken,
+          })
+          setUserData(await loadBusinessBackCompat(response.data.userId))
+          setIsAuthenticated(true)
+          return
+        } catch {
+          // Refresh failed — token revoked/expired, force sign-in
+          await clearAuthStorage()
+          await clearSecureAuth()
+          setUserId(null)
+          setAuthTokens(null)
+          setUserData(null)
+          setIsAuthenticated(false)
+          return
+        }
+      }
+
+      // Token still valid — mark authenticated
+      setUserId(storedUserId)
+      setAuthTokens({ access, refresh })
+      setUserData(await loadBusinessBackCompat(storedUserId))
+      setIsAuthenticated(true)
     } catch (error) {
       console.error('Error checking auth status:', error)
+      setIsAuthenticated(false)
     } finally {
       setIsLoading(false)
     }
