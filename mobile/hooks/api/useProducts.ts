@@ -159,8 +159,8 @@ export const useProducts = () => {
 
   const getProducts = useQuery({
     queryKey: ['products', bid],
-    queryFn: async () => {
-      const res = await api.get<{ products: BackendProduct[] }>('/products')
+    queryFn: async ({ signal }) => {
+      const res = await api.get<{ products: BackendProduct[] }>('/products', { signal })
       return (res.data.products || []).map(mapProduct)
     },
     enabled: !!bid,

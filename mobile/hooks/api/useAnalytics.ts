@@ -198,20 +198,25 @@ export const useAnalytics = () => {
   const hasBusiness = !!activeBusinessId
   const enabled = hasBusiness && !businessLoading
 
-  const fetchSnapshot = async (tf: Timeframe): Promise<BackendSnapshot> => {
+  const fetchSnapshot = async (
+    tf: Timeframe,
+    signal?: AbortSignal,
+  ): Promise<BackendSnapshot> => {
     const bt = backendTimeframe(tf)
     const cacheKey = `${SNAPSHOT_CACHE_PREFIX}${activeBusinessId || 'none'}_${bt}`
     try {
-      // Single canonical endpoint — backend/internal/analytics/module.go:51 r.Get("/", h.Get)
-      // GET /api/v1/analytics?timeframe=week  with X-Business-ID header + ?businessId= fallback
+      // Single canonical endpoint — GET /api/v1/analytics?timeframe=week
+      // signal is forwarded so TanStack can cancel on unmount / swipe-away
       const response = await api.get<BackendSnapshot>('/analytics', {
         params: { timeframe: bt },
+        signal,
       })
       const data = response.data
-      // Cache for offline display
       AsyncStorage.setItem(cacheKey, JSON.stringify(data)).catch(() => {})
       return data
-    } catch (e) {
+    } catch (e: any) {
+      // Don't fallback to cache on explicit abort — let query get cancelled
+      if (e?.name === 'CanceledError' || e?.code === 'ERR_CANCELED' || signal?.aborted) throw e
       const cached = await AsyncStorage.getItem(cacheKey)
       if (cached) {
         try {
@@ -259,106 +264,101 @@ export const useAnalytics = () => {
   const getAnalyticsSummary = (timeframe: Timeframe = 'week') =>
     useQuery<AnalyticsSummary>({
       queryKey: ['analytics', 'snapshot', timeframe, activeBusinessId],
-      queryFn: async () => {
-        const snap = await fetchSnapshot(timeframe)
+      queryFn: ({ signal }) => (async () => {
+        const snap = await fetchSnapshot(timeframe, signal)
         const mapped = mapSnapshotToAnalytics(snap, timeframe)
-        // client-side gap fill as safety
         ;(mapped.revenue as any).data = fillWeekBuckets(mapped.revenue.data as any, timeframe, { revenue: 0, transactions: 0 } as any)
         ;(mapped.profit as any).data = fillWeekBuckets(mapped.profit.data as any, timeframe, { revenue: 0, expenses: 0, profit: 0, margin: 0 } as any)
         return mapped
-      },
+      })(),
       enabled,
       staleTime: SNAP_STALE[timeframe] ?? 60*1000,
       gcTime: 5*60*1000,
       refetchOnWindowFocus: true,
       refetchOnReconnect: true,
       retry: (count, err: any) =>
-        err?.response?.status === 403 ? false : count < 2,
+        err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' ? false : err?.response?.status === 403 ? false : count < 2,
     })
 
   const getRevenueAnalytics = (timeframe: Timeframe = 'week') =>
     useQuery<RevenueAnalytics>({
       queryKey: ['analytics', 'revenue', timeframe, activeBusinessId],
-      queryFn: async () => {
-        const snap = await fetchSnapshot(timeframe)
+      queryFn: ({ signal }) => (async () => {
+        const snap = await fetchSnapshot(timeframe, signal)
         const m = mapSnapshotToAnalytics(snap, timeframe).revenue
         ;(m as any).data = fillWeekBuckets(m.data as any, timeframe, { revenue: 0, transactions: 0 } as any)
         return m
-      },
+      })(),
       enabled,
       staleTime: SNAP_STALE[timeframe] ?? 60*1000,
       gcTime: 5*60*1000,
       refetchOnWindowFocus: true,
       refetchOnReconnect: true,
       retry: (count, err: any) =>
-        err?.response?.status === 403 ? false : count < 2,
+        err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' ? false : err?.response?.status === 403 ? false : count < 2,
     })
 
   const getProfitAnalytics = (timeframe: Timeframe = 'week') =>
     useQuery<ProfitAnalytics>({
       queryKey: ['analytics', 'profit', timeframe, activeBusinessId],
-      queryFn: async () => {
-        const snap = await fetchSnapshot(timeframe)
+      queryFn: ({ signal }) => (async () => {
+        const snap = await fetchSnapshot(timeframe, signal)
         const m = mapSnapshotToAnalytics(snap, timeframe).profit
         ;(m as any).data = fillWeekBuckets(m.data as any, timeframe, { revenue: 0, expenses: 0, profit: 0, margin: 0 } as any)
         return m
-      },
+      })(),
       enabled,
       staleTime: SNAP_STALE[timeframe] ?? 60*1000,
       gcTime: 5*60*1000,
       refetchOnWindowFocus: true,
       refetchOnReconnect: true,
       retry: (count, err: any) =>
-        err?.response?.status === 403 ? false : count < 2,
+        err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' ? false : err?.response?.status === 403 ? false : count < 2,
     })
 
   const getCategoryAnalytics = (timeframe: Timeframe = 'week') =>
     useQuery<CategoryAnalytics>({
       queryKey: ['analytics', 'categories', timeframe, activeBusinessId],
-      queryFn: async () => {
-        const snap = await fetchSnapshot(timeframe)
-        return mapSnapshotToAnalytics(snap, timeframe).categories
-      },
+      queryFn: ({ signal }) => fetchSnapshot(timeframe, signal).then((snap) => mapSnapshotToAnalytics(snap, timeframe).categories),
       enabled,
       staleTime: 2*60*1000,
       retry: (count, err: any) =>
-        err?.response?.status === 403 ? false : count < 2,
+        err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' ? false : err?.response?.status === 403 ? false : count < 2,
     })
 
   const getCustomerAnalytics = (timeframe: Timeframe = 'week') =>
     useQuery<CustomerSegmentAnalytics>({
       queryKey: ['analytics', 'customers', timeframe, activeBusinessId],
-      queryFn: async () => {
-        const snap = await fetchSnapshot(timeframe)
-        return mapSnapshotToAnalytics(snap, timeframe).customers
-      },
+      queryFn: ({ signal }) => fetchSnapshot(timeframe, signal).then((snap) => mapSnapshotToAnalytics(snap, timeframe).customers),
       enabled,
       staleTime: 5*60*1000,
       retry: (count, err: any) =>
-        err?.response?.status === 403 ? false : count < 2,
+        err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' ? false : err?.response?.status === 403 ? false : count < 2,
     })
 
   // Legacy queries — also gated
   const getSalesSummary = useQuery({
     queryKey: ['analytics', 'sales-summary', activeBusinessId],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const response = await api.get<SalesSummary>('/sales/summary', {
         params: dateRangeFor('week'),
+        signal,
       })
       return response.data
     },
     enabled,
     retry: (count, err: any) =>
-      err?.response?.status === 403 ? false : count < 2,
+      err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' ? false : err?.response?.status === 403 ? false : count < 2,
   })
 
   const getCategoryPerformance = useQuery({
     queryKey: ['analytics', 'categories-legacy', activeBusinessId],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const [salesByProduct, expenseSummary] = await Promise.all([
-        api.get<{ items: Breakdown[] }>('/sales/by-product'),
+        api.get<{ items: Breakdown[] }>('/sales/by-product', { signal }),
         api.get<{ summary: CategorySummary[] }>('/expenses/summary', {
           params: dateRangeFor('month'),
+          signal,
         }),
       ])
       return {
@@ -382,9 +382,10 @@ export const useAnalytics = () => {
   const getSalesAnalytics = (timeframe: Timeframe = 'week') =>
     useQuery({
       queryKey: ['analytics', 'sales', timeframe, activeBusinessId],
-      queryFn: async () => {
+      queryFn: async ({ signal }) => {
         const response = await api.get<SalesSummary>('/sales/summary', {
           params: dateRangeFor(timeframe),
+          signal,
         })
         return [
           {
@@ -396,16 +397,16 @@ export const useAnalytics = () => {
       },
       enabled,
       retry: (count, err: any) =>
-        err?.response?.status === 403 ? false : count < 2,
+        err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' ? false : err?.response?.status === 403 ? false : count < 2,
     })
 
   const getExpenseAnalytics = (timeframe: Timeframe = 'week') =>
     useQuery({
       queryKey: ['analytics', 'expenses', timeframe, activeBusinessId],
-      queryFn: async () => {
+      queryFn: async ({ signal }) => {
         const response = await api.get<{ summary: CategorySummary[] }>(
           '/expenses/summary',
-          { params: dateRangeFor(timeframe) },
+          { params: dateRangeFor(timeframe), signal },
         )
         const amount = (response.data.summary || []).reduce(
           (sum, item) => sum + toNumber(item.amount),
@@ -415,20 +416,22 @@ export const useAnalytics = () => {
       },
       enabled,
       retry: (count, err: any) =>
-        err?.response?.status === 403 ? false : count < 2,
+        err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' ? false : err?.response?.status === 403 ? false : count < 2,
     })
 
   const getAIInsights = useQuery<AIInsights>({
     queryKey: ['analytics', 'ai-insights', activeBusinessId],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const cacheKey = `${SNAPSHOT_CACHE_PREFIX}ai_${activeBusinessId}`
       try {
         const res = await api.get<AIInsights>('/analytics/ai-insights', {
           params: { timeframe: 'month' },
+          signal,
         })
         AsyncStorage.setItem(cacheKey, JSON.stringify(res.data)).catch(() => {})
         return res.data
-      } catch (e) {
+      } catch (e: any) {
+        if (e?.name === 'CanceledError' || e?.code === 'ERR_CANCELED' || signal?.aborted) throw e
         const cached = await AsyncStorage.getItem(cacheKey)
         if (cached) {
           try {
@@ -441,19 +444,20 @@ export const useAnalytics = () => {
     enabled,
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
-    retry: (count, err: any) => (err?.response?.status === 403 ? false : count < 2),
+    retry: (count, err: any) => (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' ? false : err?.response?.status === 403 ? false : count < 2),
   })
 
   const getTaxSummary = (timeframe: Timeframe = 'month') =>
     useQuery<TaxSummary>({
       queryKey: ['analytics', 'tax', timeframe, activeBusinessId],
-      queryFn: async () => {
+      queryFn: async ({ signal }) => {
         const cacheKey = `${SNAPSHOT_CACHE_PREFIX}tax_${activeBusinessId}_${timeframe}`
         try {
-          const res = await api.get<TaxSummary>('/analytics/tax', { params: { timeframe: backendTimeframe(timeframe) } })
+          const res = await api.get<TaxSummary>('/analytics/tax', { params: { timeframe: backendTimeframe(timeframe) }, signal })
           AsyncStorage.setItem(cacheKey, JSON.stringify(res.data)).catch(() => {})
           return res.data
-        } catch (e) {
+        } catch (e: any) {
+          if (e?.name === 'CanceledError' || e?.code === 'ERR_CANCELED' || signal?.aborted) throw e
           const cached = await AsyncStorage.getItem(cacheKey)
           if (cached) { try { return JSON.parse(cached) as TaxSummary } catch {} }
           throw e
@@ -461,7 +465,7 @@ export const useAnalytics = () => {
       },
       enabled,
       staleTime: 60 * 1000,
-      retry: (count, err: any) => (err?.response?.status === 403 ? false : count < 2),
+      retry: (count, err: any) => (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' ? false : err?.response?.status === 403 ? false : count < 2),
     })
 
   const defaultTimeframe: Timeframe = 'week'

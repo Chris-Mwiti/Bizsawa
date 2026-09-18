@@ -82,8 +82,8 @@ export const useExpenses = () => {
 
   const getExpenses = useQuery({
     queryKey: ['expenses', bid],
-    queryFn: async () => {
-      const res = await api.get<{ expenses: BackendExpense[] }>('/expenses')
+    queryFn: async ({ signal }) => {
+      const res = await api.get<{ expenses: BackendExpense[] }>('/expenses', { signal })
       return (res.data.expenses || []).map(mapExpense)
     },
     enabled: !!bid,

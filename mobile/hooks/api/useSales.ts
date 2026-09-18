@@ -103,8 +103,8 @@ export const useSales = () => {
 
   const getSales = useQuery({
     queryKey: ['sales', bid],
-    queryFn: async () => {
-      const res = await api.get<{ sales: Sale[] }>('/sales')
+    queryFn: async ({ signal }) => {
+      const res = await api.get<{ sales: Sale[] }>('/sales', { signal })
       return res.data.sales || []
     },
     enabled: !!bid,
