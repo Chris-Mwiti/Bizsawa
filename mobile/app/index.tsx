@@ -8,7 +8,10 @@ import {
   Easing,
 } from 'react-native'
 import { useRouter } from 'expo-router'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import NetInfo from '@react-native-community/netinfo'
 import { useAuth } from '../contexts/AuthContext'
+import { api } from '../lib/api'
 
 export default function Index() {
   const [isAppReady, setIsAppReady] = useState(false)
@@ -82,10 +85,47 @@ export default function Index() {
   }, [])
 
   useEffect(() => {
-    if (isAppReady && !isAuthLoading) {
-      // Always route to onboarding per user request
-      router.replace('/onboarding')
+    if (!isAppReady || isAuthLoading) return
+
+    const route = async () => {
+      try {
+        const hasOnboarded = await AsyncStorage.getItem('HAS_FINISHED_ONBOARDING')
+
+        // First launch: show marketing onboarding regardless of auth
+        if (!hasOnboarded) {
+          router.replace('/onboarding')
+          return
+        }
+
+        // Online auto-redirect: if token still valid (AuthContext already validated + refreshed), go home
+        // Offline: AuthContext deliberately leaves isAuthenticated=false to force manual login for security
+        let isOnline = true
+        try {
+          const net = await NetInfo.fetch()
+          isOnline = net.isConnected ?? true
+        } catch {}
+
+        if (isAuthenticated && isOnline) {
+          // Optional business check — new users without business go to setup, others to tabs
+          try {
+            const res = await api.get<{ businesses: any[] }>('/businesses')
+            const hasBusiness =
+              Array.isArray(res.data.businesses) && res.data.businesses.length > 0
+            router.replace(hasBusiness ? '/(tabs)' : '/auth/business-setup')
+          } catch {
+            router.replace('/(tabs)')
+          }
+          return
+        }
+
+        // Not authenticated, or offline cold start (security policy), or token expired/refresh failed
+        router.replace('/auth/login')
+      } catch {
+        router.replace('/auth/login')
+      }
     }
+
+    void route()
   }, [isAppReady, isAuthLoading, isAuthenticated, router])
 
   if (showSplash) {
