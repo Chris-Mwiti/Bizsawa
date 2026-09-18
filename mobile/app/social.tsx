@@ -11,10 +11,8 @@ import {
   Platform,
   Alert,
   Share,
-  Keyboard,
-  TouchableWithoutFeedback,
 } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
   ArrowLeft,
   Sparkles,
@@ -22,11 +20,7 @@ import {
   Share as ShareIcon,
 } from 'lucide-react-native'
 import { router } from 'expo-router'
-// import { useAuth } from "../contexts/AuthContext";
-// import { api } from "../lib/api";
-// import Toast from "react-native-toast-message";
 
-// Platform aware proxy URL avoiding emulator localhost crashing
 const PROXY_URL: string =
   process.env.EXPO_PUBLIC_PROXY_URL ||
   (Platform.OS === 'android' ? 'http://10.0.2.2:3001' : 'http://localhost:3001')
@@ -276,186 +270,211 @@ export default function SocialMediaModal() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-    >
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <View className='flex-1 bg-white'>
-        <View className='flex-row items-center p-4 border-b border-gray-100 mt-2'>
-          <TouchableOpacity onPress={() => router.back()} className='mr-3 p-2'>
-            <ArrowLeft size={20} color='#374151' />
-          </TouchableOpacity>
-          <View>
-            <Text className='text-lg font-bold'>Create Content</Text>
-            <Text className='text-xs text-gray-500'>
-              Pick a goal and we'll handle the rest
-            </Text>
+    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: '#F4F9F7' }}>
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: 'white',
+          borderTopLeftRadius: Platform.OS === 'ios' ? 20 : 0,
+          borderTopRightRadius: Platform.OS === 'ios' ? 20 : 0,
+          overflow: 'hidden',
+        }}
+      >
+        {Platform.OS === 'android' && (
+          <View style={{ alignItems: 'center', paddingTop: 8, paddingBottom: 4 }}>
+            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: '#e5e7eb' }} />
           </View>
-        </View>
+        )}
 
-        <ScrollView
-          className='flex-1 px-4 py-4'
-          contentContainerStyle={{ paddingBottom: 40 + insets.bottom }}
-          keyboardShouldPersistTaps='handled'
-          keyboardDismissMode='interactive'
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
         >
-          {errorMsg ? (
-            <View className='bg-amber-50 p-3 rounded-2xl flex-row items-center mb-4 border border-amber-200'>
-              <View className='mr-2'>
-                <AlertCircle size={16} color='#d97706' />
-              </View>
-              <Text className='text-sm text-amber-700 font-medium flex-1'>
-                {errorMsg}
+          <View className='flex-row items-center p-4 border-b border-gray-100'>
+            <TouchableOpacity onPress={() => router.back()} className='mr-3 p-2 -ml-2'>
+              <ArrowLeft size={20} color='#374151' />
+            </TouchableOpacity>
+            <View>
+              <Text className='text-lg font-bold'>Create Content</Text>
+              <Text className='text-xs text-gray-500'>
+                Pick a goal and we'll handle the rest
               </Text>
             </View>
-          ) : null}
-
-          <Text className='text-xs font-bold uppercase text-gray-500 mb-2'>
-            Choose Platform
-          </Text>
-          <View className='flex-row justify-between mb-6'>
-            {platforms.map((platform) => (
-              <TouchableOpacity
-                key={platform.id}
-                onPress={() => setSelectedPlatform(platform.id)}
-                className={`flex-1 mx-1 py-3 rounded-2xl items-center ${selectedPlatform === platform.id ? platform.color : 'bg-gray-100'}`}
-              >
-                <Text
-                  className={`font-bold text-xs ${selectedPlatform === platform.id ? 'text-white' : 'text-gray-600'}`}
-                >
-                  {platform.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
           </View>
 
-          <Text className='text-xs font-bold uppercase text-gray-500 mb-2'>
-            What's your goal?
-          </Text>
-          <View className='flex-row flex-wrap justify-between mb-6'>
-            {goals.map((g) => (
-              <TouchableOpacity
-                key={g.id}
-                onPress={() =>
-                  setSelectedGoal(selectedGoal?.id === g.id ? null : g)
-                }
-                className={`w-[48%] mb-2 p-3 rounded-2xl border-2 ${selectedGoal?.id === g.id ? g.color + ' bg-gray-50' : 'border-gray-100 bg-white'}`}
-              >
-                <Text className='font-bold text-sm text-gray-800'>
-                  {g.label}
-                </Text>
-                <Text className='text-xs text-gray-500 mt-1'>
-                  {g.sublabel}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <Text className='text-xs font-bold uppercase text-gray-500 mb-2'>
-            Tone
-          </Text>
-          <View className='flex-row flex-wrap justify-between mb-6'>
-            {tones.map((t) => (
-              <TouchableOpacity
-                key={t.id}
-                onPress={() => setTone(tone === t.id ? '' : t.id)}
-                className={`w-[31%] mb-2 py-3 rounded-2xl border items-center ${tone === t.id ? 'bg-[#00C4B4] border-[#00C4B4]' : 'bg-white border-gray-200'}`}
-              >
-                <Text
-                  className={`font-bold text-xs ${tone === t.id ? 'text-white' : 'text-gray-600'}`}
-                >
-                  {t.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <Text className='text-xs font-bold uppercase text-gray-500 mb-2'>
-            What are you promoting?
-          </Text>
-          <TextInput
-            multiline
-            numberOfLines={4}
-            value={description}
-            onChangeText={setDescription}
-            placeholder='e.g. My new M-Pesa payment feature...'
-            className='bg-gray-50 border border-gray-200 rounded-2xl p-4 text-sm text-gray-800 h-32 mb-6'
-            textAlignVertical='top'
-          />
-
-          <TouchableOpacity
-            onPress={generateContent}
-            disabled={
-              !selectedGoal || !tone || !description.trim() || isGenerating
-            }
-            className={`py-4 rounded-2xl items-center flex-row justify-center mb-6 shadow-sm ${!selectedGoal || !tone || !description.trim() || isGenerating ? 'bg-gray-300' : 'bg-[#00C4B4]'}`}
+          <ScrollView
+            className='flex-1 px-4 pt-4'
+            contentContainerStyle={{ paddingBottom: 24 + insets.bottom, flexGrow: 1 }}
+            keyboardShouldPersistTaps='handled'
+            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+            bounces
+            overScrollMode='never'
+            decelerationRate='normal'
+            scrollEventThrottle={16}
+            showsVerticalScrollIndicator={false}
+            contentInsetAdjustmentBehavior='automatic'
+            automaticallyAdjustContentInsets={false}
+            alwaysBounceVertical={false}
           >
-            {isGenerating ? (
-              <ActivityIndicator size='small' color='white' />
-            ) : (
-              <View className='mr-2'>
-                <Sparkles size={20} color='white' />
-              </View>
-            )}
-            <Text className='text-white font-bold text-lg'>
-              {isGenerating ? 'Generating...' : 'Generate Content'}
-            </Text>
-          </TouchableOpacity>
-
-          {generatedContent && (
-            <View className='mt-2'>
-              <View className='flex-row justify-between mb-2 items-center'>
-                <Text className='font-bold'>Preview</Text>
-                <Text className='text-xs text-gray-400 uppercase tracking-widest'>
-                  {generatedContent.platform} {generatedContent.type}
+            {errorMsg ? (
+              <View className='bg-amber-50 p-3 rounded-2xl flex-row items-center mb-4 border border-amber-200'>
+                <View className='mr-2'>
+                  <AlertCircle size={16} color='#d97706' />
+                </View>
+                <Text className='text-sm text-amber-700 font-medium flex-1'>
+                  {errorMsg}
                 </Text>
               </View>
-              <View className='bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm'>
-                <View className='flex-row items-center p-3 border-b border-gray-100 justify-between'>
-                  <View className='flex-row items-center'>
-                    <View className='w-11 h-11 rounded-full bg-blue-600 mr-3 items-center justify-center'>
-                      <Text className='text-white text-xs font-bold'>NM</Text>
+            ) : null}
+
+            <Text className='text-xs font-bold uppercase text-gray-500 mb-2'>
+              Choose Platform
+            </Text>
+            <View className='flex-row justify-between mb-6'>
+              {platforms.map((platform) => (
+                <TouchableOpacity
+                  key={platform.id}
+                  onPress={() => setSelectedPlatform(platform.id)}
+                  className={`flex-1 mx-1 py-3 rounded-2xl items-center ${selectedPlatform === platform.id ? platform.color : 'bg-gray-100'}`}
+                >
+                  <Text
+                    className={`font-bold text-xs ${selectedPlatform === platform.id ? 'text-white' : 'text-gray-600'}`}
+                  >
+                    {platform.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text className='text-xs font-bold uppercase text-gray-500 mb-2'>
+              What's your goal?
+            </Text>
+            <View className='flex-row flex-wrap justify-between mb-6'>
+              {goals.map((g) => (
+                <TouchableOpacity
+                  key={g.id}
+                  onPress={() =>
+                    setSelectedGoal(selectedGoal?.id === g.id ? null : g)
+                  }
+                  className={`w-[48%] mb-2 p-3 rounded-2xl border-2 ${selectedGoal?.id === g.id ? g.color + ' bg-gray-50' : 'border-gray-100 bg-white'}`}
+                >
+                  <Text className='font-bold text-sm text-gray-800'>
+                    {g.label}
+                  </Text>
+                  <Text className='text-xs text-gray-500 mt-1'>
+                    {g.sublabel}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text className='text-xs font-bold uppercase text-gray-500 mb-2'>
+              Tone
+            </Text>
+            <View className='flex-row flex-wrap justify-between mb-6'>
+              {tones.map((t) => (
+                <TouchableOpacity
+                  key={t.id}
+                  onPress={() => setTone(tone === t.id ? '' : t.id)}
+                  className={`w-[31%] mb-2 py-3 rounded-2xl border items-center ${tone === t.id ? 'bg-[#00C4B4] border-[#00C4B4]' : 'bg-white border-gray-200'}`}
+                >
+                  <Text
+                    className={`font-bold text-xs ${tone === t.id ? 'text-white' : 'text-gray-600'}`}
+                  >
+                    {t.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text className='text-xs font-bold uppercase text-gray-500 mb-2'>
+              What are you promoting?
+            </Text>
+            <TextInput
+              multiline
+              numberOfLines={4}
+              value={description}
+              onChangeText={setDescription}
+              placeholder='e.g. My new M-Pesa payment feature...'
+              className='bg-gray-50 border border-gray-200 rounded-2xl p-4 text-sm text-gray-800 h-32 mb-6'
+              textAlignVertical='top'
+              returnKeyType='done'
+              blurOnSubmit
+            />
+
+            <TouchableOpacity
+              onPress={generateContent}
+              disabled={
+                !selectedGoal || !tone || !description.trim() || isGenerating
+              }
+              className={`py-4 rounded-2xl items-center flex-row justify-center mb-6 active:opacity-90 ${!selectedGoal || !tone || !description.trim() || isGenerating ? 'bg-gray-300' : 'bg-[#00C4B4]'}`}
+            >
+              {isGenerating ? (
+                <ActivityIndicator size='small' color='white' />
+              ) : (
+                <View className='mr-2'>
+                  <Sparkles size={20} color='white' />
+                </View>
+              )}
+              <Text className='text-white font-bold text-base'>
+                {isGenerating ? 'Generating...' : 'Generate Content'}
+              </Text>
+            </TouchableOpacity>
+
+            {generatedContent && (
+              <View className='mt-2'>
+                <View className='flex-row justify-between mb-2 items-center'>
+                  <Text className='font-bold'>Preview</Text>
+                  <Text className='text-xs text-gray-400 uppercase tracking-widest'>
+                    {generatedContent.platform} {generatedContent.type}
+                  </Text>
+                </View>
+                <View className='bg-white border border-gray-200 rounded-2xl overflow-hidden'>
+                  <View className='flex-row items-center p-3 border-b border-gray-100 justify-between'>
+                    <View className='flex-row items-center'>
+                      <View className='w-11 h-11 rounded-full bg-blue-600 mr-3 items-center justify-center'>
+                        <Text className='text-white text-xs font-bold'>NM</Text>
+                      </View>
+                      <Text className='font-medium text-sm'>
+                        bizsawa_official
+                      </Text>
                     </View>
-                    <Text className='font-medium text-sm'>
-                      bizsawa_official
+                    <Text className='text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-sm'>
+                      {generatedContent.source}
                     </Text>
                   </View>
-                  <Text className='text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-sm'>
-                    {generatedContent.source}
-                  </Text>
+                  {generatedContent.imageUrl && (
+                    <Image
+                      source={{ uri: generatedContent.imageUrl }}
+                      className='w-full h-64 bg-gray-100'
+                      resizeMode='cover'
+                    />
+                  )}
+                  <View className='p-4'>
+                    <Text className='text-sm text-gray-800 mb-2 leading-5'>
+                      {generatedContent.content}
+                    </Text>
+                    <Text className='text-blue-600 text-xs font-medium'>
+                      {generatedContent.hashtags.join(' ')}
+                    </Text>
+                  </View>
                 </View>
-                {generatedContent.imageUrl && (
-                  <Image
-                    source={{ uri: generatedContent.imageUrl }}
-                    className='w-full h-64 bg-gray-100'
-                    resizeMode='cover'
-                  />
-                )}
-                <View className='p-4'>
-                  <Text className='text-sm text-gray-800 mb-2 leading-tight'>
-                    {generatedContent.content}
-                  </Text>
-                  <Text className='text-blue-600 text-xs font-medium'>
-                    {generatedContent.hashtags.join(' ')}
-                  </Text>
-                </View>
+                <TouchableOpacity
+                  onPress={handleShare}
+                  className='mt-4 bg-gray-900 py-4 rounded-2xl items-center flex-row justify-center active:opacity-90'
+                  style={{ marginBottom: insets.bottom }}
+                >
+                  <View className='mr-2'>
+                    <ShareIcon size={18} color='white' />
+                  </View>
+                  <Text className='text-white font-bold text-base'>Share Now</Text>
+                </TouchableOpacity>
               </View>
-              <TouchableOpacity
-                onPress={handleShare}
-                className='mt-4 bg-gray-900 py-4 rounded-2xl items-center flex-row justify-center shadow-md'
-              >
-                <View className='mr-2'>
-                  <ShareIcon size={18} color='white' />
-                </View>
-                <Text className='text-white font-bold text-lg'>Share Now</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </ScrollView>
-        </View>
-      </TouchableWithoutFeedback>
-    </KeyboardAvoidingView>
+            )}
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </View>
+    </SafeAreaView>
   )
 }
