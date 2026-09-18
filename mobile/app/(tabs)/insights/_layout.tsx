@@ -3,6 +3,8 @@ import { View, Text, Modal, Pressable, TouchableOpacity } from 'react-native'
 import { Slot, usePathname, useRouter } from 'expo-router'
 import { useBusinessContext } from '../../../contexts/BusinessContext'
 import { Tabs } from 'tamagui'
+import { SwipeContainer } from '../../../components/SwipeContainer'
+import { useSwipeNavigation } from '../../../hooks/useSwipeNavigation'
 import {
   BarChart3,
   LayoutGrid,
@@ -84,8 +86,17 @@ export default function InsightsLayout() {
   // Tamagui Tabs value: when overflow active, highlight More pill
   const tabsValue = isOverflowActive ? '__more' : active
 
+  const { swipe: swipeInsight } = useSwipeNavigation(
+    TABS.map((t) => ({ key: t.key, href: t.href, name: t.key })),
+  )
+
   return (
-    <View className='flex-1 bg-gray-50'>
+    <SwipeContainer
+      onSwipeLeft={() => swipeInsight('left')}
+      onSwipeRight={() => swipeInsight('right')}
+      style={{ flex: 1, backgroundColor: '#f9fafb' } as any}
+    >
+      <View className='flex-1 bg-gray-50'>
       {/* Header */}
       <View className='bg-white border-b border-gray-200'>
         <View className='px-4 pt-12 pb-3'>
@@ -425,6 +436,7 @@ export default function InsightsLayout() {
       </Modal>
 
       <Slot />
-    </View>
+      </View>
+    </SwipeContainer>
   )
 }
