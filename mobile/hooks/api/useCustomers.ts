@@ -94,12 +94,11 @@ export const useCustomers = () => {
 
   const getCustomers = useQuery({
     queryKey: ['customers', bid],
-    queryFn: async () => {
-      const res = await api.get<{ customers: Customer[] }>('/customers')
+    queryFn: async ({ signal }) => {
+      const res = await api.get<{ customers: Customer[] }>('/customers', { signal })
       return res.data.customers || []
     },
     enabled: !!bid,
-    // keep stale data while refetching so UI doesn't flicker empty
     staleTime: 30 * 1000,
   })
 
