@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 
+	"github.com/Codecx-Org/FinAI/backend/internal/observability"
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/config"
 	sharedhttp "github.com/Codecx-Org/FinAI/backend/internal/shared/http"
 )
@@ -29,9 +31,10 @@ func NewServer(cfg config.Config, auth *Authenticator, registry *Registry, ready
 
 func (s *Server) Router() http.Handler {
 	r := chi.NewRouter()
+	// Observability must be first to capture full request including auth & workflow latency for load/spike tests
+	r.Use(observability.HTTPMiddleware("bizsawa-mcp"))
 	r.Use(chimiddleware.RequestID)
 	r.Use(chimiddleware.RealIP)
-	r.Use(chimiddleware.Logger)
 	r.Use(chimiddleware.Recoverer)
 	r.Use(chimiddleware.Timeout(60 * time.Second))
 
@@ -47,6 +50,10 @@ func (s *Server) Router() http.Handler {
 		}
 
 		sharedhttp.JSON(w, http.StatusOK, sharedhttp.Envelope{"status": "ready"})
+	})
+	r.Handle("/metrics", observability.MetricsHandler())
+	r.Get("/otel/health", func(w http.ResponseWriter, r *http.Request) {
+		sharedhttp.JSON(w, http.StatusOK, sharedhttp.Envelope{"status": "ok", "service": "bizsawa-mcp", "otel": s.cfg.Observability.Enabled})
 	})
 	r.Get("/.well-known/oauth-protected-resource", s.protectedResourceMetadata)
 
@@ -80,11 +87,17 @@ func (s *Server) protectedResourceMetadata(w http.ResponseWriter, r *http.Reques
 
 func (s *Server) handleProfile(profile Profile) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		workflowStart := time.Now()
+
 		session, err := s.auth.Authenticate(r, profile)
 		if err != nil {
+			// Auth failure is a workflow error — trace it
+			aCtx, authSpan := observability.StartWorkflowSpan(ctx, "auth", string(profile))
+			_ = aCtx
 			w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer resource_metadata="%s/.well-known/oauth-protected-resource", error="invalid_token"`, strings.TrimRight(s.cfg.MCP.PublicURL, "/")))
 			sharedhttp.JSON(w, http.StatusUnauthorized, ErrorEnvelope{Status: "error", Error: "unauthorized", Message: "A valid bearer token for the MCP resource is required.", Retryable: false})
-
+			observability.EndWorkflowSpan(aCtx, authSpan, "auth", string(profile), workflowStart, err)
 			return
 		}
 
@@ -93,16 +106,29 @@ func (s *Server) handleProfile(profile Profile) http.HandlerFunc {
 		var req RPCRequest
 
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			aCtx, span := observability.StartWorkflowSpan(ctx, "invalid_jsonrpc", string(profile))
 			sharedhttp.JSON(w, http.StatusBadRequest, RPCResponse{JSONRPC: "2.0", Error: &RPCError{Code: -32700, Message: "invalid JSON-RPC request"}})
+			observability.EndWorkflowSpan(aCtx, span, "invalid_jsonrpc", string(profile), workflowStart, err)
 			return
 		}
 
-		sharedhttp.JSON(w, http.StatusOK, s.dispatch(r, session, req))
+		// Per-method workflow span (parent of any tool span)
+		wCtx, methodSpan := observability.StartWorkflowSpan(ctx, req.Method, string(profile))
+		resp := s.dispatch(r.WithContext(wCtx), session, req)
+		var wfErr error
+		if resp.Error != nil {
+			wfErr = fmt.Errorf("rpc error %d: %s", resp.Error.Code, resp.Error.Message)
+		}
+		observability.EndWorkflowSpan(wCtx, methodSpan, req.Method, string(profile), workflowStart, wfErr)
+
+		sharedhttp.JSON(w, http.StatusOK, resp)
+		_ = context.Background // silence import if tracing disabled
 	}
 }
 
 func (s *Server) dispatch(r *http.Request, session Session, req RPCRequest) RPCResponse {
-	slog.Info("mcp dispatch", "method", req.Method, "profile", session.Profile, "business", session.BusinessID.String(), "user", session.UserID.String(), "id", req.ID)
+	ctx := r.Context()
+	slog.InfoContext(ctx, "mcp dispatch", "method", req.Method, "profile", session.Profile, "business", session.BusinessID.String(), "user", session.UserID.String(), "id", req.ID)
 	resp := RPCResponse{JSONRPC: "2.0", ID: req.ID}
 
 	switch req.Method {
@@ -121,8 +147,11 @@ func (s *Server) dispatch(r *http.Request, session Session, req RPCRequest) RPCR
 			return resp
 		}
 
+		// Tool-level tracing + metrics: critical for discovering error rates between workflow tool calls
+		toolCtx, toolSpan := observability.StartToolSpan(ctx, call.Name, string(session.Profile))
 		start := time.Now()
-		envelope, err := s.registry.Call(session, call.Name, call.Arguments)
+		// Pass traced context into registry so downstream service spans are children
+		envelope, err := s.registry.CallWithContext(toolCtx, session, call.Name, call.Arguments)
 		latency := time.Since(start).Milliseconds()
 
 		if envelope.Meta == nil {
@@ -130,9 +159,13 @@ func (s *Server) dispatch(r *http.Request, session Session, req RPCRequest) RPCR
 		}
 
 		envelope.Meta["latency_ms"] = latency
+		// inject trace_id into meta for log correlation in load tests
+		if sc := toolSpan.SpanContext(); sc.IsValid() {
+			envelope.Meta["trace_id"] = sc.TraceID().String()
+		}
 
 		if err != nil {
-			slog.Error("mcp tool call failed", "tool", call.Name, "profile", session.Profile, "err", err, "latency_ms", latency)
+			observability.EndToolSpan(toolCtx, toolSpan, call.Name, string(session.Profile), start, err)
 			code, payload := ErrorPayload(err)
 			if errors.Is(err, ErrToolNotFound) {
 				payload.Message = "Not found: " + payload.Message
@@ -147,7 +180,7 @@ func (s *Server) dispatch(r *http.Request, session Session, req RPCRequest) RPCR
 			return resp
 		}
 
-		slog.Info("mcp tool call", "tool", call.Name, "profile", session.Profile, "latency_ms", latency)
+		observability.EndToolSpan(toolCtx, toolSpan, call.Name, string(session.Profile), start, nil)
 		body, _ := json.Marshal(envelope)
 		resp.Result = CallResponse{Content: []ContentBlock{{Type: "text", Text: string(body)}}}
 	default:
