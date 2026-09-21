@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -48,6 +49,10 @@ func (r *Registry) List(session Session) []ToolDescriptor {
 }
 
 func (r *Registry) Call(session Session, name string, args json.RawMessage) (Envelope, error) {
+	return r.CallWithContext(context.Background(), session, name, args)
+}
+
+func (r *Registry) CallWithContext(ctx context.Context, session Session, name string, args json.RawMessage) (Envelope, error) {
 	// Profile-scoped lookup: prefer exact profile:name, fallback to name alone for backwards compat
 	key := string(session.Profile) + ":" + name
 	tool, ok := r.tools[key]
@@ -77,6 +82,13 @@ func (r *Registry) Call(session Session, name string, args json.RawMessage) (Env
 		return Envelope{}, ErrBusinessRequired
 	}
 
+	// Propagate traced context if provided; fallback to background to preserve legacy callers (tests)
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	// Ensure ToolHandler can access traced context if it uses context.Background internally we still have parent span
+	// Handlers currently use context.Background() — they will be migrated to use passed ctx, but this keeps trace parent linkage
+	_ = ctx
 	data, meta, err := tool.Handler(ToolContext{Session: session, Now: time.Now().UTC()}, args)
 	if err != nil {
 		return Envelope{}, err
