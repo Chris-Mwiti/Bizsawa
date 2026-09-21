@@ -8,6 +8,8 @@ import (
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 
+	"github.com/Codecx-Org/FinAI/backend/internal/observability"
+
 	"github.com/Codecx-Org/FinAI/backend/internal/analytics"
 	"github.com/Codecx-Org/FinAI/backend/internal/auth"
 	"github.com/Codecx-Org/FinAI/backend/internal/business"
@@ -57,9 +59,11 @@ type Dependencies struct {
 func NewRouter(deps Dependencies) http.Handler {
 	r := chi.NewRouter()
 
+	// Observability: OpenTelemetry tracing + metrics + correlated structured logging.
+	// Must be early to capture full latency for load/spike tests. Replaces chi Logger with trace-aware logging.
+	r.Use(observability.HTTPMiddleware("bizsawa-api"))
 	r.Use(chimiddleware.RequestID)
 	r.Use(chimiddleware.RealIP)
-	r.Use(chimiddleware.Logger)
 	r.Use(chimiddleware.Recoverer)
 	r.Use(chimiddleware.Timeout(60 * time.Second))
 	r.Use(cors.Handler(cors.Options{
@@ -85,6 +89,12 @@ func NewRouter(deps Dependencies) http.Handler {
 		}
 
 		sharedhttp.JSON(w, http.StatusOK, sharedhttp.Envelope{"status": "ready"})
+	})
+
+	// Observability endpoints (no auth) — for Prometheus scraping and OTel health
+	r.Handle("/metrics", observability.MetricsHandler())
+	r.Get("/otel/health", func(w http.ResponseWriter, r *http.Request) {
+		sharedhttp.JSON(w, http.StatusOK, sharedhttp.Envelope{"status": "ok", "otel": deps.Config.Observability.Enabled, "service": "bizsawa-api"})
 	})
 
 	r.Route("/api/v1", func(r chi.Router) {
