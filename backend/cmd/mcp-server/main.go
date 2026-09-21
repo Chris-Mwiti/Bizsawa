@@ -12,6 +12,8 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	"github.com/Codecx-Org/FinAI/backend/internal/observability"
+
 	"github.com/Codecx-Org/FinAI/backend/internal/auth"
 	"github.com/Codecx-Org/FinAI/backend/internal/business"
 	"github.com/Codecx-Org/FinAI/backend/internal/customers"
@@ -32,8 +34,39 @@ import (
 
 func main() {
 	cfg := config.Load()
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	slog.SetDefault(logger)
+	otelCfg := observability.Config{
+		Enabled:           cfg.Observability.Enabled,
+		ServiceName:       "bizsawa-mcp",
+		ServiceVersion:    cfg.Observability.ServiceVersion,
+		Environment:       cfg.Env,
+		Endpoint:          cfg.Observability.Endpoint,
+		Insecure:          cfg.Observability.Insecure,
+		SampleRatio:       cfg.Observability.SampleRatio,
+		TracingEnabled:    cfg.Observability.TracingEnabled,
+		MetricsEnabled:    cfg.Observability.MetricsEnabled,
+		PrometheusEnabled: cfg.Observability.PrometheusEnabled,
+		StdoutFallback:    cfg.Observability.StdoutFallback,
+	}
+	if v := cfg.Observability.ServiceName; v != "" && v != "bizsawa-api" {
+		otelCfg.ServiceName = v + "-mcp"
+	}
+	bootstrapCtx := context.Background()
+	otelProvider, err := observability.Setup(bootstrapCtx, otelCfg)
+	if err != nil {
+		slog.Error("observability setup failed, continuing without telemetry", "err", err)
+	}
+	if _, err := observability.InitMetrics(); err != nil {
+		slog.Error("metrics init failed", "err", err)
+	}
+	logger := observability.NewLogger(otelCfg.ServiceName)
+	if otelProvider != nil {
+		defer func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = otelProvider.Shutdown(ctx)
+		}()
+	}
+	logger.Info("mcp observability initialized", "enabled", otelCfg.Enabled, "endpoint", otelCfg.Endpoint, "service", otelCfg.ServiceName)
 
 	gormDB, err := shareddb.Open(cfg.Database)
 	if err != nil {
