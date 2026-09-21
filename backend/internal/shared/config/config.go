@@ -23,6 +23,7 @@ type Config struct {
 	Crypto          CryptoConfig
 	Mpesa           MpesaConfig
 	Email           EmailConfig
+	Observability   ObservabilityConfig
 }
 
 type DatabaseConfig struct {
@@ -104,6 +105,21 @@ type EmailConfig struct {
 	FromName     string
 }
 
+type ObservabilityConfig struct {
+	Enabled           bool
+	ServiceName       string
+	ServiceVersion    string
+	Endpoint          string // OTEL_EXPORTER_OTLP_ENDPOINT e.g. http://otel-collector:4318
+	Insecure          bool
+	SampleRatio       float64
+	TracingEnabled    bool
+	MetricsEnabled    bool
+	PrometheusEnabled bool
+	StdoutFallback    bool
+	// PrometheusAddr blank means reuse main Addr
+	PrometheusAddr string
+}
+
 func Load() Config {
 	return Config{
 		Env:             env("APP_ENV", "development"),
@@ -176,6 +192,19 @@ func Load() Config {
 			FromEmail:    env("EMAIL_FROM_ADDRESS", env("RESEND_FROM_EMAIL", "noreply@bizsawa.com")),
 			FromName:     env("EMAIL_FROM_NAME", "BizSawa"),
 		},
+		Observability: ObservabilityConfig{
+			Enabled:           boolEnv("OTEL_ENABLED", true),
+			ServiceName:       env("OTEL_SERVICE_NAME", env("APP_NAME", "bizsawa-api")),
+			ServiceVersion:    env("OTEL_SERVICE_VERSION", env("APP_VERSION", "0.1.0")),
+			Endpoint:          strings.TrimRight(strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")), "/"),
+			Insecure:          boolEnv("OTEL_EXPORTER_OTLP_INSECURE", true),
+			SampleRatio:       floatEnv("OTEL_SAMPLE_RATIO", floatEnv("OTEL_TRACES_SAMPLER_ARG", 1.0)),
+			TracingEnabled:    boolEnv("OTEL_TRACES_ENABLED", true),
+			MetricsEnabled:    boolEnv("OTEL_METRICS_ENABLED", true),
+			PrometheusEnabled: boolEnv("OTEL_PROMETHEUS_ENABLED", true),
+			StdoutFallback:    boolEnv("OTEL_STDOUT_FALLBACK", boolEnv("OTEL_DEBUG", env("APP_ENV", "development") == "development")),
+			PrometheusAddr:    env("OTEL_PROMETHEUS_ADDR", ""),
+		},
 	}
 }
 
@@ -230,6 +259,24 @@ func boolEnv(key string, fallback bool) bool {
 		return fallback
 	}
 
+	return parsed
+}
+
+func floatEnv(key string, fallback float64) float64 {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.ParseFloat(value, 64)
+	if err != nil {
+		return fallback
+	}
+	if parsed < 0 {
+		return 0
+	}
+	if parsed > 1 {
+		return 1
+	}
 	return parsed
 }
 
