@@ -1,13 +1,12 @@
 # BizSawa backend — env-aware compose aliases
 # Usage: make dev-up / make prod-up / make dev-config
-# Shell aliases (paste into ~/.bashrc or ~/.zshrc):
-#   alias dc-dev='ENV_FILE=.env.development docker compose --env-file .env.development'
-#   alias dc-prod='ENV_FILE=.env.production docker compose --env-file .env.production'
+# Shell helpers (functions so --profile args pass): dc-dev, dc-prod
+#   dc-dev --profile observability up otel-collector jaeger
 
 ENV_FILE ?= .env.development
 COMPOSE = ENV_FILE=$(ENV_FILE) docker compose --env-file $(ENV_FILE)
 
-.PHONY: dev dev-up dev-down dev-config prod prod-up prod-down prod-config logs ps clean
+.PHONY: dev dev-up dev-down dev-config prod prod-up prod-down prod-config logs ps clean dev-observability prod-observability
 
 dev: dev-up
 prod: prod-up
@@ -25,6 +24,9 @@ dev-config:
 dev-logs:
 	ENV_FILE=.env.development docker compose --env-file .env.development logs -f
 
+dev-observability:
+	ENV_FILE=.env.development docker compose --env-file .env.development --profile observability up -d
+
 # Production — uses .env.production (never commit real secrets)
 prod-up:
 	ENV_FILE=.env.production docker compose --env-file .env.production up -d
@@ -37,6 +39,9 @@ prod-config:
 
 prod-logs:
 	ENV_FILE=.env.production docker compose --env-file .env.production logs -f
+
+prod-observability:
+	ENV_FILE=.env.production docker compose --env-file .env.production --profile observability up -d
 
 # Generic — respects ENV_FILE var: e.g. ENV_FILE=.env.production make up
 up:
