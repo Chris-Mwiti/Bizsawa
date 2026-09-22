@@ -55,7 +55,7 @@ services:
       redis:
         condition: service_healthy
       otel-collector:
-        condition: service_healthy
+        condition: service_started
     env_file:
       - path: ${ENV_FILE:-.env.development}
         required: true
@@ -114,12 +114,13 @@ services:
       - "13133:13133" # Health check
     healthcheck:
       test: ["CMD", "/healthcheck"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 15s
 
   jaeger:
-    image: jaegertracing/all-in-one:1.66
+    image: jaegertracing/all-in-one:latest
     environment:
       COLLECTOR_OTLP_ENABLED: true
     ports:
@@ -131,28 +132,25 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    profiles:
-      - observability
 
   prometheus:
-    image: prom/prometheus:v3.2.1
+    image: prom/prometheus:latest
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
     ports:
       - "9090:9090"
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--web.enable-remote-write-receiver"
       - "--enable-feature=otlp-write-receiver"
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:9090/-/healthy || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
-    profiles:
-      - observability
 
   grafana:
-    image: grafana/grafana:11.6.2
+    image: grafana/grafana:latest
     environment:
       GF_AUTH_ANONYMOUS_ENABLED: true
       GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
@@ -168,8 +166,6 @@ services:
         condition: service_healthy
       jaeger:
         condition: service_healthy
-    profiles:
-      - observability
 
   waha:
     image: devlikeapro/waha

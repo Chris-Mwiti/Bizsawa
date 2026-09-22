@@ -27,6 +27,9 @@ dev-logs:
 dev-observability:
 	ENV_FILE=.env.development docker compose --env-file .env.development --profile observability up -d
 
+dev-observability-down:
+	ENV_FILE=.env.development docker compose --env-file .env.development --profile observability down
+
 # Production — uses .env.production (never commit real secrets)
 prod-up:
 	ENV_FILE=.env.production docker compose --env-file .env.production up -d

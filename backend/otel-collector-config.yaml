@@ -8,6 +8,10 @@ receivers:
       grpc:
         endpoint: 0.0.0.0:4317
 
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
 processors:
   batch:
     timeout: 2s
@@ -17,7 +21,7 @@ processors:
     limit_mib: 512
     spike_limit_mib: 128
   resourcedetection:
-    detectors: [env, system, docker]
+    detectors: [env, system]
   attributes:
     actions:
       - key: service.instance.id
@@ -37,9 +41,8 @@ exporters:
       insecure: true
   debug:
     verbosity: basic
-  # Fallback: log to stdout for dev visibility
-  logging:
-    verbosity: detailed
+  # Fallback: log to stdout for dev visibility (logging exporter deprecated → use debug)
+  # logging: removed, use debug instead
 
 connectors:
   # spanmetrics connector generates RED metrics (request, error, duration) from traces
@@ -48,6 +51,7 @@ connectors:
     namespace: traces.spanmetrics
 
 service:
+  extensions: [health_check]
   pipelines:
     traces:
       receivers: [otlp]
@@ -60,7 +64,7 @@ service:
     logs:
       receivers: [otlp]
       processors: [memory_limiter, batch]
-      exporters: [logging]
+      exporters: [debug]
   telemetry:
     logs:
       level: info
