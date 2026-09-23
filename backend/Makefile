@@ -28,6 +28,13 @@ dev-logs:
 dev-observability:
 	ENV_FILE=.env.development docker compose --env-file .env.development --profile observability up -d
 
+dev-migration:
+	ENV_FILE=.env.development docker compose --env-file .env.development --profile migrate build migrate
+	ENV_FILE=.env.development docker compose --env-file .env.development --profile migrate up migrate
+
+dev-migration-down:
+	ENV_FILE=.env.development docker compose --env-file .env.development --profile migrate down migrate
+
 dev-observability-down:
 	ENV_FILE=.env.development docker compose --env-file .env.development --profile observability down
 
@@ -35,6 +42,12 @@ dev-observability-down:
 prod-up:
 	ENV_FILE=.env.production docker compose --env-file .env.production build --no-cache
 	ENV_FILE=.env.production docker compose --env-file .env.production up -d
+
+prod-migration:
+	ENV_FILE=.env.production docker compose --env-file .env.production --profile migrate up migrate
+
+prod-migration-down:
+	ENV_FILE=.env.production docker compose --env-file .env.production --profile migrate down migrate
 
 prod-down:
 	ENV_FILE=.env.production docker compose --env-file .env.production down
