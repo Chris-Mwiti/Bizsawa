@@ -17,4 +17,6 @@ CREATE TABLE IF NOT EXISTS business_invites (
 CREATE INDEX IF NOT EXISTS idx_business_invites_business_email ON business_invites(business_id, email);
 CREATE INDEX IF NOT EXISTS idx_business_invites_email ON business_invites(email);
 CREATE INDEX IF NOT EXISTS idx_business_invites_expires ON business_invites(expires_at);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_business_invites_pending_unique ON business_invites(business_id, email) WHERE used_at IS NULL AND expires_at > NOW();
+-- NOTE: cannot use NOW() in partial index predicate (must be IMMUTABLE). Use used_at IS NULL only;
+-- expiry is enforced in queries (WHERE expires_at > NOW()) and service refreshes/cleans expired rows.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_business_invites_pending_unique ON business_invites(business_id, email) WHERE used_at IS NULL;
