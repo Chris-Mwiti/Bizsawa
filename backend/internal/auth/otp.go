@@ -17,6 +17,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/email"
+	apperrors "github.com/Codecx-Org/FinAI/backend/internal/shared/errors"
 )
 
 type OTPType string
@@ -155,11 +156,17 @@ func (s *Service) CheckVerificationOTP(ctx context.Context, req CheckOTPRequest)
 		return false, ErrUnauthorized.WithMessage("otp not found or expired")
 	}
 	if rec.Attempts >= otpAllowedAttempts {
-		_ = s.repo.db.WithContext(ctx).Delete(&rec).Error
+		err = s.repo.db.WithContext(ctx).Delete(&rec).Error
+		if err != nil {
+			return false, err
+		}
 		return false, ErrUnauthorized.WithMessage("too many attempts, request new otp")
 	}
 	if hashOTP(otp) != rec.OtpHash {
-		_ = s.repo.db.WithContext(ctx).Model(&rec).Update("attempts", rec.Attempts+1).Error
+		err = s.repo.db.WithContext(ctx).Model(&rec).Update("attempts", rec.Attempts+1).Error
+		if err != nil {
+			return false, err
+		}
 		return false, ErrUnauthorized.WithMessage("invalid otp")
 	}
 	return true, nil
@@ -179,14 +186,28 @@ func (s *Service) verifyOTPAtomic(ctx context.Context, email, typ, otp string) (
 		return nil, err
 	}
 	if rec.Attempts >= otpAllowedAttempts {
-		_ = s.repo.db.WithContext(ctx).Delete(&rec).Error
+		err = s.repo.db.WithContext(ctx).Delete(&rec).Error
+
+		if err != nil {
+
+			return nil, apperrors.ErrInternal.WithCause(err).WithMessage("internal server error")
+		}
 		return nil, ErrUnauthorized.WithMessage("too many attempts")
 	}
 	if hashOTP(otp) != rec.OtpHash {
-		_ = s.repo.db.WithContext(ctx).Model(&rec).Update("attempts", rec.Attempts+1).Error
+		err = s.repo.db.WithContext(ctx).Model(&rec).Update("attempts", rec.Attempts+1).Error
+
+		if err != nil {
+			return nil, apperrors.ErrInternal.WithCause(err).WithMessage("internal server error")
+		}
 		return nil, ErrUnauthorized.WithMessage("invalid otp")
 	}
-	_ = s.repo.db.WithContext(ctx).Model(&rec).Updates(map[string]any{"verified": true, "attempts": rec.Attempts + 1}).Error
+	err = s.repo.db.WithContext(ctx).Model(&rec).Updates(map[string]any{"verified": true, "attempts": rec.Attempts + 1}).Error
+
+	if err != nil {
+
+		return nil, err
+	}
 	return &rec, nil
 }
 
@@ -214,17 +235,65 @@ func (s *Service) SignInEmailOTP(ctx context.Context, req SignInOTPRequest) (*Au
 			return nil, err
 		}
 		if s.subscriptions != nil {
-			_ = s.subscriptions.EnsureDefaultSubscriptionForUser(ctx, user.ID)
+			err = s.subscriptions.EnsureDefaultSubscriptionForUser(ctx, user.ID)
+			if err != nil {
+				return nil, err
+			}
 		}
 	} else {
 		// Existing unverified credential account: per docs, clear password and verify email
 		if !user.EmailVerified {
-			_ = s.repo.db.WithContext(ctx).Model(&User{}).Where("id = ?", user.ID).Updates(map[string]any{"email_verified": true, "password_hash": ""}).Error
+			err = s.repo.db.WithContext(ctx).Model(&User{}).Where("id = ?", user.ID).Updates(map[string]any{"email_verified": true, "password_hash": ""}).Error
+			if err != nil {
+				return nil, err
+			}
 			user.EmailVerified = true
 		}
 		if !user.IsActive {
 			return nil, ErrInactiveUser
 		}
+	}
+	// Auto-accept pending business invites for this email (invite OTP doubles as sign-in code)
+	// Best-effort: create membership for each pending invite where user not already member
+	err = func() error {
+		var invites []struct {
+			ID         uuid.UUID `gorm:"column:id"`
+			BusinessID uuid.UUID `gorm:"column:business_id"`
+			Role       string    `gorm:"column:role"`
+			InvitedBy  uuid.UUID `gorm:"column:invited_by"`
+			CreatedAt  time.Time `gorm:"column:created_at"`
+		}
+		if err := s.repo.db.WithContext(ctx).Raw("SELECT id, business_id, role, invited_by, created_at FROM business_invites WHERE email = ? AND used_at IS NULL AND expires_at > NOW()", email).Scan(&invites).Error; err != nil || len(invites) == 0 {
+			return nil
+		}
+		for _, inv := range invites {
+			var cnt int64
+			s.repo.db.WithContext(ctx).Raw("SELECT COUNT(*) FROM business_members WHERE business_id = ? AND user_id = ? AND deleted_at IS NULL", inv.BusinessID, user.ID).Scan(&cnt)
+			if cnt > 0 {
+				continue
+			}
+			now := time.Now().UTC()
+
+			err = s.repo.db.WithContext(ctx).Exec(
+				`INSERT INTO business_members (id, tenant_id, business_id, user_id, role, is_active, invited_by, invited_at, joined_at, created_at, updated_at) VALUES (gen_random_uuid(), ?, ?, ?, ?, true, ?, ?, ?, NOW(), NOW()) ON CONFLICT DO NOTHING`,
+				inv.BusinessID, inv.BusinessID, user.ID, inv.Role, inv.InvitedBy, inv.CreatedAt, now,
+			).Error
+			if err != nil {
+				return err
+			}
+
+			err = s.repo.db.WithContext(ctx).Exec("UPDATE business_invites SET used_at = NOW(), updated_at = NOW() WHERE id = ?", inv.ID).Error
+
+			if err != nil {
+				return err
+			}
+			slog.Info("auto-accepted invite on sign-in", "email", email, "business", inv.BusinessID, "role", inv.Role)
+		}
+		return nil
+	}()
+
+	if err != nil {
+		return nil, err
 	}
 	// OTP verified → sessions prior password sessions revoked? Keep per docs: revoke and sign in via OTP
 	return s.issue(ctx, user.ID, uuid.Nil, uuid.Nil, nil)
@@ -272,7 +341,9 @@ func (s *Service) ResetPasswordWithOTP(ctx context.Context, req ResetPasswordOTP
 		return err
 	}
 	// Revoke other sessions per EmailPassword.md revokeSessionsOnPasswordReset
-	_ = s.repo.db.WithContext(ctx).Model(&RefreshToken{}).Where("user_id = ?", user.ID).Update("revoked_at", time.Now().UTC()).Error
+	if err = s.repo.db.WithContext(ctx).Model(&RefreshToken{}).Where("user_id = ?", user.ID).Update("revoked_at", time.Now().UTC()).Error; err != nil {
+		return err
+	}
 	if err := s.repo.db.WithContext(ctx).Model(&User{}).Where("id = ?", user.ID).Updates(map[string]any{"password_hash": string(hash), "email_verified": true}).Error; err != nil {
 		return err
 	}
