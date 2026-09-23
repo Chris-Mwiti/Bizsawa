@@ -106,6 +106,15 @@ func NewRouter(deps Dependencies) http.Handler {
 			r.Route("/auth", deps.Auth.RegisterRoutes)
 		}
 
+		// Public invite accept — no auth, invited user redeems OTP to join business
+		if deps.Users != nil {
+			r.Route("/invites", func(r chi.Router) {
+				r.Group(func(r chi.Router) {
+					deps.Users.RegisterInvitePublicRoutes(r)
+				})
+			})
+		}
+
 		if deps.Tenancy != nil {
 			r.Route("/public", deps.Tenancy.RegisterPublicRoutes)
 		}
