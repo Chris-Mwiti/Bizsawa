@@ -13,6 +13,7 @@ prod: prod-up
 
 # Development (default) — uses .env.development
 dev-up:
+	ENV_FILE=.env.development docker compose --env-file .env.development build --no-cache
 	ENV_FILE=.env.development docker compose --env-file .env.development up -d
 
 dev-down:
@@ -32,6 +33,7 @@ dev-observability-down:
 
 # Production — uses .env.production (never commit real secrets)
 prod-up:
+	ENV_FILE=.env.production docker compose --env-file .env.production build --no-cache
 	ENV_FILE=.env.production docker compose --env-file .env.production up -d
 
 prod-down:
