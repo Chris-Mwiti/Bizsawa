@@ -29,6 +29,10 @@ import {
   RefreshCw,
   ShieldAlert,
   Crown,
+  Mail,
+  UserPlus,
+  Users,
+  Clock,
 } from 'lucide-react-native'
 import {
   Card,
@@ -45,6 +49,7 @@ import { api } from '../../lib/api'
 import { TAB_BAR_SCROLL_PADDING } from '../../constants/tabBar'
 import { useSubscription } from '../../hooks/api/useSubscription'
 import { PaywallModal } from '../../components/PaywallModal'
+import { useInvites } from '../../hooks/api/useInvites'
 
 function metadataLocation(metadata: unknown): string | null {
   if (!metadata || typeof metadata !== 'object') return null
@@ -92,6 +97,13 @@ export default function ProfileTab() {
   })
   const { subscription, isPremium } = useSubscription()
   const [showPaywall, setShowPaywall] = useState(false)
+  const { activeRole } = (() => { try { return useBusinessContext() as any } catch { return { activeRole: null } } })()
+  const { members, invites, inviteByEmail, isInviting } = useInvites()
+  const [showInvite, setShowInvite] = useState(false)
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteRole, setInviteRole] = useState<'MANAGER' | 'CASHIER' | 'VIEWER'>('CASHIER')
+  const canInvite = activeRole === 'OWNER' || activeRole === 'MANAGER'
+  const availableRoles: Array<'MANAGER' | 'CASHIER' | 'VIEWER'> = activeRole === 'OWNER' ? ['MANAGER', 'CASHIER', 'VIEWER'] : ['CASHIER']
 
   const ownerParts = useMemo(() => {
     const name = (business?.ownerName || userData?.ownerName || business?.name || '').trim()
@@ -377,6 +389,63 @@ export default function ProfileTab() {
             </TouchableOpacity>
           </CardContent>
         </Card>
+
+        {canInvite && (
+          <Card className='border border-gray-200'>
+            <CardHeader className='flex-row items-center justify-between'>
+              <View className='flex-row items-center gap-2'>
+                <Users size={16} color='#111827' />
+                <CardTitle>Team • {activeRole}</CardTitle>
+              </View>
+              <TouchableOpacity onPress={() => setShowInvite(true)} className='px-4 py-2 rounded-full bg-gray-900 flex-row items-center gap-2'>
+                <UserPlus size={14} color='white' />
+                <Text className='text-xs font-bold text-white'>Invite</Text>
+              </TouchableOpacity>
+            </CardHeader>
+            <CardContent className='pt-0 gap-3'>
+              <Text className='text-xs leading-4 text-gray-600'>
+                {activeRole === 'OWNER' ? 'Owner can invite Manager, Cashier or Viewer.' : 'Manager can invite Cashiers only.'} Invite sends an email with OTP + download instructions; the recipient enters the code to join as that role.
+              </Text>
+              {members.length > 0 && (
+                <View className='gap-2'>
+                  <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>Members ({members.length})</Text>
+                  {members.map((m:any) => (
+                    <View key={m.id} className='flex-row items-center justify-between p-3 rounded-2xl bg-white border border-gray-200'>
+                      <View className='flex-1'>
+                        <Text className='text-sm font-semibold text-gray-900' numberOfLines={1}>{m.userId.slice(0,8)}…</Text>
+                        <Text className='text-xs text-gray-500'>{m.role} • {m.isActive ? 'Active' : 'Inactive'}</Text>
+                      </View>
+                      <View className={`px-3 py-1 rounded-full ${m.role==='OWNER'?'bg-gray-900':m.role==='MANAGER'?'bg-blue-600':'bg-emerald-600'}`}>
+                        <Text className='text-xs font-bold text-white'>{m.role}</Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
+              {invites.length > 0 && (
+                <View className='gap-2'>
+                  <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>Pending invites ({invites.length})</Text>
+                  {invites.map((inv:any) => (
+                    <View key={inv.id} className='flex-row items-center gap-3 p-3 rounded-2xl bg-amber-50 border border-amber-200'>
+                      <Mail size={14} color='#b45309' />
+                      <View className='flex-1'>
+                        <Text className='text-sm font-medium text-gray-900' numberOfLines={1}>{inv.email}</Text>
+                        <Text className='text-xs text-gray-500'>{inv.role} • expires {new Date(inv.expiresAt).toLocaleDateString('en-KE')}</Text>
+                      </View>
+                      <View className='flex-row items-center gap-1'>
+                        <Clock size={12} color='#b45309' />
+                        <Text className='text-xs font-bold text-amber-700'>Pending</Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
+              {members.length===0 && invites.length===0 && (
+                <Text className='text-xs text-gray-500 text-center py-2'>No team yet — invite your first cashier.</Text>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         <Card className={`border ${isPremium?'border-emerald-200 bg-emerald-50/20':'border-gray-200'}`}>
           <CardHeader className='flex-row items-center justify-between'>
@@ -763,6 +832,50 @@ export default function ProfileTab() {
                 </>
               )}
             </TouchableOpacity>
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* Invite Modal — owner/manager */}
+      <Modal visible={showInvite} animationType='slide' presentationStyle='pageSheet' onRequestClose={() => setShowInvite(false)}>
+        <View className='flex-1 bg-gray-50'>
+          <View className='flex-row justify-between items-center p-4 bg-white border-b border-gray-200'>
+            <View>
+              <Text className='text-lg font-bold'>Invite team member</Text>
+              <Text className='text-xs text-gray-500'>{activeRole==='OWNER'?'Owner can invite any role':'Manager can invite Cashier'}</Text>
+            </View>
+            <TouchableOpacity onPress={() => setShowInvite(false)} className='w-11 h-11 rounded-full bg-gray-100 items-center justify-center'><Text className='font-bold'>✕</Text></TouchableOpacity>
+          </View>
+          <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
+            <View>
+              <Text className='text-sm font-semibold text-gray-700 mb-2'>Email *</Text>
+              <TextInput className='bg-white border border-gray-300 rounded-2xl px-4 py-4' keyboardType='email-address' autoCapitalize='none' placeholder='colleague@example.com' value={inviteEmail} onChangeText={setInviteEmail} />
+              <Text className='text-xs text-gray-500 mt-1'>An OTP code will be sent with download instructions.</Text>
+            </View>
+            <View>
+              <Text className='text-sm font-semibold text-gray-700 mb-2'>Role *</Text>
+              <View className='flex-row gap-2'>
+                {availableRoles.map((r) => (
+                  <TouchableOpacity key={r} onPress={() => setInviteRole(r)} className={`flex-1 py-3 rounded-2xl border items-center ${inviteRole===r?'bg-gray-900 border-gray-900':'bg-white border-gray-200'}`}>
+                    <Text className={`text-sm font-bold ${inviteRole===r?'text-white':'text-gray-700'}`}>{r}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <Text className='text-xs text-gray-500 mt-1'>Manager → Cashier only; Owner → any.</Text>
+            </View>
+            <TouchableOpacity disabled={isInviting || !inviteEmail.trim()} onPress={async () => {
+              try {
+                await inviteByEmail({ email: inviteEmail.trim(), role: inviteRole })
+                Alert.alert('Invite sent', `OTP sent to ${inviteEmail.trim()} as ${inviteRole}. They will get download instructions and can enter the code in Login → Have an invite code?`)
+                setInviteEmail(''); setShowInvite(false)
+              } catch (e:any) { Alert.alert('Invite failed', e.friendlyMessage || e.message || 'Failed') }
+            }} className={`py-4 rounded-2xl items-center flex-row justify-center gap-2 ${isInviting || !inviteEmail.trim() ? 'bg-gray-300' : 'bg-gray-900'}`}>
+              {isInviting ? <ActivityIndicator color='white' /> : <><Mail size={16} color='white' /><Text className='text-white font-bold'>Send invite</Text></>}
+            </TouchableOpacity>
+            <View className='bg-white rounded-2xl border border-gray-200 p-3'>
+              <Text className='text-xs font-bold text-gray-900'>How it works</Text>
+              <Text className='text-xs leading-4 text-gray-600 mt-1'>1. Email delivers OTP (24h) + Play Store / App Store links.{"\n"}2. If app not installed → download, open, Login → “Have an invite code?” → enter email + OTP.{"\n"}3. If app installed → Login → “Have an invite code?” → enter OTP → instantly joined with role.</Text>
+            </View>
           </ScrollView>
         </View>
       </Modal>
