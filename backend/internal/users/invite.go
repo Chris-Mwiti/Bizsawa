@@ -105,6 +105,8 @@ func (s *InviteService) InviteByEmail(ctx context.Context, businessID, invitedBy
 	if !validInviteRole(role) {
 		return nil, apperrors.ErrUnprocessable.WithMessage("invalid role for invite: use MANAGER, CASHIER, VIEWER")
 	}
+	// clean expired pending invites for this email/business so unique index (used_at IS NULL) doesn't block re-invite
+	_ = s.db.WithContext(ctx).Where("business_id = ? AND email = ? AND used_at IS NULL AND expires_at <= ?", businessID, email, time.Now().UTC()).Delete(&BusinessInvite{}).Error
 	// check already member
 	var cnt int64
 	if err := s.db.WithContext(ctx).Model(&BusinessMember{}).Where("business_id = ? AND user_id IN (SELECT id FROM auth_users WHERE email = ?) AND is_active = true", businessID, email).Count(&cnt).Error; err == nil && cnt > 0 {
