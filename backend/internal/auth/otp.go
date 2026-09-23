@@ -114,8 +114,11 @@ func (s *Service) SendVerificationOTP(ctx context.Context, req SendOTPRequest) e
 	}
 	otp := generateOTP(otpLength)
 	otpHash := hashOTP(otp)
-	// Invalidate previous unexpired OTPs of same type
-	_ = s.repo.db.WithContext(ctx).Where("email = ? AND type = ? AND expires_at > ?", emailAddr, string(otpType), time.Now().UTC()).Delete(&OTP{}).Error
+	// Invalidate previous unexpired OTPs of same type — best effort, log on failure
+	if err := s.repo.db.WithContext(ctx).Where("email = ? AND type = ? AND expires_at > ?", emailAddr, string(otpType), time.Now().UTC()).Delete(&OTP{}).Error; err != nil {
+		slog.Error("failed to invalidate previous OTPs", "email", emailAddr, "type", otpType, "err", err)
+		// continue, not fatal
+	}
 	rec := &OTP{
 		Email:     emailAddr,
 		OtpHash:   otpHash,
