@@ -13,6 +13,8 @@ import (
 
 	"github.com/shopspring/decimal"
 
+	"github.com/Codecx-Org/FinAI/backend/internal/observability"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverdatabasesql"
@@ -48,8 +50,43 @@ import (
 
 func main() {
 	cfg := config.Load()
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	slog.SetDefault(logger)
+	// Observability: OpenTelemetry Tracing + Metrics + Structured Logging
+	// Respects OTEL_ENABLED, OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_SERVICE_NAME etc.
+	otelCfg := observability.Config{
+		Enabled:           cfg.Observability.Enabled,
+		ServiceName:       cfg.Observability.ServiceName,
+		ServiceVersion:    cfg.Observability.ServiceVersion,
+		Environment:       cfg.Env,
+		Endpoint:          cfg.Observability.Endpoint,
+		Insecure:          cfg.Observability.Insecure,
+		SampleRatio:       cfg.Observability.SampleRatio,
+		TracingEnabled:    cfg.Observability.TracingEnabled,
+		MetricsEnabled:    cfg.Observability.MetricsEnabled,
+		PrometheusEnabled: cfg.Observability.PrometheusEnabled,
+		StdoutFallback:    cfg.Observability.StdoutFallback,
+	}
+	// Ensure service name is api-specific if generic
+	if otelCfg.ServiceName == "bizsawa-api" || otelCfg.ServiceName == "" {
+		otelCfg.ServiceName = "bizsawa-api"
+	}
+	// Bootstrap context for OTel setup before signal handling
+	bootstrapCtx := context.Background()
+	otelProvider, err := observability.Setup(bootstrapCtx, otelCfg)
+	if err != nil {
+		slog.Error("observability setup failed, continuing without telemetry", "err", err)
+	}
+	if _, err := observability.InitMetrics(); err != nil {
+		slog.Error("metrics init failed", "err", err)
+	}
+	logger := observability.NewLogger(otelCfg.ServiceName)
+	if otelProvider != nil {
+		defer func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = otelProvider.Shutdown(ctx)
+		}()
+	}
+	logger.Info("observability initialized", "enabled", otelCfg.Enabled, "endpoint", otelCfg.Endpoint, "prometheus", otelCfg.PrometheusEnabled, "service", otelCfg.ServiceName)
 
 	gormDB, err := shareddb.Open(cfg.Database)
 	if err != nil {
@@ -113,6 +150,7 @@ func main() {
 	tenancyModule := tenancy.New(gormDB)
 	usersModule := users.New(gormDB)
 	emailSender := email.NewSender(cfg.Email)
+	usersModule.InitInvites(emailSender)
 	authModule := auth.New(gormDB, auth.Config{SigningKey: cfg.JWT.SigningKey, Issuer: cfg.JWT.Issuer, AccessTTL: 90 * time.Minute, RefreshTTL: 30 * 24 * time.Hour}, auth.WithMembershipResolver(usersModule), auth.WithSubscriptionProvisioner(tenancyModule), auth.WithGoogleConfig(cfg.Google), auth.WithEmailSender(emailSender))
 	businessModule := business.New(gormDB, tenancyModule, usersModule, cryptoManager)
 	// Isolate subscription payments: inject mpesa STK provider into tenancy (separate from business payments)

@@ -1,0 +1,77 @@
+# OpenTelemetry Collector config for BizSawa - local dev / load-test observability
+# Traces -> Jaeger, Metrics -> Prometheus, Logs -> stdout (and optionally Loki)
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+processors:
+  batch:
+    timeout: 2s
+    send_batch_size: 512
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+    spike_limit_mib: 128
+  resourcedetection:
+    detectors: [env, system]
+  attributes:
+    actions:
+      - key: service.instance.id
+        action: upsert
+        value: ${env:HOSTNAME}
+
+exporters:
+  # Traces -> Jaeger (all-in-one) OTLP endpoint
+  otlp/jaeger:
+    endpoint: jaeger:4317
+    tls:
+      insecure: true
+  # Metrics -> Prometheus remote-write or keep in collector's own prometheus exporter
+  prometheusremotewrite:
+    endpoint: http://prometheus:9090/api/v1/write
+    tls:
+      insecure: true
+  debug:
+    verbosity: basic
+  # Fallback: log to stdout for dev visibility (logging exporter deprecated → use debug)
+  # logging: removed, use debug instead
+
+connectors:
+  # spanmetrics connector generates RED metrics (request, error, duration) from traces
+  # Useful for Kiali/Grafana and load-test error-rate dashboards without separate metrics instrumentation
+  spanmetrics:
+    namespace: traces.spanmetrics
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch, resourcedetection, attributes]
+      exporters: [otlp/jaeger, spanmetrics, debug]
+    metrics:
+      receivers: [otlp, spanmetrics]
+      processors: [memory_limiter, batch]
+      exporters: [debug, prometheusremotewrite]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [debug]
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: '0.0.0.0'
+                port: 8888

@@ -29,7 +29,7 @@ function getExpoDevHost(): string | null {
 }
 
 export function getApiUrl(): string {
-  const envUrl = process.env.EXPO_PUBLIC_API_URL?.trim()
+  const envUrl = (process.env.EXPO_PUBLIC_API_URL as string)?.trim()
   if (envUrl) return envUrl.replace(/\/$/, '')
 
   if (Platform.OS === 'web') return `http://localhost:${DEFAULT_API_PORT}`
@@ -47,7 +47,7 @@ export function getApiUrl(): string {
 
   if (__DEV__) {
     console.warn(
-      '[api] EXPO_PUBLIC_API_URL is unset and Expo hostUri is missing; API calls may fail.',
+      `[api] EXPO_PUBLIC_API_URL unset and Expo hostUri missing; API calls may fail. ENV=${(process.env.EXPO_PUBLIC_ENV as string) || (__DEV__?'development':'production')}`,
     )
   }
   return `http://localhost:${DEFAULT_API_PORT}`

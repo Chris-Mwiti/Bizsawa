@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -99,14 +100,16 @@ func (s *Service) LoginWithGoogle(ctx context.Context, req GoogleLoginRequest) (
 			return nil, ErrInactiveUser
 		}
 		// update account tokens
-		_ = s.repo.UpsertAccount(ctx, &Account{
+		if err := s.repo.UpsertAccount(ctx, &Account{
 			UserID:            existing.ID,
 			Provider:          "google",
 			ProviderAccountID: sub,
 			AccessToken:       accessTok,
 			IDToken:           rawIDToken,
 			ExpiresAt:         nil,
-		})
+		}); err != nil {
+			slog.Error("failed to upsert google account for existing user", "user", existing.ID, "err", err)
+		}
 		// business scoping same as Login
 		businessID := uuid.Nil
 		roles := []string(nil)
@@ -124,13 +127,15 @@ func (s *Service) LoginWithGoogle(ctx context.Context, req GoogleLoginRequest) (
 			if !u.IsActive {
 				return nil, ErrInactiveUser
 			}
-			_ = s.repo.UpsertAccount(ctx, &Account{
+			if err := s.repo.UpsertAccount(ctx, &Account{
 				UserID:            u.ID,
 				Provider:          "google",
 				ProviderAccountID: sub,
 				AccessToken:       accessTok,
 				IDToken:           rawIDToken,
-			})
+			}); err != nil {
+				slog.Error("failed to upsert google account for linked user", "user", u.ID, "err", err)
+			}
 			businessID := uuid.Nil
 			roles := []string(nil)
 			if req.BusinessID != nil && *req.BusinessID != uuid.Nil && s.memberships != nil {
@@ -169,15 +174,19 @@ func (s *Service) LoginWithGoogle(ctx context.Context, req GoogleLoginRequest) (
 			updates["name"] = info.Name
 		}
 		if len(updates) > 0 {
-			_ = s.repo.db.WithContext(ctx).Model(&User{}).Where("id = ?", u.ID).Updates(updates).Error
+			if err := s.repo.db.WithContext(ctx).Model(&User{}).Where("id = ?", u.ID).Updates(updates).Error; err != nil {
+				slog.Error("failed to update user for google link", "user", u.ID, "err", err)
+			}
 		}
-		_ = s.repo.UpsertAccount(ctx, &Account{
+		if err := s.repo.UpsertAccount(ctx, &Account{
 			UserID:            u.ID,
 			Provider:          "google",
 			ProviderAccountID: sub,
 			AccessToken:       accessTok,
 			IDToken:           rawIDToken,
-		})
+		}); err != nil {
+			slog.Error("failed to upsert google account for email-linked user", "user", u.ID, "err", err)
+		}
 		businessID := uuid.Nil
 		roles := []string(nil)
 		if req.BusinessID != nil && *req.BusinessID != uuid.Nil && s.memberships != nil {
@@ -206,15 +215,19 @@ func (s *Service) LoginWithGoogle(ctx context.Context, req GoogleLoginRequest) (
 	if err := s.repo.CreateUser(ctx, newUser); err != nil {
 		return nil, err
 	}
-	_ = s.repo.UpsertAccount(ctx, &Account{
+	if err := s.repo.UpsertAccount(ctx, &Account{
 		UserID:            newUser.ID,
 		Provider:          "google",
 		ProviderAccountID: sub,
 		AccessToken:       accessTok,
 		IDToken:           rawIDToken,
-	})
+	}); err != nil {
+		slog.Error("failed to upsert google account for new user", "user", newUser.ID, "err", err)
+	}
 	if s.subscriptions != nil {
-		_ = s.subscriptions.EnsureDefaultSubscriptionForUser(ctx, newUser.ID)
+		if err := s.subscriptions.EnsureDefaultSubscriptionForUser(ctx, newUser.ID); err != nil {
+			slog.Error("failed to ensure subscription for google user", "user", newUser.ID, "err", err)
+		}
 	}
 	businessID := uuid.Nil
 	if req.BusinessID != nil {

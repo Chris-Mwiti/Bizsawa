@@ -8,17 +8,32 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/authz"
+	"github.com/Codecx-Org/FinAI/backend/internal/shared/email"
 )
 
 type Module struct {
-	repo *Repository
-	svc  *Service
+	repo          *Repository
+	svc           *Service
+	inviteSvc     *InviteService
+	db            *gorm.DB
 }
 
 func New(db *gorm.DB) *Module {
 	repo := NewRepository(db)
-	return &Module{repo: repo, svc: NewService(repo)}
+	return &Module{repo: repo, svc: NewService(repo), db: db}
 }
+
+func (m *Module) InitInvites(emailSender email.Sender) {
+	m.inviteSvc = NewInviteService(m.db, m.repo, emailSender)
+	// resolve business name for invite email
+	m.inviteSvc.WithBusinessNameFn(func(ctx context.Context, businessID uuid.UUID) string {
+		var name string
+		_ = m.db.WithContext(ctx).Raw("SELECT name FROM businesses WHERE id = ? LIMIT 1", businessID).Scan(&name).Error
+		return name
+	})
+}
+
+func (m *Module) InviteService() *InviteService { return m.inviteSvc }
 
 func (m *Module) RegisterProfileRoutes(r chi.Router) {
 	h := Handler{svc: m.svc}
@@ -28,11 +43,19 @@ func (m *Module) RegisterProfileRoutes(r chi.Router) {
 }
 
 func (m *Module) RegisterRoutes(r chi.Router) {
-	h := Handler{svc: m.svc}
+	h := Handler{svc: m.svc, inviteSvc: m.inviteSvc, repo: m.repo, db: m.db}
 	r.Get("/", h.ListMembers)
 	r.Post("/invite", h.InviteMember)
+	r.Post("/invite-email", h.InviteByEmail)
+	r.Get("/invites", h.ListInvites)
+	r.Post("/accept-invite", h.AcceptInvite)
 	r.Put("/{memberID}/role", h.UpdateRole)
 	r.Delete("/{memberID}", h.DeactivateMember)
+}
+
+func (m *Module) RegisterInvitePublicRoutes(r chi.Router) {
+	h := Handler{svc: m.svc, inviteSvc: m.inviteSvc, repo: m.repo, db: m.db}
+	r.Post("/accept", h.AcceptInvitePublic)
 }
 
 func (m *Module) AddOwner(ctx context.Context, businessID, userID uuid.UUID) error {

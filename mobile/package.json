@@ -4,8 +4,13 @@
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
+    "start:lan": "expo start --host lan",
     "android": "expo run:android",
+    "android:dev": "NODE_ENV=development expo run:android",
+    "android:prod": "NODE_ENV=production expo run:android",
+    "android:lan": "EXPO_PUBLIC_API_URL=http://$(hostname -I | awk '{print $1}'):5504/api/v1 expo run:android",
     "ios": "expo run:ios",
+    "ios:dev": "NODE_ENV=development expo run:ios",
     "web": "expo start --web",
     "postinstall": "patch-package",
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx",

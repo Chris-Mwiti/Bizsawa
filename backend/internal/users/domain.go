@@ -23,6 +23,23 @@ type BusinessMember struct {
 
 func (BusinessMember) TableName() string { return "business_members" }
 
+// BusinessInvite holds pending email invites with OTP and role.
+type BusinessInvite struct {
+	ID        uuid.UUID  `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	BusinessID uuid.UUID `gorm:"type:uuid;not null;index" json:"businessId"`
+	TenantID  uuid.UUID `gorm:"type:uuid;not null" json:"tenantId"`
+	Email     string    `gorm:"type:text;not null;index" json:"email"`
+	Role      string    `gorm:"type:text;not null" json:"role"`
+	OtpHash   string    `gorm:"type:text;not null" json:"-"`
+	InvitedBy uuid.UUID `gorm:"type:uuid;not null" json:"invitedBy"`
+	ExpiresAt time.Time `gorm:"not null;index" json:"expiresAt"`
+	UsedAt    *time.Time `json:"usedAt"`
+	CreatedAt time.Time `gorm:"not null;default:now()" json:"createdAt"`
+	UpdatedAt time.Time `gorm:"not null;default:now()" json:"updatedAt"`
+}
+
+func (BusinessInvite) TableName() string { return "business_invites" }
+
 type UserProfile struct {
 	shareddb.TenantModel
 	UserID    uuid.UUID `gorm:"type:uuid;not null;uniqueIndex" json:"userId"`

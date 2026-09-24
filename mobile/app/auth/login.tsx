@@ -375,8 +375,18 @@ export default function LoginScreen() {
                 </View>
               ) : null}
 
+              {/* Invite code Link */}
+              <View className='flex-row justify-center mt-4'>
+                <Text className='text-gray-600'>Have an invite code? </Text>
+                <TouchableOpacity onPress={() => router.push({ pathname: '/auth/accept-invite', params: formData.email ? { email: formData.email } : undefined } as any)}>
+                  <Text className='text-primary-600 font-semibold'>
+                    Accept invite
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
               {/* Register Link */}
-              <View className='flex-row justify-center mt-6'>
+              <View className='flex-row justify-center mt-2'>
                 <Text className='text-gray-600'>Don't have an account? </Text>
                 <TouchableOpacity onPress={() => router.push('/auth/register')}>
                   <Text className='text-primary-600 font-semibold'>

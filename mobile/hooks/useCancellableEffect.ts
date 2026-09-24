@@ -18,6 +18,5 @@ export function useCancellableEffect(
     const ctrl = new AbortController()
     void effect(ctrl.signal)
     return () => ctrl.abort('unmount')
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps)
 }
