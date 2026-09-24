@@ -1,0 +1,3 @@
+FROM otel/opentelemetry-collector-contrib:0.128.0
+COPY otel-collector-config.yaml /etc/otel-collector-config.yaml
+# Render will run: --config=/etc/otel-collector-config.yaml (see Render Dashboard > Docker Command)
