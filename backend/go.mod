@@ -19,7 +19,7 @@ require (
 	github.com/riverqueue/river/riverdriver/riverdatabasesql v0.41.0
 	github.com/riverqueue/river/riverdriver/riverpgxv5 v0.41.0
 	github.com/shopspring/decimal v1.4.0
-	github.com/sony/gobreaker/v2 v2.0.0
+	github.com/sony/gobreaker/v2 v2.4.0
 	go.opentelemetry.io/otel v1.46.0
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp v1.46.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.46.0
