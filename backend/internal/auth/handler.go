@@ -64,17 +64,17 @@ func (h Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 func (h Handler) GoogleLogin(w http.ResponseWriter, r *http.Request) {
 	var req GoogleLoginRequest
 	if err := sharedhttp.Decode(r, &req); err != nil {
-		slog.Error("google login decode failed", "err", err)
+		slog.ErrorContext(r.Context(), "google login decode failed", "err", err)
 		sharedhttp.Error(w, err)
 		return
 	}
 	resp, err := h.svc.LoginWithGoogle(r.Context(), req)
 	if err != nil {
-		slog.Error("google login failed", "err", err)
+		slog.ErrorContext(r.Context(), "google login failed", "err", err)
 		sharedhttp.Error(w, err)
 		return
 	}
-	slog.Info("google login succeeded", "userId", resp.UserID)
+	slog.InfoContext(r.Context(), "google login succeeded", "userId", resp.UserID)
 	sharedhttp.JSON(w, http.StatusOK, resp)
 }
 
@@ -121,12 +121,12 @@ func (h Handler) GoogleRedirect(w http.ResponseWriter, r *http.Request) {
 func (h Handler) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 	code := r.URL.Query().Get("code")
 	if code == "" {
-		slog.Error("google callback missing code", "query", r.URL.RawQuery)
+		slog.ErrorContext(r.Context(), "google callback missing code", "query", r.URL.RawQuery)
 		sharedhttp.Error(w, fmt.Errorf("missing code"))
 		return
 	}
 	if h.svc.googleCfg == nil || len(h.svc.googleCfg.ClientIDs) == 0 {
-		slog.Error("google callback not configured")
+		slog.ErrorContext(r.Context(), "google callback not configured")
 		sharedhttp.Error(w, fmt.Errorf("google sso not configured"))
 		return
 	}
@@ -149,7 +149,7 @@ func (h Handler) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 	form.Set("grant_type", "authorization_code")
 	resp, err := http.PostForm("https://oauth2.googleapis.com/token", form)
 	if err != nil {
-		slog.Error("google token exchange failed", "err", err)
+		slog.ErrorContext(r.Context(), "google token exchange failed", "err", err)
 		sharedhttp.Error(w, err)
 		return
 	}
@@ -159,12 +159,12 @@ func (h Handler) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 		AccessToken string `json:"access_token"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&tok); err != nil {
-		slog.Error("google token decode failed", "err", err, "status", resp.Status)
+		slog.ErrorContext(r.Context(), "google token decode failed", "err", err, "status", resp.Status)
 		sharedhttp.Error(w, err)
 		return
 	}
 	if tok.IDToken == "" {
-		slog.Error("google callback no id_token", "status", resp.Status)
+		slog.ErrorContext(r.Context(), "google callback no id_token", "status", resp.Status)
 		sharedhttp.Error(w, fmt.Errorf("no id_token from google"))
 		return
 	}
@@ -172,11 +172,11 @@ func (h Handler) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 		IDToken: &GoogleIDToken{Token: tok.IDToken, AccessToken: tok.AccessToken},
 	})
 	if err != nil {
-		slog.Error("google callback LoginWithGoogle failed", "err", err)
+		slog.ErrorContext(r.Context(), "google callback LoginWithGoogle failed", "err", err)
 		sharedhttp.Error(w, err)
 		return
 	}
-	slog.Info("google callback succeeded", "userId", authResp.UserID)
+	slog.InfoContext(r.Context(), "google callback succeeded", "userId", authResp.UserID)
 	sharedhttp.JSON(w, http.StatusOK, authResp)
 }
 
