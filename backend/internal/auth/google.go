@@ -108,7 +108,7 @@ func (s *Service) LoginWithGoogle(ctx context.Context, req GoogleLoginRequest) (
 			IDToken:           rawIDToken,
 			ExpiresAt:         nil,
 		}); err != nil {
-			slog.Error("failed to upsert google account for existing user", "user", existing.ID, "err", err)
+			slog.ErrorContext(ctx, "failed to upsert google account for existing user", "user", existing.ID, "err", err)
 		}
 		// business scoping same as Login
 		businessID := uuid.Nil
@@ -134,7 +134,7 @@ func (s *Service) LoginWithGoogle(ctx context.Context, req GoogleLoginRequest) (
 				AccessToken:       accessTok,
 				IDToken:           rawIDToken,
 			}); err != nil {
-				slog.Error("failed to upsert google account for linked user", "user", u.ID, "err", err)
+				slog.ErrorContext(ctx, "failed to upsert google account for linked user", "user", u.ID, "err", err)
 			}
 			businessID := uuid.Nil
 			roles := []string(nil)
@@ -175,7 +175,7 @@ func (s *Service) LoginWithGoogle(ctx context.Context, req GoogleLoginRequest) (
 		}
 		if len(updates) > 0 {
 			if err := s.repo.db.WithContext(ctx).Model(&User{}).Where("id = ?", u.ID).Updates(updates).Error; err != nil {
-				slog.Error("failed to update user for google link", "user", u.ID, "err", err)
+				slog.ErrorContext(ctx, "failed to update user for google link", "user", u.ID, "err", err)
 			}
 		}
 		if err := s.repo.UpsertAccount(ctx, &Account{
@@ -185,7 +185,7 @@ func (s *Service) LoginWithGoogle(ctx context.Context, req GoogleLoginRequest) (
 			AccessToken:       accessTok,
 			IDToken:           rawIDToken,
 		}); err != nil {
-			slog.Error("failed to upsert google account for email-linked user", "user", u.ID, "err", err)
+			slog.ErrorContext(ctx, "failed to upsert google account for email-linked user", "user", u.ID, "err", err)
 		}
 		businessID := uuid.Nil
 		roles := []string(nil)
@@ -222,11 +222,11 @@ func (s *Service) LoginWithGoogle(ctx context.Context, req GoogleLoginRequest) (
 		AccessToken:       accessTok,
 		IDToken:           rawIDToken,
 	}); err != nil {
-		slog.Error("failed to upsert google account for new user", "user", newUser.ID, "err", err)
+		slog.ErrorContext(ctx, "failed to upsert google account for new user", "user", newUser.ID, "err", err)
 	}
 	if s.subscriptions != nil {
 		if err := s.subscriptions.EnsureDefaultSubscriptionForUser(ctx, newUser.ID); err != nil {
-			slog.Error("failed to ensure subscription for google user", "user", newUser.ID, "err", err)
+			slog.ErrorContext(ctx, "failed to ensure subscription for google user", "user", newUser.ID, "err", err)
 		}
 	}
 	businessID := uuid.Nil
