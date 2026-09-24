@@ -21,12 +21,12 @@ type Sender interface {
 type NoopSender struct{}
 
 func (n *NoopSender) SendOTPEmail(ctx context.Context, toEmail, otp string, otpType string) error {
-	slog.Info("email (noop) — OTP not sent via provider", "to", toEmail, "type", otpType, "otp", otp)
+	slog.InfoContext(ctx, "email (noop) — OTP not sent via provider", "to", toEmail, "type", otpType, "otp", otp)
 	return nil
 }
 
 func (n *NoopSender) SendInviteEmail(ctx context.Context, toEmail, businessName, role, otp string) error {
-	slog.Info("email (noop) — invite not sent via provider", "to", toEmail, "business", businessName, "role", role, "otp", otp)
+	slog.InfoContext(ctx, "email (noop) — invite not sent via provider", "to", toEmail, "business", businessName, "role", role, "otp", otp)
 	return nil
 }
 
@@ -70,7 +70,7 @@ func (r *ResendSender) SendOTPEmail(ctx context.Context, toEmail, otp string, ot
 	if err != nil {
 		return fmt.Errorf("resend send failed: %w", err)
 	}
-	slog.Info("email sent via Resend", "to", toEmail, "type", otpType, "id", sent.Id)
+	slog.InfoContext(ctx, "email sent via Resend", "to", toEmail, "type", otpType, "id", sent.Id)
 	return nil
 }
 
@@ -92,7 +92,7 @@ func (r *ResendSender) SendInviteEmail(ctx context.Context, toEmail, businessNam
 	if err != nil {
 		return fmt.Errorf("resend invite send failed: %w", err)
 	}
-	slog.Info("invite email sent via Resend", "to", toEmail, "business", businessName, "role", role, "id", sent.Id)
+	slog.InfoContext(ctx, "invite email sent via Resend", "to", toEmail, "business", businessName, "role", role, "id", sent.Id)
 	return nil
 }
 
