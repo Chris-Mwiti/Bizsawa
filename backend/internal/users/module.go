@@ -2,6 +2,7 @@ package users
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -28,7 +29,10 @@ func (m *Module) InitInvites(emailSender email.Sender) {
 	// resolve business name for invite email
 	m.inviteSvc.WithBusinessNameFn(func(ctx context.Context, businessID uuid.UUID) string {
 		var name string
-		_ = m.db.WithContext(ctx).Raw("SELECT name FROM businesses WHERE id = ? LIMIT 1", businessID).Scan(&name).Error
+		if err := m.db.WithContext(ctx).Raw("SELECT name FROM businesses WHERE id = ? LIMIT 1", businessID).Scan(&name).Error; err != nil {
+			slog.ErrorContext(ctx, "failed to resolve business name for invite", "business", businessID, "err", err)
+			return ""
+		}
 		return name
 	})
 }
