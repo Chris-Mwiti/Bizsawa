@@ -1,6 +1,7 @@
 package tenancy
 
 import (
+	"log/slog"
 	"context"
 	"time"
 
@@ -75,7 +76,10 @@ func (r *Repository) UpsertActiveSubscription(ctx context.Context, userID uuid.U
 	var active Subscription
 	err := r.db.WithContext(ctx).Where("user_id = ? AND status = 'ACTIVE'", userID).First(&active).Error
 	if err == nil {
-		_ = r.db.WithContext(ctx).Model(&active).Update("status", "INACTIVE").Error
+		if err := r.db.WithContext(ctx).Model(&active).Update("status", "INACTIVE").Error; err != nil {
+			slog.ErrorContext(ctx, "database operation failed", "err", err)
+			return nil, err
+		}
 	}
 	sub := &Subscription{UserID: userID, PlanCode: plan, Status: "ACTIVE", EndsAt: endsAt}
 	if err := r.db.WithContext(ctx).Create(sub).Error; err != nil {

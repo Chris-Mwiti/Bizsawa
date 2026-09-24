@@ -1,6 +1,7 @@
 package invoices
 
 import (
+	"log/slog"
 	"context"
 	"fmt"
 	"time"
@@ -83,7 +84,9 @@ func (r *Repository) Find(ctx context.Context, businessID, invoiceID uuid.UUID) 
 
 		var cr custRow
 
-		_ = r.db.WithContext(ctx).Table("customers").Select("name, phone").Where("business_id = ? AND id = ?", businessID, *invoice.CustomerID).First(&cr).Error
+		if err := r.db.WithContext(ctx).Table("customers").Select("name, phone").Where("business_id = ? AND id = ?", businessID, *invoice.CustomerID).First(&cr).Error; err != nil {
+			slog.ErrorContext(ctx, "database operation failed", "err", err)
+		}
 		invoice.CustomerName = cr.Name
 		invoice.CustomerPhone = cr.Phone
 	}
@@ -144,7 +147,9 @@ func (r *Repository) enrichInvoices(ctx context.Context, businessID uuid.UUID, i
 
 		var crows []custRow
 
-		_ = r.db.WithContext(ctx).Table("customers").Select("id, name, phone").Where("business_id = ? AND id IN ?", businessID, custIDs).Find(&crows).Error
+		if err := r.db.WithContext(ctx).Table("customers").Select("id, name, phone").Where("business_id = ? AND id IN ?", businessID, custIDs).Find(&crows).Error; err != nil {
+			slog.ErrorContext(ctx, "database operation failed", "err", err)
+		}
 
 		for _, cr := range crows {
 			custMap[cr.ID] = struct{ Name, Phone string }{cr.Name, cr.Phone}
@@ -162,7 +167,9 @@ func (r *Repository) enrichInvoices(ctx context.Context, businessID uuid.UUID, i
 
 		var prows []prodRow
 
-		_ = r.db.WithContext(ctx).Table("products").Select("id, name").Where("business_id = ? AND id IN ?", businessID, prodIDs).Find(&prows).Error
+		if err := r.db.WithContext(ctx).Table("products").Select("id, name").Where("business_id = ? AND id IN ?", businessID, prodIDs).Find(&prows).Error; err != nil {
+			slog.ErrorContext(ctx, "database operation failed", "err", err)
+		}
 
 		for _, pr := range prows {
 			prodMap[pr.ID] = pr.Name

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/url"
+	"strings"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -31,7 +33,7 @@ type Provider struct {
 // Returns shutdown func that should be called on app exit.
 func Setup(ctx context.Context, cfg Config) (*Provider, error) {
 	if !cfg.Enabled {
-		slog.Info("observability disabled via OTEL_ENABLED=false")
+		slog.InfoContext(ctx, "observability disabled via OTEL_ENABLED=false")
 		// set noop propagator and providers
 		otel.SetTracerProvider(sdktrace.NewTracerProvider())
 		otel.SetMeterProvider(sdkmetric.NewMeterProvider())
@@ -72,15 +74,15 @@ func Setup(ctx context.Context, cfg Config) (*Provider, error) {
 			if err != nil {
 				return nil, fmt.Errorf("otlp trace exporter: %w", err)
 			}
-			slog.Info("otel tracing via OTLP", "endpoint", cfg.Endpoint, "service", cfg.ServiceName)
+			slog.InfoContext(ctx, "otel tracing via OTLP", "endpoint", cfg.Endpoint, "service", cfg.ServiceName)
 		} else if cfg.StdoutFallback {
 			exp, err = stdouttrace.New(stdouttrace.WithPrettyPrint())
 			if err != nil {
 				return nil, fmt.Errorf("stdout trace exporter: %w", err)
 			}
-			slog.Info("otel tracing via stdout (no OTEL_EXPORTER_OTLP_ENDPOINT)")
+			slog.InfoContext(ctx, "otel tracing via stdout (no OTEL_EXPORTER_OTLP_ENDPOINT)")
 		} else {
-			slog.Info("otel tracing disabled: no endpoint and stdout fallback off")
+			slog.InfoContext(ctx, "otel tracing disabled: no endpoint and stdout fallback off")
 		}
 
 		var opts []sdktrace.TracerProviderOption
@@ -110,10 +112,10 @@ func Setup(ctx context.Context, cfg Config) (*Provider, error) {
 		if cfg.PrometheusEnabled {
 			promExp, err := promexporter.New()
 			if err != nil {
-				slog.Warn("prometheus exporter failed, continuing without it", "err", err)
+				slog.WarnContext(ctx, "prometheus exporter failed, continuing without it", "err", err)
 			} else {
 				readers = append(readers, sdkmetric.WithReader(promExp))
-				slog.Info("otel prometheus metrics enabled", "service", cfg.ServiceName)
+				slog.InfoContext(ctx, "otel prometheus metrics enabled", "service", cfg.ServiceName)
 			}
 		}
 
@@ -125,22 +127,22 @@ func Setup(ctx context.Context, cfg Config) (*Provider, error) {
 			metricOpts = append(metricOpts, otlpmetrichttp.WithEndpoint(stripScheme(cfg.Endpoint)))
 			otlpExp, err := otlpmetrichttp.New(ctx, metricOpts...)
 			if err != nil {
-				slog.Warn("otlp metric exporter failed", "err", err)
+				slog.WarnContext(ctx, "otlp metric exporter failed", "err", err)
 			} else {
 				readers = append(readers, sdkmetric.WithReader(sdkmetric.NewPeriodicReader(otlpExp, sdkmetric.WithInterval(15*time.Second))))
-				slog.Info("otel metrics via OTLP", "endpoint", cfg.Endpoint)
+				slog.InfoContext(ctx, "otel metrics via OTLP", "endpoint", cfg.Endpoint)
 			}
 		} else if cfg.StdoutFallback {
 			stdExp, err := stdoutmetric.New()
 			if err == nil {
 				readers = append(readers, sdkmetric.WithReader(sdkmetric.NewPeriodicReader(stdExp, sdkmetric.WithInterval(30*time.Second))))
-				slog.Info("otel metrics via stdout")
+				slog.InfoContext(ctx, "otel metrics via stdout")
 			}
 		}
 
 		if len(readers) == 0 {
 			// fallback noop reader to avoid nil meter provider
-			slog.Info("otel metrics disabled: no exporter configured")
+			slog.InfoContext(ctx, "otel metrics disabled: no exporter configured")
 		}
 
 		mOpts := []sdkmetric.Option{sdkmetric.WithResource(res)}
@@ -173,25 +175,41 @@ func (p *Provider) Shutdown(ctx context.Context) error {
 
 func stripScheme(endpoint string) string {
 	// otlptracehttp.WithEndpoint expects host:port, not https://...
-	// handle http://host:4318 and https://host:4318 and host:4318
-	s := endpoint
-	if len(s) > 7 && s[:7] == "http://" {
-		s = s[7:]
-	} else if len(s) > 8 && s[:8] == "https://" {
-		s = s[8:]
+	// Use url.Parse for robust handling, fallback to string trim
+	endpoint = strings.TrimSpace(endpoint)
+	endpoint = strings.TrimSuffix(endpoint, "/")
+	if u, err := parseURL(endpoint); err == nil && u.Host != "" {
+		return u.Host
 	}
-	// strip trailing /v1/traces etc if user passed full path
-	if idx := indexOf(s, "/"); idx != -1 {
+	s := endpoint
+	if strings.HasPrefix(s, "http://") {
+		s = strings.TrimPrefix(s, "http://")
+	} else if strings.HasPrefix(s, "https://") {
+		s = strings.TrimPrefix(s, "https://")
+	}
+	if idx := strings.Index(s, "/"); idx != -1 {
 		s = s[:idx]
 	}
-	return s
+	return strings.TrimSpace(s)
+}
+
+func parseURL(raw string) (*url.URL, error) {
+	// need net/url import — handled via strings fallback if not available
+	// Use standard library
+	u, err := url.Parse(raw)
+	if err != nil {
+		return nil, err
+	}
+	// url.Parse without scheme treats host as path; ensure scheme present for correct Host extraction
+	if u.Scheme == "" {
+		u, err = url.Parse("https://" + raw)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return u, nil
 }
 
 func indexOf(s, substr string) int {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return i
-		}
-	}
-	return -1
+	return strings.Index(s, substr)
 }

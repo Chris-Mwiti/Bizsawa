@@ -109,14 +109,14 @@ func (s *Service) SendVerificationOTP(ctx context.Context, req SendOTPRequest) e
 	// For forget-password, user must exist — prevents enumeration timing but we still create OTP for non-existent to avoid leak
 	if otpType == OTPTypeForgetPassword {
 		if _, err := s.repo.FindByEmail(ctx, emailAddr); err != nil {
-			slog.Info("otp forget-password for non-existent user (no-op)", "email", emailAddr)
+			slog.InfoContext(ctx, "otp forget-password for non-existent user (no-op)", "email", emailAddr)
 		}
 	}
 	otp := generateOTP(otpLength)
 	otpHash := hashOTP(otp)
 	// Invalidate previous unexpired OTPs of same type — best effort, log on failure
 	if err := s.repo.db.WithContext(ctx).Where("email = ? AND type = ? AND expires_at > ?", emailAddr, string(otpType), time.Now().UTC()).Delete(&OTP{}).Error; err != nil {
-		slog.Error("failed to invalidate previous OTPs", "email", emailAddr, "type", otpType, "err", err)
+		slog.ErrorContext(ctx, "failed to invalidate previous OTPs", "email", emailAddr, "type", otpType, "err", err)
 		// continue, not fatal
 	}
 	rec := &OTP{
@@ -134,13 +134,13 @@ func (s *Service) SendVerificationOTP(ctx context.Context, req SendOTPRequest) e
 		sender = &email.NoopSender{}
 	}
 	if err := sender.SendOTPEmail(ctx, emailAddr, otp, string(otpType)); err != nil {
-		slog.Error("failed to send OTP email via provider", "email", emailAddr, "type", otpType, "err", err)
+		slog.ErrorContext(ctx, "failed to send OTP email via provider", "email", emailAddr, "type", otpType, "err", err)
 		// OTP is already persisted; surface error so caller can retry/show message.
 		// In dev (NoopSender) this never errors.
 		return fmt.Errorf("failed to send OTP email: %w", err)
 	}
 	// Always log at info for dev observability (redacted in prod via log level)
-	slog.Info("sendVerificationOTP dispatched", "email", emailAddr, "type", otpType, "expiresIn", otpExpiresIn.String())
+	slog.InfoContext(ctx, "sendVerificationOTP dispatched", "email", emailAddr, "type", otpType, "expiresIn", otpExpiresIn.String())
 	return nil
 }
 
@@ -290,7 +290,7 @@ func (s *Service) SignInEmailOTP(ctx context.Context, req SignInOTPRequest) (*Au
 			if err != nil {
 				return err
 			}
-			slog.Info("auto-accepted invite on sign-in", "email", email, "business", inv.BusinessID, "role", inv.Role)
+			slog.InfoContext(ctx, "auto-accepted invite on sign-in", "email", email, "business", inv.BusinessID, "role", inv.Role)
 		}
 		return nil
 	}()
@@ -321,7 +321,7 @@ func (s *Service) RequestPasswordResetWithOTP(ctx context.Context, req RequestPa
 	}
 	// Always return success to avoid enumeration, but only send if user exists
 	if _, err := s.repo.FindByEmail(ctx, email); err != nil {
-		slog.Info("requestPasswordReset OTP for non-existent user (silently succeed)", "email", email)
+		slog.InfoContext(ctx, "requestPasswordReset OTP for non-existent user (silently succeed)", "email", email)
 		return nil
 	}
 	return s.SendVerificationOTP(ctx, SendOTPRequest{Email: email, Type: OTPTypeForgetPassword})
@@ -350,7 +350,7 @@ func (s *Service) ResetPasswordWithOTP(ctx context.Context, req ResetPasswordOTP
 	if err := s.repo.db.WithContext(ctx).Model(&User{}).Where("id = ?", user.ID).Updates(map[string]any{"password_hash": string(hash), "email_verified": true}).Error; err != nil {
 		return err
 	}
-	slog.Info("password reset via OTP", "email", email)
+	slog.InfoContext(ctx, "password reset via OTP", "email", email)
 	return nil
 }
 

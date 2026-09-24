@@ -159,7 +159,9 @@ func (s *Service) create(ctx context.Context, businessID, staffID uuid.UUID, ord
 	s.logger.InfoContext(ctx, "[SALES]-sale created", "saleID", sale.ID.String(), "businessID", businessID.String())
 
 	// Invalidate analytics snapshots so next insights fetch recomputes with fresh sale.
-	_ = s.repo.DB().WithContext(ctx).Exec(`DELETE FROM analytics_snapshots WHERE business_id = ?`, businessID).Error
+	if err := s.repo.DB().WithContext(ctx).Exec(`DELETE FROM analytics_snapshots WHERE business_id = ?`, businessID).Error; err != nil {
+		slog.ErrorContext(ctx, "database operation failed", "err", err)
+	}
 
 	return s.repo.Find(ctx, businessID, sale.ID)
 }
@@ -175,7 +177,9 @@ func (s *Service) Get(ctx context.Context, businessID, saleID uuid.UUID) (*Sale,
 func (s *Service) Void(ctx context.Context, businessID, saleID uuid.UUID) error {
 	err := s.repo.Void(ctx, businessID, saleID)
 	if err == nil {
-		_ = s.repo.DB().WithContext(ctx).Exec(`DELETE FROM analytics_snapshots WHERE business_id = ?`, businessID).Error
+		if err := s.repo.DB().WithContext(ctx).Exec(`DELETE FROM analytics_snapshots WHERE business_id = ?`, businessID).Error; err != nil {
+			slog.ErrorContext(ctx, "database operation failed", "err", err)
+		}
 	}
 	return err
 }

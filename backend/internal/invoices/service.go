@@ -466,7 +466,9 @@ func (s *Service) PDF(ctx context.Context, businessID, invoiceID uuid.UUID) ([]b
 		Address string `gorm:"column:address"`
 		TaxPIN  string `gorm:"column:tax_pin"`
 	}
-	_ = s.repo.db.WithContext(ctx).Table("businesses").Select("name, phone, email, address, tax_pin").Where("id = ?", businessID).First(&business).Error
+	if err := s.repo.db.WithContext(ctx).Table("businesses").Select("name, phone, email, address, tax_pin").Where("id = ?", businessID).First(&business).Error; err != nil {
+		slog.ErrorContext(ctx, "database operation failed", "err", err)
+	}
 
 	return deterministicPDF(inv, business), nil
 }

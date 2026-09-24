@@ -105,8 +105,6 @@ func (s *InviteService) InviteByEmail(ctx context.Context, businessID, invitedBy
 	if !validInviteRole(role) {
 		return nil, apperrors.ErrUnprocessable.WithMessage("invalid role for invite: use MANAGER, CASHIER, VIEWER")
 	}
-	// clean expired pending invites for this email/business so unique index (used_at IS NULL) doesn't block re-invite
-	_ = s.db.WithContext(ctx).Where("business_id = ? AND email = ? AND used_at IS NULL AND expires_at <= ?", businessID, email, time.Now().UTC()).Delete(&BusinessInvite{}).Error
 	// check already member
 	var cnt int64
 	if err := s.db.WithContext(ctx).Model(&BusinessMember{}).Where("business_id = ? AND user_id IN (SELECT id FROM auth_users WHERE email = ?) AND is_active = true", businessID, email).Count(&cnt).Error; err == nil && cnt > 0 {
@@ -135,11 +133,11 @@ func (s *InviteService) InviteByEmail(ctx context.Context, businessID, invitedBy
 		}
 		if s.emailSender != nil {
 			if err := s.emailSender.SendInviteEmail(ctx, email, bname, role, otp); err != nil {
-				slog.Error("invite email send failed", "email", email, "err", err)
+				slog.ErrorContext(ctx, "invite email send failed", "email", email, "err", err)
 				return nil, fmt.Errorf("failed to send invite email: %w", err)
 			}
 		} else {
-			slog.Info("invite OTP (no sender)", "email", email, "otp", otp, "role", role)
+			slog.InfoContext(ctx, "invite OTP (no sender)", "email", email, "otp", otp, "role", role)
 		}
 		return &existing, nil
 	}
@@ -167,14 +165,14 @@ func (s *InviteService) InviteByEmail(ctx context.Context, businessID, invitedBy
 	}
 	if s.emailSender != nil {
 		if err := s.emailSender.SendInviteEmail(ctx, email, bname, role, otp); err != nil {
-			slog.Error("invite email send failed", "email", email, "err", err)
+			slog.ErrorContext(ctx, "invite email send failed", "email", email, "err", err)
 			// keep invite but surface error
 			return nil, fmt.Errorf("failed to send invite email: %w", err)
 		}
 	} else {
-		slog.Info("invite OTP (no sender)", "email", email, "otp", otp, "role", role)
+		slog.InfoContext(ctx, "invite OTP (no sender)", "email", email, "otp", otp, "role", role)
 	}
-	slog.Info("invite created", "business", businessID, "email", email, "role", role)
+	slog.InfoContext(ctx, "invite created", "business", businessID, "email", email, "role", role)
 	return invite, nil
 }
 

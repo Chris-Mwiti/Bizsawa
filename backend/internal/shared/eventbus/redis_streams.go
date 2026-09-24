@@ -87,7 +87,7 @@ func (b *RedisStreamsBus) Subscribe(ctx context.Context, stream, targetType stri
 				// 5. CRITICAL BUG FIX: Execute the business logic *OUTSIDE* the key-value loop!
 				if err := evtHandFun(ctx, eventData); err != nil {
 					// 6. Fixed slog.Warn casing, err.Error() typo, and structured logging syntax
-					slog.Warn("error while subscribing to event queue", "stream", stream, "error", err)
+					slog.WarnContext(ctx, "error while subscribing to event queue", "stream", stream, "error", err)
 					return err
 				}
 			}
