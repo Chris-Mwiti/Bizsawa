@@ -105,6 +105,10 @@ services:
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.128.0
     command: ["--config=/etc/otel-collector-config.yaml"]
+    environment:
+      # Consumed by the otlp/honeycomb exporter in otel-collector-config.yaml.
+      # Blank keeps telemetry local-only; Honeycomb export then fails auth harmlessly.
+      HONEYCOMB_API_KEY: ${HONEYCOMB_API_KEY:-}
     volumes:
       - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
     ports:
