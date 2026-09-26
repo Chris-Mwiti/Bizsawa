@@ -4,7 +4,8 @@ receivers:
   otlp:
     protocols:
       http:
-        endpoint: 0.0.0.0:4318
+        # Render Web Service must listen on $PORT (10000) — fallback 4318 for local docker-compose
+        endpoint: 0.0.0.0:${env:PORT:-4318}
       grpc:
         endpoint: 0.0.0.0:4317
 
