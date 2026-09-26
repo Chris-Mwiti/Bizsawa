@@ -28,6 +28,12 @@ function getExpoDevHost(): string | null {
   return parseHostFromHostUri(Constants.expoConfig?.hostUri)
 }
 
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '[::1]'])
+
+function isLoopbackHost(host: string | null): boolean {
+  return !!host && LOOPBACK_HOSTS.has(host.trim().toLowerCase())
+}
+
 export function getApiUrl(): string {
   const envUrl = (process.env.EXPO_PUBLIC_API_URL as string)?.trim()
   if (envUrl) return envUrl.replace(/\/$/, '')
@@ -35,6 +41,16 @@ export function getApiUrl(): string {
   if (Platform.OS === 'web') return `http://localhost:${DEFAULT_API_PORT}`
 
   const expoHost = getExpoDevHost()
+
+  if (__DEV__ && isLoopbackHost(expoHost)) {
+    console.warn(
+      `[api] Expo dev host is "${expoHost}" (Metro reached over adb reverse), so the API would be ` +
+        `resolved against this device's own loopback and every request will fail with "Network Error". ` +
+        `Set EXPO_PUBLIC_API_URL to the host's LAN IP (e.g. http://192.168.x.x:${DEFAULT_API_PORT}/api/v1) ` +
+        `in .env.development, or run: adb reverse tcp:${DEFAULT_API_PORT} tcp:${DEFAULT_API_PORT}`,
+    )
+  }
+
   if (Platform.OS === 'android') {
     if (!Device.isDevice) return `http://10.0.2.2:${DEFAULT_API_PORT}`
     if (expoHost) return `http://${expoHost}:${DEFAULT_API_PORT}`
