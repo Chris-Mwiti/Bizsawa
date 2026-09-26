@@ -1,6 +1,7 @@
 package config
 
 import (
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -110,6 +111,9 @@ type ObservabilityConfig struct {
 	ServiceName       string
 	ServiceVersion    string
 	Endpoint          string // OTEL_EXPORTER_OTLP_ENDPOINT e.g. http://otel-collector:4318
+	TracesEndpoint    string // OTEL_EXPORTER_OTLP_TRACES_ENDPOINT; falls back to Endpoint
+	MetricsEndpoint   string // OTEL_EXPORTER_OTLP_METRICS_ENDPOINT; falls back to Endpoint
+	Headers           map[string]string
 	Insecure          bool
 	SampleRatio       float64
 	TracingEnabled    bool
@@ -118,6 +122,24 @@ type ObservabilityConfig struct {
 	StdoutFallback    bool
 	// PrometheusAddr blank means reuse main Addr
 	PrometheusAddr string
+}
+
+// TracesTarget returns the effective OTLP traces endpoint, honouring the
+// signal-specific override before the generic one.
+func (o ObservabilityConfig) TracesTarget() string {
+	if o.TracesEndpoint != "" {
+		return o.TracesEndpoint
+	}
+	return o.Endpoint
+}
+
+// MetricsTarget returns the effective OTLP metrics endpoint, honouring the
+// signal-specific override before the generic one.
+func (o ObservabilityConfig) MetricsTarget() string {
+	if o.MetricsEndpoint != "" {
+		return o.MetricsEndpoint
+	}
+	return o.Endpoint
 }
 
 func Load() Config {
@@ -197,6 +219,9 @@ func Load() Config {
 			ServiceName:       env("OTEL_SERVICE_NAME", env("APP_NAME", "bizsawa-api")),
 			ServiceVersion:    env("OTEL_SERVICE_VERSION", env("APP_VERSION", "0.1.0")),
 			Endpoint:          strings.TrimRight(strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")), "/"),
+			TracesEndpoint:    strings.TrimRight(strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")), "/"),
+			MetricsEndpoint:   strings.TrimRight(strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT")), "/"),
+			Headers:           ParseOTLPHeaders(os.Getenv("OTEL_EXPORTER_OTLP_HEADERS")),
 			Insecure:          boolEnv("OTEL_EXPORTER_OTLP_INSECURE", true),
 			SampleRatio:       floatEnv("OTEL_SAMPLE_RATIO", floatEnv("OTEL_TRACES_SAMPLER_ARG", 1.0)),
 			TracingEnabled:    boolEnv("OTEL_TRACES_ENABLED", true),
@@ -206,6 +231,36 @@ func Load() Config {
 			PrometheusAddr:    env("OTEL_PROMETHEUS_ADDR", ""),
 		},
 	}
+}
+
+// ParseOTLPHeaders parses the comma-separated "k1=v1,k2=v2" form defined by the
+// OTEL_EXPORTER_OTLP_HEADERS spec. Values are percent-decoded so credentials
+// containing reserved characters survive intact.
+func ParseOTLPHeaders(raw string) map[string]string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	out := make(map[string]string)
+	for _, pair := range strings.Split(raw, ",") {
+		pair = strings.TrimSpace(pair)
+		if pair == "" {
+			continue
+		}
+		k, v, ok := strings.Cut(pair, "=")
+		k = strings.TrimSpace(k)
+		if !ok || k == "" {
+			continue
+		}
+		if dec, err := url.QueryUnescape(strings.TrimSpace(v)); err == nil {
+			v = dec
+		}
+		out[k] = v
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func env(key, fallback string) string {
