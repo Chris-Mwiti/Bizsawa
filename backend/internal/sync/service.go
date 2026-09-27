@@ -50,6 +50,19 @@ type PushResult struct {
 	Applied   map[string][]string `json:"applied"` // per table ids applied
 	Conflicts []Conflict          `json:"conflicts"`
 	Errors    map[string][]string `json:"errors,omitempty"`
+	// Rejected lists the record ids that failed to apply, per table. Clients use this to
+	// keep those records pending for retry; without it they cannot tell which of the
+	// pushed records actually failed and would mark all of them as synced (data loss).
+	Rejected map[string][]string `json:"rejected,omitempty"`
+}
+
+// reject records a per-record failure and remembers the record id so the client keeps
+// the record pending for retry rather than silently marking it synced.
+func (r *PushResult) reject(table, id, msg string) {
+	r.Errors[table] = append(r.Errors[table], msg)
+	if id != "" {
+		r.Rejected[table] = append(r.Rejected[table], id)
+	}
 }
 
 type Conflict struct {
@@ -201,7 +214,7 @@ func (s *Service) Push(ctx context.Context, businessID uuid.UUID, req PushReques
 }
 
 func (s *Service) PushWithUser(ctx context.Context, businessID uuid.UUID, userID uuid.UUID, req PushRequest) (*PushResult, error) {
-	result := &PushResult{Applied: map[string][]string{}, Conflicts: []Conflict{}, Errors: map[string][]string{}}
+	result := &PushResult{Applied: map[string][]string{}, Conflicts: []Conflict{}, Errors: map[string][]string{}, Rejected: map[string][]string{}}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// Process in syncableTables order to respect FKs (products → product_variants → inventory_items → ...).
 		// Go map iteration is random, so inventory_items could be attempted before its product and hit
@@ -228,7 +241,7 @@ func (s *Service) PushWithUser(ctx context.Context, businessID uuid.UUID, userID
 
 				id, err := uuid.Parse(idStr)
 				if err != nil {
-					result.Errors[table] = append(result.Errors[table], fmt.Sprintf("invalid uuid %s", idStr))
+					result.reject(table, idStr, fmt.Sprintf("invalid uuid %s", idStr))
 					continue
 				}
 				// Idempotent: if exists, skip
@@ -243,7 +256,7 @@ func (s *Service) PushWithUser(ctx context.Context, businessID uuid.UUID, userID
 				}
 
 				if err := s.insertRecord(tx, businessID, userID, table, rec); err != nil {
-					result.Errors[table] = append(result.Errors[table], err.Error())
+					result.reject(table, idStr, err.Error())
 				} else {
 					result.Applied[table] = append(result.Applied[table], idStr)
 				}
@@ -270,7 +283,7 @@ func (s *Service) PushWithUser(ctx context.Context, businessID uuid.UUID, userID
 
 				var sv int
 				if err2 := tx.Raw(fmt.Sprintf(`SELECT sync_version FROM %s WHERE id = ? AND business_id = ?`, table), id, businessID).Scan(&sv).Error; err2 != nil {
-					result.Errors[table] = append(result.Errors[table], fmt.Sprintf("record %s not found", idStr))
+					result.reject(table, idStr, fmt.Sprintf("record %s not found", idStr))
 					continue
 				}
 
@@ -322,7 +335,7 @@ func (s *Service) PushWithUser(ctx context.Context, businessID uuid.UUID, userID
 				}
 				// versions match → apply update, increment sync_version
 				if err := s.updateRecord(tx, businessID, table, rec); err != nil {
-					result.Errors[table] = append(result.Errors[table], err.Error())
+					result.reject(table, idStr, err.Error())
 				} else {
 					result.Applied[table] = append(result.Applied[table], idStr)
 					// Post-update side-effects for offline order confirm/fulfill (fixes sync bypass)
@@ -348,12 +361,12 @@ func (s *Service) PushWithUser(ctx context.Context, businessID uuid.UUID, userID
 			for _, idStr := range changes.Deleted {
 				id, err := uuid.Parse(idStr)
 				if err != nil {
-					result.Errors[table] = append(result.Errors[table], fmt.Sprintf("invalid delete id %s", idStr))
+					result.reject(table, idStr, fmt.Sprintf("invalid delete id %s", idStr))
 					continue
 				}
 				// soft delete: set deleted_at, increment version if not already deleted
 				if err := tx.Exec(fmt.Sprintf(`UPDATE %s SET deleted_at = NOW(), updated_at = NOW(), sync_version = sync_version + 1 WHERE id = ? AND business_id = ? AND deleted_at IS NULL`, table), id, businessID).Error; err != nil {
-					result.Errors[table] = append(result.Errors[table], err.Error())
+					result.reject(table, idStr, err.Error())
 				} else {
 					result.Applied[table] = append(result.Applied[table], idStr)
 				}
