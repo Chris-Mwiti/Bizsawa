@@ -4,6 +4,7 @@ import { api } from '../../lib/api'
 import type { CreateOrderRequest, Order, UUID } from '../../lib/api-dtos'
 import { toDecimalString, toNumber } from '../../lib/api-dtos'
 import { database } from '../../db/database'
+import { mergeLocalFirst } from '../../lib/mergeLocalFirst'
 import { v4 as uuidv4 } from 'uuid'
 import { Q } from '@nozbe/watermelondb'
 import { useBusinessContext } from '../../contexts/BusinessContext'
@@ -74,6 +75,8 @@ function mapRaw(raw: any): Order {
     paymentMethod: get('payment_method', 'paymentMethod') || 'cash',
     createdAt: toISO(get('created_at', 'createdAt')),
     updatedAt: toISO(get('updated_at', 'updatedAt')),
+    _status: src._status,
+    _changed: src._changed,
   } as any
 }
 
@@ -128,15 +131,14 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
     placeholderData: (prev: any) => prev,
   })
 
-  // Offline-first merge: server clean heals 0/NaN, but pending local orders must appear immediately
-  const allOrdersMerged = (() => {
-    const server = getOrders.data?.orders as any[] | undefined
-    if (server === undefined) return local
-    if (!local.length) return server
-    const serverIds = new Set(server.map((s: any) => s.id))
-    const pending = local.filter((l: any) => !serverIds.has(l.id))
-    return pending.length ? [...server, ...pending] : server
-  })()
+  // Offline-first merge: a locally-edited order keeps its optimistic values until the
+  // server confirms the push. Money fields (subtotal/taxAmount/total) stay
+  // server-authoritative because the backend derives them from order lines.
+  const allOrdersMerged = mergeLocalFirst<Order>(
+    getOrders.data?.orders as Order[] | undefined,
+    local,
+    { overlayFields: ['status', 'customerId', 'paymentMethod'] as (keyof Order)[] },
+  )
   const orders = allOrdersMerged.slice(offset, offset + limit)
   const total =
     getOrders.data?.total !== undefined
