@@ -3,6 +3,7 @@ import { api, ApiError } from '../../lib/api'
 import type { CreateSaleRequest, Sale, UUID } from '../../lib/api-dtos'
 import { toDecimalString, toNumber } from '../../lib/api-dtos'
 import { database } from '../../db/database'
+import { mergeLocalFirst } from '../../lib/mergeLocalFirst'
 import { v4 as uuidv4 } from 'uuid'
 import { Q } from '@nozbe/watermelondb'
 import { useEffect, useState } from 'react'
@@ -62,6 +63,8 @@ function mapRaw(raw: any): Sale {
     soldAt: toISO(get('sold_at', 'soldAt')),
     createdAt: toISO(get('created_at', 'createdAt')),
     updatedAt: toISO(get('updated_at', 'updatedAt')),
+    _status: src._status,
+    _changed: src._changed,
   } as any
 }
 
@@ -187,15 +190,12 @@ export const useSales = () => {
     },
   })
 
-  // Offline-first merge: server clean heals 0/NaN, but pending local sales (not yet on server) must appear immediately
-  const sales = (() => {
-    const server = getSales.data as any[] | undefined
-    if (server === undefined) return local
-    if (!local.length) return server
-    const serverIds = new Set(server.map((s: any) => s.id))
-    const pending = local.filter((l: any) => !serverIds.has(l.id))
-    return pending.length ? [...server, ...pending] : server
-  })()
+  // Offline-first merge: a locally-edited sale keeps its optimistic status until the
+  // server confirms the push. Sales are normally minted server-side by ensureSaleForOrder,
+  // so only the fields a client can legitimately change are overlaid.
+  const sales = mergeLocalFirst<Sale>(getSales.data as Sale[] | undefined, local, {
+    overlayFields: ['status', 'paymentMethod'] as (keyof Sale)[],
+  })
   return {
     sales,
     isLoading:
