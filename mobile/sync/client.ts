@@ -2,6 +2,7 @@ import { synchronize } from '@nozbe/watermelondb/sync'
 import NetInfo from '@react-native-community/netinfo'
 import { database } from '../db/database'
 import { api } from '../lib/api'
+import { extractRejectedIds } from './pushResult'
 import { v4 as uuidv4 } from 'uuid'
 import { Q } from '@nozbe/watermelondb'
 import * as RawRecord from '@nozbe/watermelondb/RawRecord'
@@ -324,12 +325,13 @@ export async function pushPendingOnly(): Promise<any> {
   try { const v = await (database as any).adapter.getLocal('__watermelon_last_pulled_at'); lastPulledAt = v? parseInt(v,10): null } catch {}
   const res: any = await api.post(`/sync/push`, { changes, lastPulledAt }, { headers: { 'X-Idempotency-Key': idempotencyKey } })
   console.log('[Sync] pushPendingOnly result', res.status, res.data)
+  const rejectedIds = extractRejectedIds(res)
   // mark as synced via Watermelon helper if push succeeded
   try {
     const { markLocalChangesAsSynced } = await import('@nozbe/watermelondb/sync/impl' as any)
     if (markLocalChangesAsSynced && affected.length) {
-      await (markLocalChangesAsSynced as any)(database as any, { changes, affectedRecords: affected }, res.data?.experimentalRejectedIds)
-      console.log('[Sync] pushPendingOnly marked synced')
+      await (markLocalChangesAsSynced as any)(database as any, { changes, affectedRecords: affected }, rejectedIds)
+      console.log('[Sync] pushPendingOnly marked synced', rejectedIds ? `keeping rejected pending: ${JSON.stringify(rejectedIds)}` : '')
     }
   } catch (e) { console.warn('[Sync] markLocalChangesAsSynced failed — pending may remain until next full sync', e) }
   return res.data
@@ -604,9 +606,10 @@ export async function syncNow() {
       const pushData = (res?.data || res) as any
       const applied = pushData?.applied || pushData?.data?.applied
       const errors = pushData?.errors || pushData?.data?.errors
-      console.log('[Sync] push result status=', res.status, 'applied=', applied, 'errors=', errors, 'idempotencyKey=', idempotencyKey)
+      const rejectedIds = extractRejectedIds(res)
+      console.log('[Sync] push result status=', res.status, 'applied=', applied, 'errors=', errors, 'rejected=', rejectedIds, 'idempotencyKey=', idempotencyKey)
       if (errors && Object.keys(errors).length) {
-        console.warn('[Sync] push errors — will remain pending for retry', errors)
+        console.warn('[Sync] push errors — rejected records stay pending for retry', errors)
       }
       _lastSyncDebug = { pushApplied: applied, pushErrors: errors, pushTimestamp: Date.now() }
       // Persist server-reported conflicts to local `conflicts` table for badge + /sync-conflicts UI (§4)
@@ -641,6 +644,10 @@ export async function syncNow() {
           console.warn('[Sync] failed to persist conflicts locally', e)
         }
       }
+      // Returning the rejected ids keeps those records pending for retry. Omitting this
+      // makes WatermelonDB mark every pushed record as synced, including the ones the
+      // server refused — which loses the change with no way to recover it.
+      return { experimentalRejectedIds: rejectedIds }
     },
     // Version-counter conflict → conflicts table (§4), not last-write-wins (§10)
     // Watermelon calls this when local _changed row also changed remotely (incremental sync)
