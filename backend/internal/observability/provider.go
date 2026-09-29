@@ -61,20 +61,27 @@ func Setup(ctx context.Context, cfg Config) (*Provider, error) {
 	var tp *sdktrace.TracerProvider
 	if cfg.TracingEnabled {
 		var exp sdktrace.SpanExporter
-		if cfg.Endpoint != "" {
+		tracesTarget := cfg.TracesTarget()
+		if tracesTarget != "" {
 			opts := []otlptracehttp.Option{}
-			if cfg.Insecure {
+			host, path, plainHTTP := splitEndpoint(tracesTarget)
+			if plainHTTP || cfg.Insecure {
 				opts = append(opts, otlptracehttp.WithInsecure())
 			}
-			// endpoint is like http://collector:4318 -> client expects "collector:4318"
-			// otlptracehttp.WithEndpoint expects host:port without scheme
-			endpoint := stripScheme(cfg.Endpoint)
-			opts = append(opts, otlptracehttp.WithEndpoint(endpoint))
+			opts = append(opts, otlptracehttp.WithEndpoint(host))
+			// Vendors like Honeycomb ingest on a signal-specific path (/v1/traces).
+			// Dropping it silently 404s every export.
+			if path != "" {
+				opts = append(opts, otlptracehttp.WithURLPath(path))
+			}
+			if len(cfg.Headers) > 0 {
+				opts = append(opts, otlptracehttp.WithHeaders(cfg.Headers))
+			}
 			exp, err = otlptracehttp.New(ctx, opts...)
 			if err != nil {
 				return nil, fmt.Errorf("otlp trace exporter: %w", err)
 			}
-			slog.InfoContext(ctx, "otel tracing via OTLP", "endpoint", cfg.Endpoint, "service", cfg.ServiceName)
+			slog.InfoContext(ctx, "otel tracing via OTLP", "endpoint", tracesTarget, "path", path, "headers", len(cfg.Headers), "service", cfg.ServiceName)
 		} else if cfg.StdoutFallback {
 			exp, err = stdouttrace.New(stdouttrace.WithPrettyPrint())
 			if err != nil {
@@ -119,18 +126,26 @@ func Setup(ctx context.Context, cfg Config) (*Provider, error) {
 			}
 		}
 
-		if cfg.Endpoint != "" {
+		metricsTarget := cfg.MetricsTarget()
+		if metricsTarget != "" {
 			metricOpts := []otlpmetrichttp.Option{}
-			if cfg.Insecure {
+			host, path, plainHTTP := splitEndpoint(metricsTarget)
+			if plainHTTP || cfg.Insecure {
 				metricOpts = append(metricOpts, otlpmetrichttp.WithInsecure())
 			}
-			metricOpts = append(metricOpts, otlpmetrichttp.WithEndpoint(stripScheme(cfg.Endpoint)))
+			metricOpts = append(metricOpts, otlpmetrichttp.WithEndpoint(host))
+			if path != "" {
+				metricOpts = append(metricOpts, otlpmetrichttp.WithURLPath(path))
+			}
+			if len(cfg.Headers) > 0 {
+				metricOpts = append(metricOpts, otlpmetrichttp.WithHeaders(cfg.Headers))
+			}
 			otlpExp, err := otlpmetrichttp.New(ctx, metricOpts...)
 			if err != nil {
 				slog.WarnContext(ctx, "otlp metric exporter failed", "err", err)
 			} else {
 				readers = append(readers, sdkmetric.WithReader(sdkmetric.NewPeriodicReader(otlpExp, sdkmetric.WithInterval(15*time.Second))))
-				slog.InfoContext(ctx, "otel metrics via OTLP", "endpoint", cfg.Endpoint)
+				slog.InfoContext(ctx, "otel metrics via OTLP", "endpoint", metricsTarget, "path", path, "headers", len(cfg.Headers))
 			}
 		} else if cfg.StdoutFallback {
 			stdExp, err := stdoutmetric.New()
@@ -173,43 +188,25 @@ func (p *Provider) Shutdown(ctx context.Context) error {
 	return firstErr
 }
 
-func stripScheme(endpoint string) string {
-	// otlptracehttp.WithEndpoint expects host:port, not https://...
-	// Use url.Parse for robust handling, fallback to string trim
-	endpoint = strings.TrimSpace(endpoint)
-	endpoint = strings.TrimSuffix(endpoint, "/")
-	if u, err := parseURL(endpoint); err == nil && u.Host != "" {
-		return u.Host
+// splitEndpoint breaks an OTLP endpoint into the "host:port" the exporter wants,
+// the URL path which must be preserved separately, and whether the scheme was
+// explicit plain HTTP. Honeycomb, for example, only ingests traces on /v1/traces
+// and metrics on /v1/metrics, so collapsing the endpoint to host:port alone makes
+// every export 404. The scheme is honoured so that an http:// target is never
+// dialled over TLS (which the collector, and any local collector, would reject).
+func splitEndpoint(raw string) (hostPort string, urlPath string, plainHTTP bool) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", "", false
 	}
-	s := endpoint
-	if strings.HasPrefix(s, "http://") {
-		s = strings.TrimPrefix(s, "http://")
-	} else if strings.HasPrefix(s, "https://") {
-		s = strings.TrimPrefix(s, "https://")
+	scheme := ""
+	if idx := strings.Index(raw, "://"); idx != -1 {
+		scheme = strings.ToLower(raw[:idx])
+		raw = raw[idx+3:]
 	}
-	if idx := strings.Index(s, "/"); idx != -1 {
-		s = s[:idx]
+	u, err := url.Parse("https://" + raw)
+	if err != nil || u.Host == "" {
+		return strings.TrimSuffix(strings.TrimSpace(raw), "/"), "", scheme == "http"
 	}
-	return strings.TrimSpace(s)
-}
-
-func parseURL(raw string) (*url.URL, error) {
-	// need net/url import — handled via strings fallback if not available
-	// Use standard library
-	u, err := url.Parse(raw)
-	if err != nil {
-		return nil, err
-	}
-	// url.Parse without scheme treats host as path; ensure scheme present for correct Host extraction
-	if u.Scheme == "" {
-		u, err = url.Parse("https://" + raw)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return u, nil
-}
-
-func indexOf(s, substr string) int {
-	return strings.Index(s, substr)
+	return u.Host, strings.TrimSuffix(u.Path, "/"), scheme == "http"
 }

@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-export const API_URL = process.env.E2E_API_URL || 'http://localhost:5505/api/v1'
+export const API_URL = process.env.E2E_API_URL || 'http://localhost:5504/api/v1'
 
 export const api = axios.create({ baseURL: API_URL, timeout: 15000, validateStatus: () => true })
 

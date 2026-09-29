@@ -3,7 +3,8 @@ import { api, ApiError } from '../../lib/api'
 import type { Expense as BackendExpense, UUID } from '../../lib/api-dtos'
 import { toDecimalString, toNumber } from '../../lib/api-dtos'
 import { database } from '../../db/database'
-import { v4 as uuidv4 } from 'uuid'
+import { mergeLocalFirst } from '../../lib/mergeLocalFirst'
+import { randomUUID } from 'expo-crypto'
 import { Q } from '@nozbe/watermelondb'
 import { useEffect, useState } from 'react'
 import { useBusinessContext } from '../../contexts/BusinessContext'
@@ -48,6 +49,8 @@ function mapRaw(raw: any): Expense {
     updatedAt: toISO(raw.updated_at ?? raw.updatedAt),
     type: raw.category,
     frequency: raw.recurring_interval,
+    _status: raw._raw?._status ?? raw._status,
+    _changed: raw._raw?._changed ?? raw._changed,
   } as any
 }
 
@@ -94,7 +97,7 @@ export const useExpenses = () => {
       if (!data || typeof data !== 'object') throw new Error('Expense data is required')
       const category = (data?.category || data?.type || '').trim()
       if (!category) throw new Error('Category required')
-      const id = uuidv4()
+      const id = randomUUID()
       const spentAt = toMillis(data.spentAt) || nowMillis()
       await (database as any).write(async () => {
         const col: any = (database as any).get('expenses')
@@ -137,15 +140,22 @@ export const useExpenses = () => {
     },
   })
 
-  // Offline-first merge: server clean, but pending local expenses must appear immediately
-  const expenses = (() => {
-    const server = getExpenses.data as any[] | undefined
-    if (server === undefined) return local
-    if (!local.length) return server
-    const serverIds = new Set(server.map((s: any) => s.id))
-    const pending = local.filter((l: any) => !serverIds.has(l.id))
-    return pending.length ? [...server, ...pending] : server
-  })()
+  // Offline-first merge: a locally-edited expense keeps its optimistic values until the
+  // server confirms the push. Expense amounts are user-entered, not server-derived.
+  const expenses = mergeLocalFirst<Expense>(getExpenses.data as Expense[] | undefined, local, {
+    overlayFields: [
+      'category',
+      'description',
+      'vendor',
+      'amount',
+      'taxAmount',
+      'isRecurring',
+      'recurringInterval',
+      'spentAt',
+      'type',
+      'frequency',
+    ] as (keyof Expense)[],
+  })
   return {
     expenses,
     totalExpenseAmount: expenses.reduce(

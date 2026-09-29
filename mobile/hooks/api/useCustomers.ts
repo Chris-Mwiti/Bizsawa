@@ -6,7 +6,7 @@ import type {
   UUID,
 } from '../../lib/api-dtos'
 import { database } from '../../db/database'
-import { v4 as uuidv4 } from 'uuid'
+import { randomUUID } from 'expo-crypto'
 import { Q } from '@nozbe/watermelondb'
 import { useEffect, useState } from 'react'
 import { useBusinessContext } from '../../contexts/BusinessContext'
@@ -152,7 +152,7 @@ export const useCreateCustomer = () => {
   return useMutation({
     mutationFn: async (data: CreateCustomerRequest) => {
       if (!bid) throw new Error('Select a business first')
-      const id = uuidv4()
+      const id = randomUUID()
       await (database as any).write(async () => {
         const col: any = (database as any).get('customers')
         await col.create((rec: any) => {

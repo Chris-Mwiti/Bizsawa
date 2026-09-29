@@ -6,7 +6,8 @@ import type {
 } from '../../lib/api-dtos'
 import { toDecimalString, toNumber } from '../../lib/api-dtos'
 import { database } from '../../db/database'
-import { v4 as uuidv4 } from 'uuid'
+import { mergeLocalFirst } from '../../lib/mergeLocalFirst'
+import { randomUUID } from 'expo-crypto'
 import { useBusinessContext } from '../../contexts/BusinessContext'
 import { Q } from '@nozbe/watermelondb'
 import { useEffect, useState } from 'react'
@@ -169,7 +170,7 @@ export const useProducts = () => {
   const createProduct = useMutation({
     mutationFn: async (data: CreateProductInput) => {
       if (!bid) throw new Error('Select a business first')
-      const id = uuidv4()
+      const id = randomUUID()
       await (database as any).write(async () => {
         const col: any = (database as any).get('products')
         await col.create((rec: any) => {
@@ -195,7 +196,7 @@ export const useProducts = () => {
           for (const v of data.variants) {
             if (!v.name?.trim()) continue
             await vcol.create((rec: any) => {
-              rec._raw.id = v.id || uuidv4()
+              rec._raw.id = v.id || randomUUID()
               rec.businessId = bid
               rec.productId = id
               rec.name = v.name.trim()
@@ -259,7 +260,7 @@ export const useProducts = () => {
           for (const v of data.variants || []) {
             if (!v.name?.trim()) continue
             await vcol.create((rec: any) => {
-              rec._raw.id = (v as any).id || uuidv4()
+              rec._raw.id = (v as any).id || randomUUID()
               rec.businessId = bid
               rec.productId = id
               rec.name = v.name.trim()
@@ -322,27 +323,25 @@ export const useProducts = () => {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['products'] }),
   })
 
-  // Offline-first merge: server is source of truth for synced rows (heals 0/NaN), but pending local creates (ids not on server) must appear immediately.
-  const productsData = (() => {
-    const server = getProducts.data as any[] | undefined
-    const localWithVariants = localProductsWithVariants as any[]
-    if (server === undefined) return localWithVariants
-    if (!localWithVariants.length) return server
-    const serverIds = new Set(server.map((s: any) => s.id))
-    const pending = localWithVariants.filter((l: any) => !serverIds.has(l.id))
-    // For existing server products, merge local variants if server has none yet (offline pending variants)
-    const merged = server.map((s: any) => {
-      const localMatch = localWithVariants.find((l: any) => l.id === s.id)
-      if (
-        localMatch?.variants?.length &&
-        (!s.variants || s.variants.length === 0)
-      ) {
-        return { ...s, variants: localMatch.variants }
-      }
-      return s
-    })
-    return pending.length ? [...merged, ...pending] : merged
-  })()
+  // Offline-first merge: a locally-edited row keeps its optimistic values until the
+  // server confirms the push. Previously the server response always won for rows it
+  // already knew about, so an optimistic edit was visually reverted until the round trip
+  // completed. Server-owned fields (stock counts, timestamps) still come from the server.
+  const productsData = mergeLocalFirst<Product>(getProducts.data as Product[] | undefined, localProductsWithVariants as Product[], {
+    overlayFields: [
+      'name',
+      'category',
+      'price',
+      'cost',
+      'description',
+      'sku',
+      'barcode',
+      'imageUrl',
+      'taxRuleId',
+      'variants',
+    ] as unknown as (keyof Product)[],
+    keepLocalWhenServerEmpty: ['variants'] as unknown as (keyof Product)[],
+  })
   return {
     products: productsData || [],
     isLoading:

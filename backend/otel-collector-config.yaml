@@ -30,6 +30,17 @@ processors:
         value: ${env:HOSTNAME}
 
 exporters:
+  # Honeycomb — the real telemetry store. The api container's
+  # OTEL_EXPORTER_OTLP_ENDPOINT is pinned to this collector by docker-compose.yml,
+  # so this is the only hop that can reach Honeycomb.
+  # endpoint is host:port; the exporter already appends the per-signal path
+  # (/v1/traces, /v1/metrics) that Honeycomb ingests on.
+  # Omitting x-honeycomb-dataset makes Honeycomb derive the dataset from
+  # service.name, which keeps traces and metrics in separate datasets.
+  otlp/honeycomb:
+    endpoint: api.honeycomb.io:443
+    headers:
+      x-honeycomb-team: ${env:HONEYCOMB_API_KEY}
   # Traces -> Jaeger (all-in-one) OTLP endpoint
   otlp/jaeger:
     endpoint: jaeger:4317
@@ -57,11 +68,11 @@ service:
     traces:
       receivers: [otlp]
       processors: [memory_limiter, batch, resourcedetection, attributes]
-      exporters: [otlp/jaeger, spanmetrics, debug]
+      exporters: [otlp/jaeger, otlp/honeycomb, spanmetrics, debug]
     metrics:
       receivers: [otlp, spanmetrics]
       processors: [memory_limiter, batch]
-      exporters: [debug, prometheusremotewrite]
+      exporters: [debug, prometheusremotewrite, otlp/honeycomb]
     logs:
       receivers: [otlp]
       processors: [memory_limiter, batch]

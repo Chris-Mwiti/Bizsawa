@@ -6,7 +6,7 @@ import {
   readonly,
   writer,
 } from '@nozbe/watermelondb/decorators'
-import { v4 as uuidv4 } from 'uuid'
+import { randomUUID } from 'expo-crypto'
 
 export default class Product extends Model {
   static table = 'products'
@@ -40,7 +40,7 @@ export default class Product extends Model {
     return db.write(async () => {
       const col = db.get('products')
       return col.create((rec: any) => {
-        rec._raw.id = uuidv4()
+        rec._raw.id = randomUUID()
         rec.businessId = businessId
         rec.name = data.name
         rec.category = data.category || 'Other'

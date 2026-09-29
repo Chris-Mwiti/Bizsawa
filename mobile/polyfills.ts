@@ -1,4 +1,5 @@
-// MUST be imported before any `import { v4 as uuidv4 } from 'uuid'` usage
-// React Native (Hermes) has no `crypto.getRandomValues` — uuid@8+ requires it
-// This polyfills global.crypto.getRandomValues via react-native-get-random-values
+// React Native (Hermes) has no `crypto.getRandomValues` natively.
+// App IDs now use expo-crypto's randomUUID() (no global crypto needed),
+// but this polyfill is kept as defensive coverage for any remaining
+// transitive consumers of global crypto.getRandomValues.
 import 'react-native-get-random-values'

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# Phase C3: starts docker postgres/redis, migrates, starts api on 5505, runs vitest api flows
+# Phase C3: starts docker postgres/redis, migrates, starts api on 5504, runs vitest api flows
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BACKEND="$ROOT/../backend"
-API_PORT="${API_PORT:-5505}"
+API_PORT="${API_PORT:-5504}"
 API_URL="http://localhost:${API_PORT}/api/v1"
 
 echo "[e2e] docker compose up postgres redis"

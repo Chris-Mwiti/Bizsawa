@@ -58,6 +58,9 @@ func main() {
 		ServiceVersion:    cfg.Observability.ServiceVersion,
 		Environment:       cfg.Env,
 		Endpoint:          cfg.Observability.Endpoint,
+		TracesEndpoint:    cfg.Observability.TracesEndpoint,
+		MetricsEndpoint:   cfg.Observability.MetricsEndpoint,
+		Headers:           cfg.Observability.Headers,
 		Insecure:          cfg.Observability.Insecure,
 		SampleRatio:       cfg.Observability.SampleRatio,
 		TracingEnabled:    cfg.Observability.TracingEnabled,
@@ -166,7 +169,7 @@ func main() {
 	customersModule := customers.New(gormDB)
 	taxesModule := taxes.New(gormDB)
 	inventoryModule := inventory.New(gormDB)
-	salesModule := sales.New(gormDB, taxesModule.Service(), riverIngester, logger)
+	salesModule := sales.New(gormDB, taxesModule.Service(), inventoryModule.Service(), riverIngester, logger)
 	expensesModule := expenses.New(gormDB, taxesModule.Service())
 	invoicesModule := invoices.New(gormDB, riverIngester, logger)
 	ordersModule := orders.New(gormDB, inventoryModule.Service(), salesModule.Service(), riverIngester, customersModule.Service(), invoicesModule.Service(), nil, logger)

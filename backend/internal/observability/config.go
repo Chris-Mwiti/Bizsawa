@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Codecx-Org/FinAI/backend/internal/shared/config"
 )
 
 // Config holds OpenTelemetry configuration following OTel env conventions
@@ -15,6 +17,9 @@ type Config struct {
 	ServiceVersion    string
 	Environment       string
 	Endpoint          string // OTEL_EXPORTER_OTLP_ENDPOINT e.g. http://otel-collector:4318
+	TracesEndpoint    string // OTEL_EXPORTER_OTLP_TRACES_ENDPOINT; falls back to Endpoint
+	MetricsEndpoint   string // OTEL_EXPORTER_OTLP_METRICS_ENDPOINT; falls back to Endpoint
+	Headers           map[string]string
 	Insecure          bool
 	SampleRatio       float64 // 0.0 - 1.0
 	TracingEnabled    bool
@@ -39,7 +44,28 @@ func LoadConfig(serviceName, env string) Config {
 		PrometheusEnabled: boolEnv("OTEL_PROMETHEUS_ENABLED", true),
 		MetricsAddr:       envOr("OTEL_PROMETHEUS_ADDR", ""),
 		StdoutFallback:    boolEnv("OTEL_STDOUT_FALLBACK", boolEnv("OTEL_DEBUG", env == "development")),
+		TracesEndpoint:    strings.TrimRight(strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")), "/"),
+		MetricsEndpoint:   strings.TrimRight(strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT")), "/"),
+		Headers:           config.ParseOTLPHeaders(os.Getenv("OTEL_EXPORTER_OTLP_HEADERS")),
 	}
+}
+
+// TracesTarget returns the effective OTLP traces endpoint, preferring the
+// signal-specific override over the generic one.
+func (c Config) TracesTarget() string {
+	if c.TracesEndpoint != "" {
+		return c.TracesEndpoint
+	}
+	return c.Endpoint
+}
+
+// MetricsTarget returns the effective OTLP metrics endpoint, preferring the
+// signal-specific override over the generic one.
+func (c Config) MetricsTarget() string {
+	if c.MetricsEndpoint != "" {
+		return c.MetricsEndpoint
+	}
+	return c.Endpoint
 }
 
 func envOr(k, fallback string) string {

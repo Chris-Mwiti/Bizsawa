@@ -17,6 +17,7 @@ import type {
   UUID,
 } from '../lib/api-dtos'
 import { useAuth } from './AuthContext'
+import { randomUUID } from 'expo-crypto'
 import { canRole } from '../lib/permissions'
 
 interface BusinessContextType {
@@ -98,12 +99,20 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
         setBusinesses((prev) => (prev.length ? prev : [biz]))
         if (savedRole) setActiveRole(savedRole as Role)
         else if (biz.id) resolveRole(biz.id).then(setActiveRole).catch(() => {})
+        // Re-persist the hydrated selection. Without this the auth context and the
+        // persisted businessId can drift apart after a cold start, and any code that
+        // relies on the stored selection (e.g. the X-Business-ID interceptor) sees no
+        // tenant even though the user has one.
+        if (biz.id) {
+          await setSelectedBusinessAuth(biz, savedRole as Role | null)
+        }
         return biz
       }
       if (savedId) {
         // business object missing but id exists — create minimal stub so queries have bid
         const stub = { id: savedId, name: 'Business' } as unknown as Business
         setActiveBusiness(stub)
+        await setSelectedBusinessAuth(stub, savedRole as Role | null)
         // try to enrich from businesses list later
         return stub
       }
@@ -146,9 +155,14 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
     // Offline queue: if offline, store pending and return optimistic
     const net = await NetInfo.fetch()
     if (!net.isConnected) {
+      // Use a real UUID for the optimistic business. A `pending_<timestamp>` id would be
+      // persisted as businessId and then sent as X-Business-ID, which the tenant
+      // middleware rejects because it only accepts parseable UUIDs — poisoning every
+      // tenant-scoped request until the business is created for real.
+      const pendingId = randomUUID()
       const pending = {
         ...data,
-        _pendingId: `pending_${Date.now()}`,
+        _pendingId: pendingId,
         _offlinePending: true,
       }
       await AsyncStorage.setItem(

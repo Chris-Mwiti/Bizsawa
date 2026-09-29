@@ -14,6 +14,7 @@ import type {
 } from '../../lib/api-dtos'
 import { toNumber } from '../../lib/api-dtos'
 import { useBusinessContext } from '../../contexts/BusinessContext'
+import { analyticsSnapshotKey } from './analyticsKeys'
 
 const SNAPSHOT_CACHE_PREFIX = 'bizsawa_analytics_snapshot_'
 
@@ -183,6 +184,14 @@ function mapSnapshotToAnalytics(
   }
 }
 
+// Stable module-scope selectors. TanStack re-runs `select` whenever the function
+// identity changes, so defining these inline would hand consumers a fresh object on
+// every render and defeat the memoization that makes the shared query worthwhile.
+const selectRevenue = (m?: AnalyticsSummary): RevenueAnalytics | undefined => m?.revenue
+const selectProfit = (m?: AnalyticsSummary): ProfitAnalytics | undefined => m?.profit
+const selectCategories = (m?: AnalyticsSummary): CategoryAnalytics | undefined => m?.categories
+const selectCustomers = (m?: AnalyticsSummary): CustomerSegmentAnalytics | undefined => m?.customers
+
 export const useAnalytics = () => {
   // Gate all analytics on active business — prevents 403 "business context is required" on cold start
   let activeBusinessId: string | null = null
@@ -261,9 +270,16 @@ export const useAnalytics = () => {
 
   const SNAP_STALE: Record<string, number> = { day: 30*1000, week: 60*1000, month: 5*60*1000, year: 15*60*1000 }
 
-  const getAnalyticsSummary = (timeframe: Timeframe = 'week') =>
-    useQuery<AnalyticsSummary>({
-      queryKey: ['analytics', 'snapshot', timeframe, activeBusinessId],
+  // Single owner of GET /analytics. Every projection below selects from this one query,
+  // so a screen that mounts summary + revenue + profit + categories + customers issues
+  // exactly one request instead of one per projection. Sharing the key is also what lets
+  // TanStack dedupe concurrent mounts and share loading/error state.
+  const useAnalyticsSnapshot = <T,>(
+    timeframe: Timeframe = 'week',
+    select?: (m?: AnalyticsSummary) => T,
+  ) =>
+    useQuery<AnalyticsSummary, Error, T>({
+      queryKey: analyticsSnapshotKey(timeframe, activeBusinessId),
       queryFn: ({ signal }) => (async () => {
         const snap = await fetchSnapshot(timeframe, signal)
         const mapped = mapSnapshotToAnalytics(snap, timeframe)
@@ -271,6 +287,7 @@ export const useAnalytics = () => {
         ;(mapped.profit as any).data = fillWeekBuckets(mapped.profit.data as any, timeframe, { revenue: 0, expenses: 0, profit: 0, margin: 0 } as any)
         return mapped
       })(),
+      select,
       enabled,
       staleTime: SNAP_STALE[timeframe] ?? 60*1000,
       gcTime: 5*60*1000,
@@ -279,62 +296,21 @@ export const useAnalytics = () => {
       retry: (count, err: any) =>
         err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' ? false : err?.response?.status === 403 ? false : count < 2,
     })
+
+  const getAnalyticsSummary = (timeframe: Timeframe = 'week') =>
+    useAnalyticsSnapshot(timeframe)
 
   const getRevenueAnalytics = (timeframe: Timeframe = 'week') =>
-    useQuery<RevenueAnalytics>({
-      queryKey: ['analytics', 'revenue', timeframe, activeBusinessId],
-      queryFn: ({ signal }) => (async () => {
-        const snap = await fetchSnapshot(timeframe, signal)
-        const m = mapSnapshotToAnalytics(snap, timeframe).revenue
-        ;(m as any).data = fillWeekBuckets(m.data as any, timeframe, { revenue: 0, transactions: 0 } as any)
-        return m
-      })(),
-      enabled,
-      staleTime: SNAP_STALE[timeframe] ?? 60*1000,
-      gcTime: 5*60*1000,
-      refetchOnWindowFocus: true,
-      refetchOnReconnect: true,
-      retry: (count, err: any) =>
-        err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' ? false : err?.response?.status === 403 ? false : count < 2,
-    })
+    useAnalyticsSnapshot(timeframe, selectRevenue)
 
   const getProfitAnalytics = (timeframe: Timeframe = 'week') =>
-    useQuery<ProfitAnalytics>({
-      queryKey: ['analytics', 'profit', timeframe, activeBusinessId],
-      queryFn: ({ signal }) => (async () => {
-        const snap = await fetchSnapshot(timeframe, signal)
-        const m = mapSnapshotToAnalytics(snap, timeframe).profit
-        ;(m as any).data = fillWeekBuckets(m.data as any, timeframe, { revenue: 0, expenses: 0, profit: 0, margin: 0 } as any)
-        return m
-      })(),
-      enabled,
-      staleTime: SNAP_STALE[timeframe] ?? 60*1000,
-      gcTime: 5*60*1000,
-      refetchOnWindowFocus: true,
-      refetchOnReconnect: true,
-      retry: (count, err: any) =>
-        err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' ? false : err?.response?.status === 403 ? false : count < 2,
-    })
+    useAnalyticsSnapshot(timeframe, selectProfit)
 
   const getCategoryAnalytics = (timeframe: Timeframe = 'week') =>
-    useQuery<CategoryAnalytics>({
-      queryKey: ['analytics', 'categories', timeframe, activeBusinessId],
-      queryFn: ({ signal }) => fetchSnapshot(timeframe, signal).then((snap) => mapSnapshotToAnalytics(snap, timeframe).categories),
-      enabled,
-      staleTime: 2*60*1000,
-      retry: (count, err: any) =>
-        err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' ? false : err?.response?.status === 403 ? false : count < 2,
-    })
+    useAnalyticsSnapshot(timeframe, selectCategories)
 
   const getCustomerAnalytics = (timeframe: Timeframe = 'week') =>
-    useQuery<CustomerSegmentAnalytics>({
-      queryKey: ['analytics', 'customers', timeframe, activeBusinessId],
-      queryFn: ({ signal }) => fetchSnapshot(timeframe, signal).then((snap) => mapSnapshotToAnalytics(snap, timeframe).customers),
-      enabled,
-      staleTime: 5*60*1000,
-      retry: (count, err: any) =>
-        err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' ? false : err?.response?.status === 403 ? false : count < 2,
-    })
+    useAnalyticsSnapshot(timeframe, selectCustomers)
 
   // Legacy queries — also gated
   const getSalesSummary = useQuery({
