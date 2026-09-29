@@ -458,10 +458,20 @@ func (s *Service) Cancel(ctx context.Context, businessID, orderID uuid.UUID) err
 			return err
 		}
 
+		prevStatus := order.Status
+
 		sm := s.buildOrderMachine(businessID, order)
 
 		if err := sm.FireCtx(ctx, TriggerCancel); err != nil {
 			return apperrors.ErrConflict.WithMessage("order state transition not supported")
+		}
+
+		// Persist the state change — previously only validated + invoice cancelled,
+		// which left the backend on "confirmed" while clients flipped to "cancelled".
+		order.Status = StatusCancelled
+		if err := s.repo.WithTx(tx).Update(ctx, order); err != nil {
+			s.logger.ErrorContext(ctx, "[ORDERS]-could not persist cancelled status", "businessID", businessID.String(), "orderID", orderID.String(), "err", err.Error())
+			return err
 		}
 
 		// cancel the invoice of the order
@@ -481,6 +491,19 @@ func (s *Service) Cancel(ctx context.Context, businessID, orderID uuid.UUID) err
 			_, err := s.invoices.WithTx(tx).Cancel(ctx, businessID, invoice.ID)
 			if err != nil {
 				s.logger.ErrorContext(ctx, "[ORDERS/INVOICES]-error while fetching order invoices", "businessID", businessID.String(), "orderID", orderID.String(), "err", err.Error())
+				return err
+			}
+		}
+
+		// Put back the stock that was removed when the (previously confirmed) order
+		// was confirmed. Draft orders never deducted, so nothing to restore.
+		if prevStatus == StatusConfirmed && s.inventory != nil && len(order.Lines) > 0 {
+			restoreLines := make([]inventory.DecrementLine, 0, len(order.Lines))
+			for _, l := range order.Lines {
+				restoreLines = append(restoreLines, inventory.DecrementLine{ProductID: l.ProductID, Quantity: l.Quantity})
+			}
+			if err := s.inventory.WithTx(tx).RestoreForOrder(ctx, businessID, orderID, restoreLines); err != nil {
+				s.logger.ErrorContext(ctx, "[ORDER/INVENTORY]-could not restore inventory", "businessID", businessID.String(), "orderID", orderID.String(), "err", err.Error())
 				return err
 			}
 		}
