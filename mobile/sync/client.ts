@@ -3,7 +3,7 @@ import NetInfo from '@react-native-community/netinfo'
 import { database } from '../db/database'
 import { api } from '../lib/api'
 import { extractRejectedIds } from './pushResult'
-import { v4 as uuidv4 } from 'uuid'
+import { randomUUID } from 'expo-crypto'
 import { Q } from '@nozbe/watermelondb'
 import * as RawRecord from '@nozbe/watermelondb/RawRecord'
 
@@ -319,7 +319,7 @@ export async function pushPendingOnly(): Promise<any> {
   const total = countChanges(changes)
   console.log('[Sync] pushPendingOnly firing total=', total, summarizeChanges(changes))
   if (total===0) return { applied: {}, errors: {}, note: 'no local changes' }
-  const idempotencyKey = uuidv4()
+  const idempotencyKey = randomUUID()
   // Need lastPulledAt for backend shape (use current lastPulledAt)
   let lastPulledAt: any = null
   try { const v = await (database as any).adapter.getLocal('__watermelon_last_pulled_at'); lastPulledAt = v? parseInt(v,10): null } catch {}
@@ -596,7 +596,7 @@ export async function syncNow() {
         }
       }
       // Per-batch idempotency key §2 (Do Not Substitute)
-      const idempotencyKey = uuidv4()
+      const idempotencyKey = randomUUID()
       const res: any = await api.post(
         `/sync/push`,
         { changes, lastPulledAt },
@@ -628,7 +628,7 @@ export async function syncNow() {
               const dup = existing.find((e: any) => e.recordId === rid && e.tableName === tname && !e.resolution)
               if (dup) continue
               await col.create((rec: any) => {
-                try { rec._raw.id = c.id || uuidv4() } catch {}
+                try { rec._raw.id = c.id || randomUUID() } catch {}
                 rec.businessId = c.business_id || c.businessId || ''
                 rec.tableName = tname
                 rec.recordId = rid
