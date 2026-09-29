@@ -45,17 +45,27 @@ func (s *Service) Adjust(ctx context.Context, businessID uuid.UUID, req Adjustme
 }
 
 func (s *Service) DecrementForOrder(ctx context.Context, businessID, orderID uuid.UUID, lines []DecrementLine) error {
-	for _, line := range lines {
-		ref := orderID
-		mv := &StockMovement{BaseModel: shareddb.BaseModel{TenantID: businessID}, BusinessID: businessID, ProductID: line.ProductID, QuantityDelta: line.Quantity.Neg(), MovementType: "sale", ReferenceType: "order", ReferenceID: &ref, OccurredAt: time.Now().UTC()}
-		item := &InventoryItem{BaseModel: shareddb.BaseModel{TenantID: businessID}, BusinessID: businessID, ProductID: line.ProductID}
+	// Ledger-guarded (reference "order"): runs at most once per order even if the
+	// REST confirm and the offline sync-confirm path both fire.
+	return ApplyLedger(s.repo.db.WithContext(ctx), businessID, "order", orderID, lines, -1, "sale", "order confirmed")
+}
 
-		if err := s.repo.Adjust(ctx, item, mv); err != nil {
-			return err
-		}
-	}
+// DeductForSale records the stock-out for a standalone (walk-in) sale. Ledger-guarded
+// so a sale pushed through sync and one created over REST never deducts twice.
+func (s *Service) DeductForSale(ctx context.Context, businessID, saleID uuid.UUID, lines []DecrementLine) error {
+	return ApplyLedger(s.repo.db.WithContext(ctx), businessID, "sale", saleID, lines, -1, "out", "sale created")
+}
 
-	return nil
+// RestoreForSale returns stock for a voided sale. Only fires if the sale previously
+// deducted stock (reference "sale") and has not been restored already.
+func (s *Service) RestoreForSale(ctx context.Context, businessID, saleID uuid.UUID, lines []DecrementLine) error {
+	return ApplyLedger(s.repo.db.WithContext(ctx), businessID, "sale", saleID, lines, 1, "in", "sale voided")
+}
+
+// RestoreForOrder returns stock for a cancelled order. Only fires if the order
+// previously deducted stock (reference "order") and has not been restored already.
+func (s *Service) RestoreForOrder(ctx context.Context, businessID, orderID uuid.UUID, lines []DecrementLine) error {
+	return ApplyLedger(s.repo.db.WithContext(ctx), businessID, "order", orderID, lines, 1, "in", "order cancelled")
 }
 
 func (s *Service) List(ctx context.Context, businessID uuid.UUID, page pagination.Page) ([]InventoryItem, error) {
