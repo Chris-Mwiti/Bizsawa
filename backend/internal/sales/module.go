@@ -7,6 +7,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/riverqueue/river"
 	"gorm.io/gorm"
+
+	"github.com/Codecx-Org/FinAI/backend/internal/inventory"
 )
 
 type Module struct {
@@ -15,14 +17,14 @@ type Module struct {
 	logger *slog.Logger
 }
 
-func New(db *gorm.DB, taxes TaxRecorder, outboxRepo *river.Client[*sql.Tx], logger *slog.Logger) *Module {
+func New(db *gorm.DB, taxes TaxRecorder, inventory *inventory.Service, outboxRepo *river.Client[*sql.Tx], logger *slog.Logger) *Module {
 	if logger == nil {
 		logger = slog.Default()
 	}
 
 	repo := NewRepository(db)
 
-	return &Module{repo: repo, svc: NewService(repo, taxes, outboxRepo, logger), logger: logger}
+	return &Module{repo: repo, svc: NewService(repo, taxes, inventory, outboxRepo, logger), logger: logger}
 }
 
 func (m *Module) RegisterRoutes(r chi.Router) {

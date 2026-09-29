@@ -12,6 +12,7 @@ import (
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 
+	"github.com/Codecx-Org/FinAI/backend/internal/inventory"
 	shareddb "github.com/Codecx-Org/FinAI/backend/internal/shared/db"
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/middleware"
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/pagination"
@@ -23,18 +24,19 @@ type TaxRecorder interface {
 	WithTx(tx *gorm.DB) *taxes.Service
 }
 type Service struct {
-	repo   *Repository
-	taxes  TaxRecorder
-	outbox *river.Client[*sql.Tx]
-	logger *slog.Logger
+	repo      *Repository
+	taxes     TaxRecorder
+	inventory *inventory.Service
+	outbox    *river.Client[*sql.Tx]
+	logger    *slog.Logger
 }
 
-func NewService(repo *Repository, taxes TaxRecorder, outboxRepo *river.Client[*sql.Tx], logger *slog.Logger) *Service {
+func NewService(repo *Repository, taxes TaxRecorder, inventory *inventory.Service, outboxRepo *river.Client[*sql.Tx], logger *slog.Logger) *Service {
 	if logger == nil {
 		logger = slog.Default()
 	}
 
-	return &Service{repo: repo, taxes: taxes, outbox: outboxRepo, logger: logger}
+	return &Service{repo: repo, taxes: taxes, inventory: inventory, outbox: outboxRepo, logger: logger}
 }
 
 type SaleLineRequest struct {
@@ -62,10 +64,11 @@ func (s *Service) WithTx(tx *gorm.DB) *Service {
 	}
 
 	return &Service{
-		repo:   s.repo.WithTx(tx),
-		taxes:  s.taxes,
-		outbox: s.outbox,
-		logger: s.logger,
+		repo:      s.repo.WithTx(tx),
+		taxes:     s.taxes,
+		inventory: s.inventory,
+		outbox:    s.outbox,
+		logger:    s.logger,
 	}
 }
 
@@ -147,6 +150,18 @@ func (s *Service) create(ctx context.Context, businessID, staffID uuid.UUID, ord
 				return err
 			}
 		}
+		// Standalone (walk-in) sales deduct inventory here. Order-linked sales are
+		// deducted at the order confirm step instead, so fulfilling an order does not
+		// double-remove stock. DeductForSale is ledger-guarded (reference "sale").
+		if orderID == nil && s.inventory != nil {
+			deductLines := make([]inventory.DecrementLine, 0, len(lines))
+			for _, l := range lines {
+				deductLines = append(deductLines, inventory.DecrementLine{ProductID: l.ProductID, Quantity: l.Quantity})
+			}
+			if err := s.inventory.WithTx(tx).DeductForSale(ctx, businessID, sale.ID, deductLines); err != nil {
+				return err
+			}
+		}
 		sqlTx, ok := tx.Statement.ConnPool.(*sql.Tx)
 		if !ok {
 			return fmt.Errorf("sqlTx not available for sales event")
@@ -175,7 +190,32 @@ func (s *Service) Get(ctx context.Context, businessID, saleID uuid.UUID) (*Sale,
 }
 
 func (s *Service) Void(ctx context.Context, businessID, saleID uuid.UUID) error {
-	err := s.repo.Void(ctx, businessID, saleID)
+	err := s.repo.db.Transaction(func(tx *gorm.DB) error {
+		// Load with lines so we can put the sold stock back; also lets us treat an
+		// already-voided sale as idempotent instead of erroring.
+		sale, err := s.repo.WithTx(tx).Find(ctx, businessID, saleID)
+		if err != nil {
+			return err
+		}
+		if sale.Status == "void" {
+			return nil
+		}
+		if err := s.repo.WithTx(tx).Void(ctx, businessID, saleID); err != nil {
+			return err
+		}
+		if s.inventory != nil && len(sale.Lines) > 0 {
+			restoreLines := make([]inventory.DecrementLine, 0, len(sale.Lines))
+			for _, l := range sale.Lines {
+				restoreLines = append(restoreLines, inventory.DecrementLine{ProductID: l.ProductID, Quantity: l.Quantity})
+			}
+			// Ledger-guarded (reference "sale") — only restores what this sale
+			// actually deducted (standalone sales), and never twice.
+			if err := s.inventory.WithTx(tx).RestoreForSale(ctx, businessID, saleID, restoreLines); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 	if err == nil {
 		if err := s.repo.DB().WithContext(ctx).Exec(`DELETE FROM analytics_snapshots WHERE business_id = ?`, businessID).Error; err != nil {
 			slog.ErrorContext(ctx, "database operation failed", "err", err)
