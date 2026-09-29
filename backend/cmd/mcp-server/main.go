@@ -93,7 +93,7 @@ func main() {
 	_ = business.New(gormDB, tenantModule, usersModule, cryptoManager)
 	customersModule := customers.New(gormDB)
 	inventoryModule := inventory.New(gormDB)
-	salesModule := sales.New(gormDB, taxesModule.Service(), nil, logger)
+	salesModule := sales.New(gormDB, taxesModule.Service(), inventoryModule.Service(), nil, logger)
 	expensesModule := expenses.New(gormDB, taxesModule.Service())
 	invoicesModule := invoices.New(gormDB, nil, logger)
 	authzEnforcer := authz.NewEnforcer(usersModule)
