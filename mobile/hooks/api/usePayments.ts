@@ -7,11 +7,11 @@ import type {
 } from '../../lib/api-dtos'
 import { toDecimalString, toNumber } from '../../lib/api-dtos'
 import { database } from '../../db/database'
-import { v4 as uuidv4 } from 'uuid'
+import { randomUUID } from 'expo-crypto'
 import { Q } from '@nozbe/watermelondb'
 import { useEffect, useState } from 'react'
 import { useBusinessContext } from '../../contexts/BusinessContext'
-import { toISO, nowMillis } from '../../lib/syncDates'
+import { toISO  } from '../../lib/syncDates'
 
 export interface PaymentInitiationRequest {
   orderId?: UUID
@@ -110,7 +110,7 @@ export const useInitiatePayment = () => {
       if (!data.phone) throw new Error('Phone required for M-Pesa')
       const amountStr = toDecimalString(data.amount)
       if (toNumber(amountStr) <= 0) throw new Error('Amount must be positive')
-      const id = uuidv4()
+      const id = randomUUID()
       // Offline-first: always write locally, then sync
       await (database as any).write(async () => {
         const col: any = (database as any).get('payment_commands')

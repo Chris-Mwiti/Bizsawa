@@ -6,7 +6,7 @@ import { database } from '../../db/database'
 import { Q } from '@nozbe/watermelondb'
 import { useEffect, useState } from 'react'
 import { useBusinessContext } from '../../contexts/BusinessContext'
-import { v4 as uuidv4 } from 'uuid'
+import { randomUUID } from 'expo-crypto'
 import { toISO, nowMillis } from '../../lib/syncDates'
 
 export interface InventoryItem {
@@ -149,7 +149,7 @@ export const useInventory = () => {
           })
         } else {
           await col.create((rec: any) => {
-            rec._raw.id = uuidv4()
+            rec._raw.id = randomUUID()
             rec.businessId = bid
             rec.productId = input.productId
             rec.quantity = delta
@@ -161,7 +161,7 @@ export const useInventory = () => {
         }
         const movCol: any = (database as any).get('stock_movements')
         await movCol.create((rec: any) => {
-          rec._raw.id = uuidv4()
+          rec._raw.id = randomUUID()
           rec.businessId = bid
           rec.productId = input.productId
           rec.quantityDelta = delta

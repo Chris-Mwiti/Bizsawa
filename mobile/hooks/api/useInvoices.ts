@@ -8,7 +8,7 @@ import type {
 import { toDecimalString, toNumber } from '../../lib/api-dtos'
 import { database } from '../../db/database'
 import { mergeLocalFirst } from '../../lib/mergeLocalFirst'
-import { v4 as uuidv4 } from 'uuid'
+import { randomUUID } from 'expo-crypto'
 import { Q } from '@nozbe/watermelondb'
 import { useEffect, useState } from 'react'
 import { useBusinessContext } from '../../contexts/BusinessContext'
@@ -141,7 +141,7 @@ export const useInvoices = () => {
 
   const createInvoice = useMutation({
     mutationFn: async (data: CreateInvoiceInput) => {
-      const id = uuidv4()
+      const id = randomUUID()
       const number = `INV-${id.slice(0, 6).toUpperCase()}`
       const subtotal = data.lines.reduce(
         (s, l) => s + toNumber(l.unitPrice) * toNumber(l.quantity),
@@ -173,7 +173,7 @@ export const useInvoices = () => {
         const lineCol: any = (database as any).get('invoice_lines')
         for (const line of data.lines) {
           await lineCol.create((rec: any) => {
-            rec._raw.id = uuidv4()
+            rec._raw.id = randomUUID()
             rec.businessId = bid
             rec.invoiceId = id
             rec.description = line.description

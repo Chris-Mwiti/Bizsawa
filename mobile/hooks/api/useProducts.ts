@@ -7,7 +7,7 @@ import type {
 import { toDecimalString, toNumber } from '../../lib/api-dtos'
 import { database } from '../../db/database'
 import { mergeLocalFirst } from '../../lib/mergeLocalFirst'
-import { v4 as uuidv4 } from 'uuid'
+import { randomUUID } from 'expo-crypto'
 import { useBusinessContext } from '../../contexts/BusinessContext'
 import { Q } from '@nozbe/watermelondb'
 import { useEffect, useState } from 'react'
@@ -170,7 +170,7 @@ export const useProducts = () => {
   const createProduct = useMutation({
     mutationFn: async (data: CreateProductInput) => {
       if (!bid) throw new Error('Select a business first')
-      const id = uuidv4()
+      const id = randomUUID()
       await (database as any).write(async () => {
         const col: any = (database as any).get('products')
         await col.create((rec: any) => {
@@ -196,7 +196,7 @@ export const useProducts = () => {
           for (const v of data.variants) {
             if (!v.name?.trim()) continue
             await vcol.create((rec: any) => {
-              rec._raw.id = v.id || uuidv4()
+              rec._raw.id = v.id || randomUUID()
               rec.businessId = bid
               rec.productId = id
               rec.name = v.name.trim()
@@ -260,7 +260,7 @@ export const useProducts = () => {
           for (const v of data.variants || []) {
             if (!v.name?.trim()) continue
             await vcol.create((rec: any) => {
-              rec._raw.id = (v as any).id || uuidv4()
+              rec._raw.id = (v as any).id || randomUUID()
               rec.businessId = bid
               rec.productId = id
               rec.name = v.name.trim()

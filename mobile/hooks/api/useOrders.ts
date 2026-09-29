@@ -5,7 +5,7 @@ import type { CreateOrderRequest, Order, UUID } from '../../lib/api-dtos'
 import { toDecimalString, toNumber } from '../../lib/api-dtos'
 import { database } from '../../db/database'
 import { mergeLocalFirst } from '../../lib/mergeLocalFirst'
-import { v4 as uuidv4 } from 'uuid'
+import { randomUUID } from 'expo-crypto'
 import { Q } from '@nozbe/watermelondb'
 import { useBusinessContext } from '../../contexts/BusinessContext'
 import { useAuth } from '../../contexts/AuthContext'
@@ -156,7 +156,7 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
   const createOrder = useMutation({
     mutationFn: async (data: CreateOrderInput) => {
       const req = toCreateOrderRequest(data)
-      const id = uuidv4()
+      const id = randomUUID()
       const subtotal = req.lines.reduce(
         (s, l) => s + toNumber(l.unitPrice) * toNumber(l.quantity),
         0,
@@ -181,7 +181,7 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
         const lineCol: any = (database as any).get('order_lines')
         for (const line of req.lines) {
           await lineCol.create((rec: any) => {
-            rec._raw.id = uuidv4()
+            rec._raw.id = randomUUID()
             rec.businessId = bid
             rec.orderId = id
             rec.productId = line.productId
@@ -262,6 +262,9 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
                   })
                 })
               } catch {}
+              // Mirror stock-out locally (server already deducted via Confirm)
+              await mirrorOrderStock(id, 'out')
+              queryClient.invalidateQueries({ queryKey: ['inventory'] })
               // Trigger pull to fetch server-created invoice
               import('../../sync/client').then((m) => m.syncNow().catch(() => {}))
               queryClient.invalidateQueries({ queryKey: ['orders'] })
@@ -301,7 +304,10 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
                   await rec.update((r: any) => { r.status = 'cancelled'; r._raw._status = 'synced'; r._raw._changed = '' })
                 })
               } catch {}
+              // Mirror stock back locally (server already restored via Cancel)
+              await mirrorOrderStock(id, 'in')
               queryClient.invalidateQueries({ queryKey: ['orders'] })
+              queryClient.invalidateQueries({ queryKey: ['inventory'] })
               return res.data as any
             }
           }
@@ -362,7 +368,7 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
           if (existingByOrder.length === 0) {
             const orderLinesCol: any = (database as any).get('order_lines')
             const lines: any[] = await orderLinesCol.query(Q.where('order_id', id)).fetch()
-            const invoiceId = uuidv4()
+            const invoiceId = randomUUID()
             const invoiceNumber = `INV-${invoiceId.slice(0, 6).toUpperCase()}`
             const subtotal = toNumber(rec.subtotal ?? rec._raw?.subtotal ?? '0')
             const tax = toNumber(rec.taxAmount ?? rec._raw?.tax_amount ?? '0')
@@ -393,7 +399,7 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
               const lineTotal = toDecimalString(toNumber(qty) * toNumber(price))
               const desc = prodId ? `Product ${String(prodId).slice(0, 6)}` : 'Item'
               await invoiceLinesCol.create((il: any) => {
-                il._raw.id = uuidv4()
+                il._raw.id = randomUUID()
                 il.businessId = bid
                 il.invoiceId = invoiceId
                 il.productId = prodId || null
@@ -414,7 +420,7 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
           if (existing.length === 0) {
             const orderLinesCol: any = (database as any).get('order_lines')
             const lines: any[] = await orderLinesCol.query(Q.where('order_id', id)).fetch()
-            const saleId = uuidv4()
+            const saleId = randomUUID()
             const receipt = `RCPT-${shortId(saleId, 6)}`
             // compute total from order lines if order total is 0/NaN
             const rawTotal = rec.total || rec._raw?.total || '0'
@@ -445,7 +451,7 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
               const q = toDecimalString(ol.quantity ?? ol._raw?.quantity)
               const p = toDecimalString(ol.unitPrice ?? ol._raw?.unit_price)
               await saleLinesCol.create((sl: any) => {
-                sl._raw.id = uuidv4()
+                sl._raw.id = randomUUID()
                 sl.businessId = bid
                 sl.saleId = saleId
                 sl.productId = ol.productId || ol._raw?.product_id
@@ -459,6 +465,15 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
           }
         }
       })
+      // Offline mirror of order-based inventory (confirm deducts, cancel/refund restores).
+      if (newStatus === 'confirmed') {
+        await mirrorOrderStock(id, 'out')
+      } else if (newStatus === 'cancelled' || newStatus === 'refunded') {
+        await mirrorOrderStock(id, 'in')
+      }
+      if (newStatus === 'confirmed' || newStatus === 'cancelled' || newStatus === 'refunded') {
+        queryClient.invalidateQueries({ queryKey: ['inventory'] })
+      }
       import('../../sync/client').then((m) => m.syncNow().catch(() => {}))
       queryClient.invalidateQueries({ queryKey: ['orders'] })
       queryClient.invalidateQueries({ queryKey: ['sales'] })
@@ -469,17 +484,53 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
 
   const deleteOrder = useMutation({
     mutationFn: async (id: UUID) => {
+      let prevStatus = ''
       await (database as any).write(async () => {
         const rec: any = await (database as any).get('orders').find(id)
+        prevStatus = String(rec.status ?? rec._raw?.status ?? '').toLowerCase()
         await rec.update((r: any) => {
           r.deletedAt = nowMillis()
         })
         await rec.markAsDeleted()
       })
+      // Deleting an order that had stock taken (confirmed/fulfilled) puts it back.
+      if (prevStatus === 'confirmed' || prevStatus === 'fulfilled') {
+        await mirrorOrderStock(id, 'in')
+      }
+      if (prevStatus === 'confirmed' || prevStatus === 'fulfilled') {
+        queryClient.invalidateQueries({ queryKey: ['inventory'] })
+      }
       import('../../sync/client').then((m) => m.syncNow().catch(() => {}))
       queryClient.invalidateQueries({ queryKey: ['orders'] })
     },
   })
+
+  // Local stock mirror for order-based inventory: deducts on confirm, restores on
+  // cancel/refund/delete. Idempotent via stock_movements (matches backend ApplyLedger).
+  const mirrorOrderStock = async (id: UUID, side: 'out' | 'in') => {
+    try {
+      const lineCol: any = (database as any).get('order_lines')
+      const lines: any[] = (await lineCol
+        .query(Q.where('order_id', id))
+        .fetch()) as any[]
+      if (!lines.length) return
+      const { applyLocalStockLedgerBatch } = await import('../../db/stockOps')
+      await applyLocalStockLedgerBatch({
+        businessId: bid,
+        refType: 'order',
+        refId: id,
+        side,
+        movementType: side === 'out' ? 'sale' : 'in',
+        notes: side === 'out' ? 'order confirmed' : 'order cancelled',
+        lines: lines.map((l: any) => ({
+          productId: l.productId ?? l._raw?.product_id,
+          quantity: l.quantity ?? l._raw?.quantity,
+        })),
+      })
+    } catch (e) {
+      console.warn('[Orders] local inventory mirror failed', (e as any)?.message)
+    }
+  }
 
   const getOrder = (id: UUID) =>
     useQuery({
