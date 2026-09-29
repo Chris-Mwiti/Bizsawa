@@ -4,7 +4,7 @@ import type { Expense as BackendExpense, UUID } from '../../lib/api-dtos'
 import { toDecimalString, toNumber } from '../../lib/api-dtos'
 import { database } from '../../db/database'
 import { mergeLocalFirst } from '../../lib/mergeLocalFirst'
-import { v4 as uuidv4 } from 'uuid'
+import { randomUUID } from 'expo-crypto'
 import { Q } from '@nozbe/watermelondb'
 import { useEffect, useState } from 'react'
 import { useBusinessContext } from '../../contexts/BusinessContext'
@@ -97,7 +97,7 @@ export const useExpenses = () => {
       if (!data || typeof data !== 'object') throw new Error('Expense data is required')
       const category = (data?.category || data?.type || '').trim()
       if (!category) throw new Error('Category required')
-      const id = uuidv4()
+      const id = randomUUID()
       const spentAt = toMillis(data.spentAt) || nowMillis()
       await (database as any).write(async () => {
         const col: any = (database as any).get('expenses')
