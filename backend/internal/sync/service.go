@@ -2,13 +2,17 @@ package sync
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
+
+	"github.com/Codecx-Org/FinAI/backend/internal/inventory"
 )
 
 var syncableTables = []string{
@@ -255,6 +259,19 @@ func (s *Service) PushWithUser(ctx context.Context, businessID uuid.UUID, userID
 					continue
 				}
 
+				if table == "stock_movements" {
+					// Pushed ledger rows ARE the ledger: recording one applies its delta
+					// to inventory_items. Guarded by the same reference-based rules as
+					// ApplyLedger so a mirrored movement can never double-apply a change
+					// the server already made (REST confirm/sale) and re-pushes stay no-ops.
+					if err := s.insertPushedMovement(tx, businessID, rec); err != nil {
+						result.reject(table, idStr, err.Error())
+					} else {
+						result.Applied[table] = append(result.Applied[table], idStr)
+					}
+					continue
+				}
+
 				if err := s.insertRecord(tx, businessID, userID, table, rec); err != nil {
 					result.reject(table, idStr, err.Error())
 				} else {
@@ -354,6 +371,12 @@ func (s *Service) PushWithUser(ctx context.Context, businessID uuid.UUID, userID
 						if prevStatus != "fulfilled" && newStatus == "fulfilled" {
 							_ = s.ensureSaleForOrder(tx, businessID, id)
 						}
+						// Offline cancel / refund: put the stock back that confirm removed.
+						if newStatus == "cancelled" || newStatus == "refunded" {
+							if err := s.restoreInventoryForOrder(tx, businessID, id); err != nil {
+								result.Errors[table] = append(result.Errors[table], fmt.Sprintf("restoreInventoryForOrder %s: %v", idStr, err))
+							}
+						}
 					}
 				}
 			}
@@ -364,11 +387,37 @@ func (s *Service) PushWithUser(ctx context.Context, businessID uuid.UUID, userID
 					result.reject(table, idStr, fmt.Sprintf("invalid delete id %s", idStr))
 					continue
 				}
-				// soft delete: set deleted_at, increment version if not already deleted
-				if err := tx.Exec(fmt.Sprintf(`UPDATE %s SET deleted_at = NOW(), updated_at = NOW(), sync_version = sync_version + 1 WHERE id = ? AND business_id = ? AND deleted_at IS NULL`, table), id, businessID).Error; err != nil {
-					result.reject(table, idStr, err.Error())
-				} else {
+
+				switch table {
+				case "sales":
+					// Voided sale: flag as void (drops it from analytics summaries) and
+					// put the stock back, all idempotently.
+					if err := tx.Exec(`UPDATE sales SET status = 'void', deleted_at = NOW(), updated_at = NOW(), sync_version = sync_version + 1 WHERE id = ? AND business_id = ? AND deleted_at IS NULL`, id, businessID).Error; err != nil {
+						result.reject(table, idStr, err.Error())
+						continue
+					}
+					if err := s.restoreInventoryForSale(tx, businessID, id); err != nil {
+						result.Errors[table] = append(result.Errors[table], fmt.Sprintf("restoreInventoryForSale %s: %v", idStr, err))
+					}
 					result.Applied[table] = append(result.Applied[table], idStr)
+				case "orders":
+					// Deleted order: soft-delete and return any stock it removed when
+					// confirmed. Draft orders never deducted, so this is a no-op for them.
+					if err := tx.Exec(`UPDATE orders SET deleted_at = NOW(), updated_at = NOW(), sync_version = sync_version + 1 WHERE id = ? AND business_id = ? AND deleted_at IS NULL`, id, businessID).Error; err != nil {
+						result.reject(table, idStr, err.Error())
+						continue
+					}
+					if err := s.restoreInventoryForOrder(tx, businessID, id); err != nil {
+						result.Errors[table] = append(result.Errors[table], fmt.Sprintf("restoreInventoryForOrder %s: %v", idStr, err))
+					}
+					result.Applied[table] = append(result.Applied[table], idStr)
+				default:
+					// soft delete: set deleted_at, increment version if not already deleted
+					if err := tx.Exec(fmt.Sprintf(`UPDATE %s SET deleted_at = NOW(), updated_at = NOW(), sync_version = sync_version + 1 WHERE id = ? AND business_id = ? AND deleted_at IS NULL`, table), id, businessID).Error; err != nil {
+						result.reject(table, idStr, err.Error())
+					} else {
+						result.Applied[table] = append(result.Applied[table], idStr)
+					}
 				}
 			}
 		}
@@ -378,6 +427,18 @@ func (s *Service) PushWithUser(ctx context.Context, businessID uuid.UUID, userID
 				continue
 			}
 			result.Errors[table] = append(result.Errors[table], "table not syncable")
+		}
+		// Post-pass: newly pushed standalone (walk-in) sales must remove stock. Their own
+		// positive/negative movement row may already be part of this batch (the client
+		// mirrors the ledger locally), so ensureSaleDeducted is idempotent.
+		for _, idStr := range result.Applied["sales"] {
+			sid, err := uuid.Parse(idStr)
+			if err != nil {
+				continue
+			}
+			if err := s.ensureSaleDeducted(tx, businessID, sid); err != nil {
+				result.Errors["sales"] = append(result.Errors["sales"], fmt.Sprintf("ensureSaleDeducted %s: %v", idStr, err))
+			}
 		}
 		return nil
 	})
@@ -539,6 +600,70 @@ func (s *Service) insertRecord(tx *gorm.DB, businessID uuid.UUID, userID uuid.UU
 	}
 
 	return tx.Table(table).Create(rec).Error
+}
+
+// insertPushedMovement records a client-pushed stock_movements row and applies its
+// quantity_delta to inventory_items — the mirror of ApplyLedger for the offline path.
+//
+// Reference-less rows (manual adjustments) always apply; their PK guarantees re-push
+// idempotency. Reference-bound rows (sales/orders) dedupe against the same rules the
+// server-side ledger uses, so a mirrored movement can never double-apply an adjustment
+// the REST API already made:
+//   - negative (out): apply only if this reference+product has not deducted yet; if the
+//     deduction already exists elsewhere, report as applied without re-applying.
+//   - positive (in): apply only if a deduction exists AND no restore has been applied;
+//     a phantom restore with no prior deduction is recorded without changing quantity.
+func (s *Service) insertPushedMovement(tx *gorm.DB, businessID uuid.UUID, rec map[string]any) error {
+	productStr := strings.TrimSpace(fmt.Sprint(rec["product_id"]))
+	productID, err := uuid.Parse(productStr)
+	if err != nil {
+		// no product → record-only row, nothing to apply
+		return s.insertRecord(tx, businessID, uuid.Nil, "stock_movements", rec)
+	}
+	deltaStr := strings.TrimSpace(fmt.Sprint(rec["quantity_delta"]))
+	delta, err := decimal.NewFromString(deltaStr)
+	if err != nil {
+		return fmt.Errorf("invalid quantity_delta %q", deltaStr)
+	}
+	refType := strings.TrimSpace(fmt.Sprint(rec["reference_type"]))
+	refIDStr := strings.TrimSpace(fmt.Sprint(rec["reference_id"]))
+	var refID uuid.UUID
+	if refIDStr != "" && refIDStr != "<nil>" {
+		refID, _ = uuid.Parse(refIDStr)
+	}
+	hasRef := refType != "" && refIDStr != "" && refIDStr != "<nil>" && refID != uuid.Nil
+
+	if hasRef {
+		var applied int64
+		if delta.Sign() < 0 {
+			tx.Raw(`SELECT COUNT(*) FROM stock_movements WHERE business_id = ? AND reference_type = ? AND reference_id = ? AND product_id = ? AND quantity_delta < 0`,
+				businessID, refType, refID, productID).Scan(&applied)
+			if applied > 0 {
+				// already deducted by a prior ledger entry (e.g. REST confirm applied it)
+				return nil
+			}
+		} else {
+			tx.Raw(`SELECT COUNT(*) FROM stock_movements WHERE business_id = ? AND reference_type = ? AND reference_id = ? AND product_id = ? AND quantity_delta > 0`,
+				businessID, refType, refID, productID).Scan(&applied)
+			if applied > 0 {
+				// restore already applied — treat as no-op
+				return nil
+			}
+			var deducted int64
+			tx.Raw(`SELECT COUNT(*) FROM stock_movements WHERE business_id = ? AND reference_type = ? AND reference_id = ? AND product_id = ? AND quantity_delta < 0`,
+				businessID, refType, refID, productID).Scan(&deducted)
+			if deducted == 0 {
+				// phantom restore (never deducted server-side) — record, do not change qty
+				return s.insertRecord(tx, businessID, uuid.Nil, "stock_movements", rec)
+			}
+		}
+	}
+
+	if err := s.insertRecord(tx, businessID, uuid.Nil, "stock_movements", rec); err != nil {
+		return err
+	}
+	return tx.Exec(`UPDATE inventory_items SET quantity = quantity + ?::numeric, updated_at = NOW() WHERE business_id = ? AND product_id = ? AND deleted_at IS NULL`,
+		delta.String(), businessID, productID).Error
 }
 
 func (s *Service) validateFKs(tx *gorm.DB, businessID uuid.UUID, table string, rec map[string]any) error {
@@ -712,7 +837,7 @@ func (s *Service) ensureInvoiceForOrder(tx *gorm.DB, businessID, orderID uuid.UU
 		total = subtotal
 	}
 	// Insert invoice
-	if err := tx.Exec(`INSERT INTO invoices (id, business_id, tenant_id, customer_id, order_id, invoice_number, status, subtotal, tax_amount, total, amount_paid, amount_due, currency, notes, due_at, created_at, updated_at, sync_version) VALUES (?, ?, ?, ?, ?, ?, 'draft', ?::numeric, ?::numeric, ?::numeric, 0, ?::numeric, 'KES', ?, ?, ?, 1)`,
+	if err := tx.Exec(`INSERT INTO invoices (id, business_id, tenant_id, customer_id, order_id, invoice_number, status, subtotal, tax_amount, total, amount_paid, amount_due, currency, notes, due_at, created_at, updated_at, sync_version) VALUES (?, ?, ?, ?, ?, ?, 'draft', ?::numeric, ?::numeric, ?::numeric, 0, ?::numeric, 'KES', ?, ?, ?, ?, 1)`,
 		invoiceID, businessID, businessID, order.CustomerID, orderID, invoiceNumber, subtotal, tax, total, total, fmt.Sprintf("Invoice for order %s", orderID.String()[:8]), dueAt, now, now).Error; err != nil {
 		return err
 	}
@@ -730,17 +855,23 @@ func (s *Service) ensureInvoiceForOrder(tx *gorm.DB, businessID, orderID uuid.UU
 			return err
 		}
 	}
-	// Decrement inventory for each line
-	for _, l := range lines {
-		if l.ProductID == nil {
-			continue
+	// Decrement inventory for each line — ledger-guarded so an offline push whose
+	// client already mirrored the stock_movements never double-deducts.
+	if len(lines) > 0 {
+		dl := make([]inventory.DecrementLine, 0, len(lines))
+		for _, l := range lines {
+			if l.ProductID == nil {
+				continue
+			}
+			q, qerr := decimal.NewFromString(l.Quantity)
+			if qerr != nil {
+				continue
+			}
+			dl = append(dl, inventory.DecrementLine{ProductID: *l.ProductID, Quantity: q})
 		}
-		_ = tx.Exec(`UPDATE inventory_items SET quantity = quantity - ?::numeric, updated_at = ?, sync_version = sync_version + 1 WHERE business_id = ? AND product_id = ? AND deleted_at IS NULL`, l.Quantity, now, businessID, *l.ProductID).Error
-		// Also record stock movement
-		movID := uuid.New()
-		qtyDelta := "-" + l.Quantity
-		_ = tx.Exec(`INSERT INTO stock_movements (id, business_id, tenant_id, product_id, quantity_delta, movement_type, reference_type, reference_id, notes, occurred_at, created_at, updated_at, sync_version) VALUES (?, ?, ?, ?, ?::numeric, 'out', 'order', ?, 'order confirmed', ?, ?, ?, 1)`,
-			movID, businessID, businessID, *l.ProductID, qtyDelta, orderID.String(), now, now, now).Error
+		if err := inventory.ApplyLedger(tx, businessID, "order", orderID, dl, -1, "out", "order confirmed"); err != nil {
+			return err
+		}
 	}
 	// Auto-create pending payment_command to trigger FIFO settlement via River worker
 	// (mirrors orders.Service.Confirm → emit OrderPaymentInit → InitiateOrder)
@@ -848,4 +979,85 @@ func (s *Service) ForceApplyClientPayload(ctx context.Context, businessID uuid.U
 
 		return tx.Table(table).Where("id = ? AND business_id = ?", recordID, businessID).Updates(update).Error
 	})
+}
+
+type ledgerLineRow struct {
+	ProductID *uuid.UUID `gorm:"column:product_id"`
+	Quantity  string     `gorm:"column:quantity"`
+}
+
+func (s *Service) saleLedgerLines(tx *gorm.DB, businessID, saleID uuid.UUID) ([]inventory.DecrementLine, error) {
+	var rows []ledgerLineRow
+	if err := tx.Raw(`SELECT product_id, quantity::text FROM sale_lines WHERE sale_id = ? AND business_id = ? AND deleted_at IS NULL`, saleID, businessID).Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	return toLedgerLines(rows), nil
+}
+
+func (s *Service) orderLedgerLines(tx *gorm.DB, businessID, orderID uuid.UUID) ([]inventory.DecrementLine, error) {
+	var rows []ledgerLineRow
+	if err := tx.Raw(`SELECT product_id, quantity::text FROM order_lines WHERE order_id = ? AND business_id = ? AND deleted_at IS NULL`, orderID, businessID).Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	return toLedgerLines(rows), nil
+}
+
+func toLedgerLines(rows []ledgerLineRow) []inventory.DecrementLine {
+	lines := make([]inventory.DecrementLine, 0, len(rows))
+	for _, r := range rows {
+		if r.ProductID == nil {
+			continue
+		}
+		q, err := decimal.NewFromString(r.Quantity)
+		if err != nil {
+			continue
+		}
+		lines = append(lines, inventory.DecrementLine{ProductID: *r.ProductID, Quantity: q})
+	}
+	return lines
+}
+
+// restoreInventoryForOrder puts stock back for a cancelled/voided order. Only fires
+// for an order that actually deducted (reference "order" had a negative movement).
+func (s *Service) restoreInventoryForOrder(tx *gorm.DB, businessID, orderID uuid.UUID) error {
+	lines, err := s.orderLedgerLines(tx, businessID, orderID)
+	if err != nil || len(lines) == 0 {
+		return err
+	}
+	return inventory.ApplyLedger(tx, businessID, "order", orderID, lines, 1, "in", "order cancelled")
+}
+
+// restoreInventoryForSale puts stock back for a voided sale. Only fires for a
+// standalone sale that deducted (reference "sale" had a negative movement).
+func (s *Service) restoreInventoryForSale(tx *gorm.DB, businessID, saleID uuid.UUID) error {
+	lines, err := s.saleLedgerLines(tx, businessID, saleID)
+	if err != nil || len(lines) == 0 {
+		return err
+	}
+	return inventory.ApplyLedger(tx, businessID, "sale", saleID, lines, 1, "in", "sale voided")
+}
+
+// ensureSaleDeducted records the stock-out for a pushed standalone sale exactly once.
+// Order-linked sales are skipped (their stock was removed at order confirm), as are
+// voids/deleted sales which must never deduct.
+func (s *Service) ensureSaleDeducted(tx *gorm.DB, businessID, saleID uuid.UUID) error {
+	var row struct {
+		OrderID sql.NullString `gorm:"column:order_id"`
+		Status  string         `gorm:"column:status"`
+	}
+	err := tx.Raw(`SELECT order_id::text, status FROM sales WHERE id = ? AND business_id = ? AND deleted_at IS NULL`, saleID, businessID).Scan(&row).Error
+	if err != nil {
+		return err
+	}
+	if row.OrderID.Valid && row.OrderID.String != "" {
+		return nil
+	}
+	if !strings.EqualFold(strings.TrimSpace(row.Status), "completed") {
+		return nil
+	}
+	lines, err := s.saleLedgerLines(tx, businessID, saleID)
+	if err != nil || len(lines) == 0 {
+		return err
+	}
+	return inventory.ApplyLedger(tx, businessID, "sale", saleID, lines, -1, "out", "sale created")
 }
