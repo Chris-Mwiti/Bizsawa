@@ -24,7 +24,7 @@ func (s *Service) buildOrderMachine(businessId uuid.UUID, order *Order) *statele
 	sm.Configure(StatusDraft).Permit(TriggerConfirm, StatusConfirmed).Permit(TriggerCancel, StatusCancelled)
 
 	// [confirm] -> [fulfill/cancel]
-	sm.Configure(StatusConfirmed).Permit(TriggerFullfill, StatusFulfilled)
+	sm.Configure(StatusConfirmed).Permit(TriggerFullfill, StatusFulfilled).Permit(TriggerCancel, StatusCancelled)
 
 	sm.Configure(StatusFulfilled).Permit(TriggerRequestRefund, StatusRefunded)
 
