@@ -1,0 +1,1 @@
+ALTER TABLE tax_entries DROP COLUMN IF EXISTS sync_version;
