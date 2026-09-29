@@ -17,7 +17,7 @@ import type {
   UUID,
 } from '../lib/api-dtos'
 import { useAuth } from './AuthContext'
-import { v4 as uuidv4 } from 'uuid'
+import { randomUUID } from 'expo-crypto'
 import { canRole } from '../lib/permissions'
 
 interface BusinessContextType {
@@ -159,7 +159,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
       // persisted as businessId and then sent as X-Business-ID, which the tenant
       // middleware rejects because it only accepts parseable UUIDs — poisoning every
       // tenant-scoped request until the business is created for real.
-      const pendingId = uuidv4()
+      const pendingId = randomUUID()
       const pending = {
         ...data,
         _pendingId: pendingId,
