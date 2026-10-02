@@ -14,7 +14,7 @@ export function Badge({
   children,
   ...props
 }: BadgeProps) {
-  let bgClass = 'bg-gray-900'
+  let bgClass = 'bg-accent'
   let textClass = 'text-white'
   let borderClass = ''
 
@@ -45,7 +45,7 @@ export function Badge({
     if (typeof children === 'string' || typeof children === 'number') {
       return (
         <Text
-          className={`text-xs font-medium ${textClass} ${textClassName || ''}`}
+          className={`font-geist-medium  text-xs font-medium ${textClass} ${textClassName || ''}`}
         >
           {children}
         </Text>
