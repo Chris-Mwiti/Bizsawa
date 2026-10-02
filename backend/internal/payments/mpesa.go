@@ -203,6 +203,29 @@ func (c *MpesaClient) TransactionStatus(ctx context.Context, req TransactionStat
 	return providerResult(resp), nil
 }
 
+// STKQuery actively polls Daraja for an STK push outcome when the async
+// callback is delayed (user cancelled mid-processing, phone offline, etc.).
+// The result arrives on ResultURL/QueueTimeOutURL; this call itself only
+// confirms Daraja accepted the query, so callers keep the payment in
+// processing and let the callback flip it to succeeded/failed.
+func (c *MpesaClient) STKQuery(ctx context.Context, checkoutRequestID string) (ProviderResult, error) {
+	timestamp := time.Now().Format("20060102150405")
+	password := base64.StdEncoding.EncodeToString([]byte(c.cfg.BusinessShortCode + c.cfg.Passkey + timestamp))
+	payload := map[string]any{
+		"BusinessShortCode": c.cfg.BusinessShortCode,
+		"Password":          password,
+		"Timestamp":         timestamp,
+		"CheckoutRequestID": checkoutRequestID,
+	}
+
+	resp, err := c.post(ctx, "/mpesa/stkpushquery/v1/query", payload)
+	if err != nil {
+		return ProviderResult{}, err
+	}
+
+	return providerResult(resp), nil
+}
+
 func (c *MpesaClient) token(ctx context.Context) (string, error) {
 	if c.cfg.ConsumerKey == "" || c.cfg.ConsumerSecret == "" {
 		return "", fmt.Errorf("mpesa consumer credentials are not configured")
@@ -284,7 +307,52 @@ func providerResult(resp mpesaAPIResponse) ProviderResult {
 	requestID := firstNonEmpty(resp.CheckoutRequestID, resp.ConversationID, resp.OriginatorConversationID, resp.MerchantRequestID)
 	receipt := firstNonEmpty(resp.ResponseCode, resp.ResultCode, requestID)
 
+	// Daraja STK push is async: ResponseCode "0" means the push was accepted and
+	// the real outcome (PIN entered / cancelled / timeout) arrives via callback.
+	// Any non-zero sync code means it never reached the phone — fail fast so the
+	// app can notify immediately instead of polling forever.
+	code := firstNonEmpty(resp.ResponseCode, resp.ResultCode)
+	if code != "" && code != "0" {
+		desc := firstNonEmpty(resp.ResponseDescription, resp.ResultDesc, "M-Pesa request was rejected")
+		raw := resp.Raw
+		if len(raw) == 0 {
+			raw = []byte(`{"code":"` + code + `","message":"` + desc + `"}`)
+		}
+		return ProviderResult{RequestID: requestID, Receipt: receipt, Raw: raw, Status: StatusFailed}
+	}
+
 	return ProviderResult{RequestID: requestID, Receipt: receipt, Raw: resp.Raw, Status: StatusProcessing}
+}
+
+// Friendly messages for the STK callback ResultCodes the app surfaces to users.
+// 1032 = user cancelled, 1037 = timeout, 1 = insufficient balance, etc.
+func mpesaFailureMessage(code, fallback string) string {
+	switch code {
+	case "1032":
+		return "M-Pesa request was cancelled on the phone. No money was charged — you can retry."
+	case "1037":
+		return "M-Pesa request timed out waiting for a PIN. No money was charged — please retry."
+	case "1":
+		return "M-Pesa failed: insufficient balance. No money was charged."
+	case "2001":
+		return "M-Pesa failed: wrong PIN entered. No money was charged — please retry."
+	case "1019", "1001":
+		return "M-Pesa failed: the transaction could not start. Please check the phone number and retry."
+	case "user_cancelled":
+		return "M-Pesa request was cancelled. No money was charged — you can retry."
+	case "stale":
+		return "M-Pesa request expired without confirmation. No money was charged — please retry."
+	case "provider_error":
+		if fallback != "" {
+			return fallback
+		}
+		return "M-Pesa request failed. No money was charged — please retry."
+	default:
+		if fallback != "" {
+			return fallback
+		}
+		return "M-Pesa payment failed. No money was charged — you can retry."
+	}
 }
 
 func (c *MpesaClient) defaultDesc() string {
