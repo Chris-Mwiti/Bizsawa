@@ -11,7 +11,6 @@ import {
 } from 'react-native'
 import {
   Plus,
-  ChevronLeft,
   ChevronRight,
   Send,
   Clock,
@@ -20,14 +19,14 @@ import {
   XCircle,
 } from 'lucide-react-native'
 import { router } from 'expo-router'
-import { Card, CardContent} from '../components/ui/Card'
-import { useInvoices } from '../hooks/api/useInvoices'
-import { useCustomers } from '../hooks/api/useCustomers'
-import { TAB_BAR_SCROLL_PADDING } from '../constants/tabBar'
-import { toNumber } from '../lib/api-dtos'
-import { SyncStatusBadge } from '../components/SyncStatusBadge'
-import { useSyncStatus } from '../hooks/useSyncStatus'
-import { manualSync } from '../sync/client'
+import { Card, CardContent} from '../../../components/ui/Card'
+import { useInvoices } from '../../../hooks/api/useInvoices'
+import { useCustomers } from '../../../hooks/api/useCustomers'
+import { TAB_BAR_SCROLL_PADDING } from '../../../constants/tabBar'
+import { toNumber } from '../../../lib/api-dtos'
+import { SyncStatusBadge } from '../../../components/SyncStatusBadge'
+import { useSyncStatus } from '../../../hooks/useSyncStatus'
+import { manualSync } from '../../../sync/client'
 
 function formatDate(iso: string) {
   const d = new Date(iso)
@@ -113,54 +112,6 @@ export default function Invoices() {
 
   return (
     <View className='flex-1 bg-gray-50'>
-      {/* Header with back + title + segmented control */}
-      <View className='px-4 pt-12 pb-4 bg-white border-b border-gray-200'>
-        <View className='flex-row items-center mb-4'>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            className='mr-3 p-2 -ml-2 rounded-full active:bg-gray-100'
-          >
-            <ChevronLeft size={22} color='#374151' />
-          </TouchableOpacity>
-          <View className='flex-1'>
-            <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
-              Billing
-            </Text>
-            <Text className='text-xl font-bold text-gray-900 -mt-0.5'>
-              Invoices
-            </Text>
-            <Text className='text-xs text-gray-500'>
-              Track and share invoices
-            </Text>
-          </View>
-          <TouchableOpacity
-            className='flex-row items-center gap-2 bg-gray-900 px-4 py-3 rounded-full active:opacity-90'
-            onPress={handleCreatePress}
-          >
-            <Plus size={16} color='white' />
-            <Text className='text-white font-bold text-sm'>Create</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View className='flex-row bg-gray-100 rounded-full p-1'>
-          <Pressable
-            className='flex-1 py-3 rounded-full items-center'
-            onPress={() => router.replace('/(tabs)/sales')}
-          >
-            <Text className='font-medium text-gray-500 text-sm'>Sales</Text>
-          </Pressable>
-          <Pressable
-            className='flex-1 py-3 rounded-full items-center'
-            onPress={() => router.replace('/orders')}
-          >
-            <Text className='font-medium text-gray-500 text-sm'>Orders</Text>
-          </Pressable>
-          <View className='flex-1 py-3 rounded-full items-center bg-white shadow-sm border border-gray-200'>
-            <Text className='font-bold text-gray-900 text-sm'>Invoices</Text>
-          </View>
-        </View>
-      </View>
-
       <ScrollView
         contentContainerStyle={{
           padding: 16,
@@ -178,35 +129,44 @@ export default function Invoices() {
       >
         {/* Summary header */}
         <View className='flex-row items-center justify-between px-1 py-1'>
-          <Text className='text-sm text-gray-500'>
+          <Text className='font-sans text-sm text-gray-500'>
             {invoices.length === 0
               ? 'No invoices'
               : `${invoices.length} ${invoices.length === 1 ? 'invoice' : 'invoices'}`}
           </Text>
-          {invoices.length > 0 && (
-            <Text className='text-xs font-medium text-gray-400'>
-              Tap to view detail
-            </Text>
-          )}
+          <View className='flex-row items-center gap-2'>
+            {invoices.length > 0 && (
+              <Text className='font-geist-medium text-xs font-medium text-gray-500'>
+                Tap to view detail
+              </Text>
+            )}
+            <TouchableOpacity
+              className='flex-row items-center gap-1 bg-accent px-3 py-2 rounded-full active:opacity-90'
+              onPress={handleCreatePress}
+            >
+              <Plus size={14} color='white' />
+              <Text className='font-geist-bold text-white font-bold text-xs'>Create</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {invoices.length === 0 ? (
           <Card className='border-dashed'>
             <CardContent className='items-center py-14'>
               <View className='w-14 h-14 rounded-full bg-gray-100 items-center justify-center mb-3'>
-                <Send size={20} color='#9ca3af' />
+                <Send size={20} color='#6b7280' />
               </View>
-              <Text className='text-gray-900 font-bold mb-1'>
+              <Text className='font-geist-bold text-gray-900 font-bold mb-1'>
                 No invoices yet
               </Text>
-              <Text className='text-gray-500 text-sm mb-5 text-center px-6'>
+              <Text className='font-sans text-gray-500 text-sm mb-5 text-center px-6'>
                 Invoices appear here after you confirm an order.
               </Text>
               <TouchableOpacity
-                className='bg-gray-900 px-5 py-3 rounded-full'
+                className='bg-accent px-5 py-3 rounded-full'
                 onPress={handleCreatePress}
               >
-                <Text className='text-white font-bold text-sm'>
+                <Text className='font-geist-bold text-white font-bold text-sm'>
                   Create your first invoice
                 </Text>
               </TouchableOpacity>
@@ -229,7 +189,7 @@ export default function Invoices() {
                     <View className='flex-row items-start justify-between gap-4 mb-3'>
                       <View className='flex-1'>
                         <Text
-                          className='font-bold text-gray-900 text-base'
+                          className='font-geist-bold font-bold text-gray-900 text-base'
                           numberOfLines={1}
                         >
                           {inv.invoiceNumber}
@@ -251,15 +211,15 @@ export default function Invoices() {
                               }
                             />
                             <Text
-                              className={`text-xs font-bold tracking-widest ${s.text}`}
+                              className={`font-geist-bold text-xs font-bold tracking-widest ${s.text}`}
                             >
                               {inv.status.toUpperCase()}
                             </Text>
                           </View>
                           <InvoiceSyncBadge id={inv.id} />
-                          <Text className='text-xs text-gray-400'>•</Text>
+                          <Text className='font-sans text-xs text-gray-500'>•</Text>
                           <Text
-                            className='text-xs text-gray-500'
+                            className='font-sans text-xs text-gray-500'
                             numberOfLines={1}
                           >
                             {getCustomerName(inv)}
@@ -269,11 +229,11 @@ export default function Invoices() {
 
                       <View className='items-end shrink-0 ml-2'>
                         <Text
-                          className={`text-base font-bold tracking-tight font-mono ${isPaid ? 'text-emerald-700' : 'text-gray-900'}`}
+                          className={`font-geist-mono-bold text-base font-bold tracking-tight  ${isPaid ? 'text-emerald-700' : 'text-gray-900'}`}
                         >
                           {formatCurrency(inv.total)}
                         </Text>
-                        <Text className='text-xs text-gray-400 mt-0.5'>
+                        <Text className='font-sans text-xs text-gray-500 mt-0.5'>
                           Due {formatDate(inv.dueAt)}
                         </Text>
                       </View>
@@ -282,13 +242,13 @@ export default function Invoices() {
                     {/* Bottom row: divider + meta + chevron — not crowding the amount */}
                     <View className='flex-row items-center justify-between pt-3 mt-1 border-t border-gray-100'>
                       <View className='flex-row items-center gap-2'>
-                        <View className='w-6 h-6 rounded-full bg-gray-900 items-center justify-center'>
-                          <Text className='text-white text-xs font-bold'>
+                        <View className='w-6 h-6 rounded-full bg-accent items-center justify-center'>
+                          <Text className='font-geist-bold text-white text-xs font-bold'>
                             {getCustomerInitial(inv)}
                           </Text>
                         </View>
                         <Text
-                          className='text-xs font-medium text-gray-600'
+                          className='text-xs font-medium text-gray-600 font-mono'
                           numberOfLines={1}
                         >
                           {toNumber(inv.amountDue) > 0
@@ -297,10 +257,10 @@ export default function Invoices() {
                         </Text>
                       </View>
                       <View className='flex-row items-center gap-1'>
-                        <Text className='text-xs font-bold text-gray-400'>
+                        <Text className='font-geist-bold text-xs font-bold text-gray-500'>
                           VIEW
                         </Text>
-                        <ChevronRight size={16} color='#9ca3af' />
+                        <ChevronRight size={16} color='#6b7280' />
                       </View>
                     </View>
                   </CardContent>
