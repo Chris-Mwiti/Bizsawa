@@ -192,18 +192,18 @@ export default function LoginScreen() {
             {/* Header */}
             <View className='items-center mb-8'>
               <View className='w-20 h-20 bg-primary-600 rounded-full items-center justify-center mb-4'>
-                <Text className='text-white text-2xl font-bold'>BS</Text>
+                <Text className='font-geist-bold text-white text-2xl font-bold'>BS</Text>
               </View>
-              <Text className='text-3xl font-bold text-gray-900 mb-2'>
+              <Text className='font-geist-bold text-3xl font-bold text-gray-900 mb-2'>
                 BizSawa
               </Text>
-              <Text className='text-gray-500 text-center'>
+              <Text className='font-sans text-gray-500 text-center'>
                 {'Welcome back! \nSign in to manage your business'}
               </Text>
               {isOffline && (
                 <View className='mt-3 px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200 flex-row items-center gap-2'>
                   <WifiOff size={12} color='#b45309' />
-                  <Text className='text-xs font-bold text-amber-700'>
+                  <Text className='font-geist-bold text-xs font-bold text-amber-700'>
                     Offline mode
                   </Text>
                 </View>
@@ -211,7 +211,7 @@ export default function LoginScreen() {
               {offlineAvailable && (
                 <View className='mt-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 flex-row items-center gap-2'>
                   <Shield size={12} color='#047857' />
-                  <Text className='text-xs text-emerald-700'>
+                  <Text className='font-sans text-xs text-emerald-700'>
                     Offline login available • {graceDays} days left
                   </Text>
                 </View>
@@ -222,7 +222,7 @@ export default function LoginScreen() {
             <View className='space-y-4'>
               {/* Email Field */}
               <View>
-                <Text className='text-gray-700 font-medium mb-2'>Email</Text>
+                <Text className='font-geist-medium text-gray-700 font-medium mb-2'>Email</Text>
                 <View className='relative'>
                   <Mail
                     size={20}
@@ -243,7 +243,7 @@ export default function LoginScreen() {
                   />
                 </View>
                 {errors.email && (
-                  <Text className='text-red-500 text-sm mt-1'>
+                  <Text className='font-sans text-red-500 text-sm mt-1'>
                     {errors.email}
                   </Text>
                 )}
@@ -251,7 +251,7 @@ export default function LoginScreen() {
 
               {/* Password Field */}
               <View>
-                <Text className='text-gray-700 font-medium mb-2'>Password</Text>
+                <Text className='font-geist-medium text-gray-700 font-medium mb-2'>Password</Text>
                 <View className='relative'>
                   <Lock
                     size={20}
@@ -281,7 +281,7 @@ export default function LoginScreen() {
                   </TouchableOpacity>
                 </View>
                 {errors.password && (
-                  <Text className='text-red-500 text-sm mt-1'>
+                  <Text className='font-sans text-red-500 text-sm mt-1'>
                     {errors.password}
                   </Text>
                 )}
@@ -297,7 +297,7 @@ export default function LoginScreen() {
                 }
                 className='self-end mt-3'
               >
-                <Text className='text-primary-600 font-semibold text-sm'>Forgot password?</Text>
+                <Text className='font-geist-semibold text-primary-600 font-semibold text-sm'>Forgot password?</Text>
               </TouchableOpacity>
 
               {/* Login Button */}
@@ -312,7 +312,7 @@ export default function LoginScreen() {
                   <ActivityIndicator color='white' size='small' />
                 ) : (
                   <View className='flex-row items-center'>
-                    <Text className='text-white font-semibold text-lg mr-2'>
+                    <Text className='font-geist-semibold text-white font-semibold text-lg mr-2'>
                       Sign In
                     </Text>
                     <ArrowRight size={20} color='white' />
@@ -328,16 +328,16 @@ export default function LoginScreen() {
                     params: formData.email ? { email: formData.email } : undefined,
                   } as any)
                 }
-                className='border border-gray-900 rounded-2xl mt-3 py-4 items-center bg-white flex-row justify-center gap-2'
+                className='border border-accent rounded-2xl mt-3 py-4 items-center bg-white flex-row justify-center gap-2'
               >
                 <Mail size={16} color='#111827' />
-                <Text className='text-gray-900 font-semibold'>Sign in with email code</Text>
+                <Text className='font-geist-semibold text-gray-900 font-semibold'>Sign in with email code</Text>
               </TouchableOpacity>
 
               {/* Divider */}
               <View className='flex-row items-center my-6'>
                 <View className='flex-1 h-[1px] bg-gray-200' />
-                <Text className='mx-4 text-gray-500 font-medium'>OR</Text>
+                <Text className='font-geist-medium mx-4 text-gray-500 font-medium'>OR</Text>
                 <View className='flex-1 h-[1px] bg-gray-200' />
               </View>
 
@@ -348,7 +348,7 @@ export default function LoginScreen() {
                   className='flex-row items-center justify-center border border-emerald-200 rounded-2xl py-3 bg-emerald-50 mt-2'
                 >
                   <Fingerprint size={18} color='#047857' />
-                  <Text className='text-emerald-700 font-semibold ml-2'>
+                  <Text className='font-geist-semibold text-emerald-700 font-semibold ml-2'>
                     Unlock with Biometrics
                   </Text>
                 </TouchableOpacity>
@@ -360,15 +360,15 @@ export default function LoginScreen() {
                 disabled={true}
                 className='flex-row items-center justify-center border border-gray-200 rounded-2xl py-4 bg-gray-100 opacity-60'
               >
-                <Text className='text-gray-400 font-semibold text-lg'>
+                <Text className='font-geist-semibold text-gray-500 font-semibold text-lg'>
                   Continue with Google — disabled
                 </Text>
               </TouchableOpacity>
-              <Text className='text-xs text-gray-400 text-center mt-2'>We’ll re-enable after fixing the silent callback error (mobile ↔ /api/v1/auth/google).</Text>
+              <Text className='font-sans text-xs text-gray-500 text-center mt-2'>We’ll re-enable after fixing the silent callback error (mobile ↔ /api/v1/auth/google).</Text>
 
               {isOffline && !offlineAvailable && formData.email ? (
                 <View className='bg-amber-50 border border-amber-200 rounded-2xl px-3 py-3 mt-4'>
-                  <Text className='text-xs text-amber-800 text-center'>
+                  <Text className='font-sans text-xs text-amber-800 text-center'>
                     Offline login not yet enabled for this email. Connect once
                     online to cache credentials (7-day grace).
                   </Text>
@@ -377,9 +377,9 @@ export default function LoginScreen() {
 
               {/* Invite code Link */}
               <View className='flex-row justify-center mt-4'>
-                <Text className='text-gray-600'>Have an invite code? </Text>
+                <Text className='font-sans text-gray-600'>Have an invite code? </Text>
                 <TouchableOpacity onPress={() => router.push({ pathname: '/auth/accept-invite', params: formData.email ? { email: formData.email } : undefined } as any)}>
-                  <Text className='text-primary-600 font-semibold'>
+                  <Text className='font-geist-semibold text-primary-600 font-semibold'>
                     Accept invite
                   </Text>
                 </TouchableOpacity>
@@ -387,9 +387,9 @@ export default function LoginScreen() {
 
               {/* Register Link */}
               <View className='flex-row justify-center mt-2'>
-                <Text className='text-gray-600'>Don't have an account? </Text>
+                <Text className='font-sans text-gray-600'>Don't have an account? </Text>
                 <TouchableOpacity onPress={() => router.push('/auth/register')}>
-                  <Text className='text-primary-600 font-semibold'>
+                  <Text className='font-geist-semibold text-primary-600 font-semibold'>
                     Sign Up
                   </Text>
                 </TouchableOpacity>
