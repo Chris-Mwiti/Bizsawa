@@ -25,6 +25,10 @@
     },
     "android": {
       "package": "com.bizsawa.mobile",
+      // "pan" (the Expo default) slides the window without resizing, so bottom
+      // inputs — chat box, sheet fields — end up under the keyboard. "resize"
+      // lets KeyboardAvoidingView do its job on both platforms.
+      "softwareKeyboardLayoutMode": "resize",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -70,7 +74,8 @@
         }
       ],
       "expo-sqlite",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-font"
     ],
     "extra": {
       "router": {},
