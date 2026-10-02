@@ -1,39 +1,45 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  KeyboardAvoidingView,
-  Platform,
-  Keyboard,
-  TouchableWithoutFeedback,
   ActivityIndicator,
   Alert,
   FlatList,
-  Modal,
   Pressable,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import {
-  ChevronLeft,
   CheckCircle,
   Smartphone,
   Trash2,
 } from 'lucide-react-native'
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
-import { OrdersEmptyState } from '../components/OrderEmptyState'
-import { OrdersFooter } from '../components/OrderFooter'
-import { OrdersHeader } from '../components/OrderHeader'
-import { SalesEntryModal, DraftLine } from '../components/SalesEntryModal'
-import { TAB_BAR_SCROLL_PADDING } from '../constants/tabBar'
-import { useCustomers, useCreateCustomer } from '../hooks/api/useCustomers'
-import { OrderStatus, useOrders } from '../hooks/api/useOrders'
-import { useInitiatePayment, usePaymentStatus } from '../hooks/api/usePayments'
-import { useProducts } from '../hooks/api/useProducts'
-import { Order, toNumber } from '../lib/api-dtos'
-import { shortId } from '../lib/ids'
+import { Card, CardContent } from '../../../components/ui/Card'
+import { Sheet } from '../../../components/ui/Sheet'
+import { Button } from '../../../components/ui/Button'
+import { OrdersEmptyState } from '../../../components/OrderEmptyState'
+import { OrdersFooter } from '../../../components/OrderFooter'
+import { OrdersHeader } from '../../../components/OrderHeader'
+import { SalesEntryModal, DraftLine } from '../../../components/SalesEntryModal'
+import { TAB_BAR_SCROLL_PADDING } from '../../../constants/tabBar'
+import { useCustomers, useCreateCustomer } from '../../../hooks/api/useCustomers'
+import { OrderStatus, useOrders } from '../../../hooks/api/useOrders'
+import {
+  useCancelPayment,
+  useInitiatePayment,
+  usePaymentStatus,
+} from '../../../hooks/api/usePayments'
+import {
+  isPaymentFailed,
+  isPaymentPending,
+  isPaymentSucceeded,
+  normalizePaymentStatus,
+  paymentFailureMessage,
+} from '../../../lib/payment-status'
+import { useProducts } from '../../../hooks/api/useProducts'
+import { Order, toNumber } from '../../../lib/api-dtos'
+import { shortId } from '../../../lib/ids'
 
 const statusPill = (s: string) => {
   if (s === 'fulfilled')
@@ -75,23 +81,23 @@ const OrderItem = memo(
             <View className='flex-row justify-between gap-3 mb-3'>
               <View className='flex-1'>
                 <Text
-                  className='text-sm font-bold tracking-tight text-gray-900'
+                  className='font-geist-bold text-sm font-bold tracking-tight text-gray-900'
                   numberOfLines={1}
                 >
                   Order • {shortId(order.id, 6)}
                 </Text>
-                <Text className='text-xs text-gray-500 mt-1'>
+                <Text className='font-sans text-xs text-gray-500 mt-1'>
                   {formatDate(order.createdAt)} • {order.paymentMethod}
                 </Text>
               </View>
               <View className='items-end gap-1'>
-                <Text className='text-sm font-bold tracking-tight text-gray-900 font-mono'>
+                <Text className='font-geist-mono-bold text-sm font-bold tracking-tight text-gray-900'>
                 {formatCurrency(toNumber(order.total))}
                 </Text>
                 <View
                   className={`px-2 py-1 rounded-full border ${statusPill(order.status)}`}
                 >
-                  <Text className='text-xs font-bold tracking-widest'>
+                  <Text className='font-geist-bold text-xs font-bold tracking-widest'>
                     {order.status.toUpperCase()}
                   </Text>
                 </View>
@@ -101,24 +107,24 @@ const OrderItem = memo(
             <View className='flex-row gap-2'>
               {order.status === 'draft' && (
                 <TouchableOpacity
-                  className='flex-1 bg-gray-900 py-3 rounded-2xl items-center'
+                  className='flex-1 bg-accent py-3 rounded-2xl items-center'
                   onPress={(e) => {
                     e.stopPropagation()
                     onUpdateStatus(order, OrderStatus.confirmed)
                   }}
                 >
-                  <Text className='text-white font-bold text-sm'>Confirm</Text>
+                  <Text className='font-geist-bold text-white font-bold text-sm'>Confirm</Text>
                 </TouchableOpacity>
               )}
               {order.status === 'confirmed' && (
                 <TouchableOpacity
-                  className='flex-1 bg-gray-900 py-3 rounded-2xl items-center'
+                  className='flex-1 bg-accent py-3 rounded-2xl items-center'
                   onPress={(e) => {
                     e.stopPropagation()
                     onUpdateStatus(order, OrderStatus.fulfilled)
                   }}
                 >
-                  <Text className='text-white font-bold text-sm'>Fulfill</Text>
+                  <Text className='font-geist-bold text-white font-bold text-sm'>Fulfill</Text>
                 </TouchableOpacity>
               )}
               {showMpesa ? (
@@ -134,7 +140,7 @@ const OrderItem = memo(
                 </TouchableOpacity>
               ) : (
                 <View className='w-11 h-11 rounded-2xl bg-gray-100 border border-gray-200 items-center justify-center opacity-50'>
-                  <Smartphone size={16} color='#9ca3af' />
+                  <Smartphone size={16} color='#6b7280' />
                 </View>
               )}
               {!isFulfilled && !isCancelled && (
@@ -150,7 +156,7 @@ const OrderItem = memo(
               )}
             </View>
             {isFulfilled && (
-              <Text className='text-xs text-gray-400 mt-2 text-center'>
+              <Text className='font-sans text-xs text-gray-500 mt-2 text-center'>
                 Fulfilled — M-Pesa disabled
               </Text>
             )}
@@ -163,7 +169,6 @@ const OrderItem = memo(
 OrderItem.displayName = 'OrderItem'
 
 export default function OrdersScreen() {
-  const insets = useSafeAreaInsets()
   const router = useRouter()
   const [showOrderModal, setShowOrderModal] = useState(false)
   const [showCustomerModal, setShowCustomerModal] = useState(false)
@@ -178,7 +183,9 @@ export default function OrdersScreen() {
   const [quantity, setQuantity] = useState('1')
   const [paymentId, setPaymentId] = useState<string | null>(null)
   const [paymentOrderId, setPaymentOrderId] = useState<string | null>(null)
+  const [paymentError, setPaymentError] = useState<string | null>(null)
   const autoConfirmRef = useRef(false)
+  const failureNotifiedRef = useRef<string | null>(null)
 
   const { products, isLoading: productsLoading } = useProducts()
   const { data: customers = [] } = useCustomers()
@@ -194,6 +201,7 @@ export default function OrdersScreen() {
   } = useOrders({ limit: 25 })
   const { mutateAsync: initiatePayment, isPending: isInitiatingPayment } =
     useInitiatePayment()
+  const { mutateAsync: cancelPayment } = useCancelPayment()
   const paymentStatus = usePaymentStatus(paymentId || undefined, !!paymentId)
 
   const selectedProduct = products.find((p) => p.id === selectedProductId)
@@ -266,6 +274,51 @@ export default function OrdersScreen() {
     setDraftLines((prev) => prev.filter((_, i) => i !== index))
   }
 
+  /** One-tap add: qty 1, merged when the line already exists. */
+  const quickAddLine = (productId: string, variantId?: string | null) => {
+    const product = products.find((p) => p.id === productId)
+    if (!product) return
+    const variants = (product as any).variants || []
+    const variant = variantId
+      ? variants.find((v: any) => v.id === variantId)
+      : null
+    const unitPrice = variant
+      ? variant.price.toString()
+      : product.price.toString()
+    setDraftLines((prev) => {
+      const i = prev.findIndex(
+        (l) =>
+          l.productId === productId &&
+          (l.variantId || null) === (variant?.id || null),
+      )
+      if (i >= 0) {
+        const next = [...prev]
+        next[i] = {
+          ...next[i],
+          quantity: String(toNumber(next[i].quantity) + 1),
+        }
+        return next
+      }
+      return [
+        ...prev,
+        {
+          productId,
+          variantId: variant?.id || null,
+          productName: product.name,
+          variantName: variant?.name || null,
+          quantity: '1',
+          unitPrice,
+        },
+      ]
+    })
+  }
+
+  const updateLineQty = (index: number, quantity: string) => {
+    setDraftLines((prev) =>
+      prev.map((l, i) => (i === index ? { ...l, quantity } : l)),
+    )
+  }
+
   const resetDraft = () => {
     setCustomerId(null)
     setPaymentMethod('cash')
@@ -331,7 +384,7 @@ export default function OrdersScreen() {
         Alert.alert('Already processed', `Order is already ${order.status} — M-Pesa not needed.`)
         return
       }
-      if (paymentId && paymentStatus.data?.status === 'pending' && paymentOrderId === order.id) {
+      if (paymentId && isPaymentPending(paymentStatus.data?.status) && paymentOrderId === order.id) {
         Alert.alert('Payment pending', 'An M-Pesa request is already pending for this order.')
         return
       }
@@ -343,25 +396,55 @@ export default function OrdersScreen() {
           'Missing phone',
           'This order needs a customer phone number before M-Pesa.',
         )
-      const payment = await initiatePayment({
-        orderId: order.id,
-        phone: customer.phone,
-        amount: order.total,
-        currency: 'KES',
-      })
-      setPaymentId(payment.id)
-      setPaymentOrderId(order.id)
-      autoConfirmRef.current = false
-      Alert.alert('Payment sent', 'M-Pesa request sent — order will auto-confirm on success.')
+      try {
+        setPaymentError(null)
+        failureNotifiedRef.current = null
+        const payment = await initiatePayment({
+          orderId: order.id,
+          phone: customer.phone,
+          amount: order.total,
+          currency: 'KES',
+        })
+        if (isPaymentFailed((payment as any)?.status)) {
+          const msg = paymentFailureMessage(payment)
+          setPaymentError(msg)
+          Alert.alert('M-Pesa failed', msg)
+          return
+        }
+        setPaymentId(payment.id)
+        setPaymentOrderId(order.id)
+        autoConfirmRef.current = false
+        Alert.alert('Payment sent', 'M-Pesa request sent — order will auto-confirm on success. Cancelling on the phone marks it as failed so you can retry.')
+      } catch (e: any) {
+        Alert.alert(
+          'Error',
+          e.friendlyMessage || e.message || 'Failed to initiate M-Pesa',
+        )
+      }
     },
     [customers, initiatePayment, paymentId, paymentStatus.data?.status, paymentOrderId],
   )
 
-  // Auto-confirm draft → confirmed when M-Pesa succeeds (prevents double charge)
+  const handleCancelPayment = useCallback(async () => {
+    if (!paymentId) return
+    try {
+      await cancelPayment(paymentId)
+      await paymentStatus.refetch()
+    } catch (e: any) {
+      Alert.alert(
+        'Error',
+        e?.friendlyMessage || e?.message || 'Failed to cancel payment',
+      )
+    }
+  }, [cancelPayment, paymentId, paymentStatus])
+
+  // Auto-confirm draft → confirmed when M-Pesa succeeds; notify + keep draft
+  // on any terminal failure (cancelled, timeout, failed) so the user can retry.
   useEffect(() => {
-    const status = paymentStatus.data?.status
-    if (!paymentId || !paymentOrderId || autoConfirmRef.current) return
-    if (status === 'succeeded' || status === 'success' || status === 'completed') {
+    const rawStatus = paymentStatus.data?.status
+    if (!paymentId || !paymentOrderId || !rawStatus) return
+    const status = normalizePaymentStatus(rawStatus)
+    if (isPaymentSucceeded(rawStatus) && !autoConfirmRef.current) {
       const target = orders.find((o) => o.id === paymentOrderId)
       if (target && String(target.status) === 'draft') {
         autoConfirmRef.current = true
@@ -370,9 +453,16 @@ export default function OrdersScreen() {
           .catch((e: any) => console.error('[Orders] auto-confirm failed', e))
       }
     }
-    if (status === 'failed') {
+    if (isPaymentFailed(rawStatus)) {
       autoConfirmRef.current = true
+      if (failureNotifiedRef.current !== paymentId) {
+        failureNotifiedRef.current = paymentId
+        const msg = paymentFailureMessage(paymentStatus.data)
+        setPaymentError(msg)
+        Alert.alert('M-Pesa failed', `${msg}\n\nOrder is still draft — you can retry.`)
+      }
     }
+    void status
   }, [paymentStatus.data?.status, paymentId, paymentOrderId, orders])
 
   const handlePressOrder = useCallback(
@@ -405,51 +495,12 @@ export default function OrdersScreen() {
     return (
       <View className='flex-1 bg-gray-50 items-center justify-center px-6'>
         <ActivityIndicator color='#111827' />
-        <Text className='text-sm text-gray-500 mt-2'>Loading orders…</Text>
+        <Text className='font-sans text-sm text-gray-500 mt-2'>Loading orders…</Text>
       </View>
     )
 
   return (
     <View className='flex-1 bg-gray-50'>
-      <View className='px-4 pt-12 pb-4 bg-white border-b border-gray-200'>
-        <View className='flex-row items-center gap-3 mb-4'>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            className='w-11 h-11 rounded-full bg-gray-100 items-center justify-center'
-          >
-            <ChevronLeft size={18} color='#111827' />
-          </TouchableOpacity>
-          <View>
-            <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
-              Workspace
-            </Text>
-            <Text className='text-lg font-bold tracking-tight text-gray-900 -mt-0.5'>
-              Orders
-            </Text>
-          </View>
-          <Text className='ml-auto text-xs text-gray-500'>
-            {orders.length} total
-          </Text>
-        </View>
-        <View className='flex-row bg-gray-100 rounded-full p-1'>
-          <Pressable
-            onPress={() => router.replace('/(tabs)/sales')}
-            className='flex-1 py-3 rounded-full items-center'
-          >
-            <Text className='text-sm font-medium text-gray-500'>Sales</Text>
-          </Pressable>
-          <View className='flex-1 py-3 rounded-full items-center bg-white shadow-sm border border-gray-200'>
-            <Text className='text-sm font-bold text-gray-900'>Orders</Text>
-          </View>
-          <Pressable
-            onPress={() => router.replace('/invoices')}
-            className='flex-1 py-3 rounded-full items-center'
-          >
-            <Text className='text-sm font-medium text-gray-500'>Invoices</Text>
-          </Pressable>
-        </View>
-      </View>
-
       <FlatList
         data={orders}
         keyExtractor={(o) => o.id}
@@ -495,8 +546,11 @@ export default function OrdersScreen() {
         draftLines={draftLines}
         addLine={addLine}
         removeLine={removeLine}
+        quickAddLine={quickAddLine}
+        updateLineQty={updateLineQty}
         total={total}
         isSaving={isCreatingOrder}
+        submitLabel='Create order'
         onAddCustomer={() => setShowCustomerModal(true)}
         onClose={() => {
           setShowOrderModal(false)
@@ -505,65 +559,80 @@ export default function OrdersScreen() {
         onSubmit={handleCreateOrder}
       />
 
-      <Modal
+      <Sheet
         visible={showCustomerModal}
-        animationType='slide'
-        presentationStyle='pageSheet'
-        onRequestClose={() => setShowCustomerModal(false)}
+        onClose={() => setShowCustomerModal(false)}
+        eyebrow='Customer'
+        title='New customer'
+        subtitle='They become selectable in the order sheet'
+        footer={
+          <Button onPress={handleCreateCustomer}>Save customer</Button>
+        }
       >
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={20}>
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <View className='flex-1 bg-gray-50 p-4 justify-center' style={{ paddingBottom: insets.bottom }}>
-          <Card className='border border-gray-200'>
-            <CardHeader>
-              <CardTitle>
-                <Text className='font-bold text-gray-900'>New Customer</Text>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className='gap-3'>
-              <TextInput
-                className='border border-gray-300 rounded-2xl px-4 py-4 bg-white text-sm'
-                placeholder='Customer name *'
-                value={customerForm.name}
-                onChangeText={(n) =>
-                  setCustomerForm((p) => ({ ...p, name: n }))
-                }
-              />
-              <TextInput
-                className='border border-gray-300 rounded-2xl px-4 py-4 bg-white text-sm'
-                placeholder='Phone'
-                keyboardType='phone-pad'
-                value={customerForm.phone}
-                onChangeText={(p) =>
-                  setCustomerForm((pr) => ({ ...pr, phone: p }))
-                }
-              />
-              <TouchableOpacity
-                className='bg-gray-900 py-4 rounded-2xl items-center mt-2'
-                onPress={handleCreateCustomer}
-              >
-                <Text className='text-white font-bold text-sm'>
-                  Save Customer
-                </Text>
-              </TouchableOpacity>
-            </CardContent>
-          </Card>
-            </View>
-          </TouchableWithoutFeedback>
-        </KeyboardAvoidingView>
-      </Modal>
+        <TextInput
+          className='border border-gray-300 rounded-2xl px-4 py-4 bg-white text-sm'
+          placeholder='Customer name *'
+          value={customerForm.name}
+          onChangeText={(n) =>
+            setCustomerForm((p) => ({ ...p, name: n }))
+          }
+        />
+        <TextInput
+          className='border border-gray-300 rounded-2xl px-4 py-4 bg-white text-sm'
+          placeholder='Phone'
+          keyboardType='phone-pad'
+          value={customerForm.phone}
+          onChangeText={(p) =>
+            setCustomerForm((pr) => ({ ...pr, phone: p }))
+          }
+        />
+      </Sheet>
 
       {paymentStatus.data && (
-        <View className='absolute bottom-24 left-4 right-4 bg-white border border-gray-200 rounded-2xl p-3 flex-row items-center gap-2 shadow-sm'>
-          <CheckCircle
-            size={18}
-            color={
-              paymentStatus.data.status === 'failed' ? '#dc2626' : '#059669'
-            }
-          />
-          <Text className='text-sm font-semibold text-gray-900'>
-            Payment {paymentStatus.data.status}
-          </Text>
+        <View className='absolute bottom-24 left-4 right-4 bg-white border border-gray-200 rounded-2xl p-3 gap-2 shadow-sm'>
+          <View className='flex-row items-center gap-2'>
+            <CheckCircle
+              size={18}
+              color={
+                isPaymentFailed(paymentStatus.data.status) ? '#dc2626' : '#059669'
+              }
+            />
+            <Text className='font-geist-semibold text-sm font-semibold text-gray-900 flex-1'>
+              {isPaymentFailed(paymentStatus.data.status)
+                ? `Payment ${normalizePaymentStatus(paymentStatus.data.status)}`
+                : `Payment ${paymentStatus.data.status}`}
+            </Text>
+            <Pressable
+              onPress={() => {
+                setPaymentId(null)
+                setPaymentOrderId(null)
+                setPaymentError(null)
+                failureNotifiedRef.current = null
+              }}
+              className='px-3 py-1.5 rounded-full bg-gray-100 border border-gray-200'
+            >
+              <Text className='font-geist-bold text-xs font-bold text-gray-600'>Dismiss</Text>
+            </Pressable>
+          </View>
+          {isPaymentFailed(paymentStatus.data.status) ? (
+            <Text className='font-sans text-xs text-red-700'>
+              {paymentError || paymentFailureMessage(paymentStatus.data)} Order is
+              still draft — you can retry.
+            </Text>
+          ) : isPaymentPending(paymentStatus.data.status) ? (
+            <View className='flex-row items-center gap-2'>
+              <Text className='font-sans text-xs text-gray-500 flex-1'>
+                Waiting for the STK prompt… cancelling on the phone marks this as
+                failed.
+              </Text>
+              <Pressable
+                onPress={handleCancelPayment}
+                className='px-3 py-1.5 rounded-full bg-white border border-gray-200'
+              >
+                <Text className='font-geist-bold text-xs font-bold text-gray-700'>Cancel</Text>
+              </Pressable>
+            </View>
+          ) : null}
         </View>
       )}
     </View>
