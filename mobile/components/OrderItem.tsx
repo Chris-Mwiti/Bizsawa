@@ -30,15 +30,15 @@ export const OrderItem = memo(
         <CardContent className='p-4'>
           <View className='flex-row justify-between mb-3'>
             <View className='flex-1 pr-3'>
-              <Text className='font-bold text-gray-900'>
+              <Text className='font-geist-bold font-bold text-gray-900'>
                 Order {shortId(order.id, 6)}
               </Text>
-              <Text className='text-xs text-gray-500'>
+              <Text className='font-sans text-xs text-gray-500'>
                 {formatDate(order.createdAt)}
               </Text>
             </View>
             <View className='items-end'>
-              <Text className='font-bold font-mono'>
+              <Text className='font-geist-mono-bold font-bold'>
                 {formatCurrency(toNumber(order.total))}
               </Text>
               <Badge
@@ -57,7 +57,7 @@ export const OrderItem = memo(
                 className='flex-1 bg-green-600 py-2 rounded-2xl items-center'
                 onPress={() => onUpdateStatus(order.id, OrderStatus.confirmed)}
               >
-                <Text className='text-white font-bold'>Confirm</Text>
+                <Text className='font-geist-bold text-white font-bold'>Confirm</Text>
               </TouchableOpacity>
             )}
             {order.status === 'confirmed' && (
@@ -65,7 +65,7 @@ export const OrderItem = memo(
                 className='flex-1 bg-blue-600 py-2 rounded-2xl items-center'
                 onPress={() => onUpdateStatus(order.id, OrderStatus.fulfilled)}
               >
-                <Text className='text-white font-bold'>Fulfill</Text>
+                <Text className='font-geist-bold text-white font-bold'>Fulfill</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity
