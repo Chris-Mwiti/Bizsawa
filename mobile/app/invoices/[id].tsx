@@ -362,12 +362,12 @@ export default function InvoiceDetail() {
   if (!invoice)
     return (
       <View className='flex-1 items-center justify-center p-6 bg-gray-50'>
-        <Text className='text-gray-500'>Invoice not found</Text>
+        <Text className='font-sans text-gray-500'>Invoice not found</Text>
         <Pressable
           onPress={() => router.back()}
-          className='mt-4 px-4 py-2 bg-gray-900 rounded-full'
+          className='mt-4 px-4 py-2 bg-accent rounded-full'
         >
-          <Text className='text-white font-bold text-sm'>Go back</Text>
+          <Text className='font-geist-bold text-white font-bold text-sm'>Go back</Text>
         </Pressable>
       </View>
     )
@@ -390,10 +390,10 @@ export default function InvoiceDetail() {
             <ChevronLeft size={22} color='#111827' />
           </TouchableOpacity>
           <View className='flex-1'>
-            <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
+            <Text className='font-geist-bold text-xs font-bold tracking-widest text-gray-500 uppercase'>
               Invoice
             </Text>
-            <Text className='text-lg font-bold text-gray-900' numberOfLines={1}>
+            <Text className='font-geist-bold text-lg font-bold text-gray-900' numberOfLines={1}>
               {invoice.invoiceNumber}
             </Text>
           </View>
@@ -410,7 +410,7 @@ export default function InvoiceDetail() {
                     : '#475569'
               }
             />
-            <Text className={`text-xs font-bold tracking-widest ${s.text}`}>
+            <Text className={`font-geist-bold text-xs font-bold tracking-widest ${s.text}`}>
               {s.label}
             </Text>
           </View>
@@ -430,22 +430,22 @@ export default function InvoiceDetail() {
           <CardContent className='p-5'>
             <View className='flex-row justify-between items-start gap-4'>
               <View className='flex-1'>
-                <Text className='text-xs font-bold font-mono tracking-widest text-gray-400 uppercase mb-1'>
+                <Text className='font-geist-mono-bold text-xs font-bold tracking-widest text-gray-500 uppercase mb-1'>
                   Amount due
                 </Text>
                 <Text
-                  className={`text-3xl font-bold tracking-tight ${isPaid ? 'text-emerald-700' : 'text-gray-900'}`}
+                  className={`font-geist-bold text-3xl font-bold tracking-tight ${isPaid ? 'text-emerald-700' : 'text-gray-900'}`}
                 >
                   {formatCurrency(invoice.amountDue)}
                 </Text>
-                <Text className='text-xs text-gray-500 mt-1'>
+                <Text className='font-sans text-xs text-gray-500 mt-1'>
                   of {formatCurrency(invoice.total)} total • Due{' '}
                   {formatDate(invoice.dueAt)}
                 </Text>
               </View>
               <View className='items-end'>
-                <Text className='text-xs text-gray-400'>Status</Text>
-                <Text className='text-sm font-bold text-gray-900 capitalize mt-1'>
+                <Text className='font-sans text-xs text-gray-500'>Status</Text>
+                <Text className='font-geist-bold text-sm font-bold text-gray-900 capitalize mt-1'>
                   {invoice.status}
                 </Text>
               </View>
@@ -455,26 +455,26 @@ export default function InvoiceDetail() {
 
             <View className='flex-row justify-between gap-4'>
               <View className='flex-1'>
-                <Text className='text-xs font-bold font-mono tracking-widest text-gray-400 uppercase'>
+                <Text className='font-geist-mono-bold text-xs font-bold tracking-widest text-gray-500 uppercase'>
                   Subtotal
                 </Text>
-                <Text className='text-sm font-semibold text-gray-900 mt-1'>
+                <Text className='font-geist-semibold text-sm font-semibold text-gray-900 mt-1'>
                   {formatCurrency(invoice.subtotal)}
                 </Text>
               </View>
               <View className='flex-1'>
-                <Text className='text-xs font-bold font-mono tracking-widest text-gray-400 uppercase'>
+                <Text className='font-geist-mono-bold text-xs font-bold tracking-widest text-gray-500 uppercase'>
                   Tax
                 </Text>
-                <Text className='text-sm font-semibold text-gray-900 mt-1'>
+                <Text className='font-geist-semibold text-sm font-semibold text-gray-900 mt-1'>
                   {formatCurrency(invoice.taxAmount)}
                 </Text>
               </View>
               <View className='flex-1 items-end'>
-                <Text className='text-xs font-bold font-mono tracking-widest text-gray-400 uppercase'>
+                <Text className='font-geist-mono-bold text-xs font-bold tracking-widest text-gray-500 uppercase'>
                   Paid
                 </Text>
-                <Text className='text-sm font-bold font-mono text-emerald-700 mt-1'>
+                <Text className='font-geist-mono-bold text-sm font-bold text-emerald-700 mt-1'>
                   {formatCurrency(invoice.amountPaid)}
                 </Text>
               </View>
@@ -488,7 +488,7 @@ export default function InvoiceDetail() {
             <CardContent className='p-4'>
               <View className='flex-row items-center gap-2 mb-2'>
                 <CheckCircle size={16} color='#059669' />
-                <Text className='font-bold text-emerald-900 text-sm'>
+                <Text className='font-geist-bold font-bold text-emerald-900 text-sm'>
                   Payment complete — distributed FIFO
                 </Text>
               </View>
@@ -496,10 +496,10 @@ export default function InvoiceDetail() {
                 <View className='gap-2'>
                   {lastSettlement.allocations.map((a: any, idx: number) => (
                     <View key={a.invoiceId || a.invoiceNumber || idx} className='flex-row justify-between items-center bg-white rounded-2xl px-3 py-2 border border-emerald-100'>
-                      <Text className='text-xs font-bold font-mono text-gray-800' numberOfLines={1}>
+                      <Text className='font-geist-mono-bold text-xs font-bold text-gray-800' numberOfLines={1}>
                         {a.invoiceNumber || `Inv ${String(a.invoiceId).slice(0, 6)}`} • {String(a.status).toUpperCase()}
                       </Text>
-                      <Text className='text-xs font-bold font-mono text-emerald-700'>
+                      <Text className='font-geist-mono-bold text-xs font-bold text-emerald-700'>
                         {formatCurrency(a.amount)}
                       </Text>
                     </View>
@@ -508,15 +508,15 @@ export default function InvoiceDetail() {
               ) : null}
               {lastSettlement.remainingCredit && parseFloat(lastSettlement.remainingCredit) > 0 ? (
                 <View className='mt-3 p-3 bg-amber-50 border border-amber-200 rounded-2xl'>
-                  <Text className='text-xs font-bold font-mono text-amber-900'>
+                  <Text className='font-geist-mono-bold text-xs font-bold text-amber-900'>
                     Excess credit: {formatCurrency(lastSettlement.remainingCredit)}
                   </Text>
-                  <Text className='text-xs text-amber-800 mt-1'>
+                  <Text className='font-sans text-xs text-amber-800 mt-1'>
                     Fully paid — excess will auto-apply to next oldest unpaid invoice for this customer.
                   </Text>
                 </View>
               ) : (
-                <Text className='text-xs text-emerald-700 mt-2'>
+                <Text className='font-sans text-xs text-emerald-700 mt-2'>
                   All targeted invoices fully settled. No remaining credit.
                 </Text>
               )}
@@ -534,18 +534,18 @@ export default function InvoiceDetail() {
           </CardHeader>
           <CardContent className='pt-0'>
             <View className='flex-row items-center gap-3 p-3 bg-gray-50 rounded-2xl border border-gray-100'>
-              <View className='w-10 h-10 rounded-full bg-gray-900 items-center justify-center'>
-                <Text className='text-white font-bold'>
+              <View className='w-10 h-10 rounded-full bg-accent items-center justify-center'>
+                <Text className='font-geist-bold text-white font-bold'>
                   {(customer?.name || invoice.customerName || '?')
                     .charAt(0)
                     .toUpperCase()}
                 </Text>
               </View>
               <View className='flex-1'>
-                <Text className='font-bold text-gray-900'>
+                <Text className='font-geist-bold font-bold text-gray-900'>
                   {customer?.name || invoice.customerName}
                 </Text>
-                <Text className='text-sm text-gray-500'>
+                <Text className='font-sans text-sm text-gray-500'>
                   {customer?.phone || (invoice as any).customerPhone || '-'}
                 </Text>
               </View>
@@ -562,7 +562,7 @@ export default function InvoiceDetail() {
                 <CardTitle>Items</CardTitle>
               </View>
               <View className='px-3 py-1 rounded-full bg-gray-100'>
-                <Text className='text-xs font-bold font-mono text-gray-600'>
+                <Text className='font-geist-mono-bold text-xs font-bold text-gray-600'>
                   {invoice.lines.length}{' '}
                   {invoice.lines.length === 1 ? 'item' : 'items'}
                 </Text>
@@ -588,25 +588,25 @@ export default function InvoiceDetail() {
                     </View>
                     <View className='flex-1 gap-1'>
                       <Text
-                        className='font-bold text-gray-900 text-[14px] leading-4'
+                        className='font-geist-bold font-bold text-gray-900 text-[14px] leading-4'
                         numberOfLines={2}
                       >
                         {title}
                       </Text>
                       <View className='flex-row items-center gap-2 flex-wrap'>
                         <View className='px-2 py-1 rounded-full bg-gray-100'>
-                          <Text className='text-xs font-bold text-gray-600'>
+                          <Text className='font-geist-bold text-xs font-bold text-gray-600'>
                             QTY {qty}
                           </Text>
                         </View>
-                        <Text className='text-xs text-gray-500'>× {unit}</Text>
+                        <Text className='font-sans text-xs text-gray-500'>× {unit}</Text>
                       </View>
                     </View>
                     <View className='items-end justify-center shrink-0 ml-2'>
-                      <Text className='font-bold text-gray-900 text-sm'>
+                      <Text className='font-geist-bold font-bold text-gray-900 text-sm'>
                         {total}
                       </Text>
-                      <Text className='text-xs text-gray-400'>
+                      <Text className='font-sans text-xs text-gray-500'>
                         Line total
                       </Text>
                     </View>
@@ -625,29 +625,29 @@ export default function InvoiceDetail() {
           <CardContent>
             <View className='gap-3'>
               <View className='flex-row justify-between items-center'>
-                <Text className='text-sm text-gray-600'>Subtotal</Text>
-                <Text className='text-sm font-semibold text-gray-900'>
+                <Text className='font-sans text-sm text-gray-600'>Subtotal</Text>
+                <Text className='font-geist-semibold text-sm font-semibold text-gray-900'>
                   {formatCurrency(invoice.subtotal)}
                 </Text>
               </View>
               <View className='flex-row justify-between items-center'>
-                <Text className='text-sm text-gray-600'>Tax</Text>
-                <Text className='text-sm font-semibold text-gray-900'>
+                <Text className='font-sans text-sm text-gray-600'>Tax</Text>
+                <Text className='font-geist-semibold text-sm font-semibold text-gray-900'>
                   {formatCurrency(invoice.taxAmount)}
                 </Text>
               </View>
               <View className='flex-row justify-between items-center'>
-                <Text className='text-sm text-gray-600'>Paid</Text>
-                <Text className='text-sm font-bold font-mono text-emerald-700'>
+                <Text className='font-sans text-sm text-gray-600'>Paid</Text>
+                <Text className='font-geist-mono-bold text-sm font-bold text-emerald-700'>
                   {formatCurrency(invoice.amountPaid)}
                 </Text>
               </View>
               <View className='h-px bg-gray-100' />
               <View className='flex-row justify-between items-center'>
-                <Text className='text-sm font-bold font-mono text-gray-900'>
+                <Text className='font-geist-mono-bold text-sm font-bold text-gray-900'>
                   Amount Due
                 </Text>
-                <Text className='text-base font-bold font-mono text-gray-900'>
+                <Text className='font-geist-mono-bold text-base font-bold text-gray-900'>
                   {formatCurrency(invoice.amountDue)}
                 </Text>
               </View>
@@ -672,15 +672,15 @@ export default function InvoiceDetail() {
                         <CheckCircle size={14} color='white' />
                       </View>
                       <View>
-                        <Text className='text-sm font-bold font-mono text-gray-900 capitalize'>
+                        <Text className='font-geist-mono-bold text-sm font-bold text-gray-900 capitalize'>
                           {p.method.replace('_', ' ')}
                         </Text>
-                        <Text className='text-xs text-gray-500'>
+                        <Text className='font-sans text-xs text-gray-500'>
                           {formatDate(p.paidAt)}
                         </Text>
                       </View>
                     </View>
-                    <Text className='font-bold font-mono text-emerald-700'>
+                    <Text className='font-geist-mono-bold font-bold text-emerald-700'>
                       {formatCurrency(p.amount)}
                     </Text>
                   </View>
@@ -696,7 +696,7 @@ export default function InvoiceDetail() {
               <CardTitle>Notes</CardTitle>
             </CardHeader>
             <CardContent>
-              <Text className='text-sm leading-5 text-gray-700'>
+              <Text className='font-sans text-sm leading-5 text-gray-700'>
                 {invoice.notes}
               </Text>
             </CardContent>
@@ -718,7 +718,7 @@ export default function InvoiceDetail() {
                     disabled={isSendingWhatsApp}
                   >
                     <MessageSquare size={18} color='white' />
-                    <Text className='text-white font-bold text-sm'>
+                    <Text className='font-geist-bold text-white font-bold text-sm'>
                       {isSendingWhatsApp ? 'Sharing…' : 'WhatsApp (Server)'}
                     </Text>
                   </TouchableOpacity>
@@ -730,7 +730,7 @@ export default function InvoiceDetail() {
                     disabled={isSending}
                   >
                     <Send size={18} color='white' />
-                    <Text className='text-white font-bold text-sm'>
+                    <Text className='font-geist-bold text-white font-bold text-sm'>
                       {isSending ? 'Sending…' : 'Email'}
                     </Text>
                   </TouchableOpacity>
@@ -743,7 +743,7 @@ export default function InvoiceDetail() {
                   disabled={isPrinting}
                 >
                   <Printer size={18} color='#111827' />
-                  <Text className='text-gray-900 font-bold text-sm'>
+                  <Text className='font-geist-bold text-gray-900 font-bold text-sm'>
                     {isPrinting ? 'Printing…' : 'Print'}
                   </Text>
                 </TouchableOpacity>
@@ -753,7 +753,7 @@ export default function InvoiceDetail() {
                   disabled={isDownloading}
                 >
                   <Download size={18} color='#111827' />
-                  <Text className='text-gray-900 font-bold text-sm'>
+                  <Text className='font-geist-bold text-gray-900 font-bold text-sm'>
                     {isDownloading ? 'Saving…' : 'Download'}
                   </Text>
                 </TouchableOpacity>
@@ -764,26 +764,26 @@ export default function InvoiceDetail() {
                   onPress={handleShareWhatsAppNative}
                 >
                   <Share2 size={18} color='white' />
-                  <Text className='text-white font-bold text-sm'>Share via WhatsApp</Text>
+                  <Text className='font-geist-bold text-white font-bold text-sm'>Share via WhatsApp</Text>
                 </TouchableOpacity>
                 {!isPaid && !isCancelled && (
                   <TouchableOpacity
-                    className='flex-1 flex-row items-center justify-center gap-2 bg-gray-900 px-4 py-4 rounded-2xl active:opacity-90'
+                    className='flex-1 flex-row items-center justify-center gap-2 bg-accent px-4 py-4 rounded-2xl active:opacity-90'
                     onPress={() => setShowPaymentModal(true)}
                   >
                     <CreditCard size={18} color='white' />
-                    <Text className='text-white font-bold text-sm'>
+                    <Text className='font-geist-bold text-white font-bold text-sm'>
                       Record Payment
                     </Text>
                   </TouchableOpacity>
                 )}
               </View>
               {(isPaid || isCancelled) && (
-                <Text className='text-xs text-center text-gray-400 mt-1'>
+                <Text className='font-sans text-xs text-center text-gray-500 mt-1'>
                   No further actions — invoice is {invoice.status}
                 </Text>
               )}
-              <Text className='text-xs text-center text-gray-400'>From: <Text className='font-bold'>{activeBusiness?.name || 'Your Shop'}</Text> — printed header uses business shop title</Text>
+              <Text className='font-sans text-xs text-center text-gray-500'>From: <Text className='font-geist-bold font-bold'>{activeBusiness?.name || 'Your Shop'}</Text> — printed header uses business shop title</Text>
             </View>
           </CardContent>
         </Card>
@@ -797,31 +797,31 @@ export default function InvoiceDetail() {
       >
         <View className='flex-1 bg-gray-50'>
           <View className='flex-row justify-between items-center p-4 bg-white border-b border-gray-200'>
-            <Text className='text-lg font-bold text-gray-900'>
+            <Text className='font-geist-bold text-lg font-bold text-gray-900'>
               Record Payment
             </Text>
             <TouchableOpacity
               onPress={() => setShowPaymentModal(false)}
               className='w-11 h-11 rounded-full bg-gray-100 items-center justify-center'
             >
-              <Text className='text-gray-600 font-bold font-mono'>✕</Text>
+              <Text className='font-geist-mono-bold text-gray-600 font-bold'>✕</Text>
             </TouchableOpacity>
           </View>
           <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
             <View className='p-4 bg-white rounded-2xl border border-gray-200'>
-              <Text className='text-xs font-bold font-mono tracking-widest text-gray-400 uppercase'>
+              <Text className='font-geist-mono-bold text-xs font-bold tracking-widest text-gray-500 uppercase'>
                 Amount Due (this invoice)
               </Text>
-              <Text className='text-2xl font-bold font-mono text-gray-900 mt-1'>
+              <Text className='font-geist-mono-bold text-2xl font-bold text-gray-900 mt-1'>
                 {formatCurrency(invoice.amountDue)}
               </Text>
-              <Text className='text-xs text-gray-500 mt-1'>
+              <Text className='font-sans text-xs text-gray-500 mt-1'>
                 Payment will be applied FIFO to oldest unpaid invoices for{' '}
                 {customer?.name || 'this customer'} — works for cash & M-Pesa.
               </Text>
             </View>
             <View>
-              <Text className='text-sm font-semibold text-gray-700 mb-2'>
+              <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
                 Payment Amount *
               </Text>
               <TextInput
@@ -833,18 +833,18 @@ export default function InvoiceDetail() {
               />
             </View>
             <View>
-              <Text className='text-sm font-semibold text-gray-700 mb-2'>
+              <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
                 Method
               </Text>
               <View className='flex-row gap-2 flex-wrap'>
                 {['cash', 'mpesa', 'bank_transfer', 'card'].map((m) => (
                   <Pressable
                     key={m}
-                    className={`px-4 py-3 rounded-full border ${paymentMethod === m ? 'bg-gray-900 border-gray-900' : 'bg-white border-gray-200'}`}
+                    className={`px-4 py-3 rounded-full border ${paymentMethod === m ? 'bg-accent border-accent' : 'bg-white border-gray-200'}`}
                     onPress={() => setPaymentMethod(m)}
                   >
                     <Text
-                      className={`text-xs font-bold tracking-widest ${paymentMethod === m ? 'text-white' : 'text-gray-600'}`}
+                      className={`font-geist-bold text-xs font-bold tracking-widest ${paymentMethod === m ? 'text-white' : 'text-gray-600'}`}
                     >
                       {m.toUpperCase().replace('_', ' ')}
                     </Text>
@@ -853,7 +853,7 @@ export default function InvoiceDetail() {
               </View>
             </View>
             <View>
-              <Text className='text-sm font-semibold text-gray-700 mb-2'>
+              <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
                 Reference
               </Text>
               <TextInput
@@ -864,11 +864,11 @@ export default function InvoiceDetail() {
               />
             </View>
             <TouchableOpacity
-              className='mt-2 bg-gray-900 py-4 rounded-2xl items-center active:opacity-90'
+              className='mt-2 bg-accent py-4 rounded-2xl items-center active:opacity-90'
               onPress={handleRecordPayment}
               disabled={isRecordingPayment || isSettlingCustomer}
             >
-              <Text className='text-white font-bold'>
+              <Text className='font-geist-bold text-white font-bold'>
                 {isRecordingPayment || isSettlingCustomer
                   ? 'Recording…'
                   : 'Record Payment'}
