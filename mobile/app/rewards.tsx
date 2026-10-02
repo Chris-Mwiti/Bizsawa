@@ -73,10 +73,10 @@ export default function RewardsScreen() {
           <ChevronLeft size={24} color='#374151' />
         </TouchableOpacity>
         <View>
-          <Text className='text-xl font-bold text-gray-900'>
+          <Text className='font-geist-bold text-xl font-bold text-gray-900'>
             Business Rewards
           </Text>
-          <Text className='text-xs text-gray-500'>
+          <Text className='font-sans text-xs text-gray-500'>
             Tuzo za Biashara / Achievements
           </Text>
         </View>
@@ -95,11 +95,11 @@ export default function RewardsScreen() {
               <Trophy size={32} color='white' />
             </View>
             <View>
-              <Text className='text-white text-lg font-bold'>
+              <Text className='font-geist-bold text-white text-lg font-bold'>
                 {achievements.filter((a) => a.earned).length} of{' '}
                 {achievements.length}
               </Text>
-              <Text className='text-primary-100 text-xs'>
+              <Text className='font-sans text-primary-100 text-xs'>
                 Achievements Unlocked
               </Text>
             </View>
@@ -113,14 +113,14 @@ export default function RewardsScreen() {
             className='flex-row items-center justify-center p-4 border-2 border-dashed border-primary-300 rounded-2xl mb-6'
           >
             <Plus size={20} color='#006b5f' />
-            <Text className='ml-2 text-primary-700 font-bold'>
+            <Text className='font-geist-bold ml-2 text-primary-700 font-bold'>
               Add New Achievement
             </Text>
           </TouchableOpacity>
         ) : (
           <Card className='mb-6 border-primary-200'>
             <CardContent className='p-4'>
-              <Text className='font-bold mb-2'>New Achievement</Text>
+              <Text className='font-geist-bold font-bold mb-2'>New Achievement</Text>
               <TextInput
                 className='bg-gray-100 p-3 rounded-2xl mb-3'
                 placeholder='Title (e.g., Sold 100 items)'
@@ -139,13 +139,13 @@ export default function RewardsScreen() {
                   onPress={() => setIsAdding(false)}
                   className='flex-1 p-3 bg-gray-200 rounded-2xl items-center'
                 >
-                  <Text className='font-bold text-gray-700'>Cancel</Text>
+                  <Text className='font-geist-bold font-bold text-gray-700'>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={handleAdd}
                   className='flex-1 p-3 bg-primary-600 rounded-2xl items-center'
                 >
-                  <Text className='font-bold text-white'>Save</Text>
+                  <Text className='font-geist-bold font-bold text-white'>Save</Text>
                 </TouchableOpacity>
               </View>
             </CardContent>
@@ -160,7 +160,7 @@ export default function RewardsScreen() {
             {achievements.length === 0 ? (
               <View className='items-center py-12'>
                 <Award size={48} color='#d1d5db' />
-                <Text className='text-gray-400 mt-4 text-center'>
+                <Text className='font-sans text-gray-500 mt-4 text-center'>
                   No achievements yet.{'\n'}Set your first business goal!
                 </Text>
               </View>
@@ -178,23 +178,23 @@ export default function RewardsScreen() {
                       {item.earned ? (
                         <CheckCircle size={20} color='#16a34a' />
                       ) : (
-                        <Award size={20} color='#9ca3af' />
+                        <Award size={20} color='#6b7280' />
                       )}
                     </TouchableOpacity>
 
                     <View className='flex-1'>
                       <Text
-                        className={`font-bold ${item.earned ? 'text-gray-900' : 'text-gray-500'}`}
+                        className={`font-geist-bold font-bold ${item.earned ? 'text-gray-900' : 'text-gray-500'}`}
                       >
                         {item.title}
                       </Text>
                       {item.description && (
-                        <Text className='text-xs text-gray-400 mt-0.5'>
+                        <Text className='font-sans text-xs text-gray-500 mt-0.5'>
                           {item.description}
                         </Text>
                       )}
                       {item.earned && item.earnedAt && (
-                        <Text className='text-xs text-green-600 mt-1'>
+                        <Text className='font-sans text-xs text-green-600 mt-1'>
                           Earned on{' '}
                           {new Date(item.earnedAt).toLocaleDateString()}
                         </Text>
