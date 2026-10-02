@@ -244,17 +244,17 @@ export function OfflineBanner() {
           <View className='flex-1'>
             {isOffline ? (
               <>
-                <Text className='text-sm font-bold text-amber-900'>
+                <Text className='font-geist-bold text-sm font-bold text-amber-900'>
                   You are offline
                 </Text>
-                <Text className='text-xs text-amber-700 mt-0.5'>
+                <Text className='font-sans text-xs text-amber-700 mt-0.5'>
                   Offline mode enabled — changes are saved locally and will sync
                   when you reconnect.
                 </Text>
                 {syncState === 'syncing' || syncState === 'conflict' ? (
                   <View className='flex-row items-center gap-2 mt-1'>
                     <CloudOff size={12} color='#b45309' />
-                    <Text className='text-xs font-bold tracking-widest text-amber-700 uppercase'>
+                    <Text className='font-geist-bold text-xs font-bold tracking-widest text-amber-700 uppercase'>
                       {syncState === 'syncing'
                         ? 'Syncing…'
                         : 'Conflicts need review'}
@@ -264,10 +264,10 @@ export function OfflineBanner() {
               </>
             ) : showRecovery ? (
               <>
-                <Text className='text-sm font-bold text-orange-900'>
+                <Text className='font-geist-bold text-sm font-bold text-orange-900'>
                   Back online — sync needed
                 </Text>
-                <Text className='text-xs text-orange-700 mt-0.5'>
+                <Text className='font-sans text-xs text-orange-700 mt-0.5'>
                   {pendingCount > 0 && conflictCount > 0
                     ? `${pendingCount} local change${pendingCount === 1 ? '' : 's'} to push • ${conflictCount} conflict${conflictCount === 1 ? '' : 's'} to resolve`
                     : pendingCount > 0
@@ -276,23 +276,23 @@ export function OfflineBanner() {
                 </Text>
                 <View className='flex-row items-center gap-2 mt-1'>
                   <ArrowLeftRight size={12} color='#c2410c' />
-                  <Text className='text-xs font-bold tracking-widest text-orange-600 uppercase'>
+                  <Text className='font-geist-bold text-xs font-bold tracking-widest text-orange-600 uppercase'>
                     Choose how to continue
                   </Text>
                 </View>
               </>
             ) : (
               <>
-                <Text className='text-sm font-bold text-emerald-900'>
+                <Text className='font-geist-bold text-sm font-bold text-emerald-900'>
                   Offline capabilities enabled
                 </Text>
-                <Text className='text-xs text-emerald-700 mt-0.5'>
+                <Text className='font-sans text-xs text-emerald-700 mt-0.5'>
                   Your data is available offline. Edits made without internet
                   will sync automatically on reconnect.
                 </Text>
                 <View className='flex-row items-center gap-2 mt-1'>
                   <Wifi size={12} color='#047857' />
-                  <Text className='text-xs font-bold tracking-widest text-emerald-600 uppercase'>
+                  <Text className='font-geist-bold text-xs font-bold tracking-widest text-emerald-600 uppercase'>
                     Back online • Synced
                   </Text>
                 </View>
@@ -329,7 +329,7 @@ export function OfflineBanner() {
                 className='py-3 rounded-full bg-red-600 flex-row items-center justify-center gap-2 active:bg-red-700'
               >
                 <AlertTriangle size={14} color='#fff' />
-                <Text className='text-xs font-bold text-white'>
+                <Text className='font-geist-bold text-xs font-bold text-white'>
                   Resolve {conflictCount} conflict{conflictCount === 1 ? '' : 's'} →
                 </Text>
               </Pressable>
@@ -349,7 +349,7 @@ export function OfflineBanner() {
                 ) : (
                   <RefreshCw size={14} color='#fff' />
                 )}
-                <Text className='text-xs font-bold text-white'>
+                <Text className='font-geist-bold text-xs font-bold text-white'>
                   {isRefreshing ? 'Refreshing…' : 'Refresh from server'}
                 </Text>
               </Pressable>
@@ -368,13 +368,13 @@ export function OfflineBanner() {
                 ) : (
                   <Trash2 size={14} color='#c2410c' />
                 )}
-                <Text className='text-xs font-bold text-orange-700'>
+                <Text className='font-geist-bold text-xs font-bold text-orange-700'>
                   {isResetting ? 'Resetting…' : 'Reset local store'}
                 </Text>
               </Pressable>
             </View>
 
-            <Text className='text-xs text-orange-600 text-center'>
+            <Text className='font-sans text-xs text-orange-600 text-center'>
               Refresh pulls latest server data and pushes pending changes. Reset
               clears local and re-pulls — use if data looks corrupted.
             </Text>
@@ -386,7 +386,7 @@ export function OfflineBanner() {
             className='mt-2 py-2 rounded-full bg-red-50 border border-red-200 flex-row items-center justify-center gap-2'
           >
             <AlertTriangle size={12} color='#dc2626' />
-            <Text className='text-xs font-bold tracking-widest text-red-700'>
+            <Text className='font-geist-bold text-xs font-bold tracking-widest text-red-700'>
               {conflictCount} CONFLICT{conflictCount===1?'':'S'} — TAP TO RESOLVE
             </Text>
           </Pressable>
@@ -407,7 +407,7 @@ export function OfflineBanner() {
               className='px-3 py-1.5 rounded-full bg-emerald-600 flex-row items-center gap-2'
             >
               <RefreshCw size={12} color='#fff' />
-              <Text className='text-xs font-bold text-white'>Refresh</Text>
+              <Text className='font-geist-bold text-xs font-bold text-white'>Refresh</Text>
             </Pressable>
 
             <Pressable
@@ -439,7 +439,7 @@ export function OfflineBanner() {
               className='px-3 py-1.5 rounded-full bg-white border border-emerald-200 flex-row items-center gap-2'
             >
               <Trash2 size={12} color='#047857' />
-              <Text className='text-xs font-bold text-emerald-700'>
+              <Text className='font-geist-bold text-xs font-bold text-emerald-700'>
                 Reset local
               </Text>
             </Pressable>
@@ -473,7 +473,7 @@ export function OfflineCapabilitiesChip() {
         <Wifi size={12} color='#6b7280' />
       )}
       <Text
-        className={`text-xs font-bold tracking-widest ${
+        className={`font-geist-bold text-xs font-bold tracking-widest ${
           isOffline ? 'text-amber-700' : 'text-gray-500'
         }`}
       >
