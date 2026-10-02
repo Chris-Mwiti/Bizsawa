@@ -1,29 +1,29 @@
-import React, { useEffect, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import {
   ActivityIndicator,
-  Modal,
-  ScrollView,
+  Pressable,
   Text,
   TextInput,
   TouchableOpacity,
   View,
-  KeyboardAvoidingView,
-  Platform,
-  TouchableWithoutFeedback,
-  Keyboard,
 } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
   Banknote,
   CreditCard,
+  Minus,
   Plus,
+  Search,
   Smartphone,
   Trash2,
   WifiOff,
   Package,
+  X,
 } from 'lucide-react-native'
 import NetInfo from '@react-native-community/netinfo'
+import { useEffect } from 'react'
 import { toNumber } from '../lib/api-dtos'
+import { Sheet } from './ui/Sheet'
+import { Button } from './ui/Button'
 
 export interface DraftLine {
   productId: string
@@ -34,21 +34,26 @@ export interface DraftLine {
   unitPrice: string
 }
 
+export interface SaleProduct {
+  id: string
+  name: string
+  price: number
+  stockQuantity: number
+  category?: string
+  variants?: Array<{
+    id: string
+    name: string
+    price: string | number
+    sku?: string
+  }>
+}
+
 export function SalesEntryModal(props: {
   visible: boolean
   title: string
-  products: Array<{
-    id: string
-    name: string
-    price: number
-    stockQuantity: number
-    variants?: Array<{
-      id: string
-      name: string
-      price: string | number
-      sku?: string
-    }>
-  }>
+  /** Label for the sticky footer CTA. Defaults to "Save sale". */
+  submitLabel?: string
+  products: SaleProduct[]
   customers: Array<{
     id: string
     name: string
@@ -68,13 +73,21 @@ export function SalesEntryModal(props: {
   draftLines: DraftLine[]
   addLine: () => void
   removeLine?: (index: number) => void
+  /** One-tap add (qty 1, merged when the line exists). Falls back to addLine. */
+  quickAddLine?: (productId: string, variantId?: string | null) => void
+  /** Stepper writes. Without it the cart rows are read-only + removable. */
+  updateLineQty?: (index: number, quantity: string) => void
   total: number
   isSaving: boolean
+  error?: string | null
   onAddCustomer: () => void
   onClose: () => void
   onSubmit: () => void
 }) {
   const [isOffline, setIsOffline] = useState(false)
+  const [productQuery, setProductQuery] = useState('')
+  const [activeCategory, setActiveCategory] = useState('All')
+  const [customerQuery, setCustomerQuery] = useState('')
 
   useEffect(() => {
     const unsub = NetInfo.addEventListener((s) => setIsOffline(!s.isConnected))
@@ -90,6 +103,39 @@ export function SalesEntryModal(props: {
       props.setPaymentMethod('cash')
     }
   }, [isOffline])
+
+  const categories = useMemo(() => {
+    const set = new Set<string>()
+    for (const p of props.products) {
+      const c = (p.category || '').trim()
+      if (c) set.add(c)
+    }
+    return ['All', ...Array.from(set).sort(), 'Low stock']
+  }, [props.products])
+
+  const filteredProducts = useMemo(() => {
+    const q = productQuery.trim().toLowerCase()
+    return props.products.filter((p) => {
+      if (activeCategory === 'Low stock' && p.stockQuantity > 5) return false
+      if (
+        activeCategory !== 'All' &&
+        activeCategory !== 'Low stock' &&
+        (p.category || '').trim() !== activeCategory
+      )
+        return false
+      if (!q) return true
+      const hay = `${p.name} ${(p.category || '')} ${(p.variants || []).map((v) => v.name).join(' ')}`.toLowerCase()
+      return hay.includes(q)
+    })
+  }, [props.products, productQuery, activeCategory])
+
+  const filteredCustomers = useMemo(() => {
+    const q = customerQuery.trim().toLowerCase()
+    if (!q) return props.customers
+    return props.customers.filter((c) =>
+      `${c.name} ${c.phone || ''}`.toLowerCase().includes(q),
+    )
+  }, [props.customers, customerQuery])
 
   const selectedProduct = props.products.find(
     (product) => product.id === props.selectedProductId,
@@ -108,427 +154,509 @@ export function SalesEntryModal(props: {
 
   const formatCurrency = (amount: number) =>
     `KES ${amount.toLocaleString('en-KE')}`
-  const insets = useSafeAreaInsets()
+
+  const canAdd =
+    !!selectedProduct && (!hasVariants || !!props.selectedVariantId)
+
+  const fireQuickAdd = (productId: string, variantId?: string | null) => {
+    if (props.quickAddLine) {
+      props.quickAddLine(productId, variantId ?? null)
+      return
+    }
+    // Fallback when the host screen hasn't wired quick-add: select the row so
+    // the existing qty + Add path below can finish the job.
+    props.setSelectedProductId(productId)
+    props.setSelectedVariantId?.(variantId ?? null)
+  }
+
+  const itemCount = props.draftLines.reduce(
+    (n, l) => n + (toNumber(l.quantity) || 0),
+    0,
+  )
 
   return (
-    <Modal
+    <Sheet
       visible={props.visible}
-      animationType='slide'
-      presentationStyle='pageSheet'
-      onRequestClose={props.onClose}
-    >
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-      >
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <View className='flex-1 bg-gray-50'>
-            <View className='flex-row justify-between items-center p-4 bg-white border-b border-gray-200'>
-              <Text className='text-lg font-bold'>{props.title}</Text>
-              <TouchableOpacity onPress={props.onClose} className='p-2'>
-                <Text className='text-gray-500 font-bold text-lg'>X</Text>
-              </TouchableOpacity>
+      onClose={props.onClose}
+      eyebrow={itemCount > 0 ? `${itemCount} in cart` : 'New transaction'}
+      title={props.title}
+      subtitle={
+        props.draftLines.length > 0
+          ? `${formatCurrency(props.total)} so far`
+          : 'Search, tap +, done'
+      }
+      footer={
+        <View className='gap-2.5'>
+          {props.error ? (
+            <View className='bg-red-50 border border-red-200 rounded-2xl px-4 py-2.5 flex-row items-center gap-2'>
+              <Text className='font-sans text-xs text-red-700 flex-1'>
+                {props.error}
+              </Text>
             </View>
-
-            <ScrollView
-              contentContainerStyle={{ padding: 16, paddingBottom: 16 + insets.bottom + 24 }}
-              keyboardShouldPersistTaps='handled'
-              keyboardDismissMode='interactive'
-              showsVerticalScrollIndicator={false}
-            >
-          <Text className='font-bold text-gray-900 mb-2'>Customer</Text>
-          <View className='bg-white border border-gray-200 rounded-2xl mb-4'>
+          ) : null}
+          <View className='flex-row items-center justify-between px-1'>
+            <Text className='font-geist-medium text-xs font-medium text-gray-500'>
+              {props.draftLines.length === 0
+                ? 'Cart empty'
+                : `${props.draftLines.length} line${props.draftLines.length === 1 ? '' : 's'} • ${itemCount} items`}
+            </Text>
+            <Text className='font-geist-mono-bold text-base font-bold text-gray-900'>
+              {formatCurrency(props.total)}
+            </Text>
+          </View>
+          <Button
+            onPress={props.onSubmit}
+            loading={props.isSaving}
+            disabled={props.draftLines.length === 0}
+          >
+            {props.isSaving
+              ? 'Saving…'
+              : `${props.submitLabel || 'Save sale'} • ${formatCurrency(props.total)}`}
+          </Button>
+        </View>
+      }
+    >
+      {/* Customer — searchable, not an endless scroll */}
+      <View>
+        <Text className='font-geist-bold text-sm font-bold text-gray-900 mb-2'>
+          Customer
+        </Text>
+        <View className='bg-white border border-gray-200 rounded-2xl overflow-hidden'>
+          <View className='flex-row items-center gap-2 px-3 border-b border-gray-100'>
+            <Search size={14} color='#6b7280' />
+            <TextInput
+              className='flex-1 py-3 text-sm text-gray-900'
+              placeholder='Search customers…'
+              placeholderTextColor='#9ca3af'
+              value={customerQuery}
+              onChangeText={setCustomerQuery}
+            />
+            {customerQuery ? (
+              <Pressable onPress={() => setCustomerQuery('')}>
+                <X size={14} color='#6b7280' />
+              </Pressable>
+            ) : null}
+          </View>
+          <TouchableOpacity
+            className='px-3 py-3 border-b border-gray-100 flex-row items-center gap-2'
+            onPress={props.onAddCustomer}
+          >
+            <Plus size={14} color='#006B5F' />
+            <Text className='font-geist-bold text-sm font-bold text-accent'>
+              New customer
+            </Text>
+          </TouchableOpacity>
+          {props.customerId ? (
             <TouchableOpacity
-              className='p-3 border-b border-gray-100'
-              onPress={props.onAddCustomer}
+              className='px-3 py-2 border-b border-gray-100'
+              onPress={() => props.setCustomerId(null)}
             >
-              <Text className='text-green-700 font-bold'>
-                + Add New Customer
+              <Text className='font-geist-medium text-xs font-medium text-gray-500'>
+                Walk-in (clear selection)
               </Text>
             </TouchableOpacity>
-            {props.customersLoading && props.customers.length === 0 ? (
-              <View className='p-4 items-center gap-2'>
-                <ActivityIndicator size='small' color='#6b7280' />
-                <Text className='text-xs text-gray-500'>Loading customers…</Text>
-              </View>
-            ) : props.customers.length === 0 ? (
-              <View className='p-3'>
-                <Text className='text-xs text-gray-400 text-center'>No customers yet. Add one above.</Text>
-              </View>
-            ) : (
-              props.customers.map((customer) => (
-              <TouchableOpacity
-                key={customer.id}
-                className={`p-3 border-b border-gray-100 ${props.customerId === customer.id ? 'bg-green-50' : ''}`}
-                onPress={() => props.setCustomerId(customer.id)}
-              >
-                <Text className='font-medium'>{customer.name}</Text>
-                {customer.phone ? (
-                  <Text className='text-xs text-gray-500'>
-                    {customer.phone}
-                  </Text>
-                ) : null}
-              </TouchableOpacity>
-              ))
-            )}
-          </View>
-
-          <View className='flex-row items-center justify-between mb-2'>
-            <Text className='font-bold text-gray-900'>Payment Method</Text>
-            {isOffline && (
-              <View className='flex-row items-center gap-2 px-3 py-1 rounded-full bg-amber-50 border border-amber-200'>
-                <WifiOff size={12} color='#b45309' />
-                <Text className='text-xs font-bold tracking-widest text-amber-700'>
-                  OFFLINE
-                </Text>
-              </View>
-            )}
-          </View>
-
-          {isOffline && (
-            <View className='bg-amber-50 border border-amber-200 rounded-2xl px-3 py-3 mb-3 flex-row items-center gap-2'>
-              <WifiOff size={14} color='#b45309' />
-              <Text className='text-xs text-amber-800 flex-1'>
-                M-Pesa and Card require internet. Only Cash is available
-                offline.
+          ) : null}
+          {props.customersLoading && props.customers.length === 0 ? (
+            <View className='p-4 items-center gap-2'>
+              <ActivityIndicator size='small' color='#6b7280' />
+              <Text className='font-sans text-xs text-gray-500'>
+                Loading customers…
               </Text>
             </View>
-          )}
-
-          <View className='flex-row gap-2 mb-4'>
-            {[
-              {
-                id: 'mpesa',
-                label: 'M-Pesa',
-                icon: Smartphone,
-                offline: true,
-              },
-              { id: 'cash', label: 'Cash', icon: Banknote, offline: false },
-              { id: 'card', label: 'Card', icon: CreditCard, offline: true },
-            ].map((method) => {
-              const Icon = method.icon
-              const active = props.paymentMethod === method.id
-              const disabled = isOffline && method.offline
-              return (
-                <TouchableOpacity
-                  key={method.id}
-                  disabled={disabled}
-                  className={`flex-1 p-3 rounded-2xl flex-row items-center justify-center border ${
-                    disabled
-                      ? 'bg-gray-100 border-gray-200 opacity-50'
-                      : active
-                        ? 'bg-green-50 border-green-500'
-                        : 'bg-white border-gray-200'
-                  }`}
-                  onPress={() => {
-                    if (disabled) return
-                    props.setPaymentMethod(method.id)
-                  }}
-                >
-                  <Icon
-                    size={16}
-                    color={
-                      disabled ? '#9ca3af' : active ? '#16a34a' : '#6b7280'
-                    }
-                  />
-                  <Text
-                    className={`ml-2 font-medium ${disabled ? 'text-gray-400' : active ? 'text-green-700' : 'text-gray-600'}`}
-                  >
-                    {method.label}
-                  </Text>
-                </TouchableOpacity>
-              )
-            })}
-          </View>
-
-          <Text className='font-bold text-gray-900 mb-2'>Products</Text>
-          <Text className='text-xs text-gray-500 mb-2'>
-            Tap product to see variants & prices. Beans example: same product,
-            different size/price.
-          </Text>
-          <View className='bg-white border border-gray-200 rounded-2xl mb-3 max-h-[220px]'>
-            <ScrollView nestedScrollEnabled>
-              {props.products.map((product) => {
-                const isSelected = props.selectedProductId === product.id
-                const vCount = product.variants?.length || 0
+          ) : filteredCustomers.length === 0 ? (
+            <View className='p-3'>
+              <Text className='font-sans text-xs text-gray-400 text-center'>
+                {props.customers.length === 0
+                  ? 'No customers yet. Add one above.'
+                  : `No match for "${customerQuery}".`}
+              </Text>
+            </View>
+          ) : (
+            <View className='max-h-[148px]'>
+              {filteredCustomers.slice(0, 20).map((customer) => {
+                const active = props.customerId === customer.id
                 return (
                   <TouchableOpacity
-                    key={product.id}
-                    className={`p-3 border-b border-gray-100 ${isSelected ? 'bg-blue-50' : ''}`}
-                    onPress={() => {
-                      props.setSelectedProductId(product.id)
-                      if (props.setSelectedVariantId) {
-                        props.setSelectedVariantId(null)
-                      }
-                    }}
+                    key={customer.id}
+                    className={`px-3 py-2.5 border-b border-gray-100 flex-row items-center justify-between ${active ? 'bg-accent-soft' : ''}`}
+                    onPress={() =>
+                      props.setCustomerId(active ? null : customer.id)
+                    }
                   >
-                    <View className='flex-row justify-between items-start gap-2'>
-                      <View className='flex-1'>
-                        <Text className='font-medium'>{product.name}</Text>
-                        <Text className='text-xs text-gray-500 mt-0.5'>
-                          {vCount
-                            ? `${vCount} variants • from ${formatCurrency(Math.min(...product.variants!.map((v) => toNumber(v.price))))} • base ${formatCurrency(product.price)}`
-                            : `${formatCurrency(product.price)}`}{' '}
-                          • Stock: {product.stockQuantity}
+                    <View className='flex-1'>
+                      <Text
+                        className={`font-geist-semibold text-sm font-semibold ${active ? 'text-accent' : 'text-gray-900'}`}
+                      >
+                        {customer.name}
+                      </Text>
+                      {customer.phone ? (
+                        <Text className='font-sans text-xs text-gray-500'>
+                          {customer.phone}
                         </Text>
-                        {/* Attribute preview: show each variant name + price as chips */}
-                        {vCount ? (
-                          <View className='flex-row flex-wrap gap-1 mt-1.5'>
-                            {product.variants!.slice(0, 4).map((v) => (
-                              <View
-                                key={v.id}
-                                className='px-2 py-1 rounded-full bg-amber-50 border border-amber-100'
-                              >
-                                <Text className='text-xs font-bold text-amber-800'>
-                                  {v.name} • {formatCurrency(toNumber(v.price))}
-                                </Text>
-                              </View>
-                            ))}
-                            {vCount > 4 ? (
-                              <View className='px-2 py-1 rounded-full bg-gray-100 border border-gray-200'>
-                                <Text className='text-xs text-gray-600'>
-                                  +{vCount - 4} more
-                                </Text>
-                              </View>
-                            ) : null}
-                          </View>
-                        ) : null}
-                      </View>
-                      {vCount ? (
-                        <View className='px-2 py-1 rounded-full bg-amber-50 border border-amber-200'>
-                          <Text className='text-xs font-bold text-amber-700'>
-                            {vCount} options
-                          </Text>
-                        </View>
                       ) : null}
                     </View>
+                    {active ? (
+                      <View className='w-6 h-6 rounded-full bg-accent items-center justify-center'>
+                        <Text className='font-geist-bold text-xs font-bold text-white'>
+                          ✓
+                        </Text>
+                      </View>
+                    ) : null}
                   </TouchableOpacity>
                 )
               })}
-            </ScrollView>
-          </View>
-
-          {/* Variant selector — shows full attributes + price attribution */}
-          {hasVariants ? (
-            <View className='mb-3'>
-              <View className='flex-row items-center gap-2 mb-2'>
-                <Package size={14} color='#6b7280' />
-                <Text className='font-bold text-gray-900 text-sm'>
-                  Choose variant — price is per variant
-                </Text>
-                <Text className='text-xs text-gray-500'>
-                  ({variants.length})
-                </Text>
-              </View>
-
-              <View className='bg-white border border-gray-200 rounded-2xl p-2 gap-2'>
-                {variants.map((variant) => {
-                  const isSelected = props.selectedVariantId === variant.id
-                  const vPrice = toNumber(variant.price)
-                  const basePrice = toNumber(selectedProduct?.price)
-                  const diff = vPrice - basePrice
-                  return (
-                    <TouchableOpacity
-                      key={variant.id}
-                      onPress={() => props.setSelectedVariantId?.(variant.id)}
-                      className={`p-3 rounded-2xl border flex-row justify-between items-center ${
-                        isSelected
-                          ? 'bg-green-50 border-green-500'
-                          : 'bg-gray-50 border-gray-200'
-                      }`}
-                    >
-                      <View className='flex-1 mr-3'>
-                        <Text
-                          className={`font-bold ${isSelected ? 'text-green-900' : 'text-gray-900'}`}
-                        >
-                          {variant.name}
-                        </Text>
-                        <View className='flex-row flex-wrap gap-2 mt-1'>
-                          <View className='px-2 py-1 rounded bg-white border border-gray-200'>
-                            <Text className='text-xs font-bold text-gray-600'>
-                              {formatCurrency(vPrice)} each
-                            </Text>
-                          </View>
-                          {diff !== 0 ? (
-                            <View
-                              className={`px-2 py-1 rounded border ${diff > 0 ? 'bg-amber-50 border-amber-200' : 'bg-emerald-50 border-emerald-200'}`}
-                            >
-                              <Text
-                                className={`text-xs font-bold ${diff > 0 ? 'text-amber-700' : 'text-emerald-700'}`}
-                              >
-                                {diff > 0 ? '+' : ''}
-                                {formatCurrency(diff)} vs base
-                              </Text>
-                            </View>
-                          ) : null}
-                          {variant.sku ? (
-                            <Text className='text-xs text-gray-500'>
-                              SKU {variant.sku}
-                            </Text>
-                          ) : null}
-                        </View>
-                        {(variant as any).barcode ? (
-                          <Text className='text-xs text-gray-400 mt-0.5'>
-                            Barcode {(variant as any).barcode}
-                          </Text>
-                        ) : null}
-                      </View>
-                      <View className='items-end'>
-                        <Text
-                          className={`font-bold text-sm ${isSelected ? 'text-green-700' : 'text-gray-900'}`}
-                        >
-                          {formatCurrency(vPrice)}
-                        </Text>
-                        <Text className='text-xs text-gray-500'>
-                          per unit
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-                  )
-                })}
-              </View>
-
-              {!props.selectedVariantId ? (
-                <View className='bg-amber-50 border border-amber-200 rounded-2xl px-3 py-2 mt-2'>
-                  <Text className='text-xs text-amber-800 text-center font-medium'>
-                    Beans example: 500g @ KES 250 vs 1kg @ KES 450 — pick size
-                    to attribute correct price.
-                  </Text>
-                </View>
-              ) : (
-                <View className='bg-green-50 border border-green-200 rounded-2xl px-3 py-2 mt-2 flex-row justify-between items-center'>
-                  <Text className='text-xs text-green-800 font-medium'>
-                    Selected: {selectedVariant?.name} •{' '}
-                    {formatCurrency(effectivePrice)} each
-                  </Text>
-                  <Text className='text-xs font-bold text-green-900'>
-                    × {props.quantity || '1'} ={' '}
-                    {formatCurrency(
-                      effectivePrice * (parseInt(props.quantity) || 1),
-                    )}
-                  </Text>
-                </View>
-              )}
             </View>
-          ) : null}
+          )}
+        </View>
+      </View>
 
-          <View className='flex-row gap-2 mb-4'>
-            <TextInput
-              className='flex-1 bg-white border border-gray-300 rounded-2xl p-3'
-              placeholder='Qty'
-              keyboardType='numeric'
-              value={props.quantity}
-              onChangeText={props.setQuantity}
-            />
-            <TouchableOpacity
-              className={`w-14 rounded-2xl items-center justify-center ${
-                !selectedProduct || (hasVariants && !props.selectedVariantId)
-                  ? 'bg-gray-300'
-                  : 'bg-green-600'
-              }`}
-              onPress={props.addLine}
-              disabled={
-                !selectedProduct || (hasVariants && !props.selectedVariantId)
-              }
-            >
-              <Plus size={22} color='white' />
-            </TouchableOpacity>
-          </View>
-
-          {hasVariants && !props.selectedVariantId && selectedProduct ? (
-            <View className='bg-amber-50 border border-amber-200 rounded-2xl px-3 py-2 mb-3'>
-              <Text className='text-xs text-amber-800 text-center'>
-                This product has variants — select one above before adding.
-              </Text>
-            </View>
-          ) : null}
-
-          {/* Cart lines — now removable per item */}
-          {props.draftLines.length > 0 ? (
-            <View className='mb-2'>
-              <View className='flex-row justify-between items-center mb-2'>
-                <Text className='font-bold text-gray-900'>
-                  Cart • {props.draftLines.length} item
-                  {props.draftLines.length === 1 ? '' : 's'}
-                </Text>
-                <Text className='text-xs text-gray-500'>
-                  Tap trash to remove
-                </Text>
-              </View>
-              {props.draftLines.map((line, index) => (
-                <View
-                  key={`${line.productId}-${line.variantId || 'base'}-${index}`}
-                  className='flex-row justify-between items-center bg-white border border-gray-100 rounded-2xl p-3 mb-2'
-                >
-                  <View className='flex-1 mr-3'>
-                    <Text className='font-medium' numberOfLines={1}>
-                      {line.productName}
-                    </Text>
-                    {line.variantName ? (
-                      <View className='flex-row items-center gap-1 mt-0.5'>
-                        <View className='px-2 py-1 rounded bg-amber-50 border border-amber-100'>
-                          <Text className='text-xs font-bold text-amber-700'>
-                            {line.variantName}
-                          </Text>
-                        </View>
-                        <Text className='text-xs text-gray-500'>
-                          Qty {line.quantity}
-                        </Text>
-                      </View>
-                    ) : (
-                      <Text className='text-xs text-gray-500'>
-                        Qty {line.quantity}
-                      </Text>
-                    )}
-                  </View>
-                  <View className='items-end gap-1'>
-                    <Text className='font-bold'>
-                      {formatCurrency(
-                        toNumber(line.unitPrice) * toNumber(line.quantity),
-                      )}
-                    </Text>
-                    <TouchableOpacity
-                      onPress={() => props.removeLine?.(index)}
-                      className='w-11 h-11 rounded-full bg-red-50 border border-red-100 items-center justify-center'
-                    >
-                      <Trash2 size={12} color='#dc2626' />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ))}
-            </View>
-          ) : (
-            <View className='bg-white border border-dashed border-gray-200 rounded-2xl py-6 items-center mb-3'>
-              <Text className='text-sm text-gray-400'>Cart empty</Text>
-              <Text className='text-xs text-gray-400 mt-1'>
-                Select product {hasVariants ? '+ variant' : ''} and quantity
+      {/* Payment */}
+      <View>
+        <View className='flex-row items-center justify-between mb-2'>
+          <Text className='font-geist-bold text-sm font-bold text-gray-900'>
+            Payment
+          </Text>
+          {isOffline && (
+            <View className='flex-row items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200'>
+              <WifiOff size={11} color='#b45309' />
+              <Text className='font-geist-bold text-xs font-bold text-amber-700'>
+                OFFLINE
               </Text>
             </View>
           )}
+        </View>
+        <View className='flex-row gap-2'>
+          {[
+            { id: 'mpesa', label: 'M-Pesa', icon: Smartphone, offline: true },
+            { id: 'cash', label: 'Cash', icon: Banknote, offline: false },
+            { id: 'card', label: 'Card', icon: CreditCard, offline: true },
+          ].map((method) => {
+            const Icon = method.icon
+            const active = props.paymentMethod === method.id
+            const disabled = isOffline && method.offline
+            return (
+              <TouchableOpacity
+                key={method.id}
+                disabled={disabled}
+                className={`flex-1 py-3 rounded-2xl flex-row items-center justify-center border ${
+                  disabled
+                    ? 'bg-gray-100 border-gray-200 opacity-50'
+                    : active
+                      ? 'bg-accent-soft border-accent'
+                      : 'bg-white border-gray-200'
+                }`}
+                onPress={() => {
+                  if (disabled) return
+                  props.setPaymentMethod(method.id)
+                }}
+              >
+                <Icon
+                  size={15}
+                  color={
+                    disabled ? '#9ca3af' : active ? '#006B5F' : '#6b7280'
+                  }
+                />
+                <Text
+                  className={`ml-1.5 font-geist-semibold text-xs font-semibold ${disabled ? 'text-gray-400' : active ? 'text-accent' : 'text-gray-600'}`}
+                >
+                  {method.label}
+                </Text>
+              </TouchableOpacity>
+            )
+          })}
+        </View>
+      </View>
 
-          <View className='bg-gray-900 p-4 rounded-2xl border border-gray-800 my-4' style={{ shadowColor: '#006b5f', shadowOpacity: 0.12, shadowRadius: 12 }}>
-            <Text className='text-white font-bold text-center text-lg font-mono'>
-              Total: {formatCurrency(props.total)}
+      {/* Products — search + quick filters + one-tap add */}
+      <View>
+        <Text className='font-geist-bold text-sm font-bold text-gray-900 mb-2'>
+          Products
+        </Text>
+        <View className='flex-row items-center gap-2 bg-white border border-gray-300 rounded-2xl px-3 mb-2'>
+          <Search size={15} color='#6b7280' />
+          <TextInput
+            className='flex-1 py-3.5 text-sm text-gray-900'
+            placeholder='Search products, category, size…'
+            placeholderTextColor='#9ca3af'
+            value={productQuery}
+            onChangeText={setProductQuery}
+            autoCorrect={false}
+          />
+          {productQuery ? (
+            <Pressable
+              onPress={() => setProductQuery('')}
+              className='w-8 h-8 items-center justify-center'
+            >
+              <X size={15} color='#6b7280' />
+            </Pressable>
+          ) : null}
+        </View>
+        <View className='flex-row flex-wrap gap-1.5 mb-2'>
+          {categories.map((c) => {
+            const active = activeCategory === c
+            return (
+              <Pressable
+                key={c}
+                onPress={() => setActiveCategory(c)}
+                className={`px-3 py-1.5 rounded-full border ${active ? 'bg-accent border-accent' : 'bg-white border-gray-200'}`}
+              >
+                <Text
+                  className={`font-geist-bold text-xs font-bold ${active ? 'text-white' : 'text-gray-600'}`}
+                >
+                  {c}
+                </Text>
+              </Pressable>
+            )
+          })}
+        </View>
+        <View className='bg-white border border-gray-200 rounded-2xl overflow-hidden'>
+          {filteredProducts.length === 0 ? (
+            <View className='p-5 items-center'>
+              <Package size={20} color='#9ca3af' />
+              <Text className='font-geist-semibold text-sm font-semibold text-gray-500 mt-2'>
+                {props.products.length === 0
+                  ? 'No products yet — add stock first'
+                  : `No match for "${productQuery}"`}
+              </Text>
+            </View>
+          ) : (
+            filteredProducts.slice(0, 30).map((product) => {
+              const isSelected = props.selectedProductId === product.id
+              const vCount = product.variants?.length || 0
+              const low = product.stockQuantity <= 5
+              return (
+                <View
+                  key={product.id}
+                  className={`flex-row items-center gap-2 px-3 py-2.5 border-b border-gray-100 ${isSelected ? 'bg-accent-soft' : ''}`}
+                >
+                  <TouchableOpacity
+                    className='flex-1'
+                    onPress={() => {
+                      props.setSelectedProductId(
+                        isSelected ? '' : product.id,
+                      )
+                      props.setSelectedVariantId?.(null)
+                    }}
+                  >
+                    <Text
+                      className='font-geist-semibold text-sm font-semibold text-gray-900'
+                      numberOfLines={1}
+                    >
+                      {product.name}
+                    </Text>
+                    <Text className='font-sans text-xs text-gray-500 mt-0.5'>
+                      {formatCurrency(toNumber(product.price))} • Stock:{' '}
+                      {product.stockQuantity}
+                      {vCount ? ` • ${vCount} sizes` : ''}
+                      {low ? ' • Low' : ''}
+                    </Text>
+                  </TouchableOpacity>
+                  {/* One-tap add: variant-less products go straight to cart */}
+                  <TouchableOpacity
+                    accessibilityRole='button'
+                    accessibilityLabel={`Add ${product.name} to cart`}
+                    onPress={() =>
+                      vCount
+                        ? (props.setSelectedProductId(product.id),
+                          props.setSelectedVariantId?.(null))
+                        : fireQuickAdd(product.id, null)
+                    }
+                    className={`w-11 h-11 rounded-full items-center justify-center ${vCount ? 'bg-white border border-gray-300' : 'bg-accent'}`}
+                  >
+                    <Plus
+                      size={17}
+                      color={vCount ? '#006B5F' : 'white'}
+                    />
+                  </TouchableOpacity>
+                </View>
+              )
+            })
+          )}
+        </View>
+      </View>
+
+      {/* Variant picker — only when the selected product has sizes */}
+      {hasVariants ? (
+        <View>
+          <View className='flex-row items-center gap-2 mb-2'>
+            <Package size={14} color='#6b7280' />
+            <Text className='font-geist-bold text-sm font-bold text-gray-900'>
+              {selectedProduct?.name} — pick size
             </Text>
           </View>
-
-          <TouchableOpacity
-            className='bg-gray-900 h-14 rounded-full items-center justify-center'
-            style={{ shadowColor: '#006b5f', shadowOpacity: 0.12, shadowRadius: 16, shadowOffset: { width: 0, height: 4 } }}
-            onPress={props.onSubmit}
-            disabled={props.isSaving}
-          >
-            {props.isSaving ? (
-              <ActivityIndicator color='white' />
-            ) : (
-              <Text className='text-white font-bold text-lg'>Save</Text>
-            )}
-          </TouchableOpacity>
-            </ScrollView>
+          <View className='bg-white border border-gray-200 rounded-2xl p-2 gap-1.5'>
+            {variants.map((variant) => {
+              const isSelected = props.selectedVariantId === variant.id
+              const vPrice = toNumber(variant.price)
+              return (
+                <View
+                  key={variant.id}
+                  className={`flex-row items-center gap-2 p-2.5 rounded-2xl border ${
+                    isSelected
+                      ? 'bg-accent-soft border-accent'
+                      : 'bg-gray-50 border-gray-200'
+                  }`}
+                >
+                  <TouchableOpacity
+                    className='flex-1'
+                    onPress={() =>
+                      props.setSelectedVariantId?.(
+                        isSelected ? null : variant.id,
+                      )
+                    }
+                  >
+                    <Text
+                      className={`font-geist-semibold text-sm font-semibold ${isSelected ? 'text-accent' : 'text-gray-900'}`}
+                    >
+                      {variant.name}
+                    </Text>
+                    <Text className='font-sans text-xs text-gray-500'>
+                      {formatCurrency(vPrice)} each
+                      {variant.sku ? ` • ${variant.sku}` : ''}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    accessibilityLabel={`Add ${variant.name} to cart`}
+                    onPress={() => {
+                      props.setSelectedProductId(selectedProduct!.id)
+                      fireQuickAdd(selectedProduct!.id, variant.id)
+                    }}
+                    className='w-11 h-11 rounded-full bg-accent items-center justify-center'
+                  >
+                    <Plus size={17} color='white' />
+                  </TouchableOpacity>
+                </View>
+              )
+            })}
           </View>
-        </TouchableWithoutFeedback>
-      </KeyboardAvoidingView>
-    </Modal>
+        </View>
+      ) : null}
+
+      {/* Qty + detailed add (kept for weighed / bulk entries) */}
+      <View className='flex-row gap-2 items-center'>
+        <View className='flex-row items-center bg-white border border-gray-300 rounded-2xl overflow-hidden'>
+          <Pressable
+            onPress={() =>
+              props.setQuantity(
+                String(Math.max(1, (parseInt(props.quantity) || 1) - 1)),
+              )
+            }
+            className='w-12 h-14 items-center justify-center'
+          >
+            <Minus size={16} color='#374151' />
+          </Pressable>
+          <TextInput
+            className='w-14 text-center font-geist-bold text-base font-bold text-gray-900'
+            keyboardType='numeric'
+            value={props.quantity}
+            onChangeText={props.setQuantity}
+          />
+          <Pressable
+            onPress={() =>
+              props.setQuantity(String((parseInt(props.quantity) || 0) + 1))
+            }
+            className='w-12 h-14 items-center justify-center'
+          >
+            <Plus size={16} color='#374151' />
+          </Pressable>
+        </View>
+        <Button
+          onPress={props.addLine}
+          disabled={!canAdd}
+          className='flex-1'
+        >
+          {canAdd
+            ? `Add • ${formatCurrency(effectivePrice * (parseInt(props.quantity) || 1))}`
+            : hasVariants && selectedProduct
+              ? 'Pick a size first'
+              : 'Select a product'}
+        </Button>
+      </View>
+
+      {/* Cart — steppers, not just trash */}
+      <View>
+        <View className='flex-row justify-between items-center mb-2'>
+          <Text className='font-geist-bold text-sm font-bold text-gray-900'>
+            Cart • {props.draftLines.length} line
+            {props.draftLines.length === 1 ? '' : 's'}
+          </Text>
+          <Text className='font-sans text-xs text-gray-500'>
+            Step qty or trash to remove
+          </Text>
+        </View>
+        {props.draftLines.length === 0 ? (
+          <View className='bg-white border border-dashed border-gray-200 rounded-2xl py-6 items-center'>
+            <Text className='font-sans text-sm text-gray-400'>
+              Cart empty
+            </Text>
+            <Text className='font-sans text-xs text-gray-400 mt-1'>
+              Search above and tap + — no scrolling needed
+            </Text>
+          </View>
+        ) : (
+          props.draftLines.map((line, index) => {
+            const qty = toNumber(line.quantity) || 0
+            return (
+              <View
+                key={`${line.productId}-${line.variantId || 'base'}-${index}`}
+                className='flex-row justify-between items-center bg-white border border-gray-100 rounded-2xl p-3 mb-2'
+              >
+                <View className='flex-1 mr-2'>
+                  <Text
+                    className='font-geist-semibold text-sm font-semibold text-gray-900'
+                    numberOfLines={1}
+                  >
+                    {line.productName}
+                  </Text>
+                  {line.variantName ? (
+                    <Text className='font-sans text-xs text-gray-500'>
+                      {line.variantName}
+                    </Text>
+                  ) : null}
+                  <Text className='font-geist-mono-bold text-sm font-bold text-gray-900 mt-0.5'>
+                    {formatCurrency(toNumber(line.unitPrice) * qty)}
+                  </Text>
+                </View>
+                <View className='flex-row items-center gap-1.5'>
+                  <View className='flex-row items-center bg-gray-50 border border-gray-200 rounded-full'>
+                    <Pressable
+                      onPress={() => {
+                        if (qty <= 1) {
+                          props.removeLine?.(index)
+                          return
+                        }
+                        if (props.updateLineQty)
+                          props.updateLineQty(index, String(qty - 1))
+                      }}
+                      className='w-9 h-9 items-center justify-center'
+                    >
+                      <Minus size={13} color='#374151' />
+                    </Pressable>
+                    <Text className='font-geist-bold text-sm font-bold text-gray-900 min-w-[20px] text-center'>
+                      {line.quantity}
+                    </Text>
+                    <Pressable
+                      onPress={() => {
+                        if (props.updateLineQty)
+                          props.updateLineQty(index, String(qty + 1))
+                      }}
+                      className='w-9 h-9 items-center justify-center'
+                    >
+                      <Plus size={13} color='#374151' />
+                    </Pressable>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => props.removeLine?.(index)}
+                    className='w-9 h-9 rounded-full bg-red-50 border border-red-100 items-center justify-center'
+                  >
+                    <Trash2 size={13} color='#dc2626' />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )
+          })
+        )}
+      </View>
+    </Sheet>
   )
 }
