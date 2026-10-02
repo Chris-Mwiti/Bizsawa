@@ -159,15 +159,15 @@ export default function VerifyOtpScreen() {
             <View className="w-16 h-16 bg-emerald-600 rounded-full items-center justify-center mb-4">
               <ShieldCheck size={28} color="white" />
             </View>
-            <Text className="text-2xl font-bold text-gray-900">Enter verification code</Text>
-            <Text className="text-gray-500 text-center mt-2 px-4">
+            <Text className="font-geist-bold text-2xl font-bold text-gray-900">Enter verification code</Text>
+            <Text className="font-sans text-gray-500 text-center mt-2 px-4">
               We&apos;ll send a 6-digit code to your email. It expires in 5 minutes.
             </Text>
           </View>
 
           <View className="gap-4">
             <View>
-              <Text className="text-gray-700 font-medium mb-2">Email</Text>
+              <Text className="font-geist-medium text-gray-700 font-medium mb-2">Email</Text>
               <View className="relative">
                 <Mail size={18} color="#6b7280" style={{ position: 'absolute', left: 12, top: 14 }} />
                 <TextInput
@@ -185,7 +185,7 @@ export default function VerifyOtpScreen() {
             <TouchableOpacity
               onPress={handleSend}
               disabled={isSending || cooldown > 0}
-              className={`rounded-2xl py-3.5 items-center flex-row justify-center gap-2 ${cooldown > 0 ? 'bg-gray-100 border border-gray-200' : 'bg-gray-900'}`}
+              className={`rounded-2xl py-3.5 items-center flex-row justify-center gap-2 ${cooldown > 0 ? 'bg-gray-100 border border-gray-200' : 'bg-accent'}`}
               style={{ opacity: isSending ? 0.6 : 1 }}
             >
               {isSending ? (
@@ -193,7 +193,7 @@ export default function VerifyOtpScreen() {
               ) : (
                 <RefreshCw size={16} color={cooldown > 0 ? '#111827' : 'white'} />
               )}
-              <Text className={`font-bold ${cooldown > 0 ? 'text-gray-700' : 'text-white'}`}>
+              <Text className={`font-geist-bold font-bold ${cooldown > 0 ? 'text-gray-700' : 'text-white'}`}>
                 {cooldown > 0 ? `Resend in ${cooldown}s` : 'Send code'}
               </Text>
             </TouchableOpacity>
@@ -201,12 +201,12 @@ export default function VerifyOtpScreen() {
             <View className="h-[1px] bg-gray-100 my-2" />
 
             <View>
-              <Text className="text-gray-700 font-medium mb-2">6-digit code</Text>
+              <Text className="font-geist-medium text-gray-700 font-medium mb-2">6-digit code</Text>
               <TextInput
                 ref={otpRef}
                 className={`border rounded-2xl px-4 py-4 text-center text-2xl tracking-[10px] font-bold text-gray-900 ${error ? 'border-red-500' : 'border-gray-300'}`}
                 placeholder="------"
-                placeholderTextColor="#9ca3af"
+                placeholderTextColor="#6b7280"
                 value={otp}
                 onChangeText={(t) => {
                   const v = t.replace(/[^0-9]/g, '').slice(0, 6)
@@ -217,10 +217,10 @@ export default function VerifyOtpScreen() {
                 maxLength={6}
                 autoCorrect={false}
               />
-              <Text className="text-xs text-gray-500 mt-2 text-center">
+              <Text className="font-sans text-xs text-gray-500 mt-2 text-center">
                 Check spam folder if you don&apos;t see it. Sent via Resend.
               </Text>
-              {error ? <Text className="text-red-500 text-sm mt-2 text-center">{error}</Text> : null}
+              {error ? <Text className="font-sans text-red-500 text-sm mt-2 text-center">{error}</Text> : null}
             </View>
 
             <TouchableOpacity
@@ -232,12 +232,12 @@ export default function VerifyOtpScreen() {
               {isVerifying ? (
                 <ActivityIndicator color="white" />
               ) : (
-                <Text className={`font-bold text-lg ${otp.length === 6 ? 'text-white' : 'text-gray-500'}`}>Verify & Sign In</Text>
+                <Text className={`font-geist-bold font-bold text-lg ${otp.length === 6 ? 'text-white' : 'text-gray-500'}`}>Verify & Sign In</Text>
               )}
             </TouchableOpacity>
 
             <TouchableOpacity onPress={() => router.replace('/auth/login')} className="items-center mt-2">
-              <Text className="text-gray-500">Back to password login</Text>
+              <Text className="font-sans text-gray-500">Back to password login</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>

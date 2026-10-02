@@ -155,12 +155,12 @@ export default function Index() {
             <View className='w-full max-w-[200px] h-1 bg-[#d3e5f1] rounded-full overflow-hidden mb-6'>
               <Animated.View
                 style={{ width: progressWidth }}
-                className='h-full bg-[#006b5f]'
+                className='h-full bg-accent'
               />
             </View>
 
             {/* Typewriter Text */}
-            <Text className='text-xs text-[#43474b]/80 font-bold tracking-widest uppercase h-6'>
+            <Text className='font-geist-bold text-xs text-[#43474b]/80 font-bold tracking-widest uppercase h-6'>
               {typewriterText}
             </Text>
           </View>

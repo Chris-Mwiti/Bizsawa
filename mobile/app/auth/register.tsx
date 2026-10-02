@@ -245,10 +245,10 @@ export default function RegisterScreen() {
             {/* Header */}
             <View className="items-center mb-6">
               <View className="w-16 h-16 bg-primary-600 rounded-full items-center justify-center mb-3">
-                <Text className="text-white text-2xl font-bold">BS</Text>
+                <Text className="font-geist-bold text-white text-2xl font-bold">BS</Text>
               </View>
-              <Text className="text-3xl font-bold text-gray-900 mb-1">Create Account</Text>
-              <Text className="text-gray-500 text-center">Join BizSawa and grow your business</Text>
+              <Text className="font-geist-bold text-3xl font-bold text-gray-900 mb-1">Create Account</Text>
+              <Text className="font-sans text-gray-500 text-center">Join BizSawa and grow your business</Text>
             </View>
 
             {/* Google — temporarily disabled: silent callback failure after consent */}
@@ -257,13 +257,13 @@ export default function RegisterScreen() {
               disabled={true}
               className="flex-row items-center justify-center border border-gray-200 rounded-2xl py-4 bg-gray-100 opacity-60 mb-4"
             >
-              <Text className="text-gray-400 font-semibold text-[15px]">Continue with Google — disabled</Text>
+              <Text className="font-geist-semibold text-gray-500 font-semibold text-[15px]">Continue with Google — disabled</Text>
             </TouchableOpacity>
-            <Text className="text-xs text-gray-400 text-center mb-4 -mt-2">Re-enabling soon after mobile ↔ /api/v1/auth/google callback logging is fixed.</Text>
+            <Text className="font-sans text-xs text-gray-500 text-center mb-4 -mt-2">Re-enabling soon after mobile ↔ /api/v1/auth/google callback logging is fixed.</Text>
 
             <View className="flex-row items-center my-4">
               <View className="flex-1 h-[1px] bg-gray-200" />
-              <Text className="mx-3 text-gray-400 text-xs font-bold tracking-widest">OR</Text>
+              <Text className="font-geist-bold mx-3 text-gray-500 text-xs font-bold tracking-widest">OR</Text>
               <View className="flex-1 h-[1px] bg-gray-200" />
             </View>
 
@@ -299,7 +299,7 @@ export default function RegisterScreen() {
                   pressStyle={{ backgroundColor: mode === 'otp' ? 'white' : '#e5e7eb' }}
                 >
                   <ShieldCheck size={16} color={mode === 'otp' ? '#111827' : '#6b7280'} />
-                  <Text style={{ fontWeight: '700', fontSize: 13, color: mode === 'otp' ? '#111827' : '#6b7280' }}>Email code</Text>
+                  <Text className="font-sans" style={{ fontWeight: '700', fontSize: 13, color: mode === 'otp' ? '#111827' : '#6b7280' }}>Email code</Text>
                 </Tabs.Tab>
                 <Tabs.Tab
                   value="password"
@@ -316,19 +316,19 @@ export default function RegisterScreen() {
                   pressStyle={{ backgroundColor: mode === 'password' ? 'white' : '#e5e7eb' }}
                 >
                   <Lock size={16} color={mode === 'password' ? '#111827' : '#6b7280'} />
-                  <Text style={{ fontWeight: '700', fontSize: 13, color: mode === 'password' ? '#111827' : '#6b7280' }}>Password</Text>
+                  <Text className="font-sans" style={{ fontWeight: '700', fontSize: 13, color: mode === 'password' ? '#111827' : '#6b7280' }}>Password</Text>
                 </Tabs.Tab>
               </Tabs.List>
             </Tabs>
 
             {mode === 'otp' ? (
               <View className="gap-4">
-                <Text className="text-xs text-gray-500 text-center -mt-2 mb-2">
+                <Text className="font-sans text-xs text-gray-500 text-center -mt-2 mb-2">
                   We&apos;ll create your account and send a 6-digit code. No password needed. After verification you&apos;ll set up your business.
                 </Text>
 
                 <View>
-                  <Text className="text-gray-700 font-medium mb-2">Full Name *</Text>
+                  <Text className="font-geist-medium text-gray-700 font-medium mb-2">Full Name *</Text>
                   <View className="relative">
                     <User size={18} color="#6b7280" style={{ position: 'absolute', left: 12, top: 14 }} />
                     <TextInput
@@ -341,7 +341,7 @@ export default function RegisterScreen() {
                 </View>
 
                 <View>
-                  <Text className="text-gray-700 font-medium mb-2">Email *</Text>
+                  <Text className="font-geist-medium text-gray-700 font-medium mb-2">Email *</Text>
                   <View className="relative">
                     <Mail size={18} color="#6b7280" style={{ position: 'absolute', left: 12, top: 14 }} />
                     <TextInput
@@ -358,11 +358,11 @@ export default function RegisterScreen() {
                 <TouchableOpacity
                   onPress={handleSendOtp}
                   disabled={isSendingOtp || otpCooldown > 0}
-                  className={`rounded-2xl py-3.5 items-center flex-row justify-center gap-2 ${otpCooldown > 0 ? 'bg-gray-100 border border-gray-200' : 'bg-gray-900'}`}
+                  className={`rounded-2xl py-3.5 items-center flex-row justify-center gap-2 ${otpCooldown > 0 ? 'bg-gray-100 border border-gray-200' : 'bg-accent'}`}
                   style={{ opacity: isSendingOtp ? 0.6 : 1 }}
                 >
                   {isSendingOtp ? <ActivityIndicator color={otpCooldown > 0 ? '#111827' : 'white'} /> : <RefreshCw size={16} color={otpCooldown > 0 ? '#111827' : 'white'} />}
-                  <Text className={`font-bold ${otpCooldown > 0 ? 'text-gray-700' : 'text-white'}`}>
+                  <Text className={`font-geist-bold font-bold ${otpCooldown > 0 ? 'text-gray-700' : 'text-white'}`}>
                     {otpCooldown > 0 ? `Resend in ${otpCooldown}s` : otpSent ? 'Resend code' : 'Send verification code'}
                   </Text>
                 </TouchableOpacity>
@@ -371,12 +371,12 @@ export default function RegisterScreen() {
                   <>
                     <View className="h-[1px] bg-gray-100 my-1" />
                     <View>
-                      <Text className="text-gray-700 font-medium mb-2">6-digit code *</Text>
+                      <Text className="font-geist-medium text-gray-700 font-medium mb-2">6-digit code *</Text>
                       <TextInput
                         ref={otpInputRef}
                         className={`border rounded-2xl px-4 py-4 text-center text-2xl tracking-[10px] font-bold text-gray-900 ${otpError ? 'border-red-500' : 'border-gray-300'}`}
                         placeholder="------"
-                        placeholderTextColor="#9ca3af"
+                        placeholderTextColor="#6b7280"
                         value={otpCode}
                         onChangeText={(t) => {
                           const v = t.replace(/[^0-9]/g, '').slice(0, 6)
@@ -386,8 +386,8 @@ export default function RegisterScreen() {
                         keyboardType="number-pad"
                         maxLength={6}
                       />
-                      <Text className="text-xs text-gray-500 mt-2 text-center">Code expires in 5 minutes. Check spam folder if missing.</Text>
-                      {otpError ? <Text className="text-red-500 text-sm mt-2 text-center">{otpError}</Text> : null}
+                      <Text className="font-sans text-xs text-gray-500 mt-2 text-center">Code expires in 5 minutes. Check spam folder if missing.</Text>
+                      {otpError ? <Text className="font-sans text-red-500 text-sm mt-2 text-center">{otpError}</Text> : null}
                     </View>
 
                     <TouchableOpacity
@@ -396,16 +396,16 @@ export default function RegisterScreen() {
                       className={`rounded-2xl py-4 items-center ${otpCode.length === 6 ? 'bg-emerald-600' : 'bg-gray-200'}`}
                       style={{ opacity: isVerifyingOtp ? 0.7 : 1 }}
                     >
-                      {isVerifyingOtp ? <ActivityIndicator color="white" /> : <Text className={`font-bold text-lg ${otpCode.length === 6 ? 'text-white' : 'text-gray-500'}`}>Verify & Continue</Text>}
+                      {isVerifyingOtp ? <ActivityIndicator color="white" /> : <Text className={`font-geist-bold font-bold text-lg ${otpCode.length === 6 ? 'text-white' : 'text-gray-500'}`}>Verify & Continue</Text>}
                     </TouchableOpacity>
                   </>
                 )}
-                {!otpSent && otpError ? <Text className="text-red-500 text-sm text-center">{otpError}</Text> : null}
+                {!otpSent && otpError ? <Text className="font-sans text-red-500 text-sm text-center">{otpError}</Text> : null}
               </View>
             ) : (
               <View className="gap-4">
                 <View>
-                  <Text className="text-gray-700 font-medium mb-2">Full Name *</Text>
+                  <Text className="font-geist-medium text-gray-700 font-medium mb-2">Full Name *</Text>
                   <View className="relative">
                     <User size={18} color="#6b7280" style={{ position: 'absolute', left: 12, top: 14 }} />
                     <TextInput
@@ -415,11 +415,11 @@ export default function RegisterScreen() {
                       onChangeText={(t) => setFormData({ ...formData, ownerName: t })}
                     />
                   </View>
-                  {errors.ownerName && <Text className="text-red-500 text-sm mt-1">{errors.ownerName}</Text>}
+                  {errors.ownerName && <Text className="font-sans text-red-500 text-sm mt-1">{errors.ownerName}</Text>}
                 </View>
 
                 <View>
-                  <Text className="text-gray-700 font-medium mb-2">Email *</Text>
+                  <Text className="font-geist-medium text-gray-700 font-medium mb-2">Email *</Text>
                   <View className="relative">
                     <Mail size={18} color="#6b7280" style={{ position: 'absolute', left: 12, top: 14 }} />
                     <TextInput
@@ -431,11 +431,11 @@ export default function RegisterScreen() {
                       autoCapitalize="none"
                     />
                   </View>
-                  {errors.ownerEmail && <Text className="text-red-500 text-sm mt-1">{errors.ownerEmail}</Text>}
+                  {errors.ownerEmail && <Text className="font-sans text-red-500 text-sm mt-1">{errors.ownerEmail}</Text>}
                 </View>
 
                 <View>
-                  <Text className="text-gray-700 font-medium mb-2">WhatsApp Number *</Text>
+                  <Text className="font-geist-medium text-gray-700 font-medium mb-2">WhatsApp Number *</Text>
                   <View className="relative">
                     <Smartphone size={18} color="#6b7280" style={{ position: 'absolute', left: 12, top: 14 }} />
                     <TextInput
@@ -446,11 +446,11 @@ export default function RegisterScreen() {
                       keyboardType="phone-pad"
                     />
                   </View>
-                  {errors.whatsappNumber && <Text className="text-red-500 text-sm mt-1">{errors.whatsappNumber}</Text>}
+                  {errors.whatsappNumber && <Text className="font-sans text-red-500 text-sm mt-1">{errors.whatsappNumber}</Text>}
                 </View>
 
                 <View>
-                  <Text className="text-gray-700 font-medium mb-2">Password *</Text>
+                  <Text className="font-geist-medium text-gray-700 font-medium mb-2">Password *</Text>
                   <View className="relative">
                     <Lock size={18} color="#6b7280" style={{ position: 'absolute', left: 12, top: 14 }} />
                     <TextInput
@@ -464,11 +464,11 @@ export default function RegisterScreen() {
                       {showPassword ? <EyeOff size={18} color="#6b7280" /> : <Eye size={18} color="#6b7280" />}
                     </TouchableOpacity>
                   </View>
-                  {errors.password && <Text className="text-red-500 text-sm mt-1">{errors.password}</Text>}
+                  {errors.password && <Text className="font-sans text-red-500 text-sm mt-1">{errors.password}</Text>}
                 </View>
 
                 <View>
-                  <Text className="text-gray-700 font-medium mb-2">Confirm Password *</Text>
+                  <Text className="font-geist-medium text-gray-700 font-medium mb-2">Confirm Password *</Text>
                   <View className="relative">
                     <Lock size={18} color="#6b7280" style={{ position: 'absolute', left: 12, top: 14 }} />
                     <TextInput
@@ -482,7 +482,7 @@ export default function RegisterScreen() {
                       {showConfirmPassword ? <EyeOff size={18} color="#6b7280" /> : <Eye size={18} color="#6b7280" />}
                     </TouchableOpacity>
                   </View>
-                  {errors.confirmPassword && <Text className="text-red-500 text-sm mt-1">{errors.confirmPassword}</Text>}
+                  {errors.confirmPassword && <Text className="font-sans text-red-500 text-sm mt-1">{errors.confirmPassword}</Text>}
                 </View>
 
                 <TouchableOpacity
@@ -494,7 +494,7 @@ export default function RegisterScreen() {
                     <ActivityIndicator color="white" size="small" />
                   ) : (
                     <View className="flex-row items-center">
-                      <Text className="text-white font-semibold text-lg mr-2">Create Account</Text>
+                      <Text className="font-geist-semibold text-white font-semibold text-lg mr-2">Create Account</Text>
                       <ArrowRight size={20} color="white" />
                     </View>
                   )}
@@ -503,9 +503,9 @@ export default function RegisterScreen() {
             )}
 
             <View className="flex-row justify-center mt-6">
-              <Text className="text-gray-600">Already have an account? </Text>
+              <Text className="font-sans text-gray-600">Already have an account? </Text>
               <TouchableOpacity onPress={() => router.replace('/auth/login')}>
-                <Text className="text-primary-600 font-semibold">Sign In</Text>
+                <Text className="font-geist-semibold text-primary-600 font-semibold">Sign In</Text>
               </TouchableOpacity>
             </View>
           </View>

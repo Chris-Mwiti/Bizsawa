@@ -25,9 +25,9 @@ export function BarChart({
     <View className='gap-2'>
       {/* y-scale */}
       <View className='flex-row justify-between px-1'>
-        <Text className='text-xs font-bold text-gray-400'>{Math.round(yTop).toLocaleString('en-KE')}</Text>
-        <Text className='text-xs text-gray-300'>KES</Text>
-        <Text className='text-xs font-bold text-gray-400'>{Math.round(yMid).toLocaleString('en-KE')}</Text>
+        <Text className='font-geist-bold text-xs font-bold text-gray-500'>{Math.round(yTop).toLocaleString('en-KE')}</Text>
+        <Text className='font-sans text-xs text-gray-300'>KES</Text>
+        <Text className='font-geist-bold text-xs font-bold text-gray-500'>{Math.round(yMid).toLocaleString('en-KE')}</Text>
       </View>
       <View className='flex-row items-end gap-2' style={{ height }}>
         {data.map((d, i) => {
@@ -43,7 +43,7 @@ export function BarChart({
               >
                 {/* value label — always show for explicitness, 0 in muted, non-zero in strong */}
                 <Text
-                  className={`text-xs font-bold mb-1 ${isZero ? 'text-gray-300' : 'text-gray-600'}`}
+                  className={`font-geist-bold text-xs font-bold mb-1 ${isZero ? 'text-gray-300' : 'text-gray-600'}`}
                   numberOfLines={1}
                 >
                   {showValues || isZero
@@ -68,7 +68,7 @@ export function BarChart({
                 />
               </View>
               <Text
-                className={`text-xs font-bold ${isZero ? 'text-gray-400' : 'text-gray-600'}`}
+                className={`font-geist-bold text-xs font-bold ${isZero ? 'text-gray-500' : 'text-gray-600'}`}
                 numberOfLines={1}
               >
                 {d.label}
@@ -133,7 +133,7 @@ export function LineChart({
           return (
             <G key={t}>
               <Line x1={padding + yLabelW} y1={y} x2={padding + yLabelW + chartW} y2={y} stroke='#f3f4f6' strokeWidth={1} />
-              <SvgText x={padding + yLabelW - 4} y={y + 3} textAnchor='end' fontSize={8} fontWeight='600' fill='#9ca3af'>
+              <SvgText x={padding + yLabelW - 4} y={y + 3} textAnchor='end' fontSize={8} fontWeight='600' fill='#6b7280'>
                 {Math.round(v).toLocaleString('en-KE')}
               </SvgText>
             </G>
@@ -177,7 +177,7 @@ export function LineChart({
                   textAnchor='middle'
                   fontSize={8}
                   fontWeight='700'
-                  fill={isZero ? '#9ca3af' : '#374151'}
+                  fill={isZero ? '#6b7280' : '#374151'}
                 >
                   {formatVal(p.value)}
                 </SvgText>
@@ -199,7 +199,7 @@ export function LineChart({
         {points.map((p, i) => (
           <Text
             key={i}
-            className={`text-xs font-bold ${p.value === 0 ? 'text-gray-400' : 'text-gray-500'}`}
+            className={`font-geist-bold text-xs font-bold ${p.value === 0 ? 'text-gray-500' : 'text-gray-500'}`}
             style={{ width: chartW / points.length, textAlign: 'center' }}
             numberOfLines={1}
           >
@@ -276,7 +276,7 @@ export function SwitchableLineCard({
                 minWidth: 0,
               }}
             >
-              <Text
+              <Text className="font-sans"
                 numberOfLines={1}
                 style={{
                   fontSize: 12,
@@ -294,10 +294,10 @@ export function SwitchableLineCard({
       </Tabs>
       <View className='bg-white rounded-2xl border border-gray-200 p-2'>
         <View className='flex-row justify-between items-center px-2 py-1'>
-          <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
+          <Text className='font-geist-bold text-xs font-bold tracking-widest text-gray-500 uppercase'>
             {label} • 7 days • 0 = no sales
           </Text>
-          <Text className='text-xs font-bold text-gray-900'>
+          <Text className='font-geist-bold text-xs font-bold text-gray-900'>
             KES{' '}
             {Math.max(...data.map((d) => d.value), 0).toLocaleString('en-KE')}
           </Text>
@@ -306,7 +306,7 @@ export function SwitchableLineCard({
           data={data.length ? data : [{ label: '—', value: 0 }]}
           color={color}
         />
-        <Text className='text-xs text-gray-400 text-center mt-1'>Dots on baseline = 0 • value above each point</Text>
+        <Text className='font-sans text-xs text-gray-500 text-center mt-1'>Dots on baseline = 0 • value above each point</Text>
       </View>
     </View>
   )
@@ -326,7 +326,7 @@ export function PieChart({
     return (
       <View className='items-center justify-center' style={{ width: size, height: size }}>
         <View className='w-20 h-20 rounded-full bg-gray-100 border border-gray-200 items-center justify-center'>
-          <Text className='text-xs font-bold text-gray-400'>No data</Text>
+          <Text className='font-geist-bold text-xs font-bold text-gray-500'>No data</Text>
         </View>
       </View>
     )
@@ -380,7 +380,7 @@ export function PieChart({
             textAnchor='middle'
             fontSize={9}
             fontWeight='700'
-            fill='#9ca3af'
+            fill='#6b7280'
           >
             TOTAL
           </SvgText>
@@ -415,18 +415,18 @@ export function PieChart({
               }}
             />
             <Text
-              className='text-xs font-semibold text-gray-900 flex-1'
+              className='font-geist-semibold text-xs font-semibold text-gray-900 flex-1'
               numberOfLines={1}
             >
               {s.name}
             </Text>
-            <Text className='text-xs font-bold text-gray-700'>
+            <Text className='font-geist-bold text-xs font-bold text-gray-700'>
               {s.pct.toFixed(1)}%
             </Text>
           </View>
         ))}
         {segments.length > 6 && (
-          <Text className='text-xs text-gray-400'>
+          <Text className='font-sans text-xs text-gray-500'>
             +{segments.length - 6} more • {segments.slice(6).reduce((acc, cur) => acc + cur.pct, 0).toFixed(1)}%
           </Text>
         )}

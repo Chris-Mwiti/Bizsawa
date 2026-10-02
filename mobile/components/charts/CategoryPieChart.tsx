@@ -24,7 +24,7 @@ export function CategoryPieChart({
         </CardHeader>
         <CardContent>
           <View className='items-center py-8'>
-            <Text className='text-gray-500'>No category data</Text>
+            <Text className='font-sans text-gray-500'>No category data</Text>
           </View>
         </CardContent>
       </Card>
@@ -44,16 +44,16 @@ export function CategoryPieChart({
           {categories.map((cat, i) => (
             <View key={i} className='space-y-1'>
               <View className='flex-row justify-between items-center'>
-                <Text className='font-medium text-gray-900'>{cat.name}</Text>
+                <Text className='font-geist-medium font-medium text-gray-900'>{cat.name}</Text>
                 <View className='flex-row items-center gap-2'>
-                  <Text className='font-bold font-mono text-gray-900'>
+                  <Text className='font-geist-mono-bold font-bold text-gray-900'>
                     {formatCurrency(cat.revenue)}
                   </Text>
-                  <Text className='text-xs text-gray-500'>
+                  <Text className='font-sans text-xs text-gray-500'>
                     ({cat.percentage.toFixed(1)}%)
                   </Text>
                   <Text
-                    className={`text-xs font-bold ${cat.trend === 'up' ? 'text-green-700' : cat.trend === 'down' ? 'text-red-700' : 'text-gray-500'}`}
+                    className={`font-geist-bold text-xs font-bold ${cat.trend === 'up' ? 'text-green-700' : cat.trend === 'down' ? 'text-red-700' : 'text-gray-500'}`}
                   >
                     {cat.trend.toUpperCase()}
                   </Text>

@@ -610,12 +610,17 @@ func (s *Service) HandleMpesaCallback(ctx context.Context, raw json.RawMessage) 
 		cmd, err = s.repo.FindByAccountReference(ctx, accountRef)
 	}
 
-	if cmd == nil {
-		return apperrors.ErrNotFound.WithMessage("command not found")
+	// Always ACK Daraja even when we cannot match the payment — returning an
+	// error would make Safaricom retry the callback in a storm. The mismatch is
+	// logged for investigation instead.
+	if err != nil || cmd == nil {
+		s.logger.WarnContext(ctx, "[PAYMENTS/MPESA]-callback command not found, acking anyway", "providerRequestID", requestID, "accountReference", accountRef, "resultCode", resultCode)
+		return nil
 	}
 
-	if err != nil {
-		s.logger.WarnContext(ctx, "[PAYMENTS/MPESA]-callback command not found", "providerRequestID", requestID, "accountReference", accountRef, "err", err.Error())
+	// Idempotent: already terminal — ack without re-emitting events.
+	if cmd.Status == StatusSucceeded || cmd.Status == StatusFailed {
+		s.logger.InfoContext(ctx, "[PAYMENTS/MPESA]-callback for terminal payment, ignoring", "paymentID", cmd.ID.String(), "status", cmd.Status)
 		return nil
 	}
 
@@ -623,7 +628,61 @@ func (s *Service) HandleMpesaCallback(ctx context.Context, raw json.RawMessage) 
 		return s.MarkSucceeded(ctx, *cmd, ProviderResult{RequestID: firstNonEmpty(requestID, cmd.ProviderRequestID), Receipt: firstNonEmpty(receipt, cmd.ProviderReceipt), Raw: raw, Status: StatusSucceeded})
 	}
 
-	return s.MarkFailed(ctx, *cmd, resultCode, firstNonEmpty(resultDesc, "mpesa payment failed"), raw)
+	// Any non-zero ResultCode (1032 user-cancelled, 1037 timeout, 1 low
+	// balance, …) is a definitive failure — flip to failed so the app's poller
+	// sees it and notifies the user instead of spinning in processing.
+	return s.MarkFailed(ctx, *cmd, resultCode, mpesaFailureMessage(resultCode, firstNonEmpty(resultDesc, "mpesa payment failed")), raw)
+}
+
+// Cancel lets the app mark a stuck pending/processing payment as failed
+// (user dismissed the STK prompt, gave up waiting, wants to retry). Terminal
+// payments are left untouched. The late Daraja callback, if it ever arrives,
+// is ignored by the idempotency guard in HandleMpesaCallback.
+func (s *Service) Cancel(ctx context.Context, businessID, id uuid.UUID) (*PaymentCommand, error) {
+	cmd, err := s.repo.Find(ctx, businessID, id)
+	if err != nil {
+		return nil, err
+	}
+	if cmd.Status == StatusSucceeded || cmd.Status == StatusFailed {
+		return cmd, nil
+	}
+	raw := []byte(`{"code":"user_cancelled","message":"cancelled from app"}`)
+	if err := s.MarkFailed(ctx, *cmd, "user_cancelled", mpesaFailureMessage("user_cancelled", ""), raw); err != nil {
+		return nil, err
+	}
+	return s.repo.Find(ctx, businessID, id)
+}
+
+// CheckSTK re-queries Daraja for a processing payment's outcome. Daraja
+// answers async via callback, so this only confirms the query was accepted;
+// the callback flips the status. A query-level failure (bad CheckoutRequestID,
+// auth) is surfaced so the app can keep polling or offer cancel/retry.
+func (s *Service) CheckSTK(ctx context.Context, businessID, id uuid.UUID) (ProviderResult, error) {
+	cmd, err := s.repo.Find(ctx, businessID, id)
+	if err != nil {
+		return ProviderResult{}, err
+	}
+	if cmd.Status == StatusSucceeded || cmd.Status == StatusFailed {
+		return ProviderResult{RequestID: cmd.ProviderRequestID, Receipt: cmd.ProviderReceipt, Status: cmd.Status}, nil
+	}
+	querier, ok := s.provider.(interface {
+		STKQuery(ctx context.Context, checkoutRequestID string) (ProviderResult, error)
+	})
+	if !ok {
+		return ProviderResult{}, apperrors.ErrInternal.WithMessage("mpesa provider not configured")
+	}
+	if cmd.ProviderRequestID == "" {
+		return ProviderResult{}, apperrors.ErrUnprocessable.WithMessage("payment has no provider request id yet")
+	}
+	result, err := querier.STKQuery(ctx, cmd.ProviderRequestID)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "[PAYMENTS/MPESA]-stk query failed", "paymentID", cmd.ID.String(), "err", err.Error())
+		return ProviderResult{}, err
+	}
+	if result.Status == StatusFailed {
+		_ = s.MarkFailed(ctx, *cmd, "stk_query", mpesaFailureMessage("", ""), result.Raw)
+	}
+	return result, nil
 }
 
 func firstJSONString(payload map[string]any, paths ...string) string {

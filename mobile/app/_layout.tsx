@@ -4,13 +4,20 @@ import { View, StatusBar, Platform } from 'react-native'
 import { Stack } from 'expo-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import Toast from 'react-native-toast-message'
+import { useFonts } from 'expo-font'
 import { TamaguiProvider } from 'tamagui'
+import { fonts } from '../lib/theme/fonts'
 import tamaguiConfig from '../tamagui.config'
 import { AuthProvider } from '../contexts/AuthContext'
 import { BusinessProvider } from '../contexts/BusinessContext'
 import { SyncProvider } from '../sync/SyncProvider'
 import { TourProvider } from '../contexts/TourContext'
 import { OfflineBanner } from '../components/OfflineBanner'
+import { NavigationGateProvider } from '../lib/navigation/NavigationGate'
+import {
+  RouteLoadingBar,
+  RouteLoadingChip,
+} from '../components/RouteLoadingBar'
 
 export default function RootLayout() {
   const [queryClient] = useState(
@@ -24,6 +31,12 @@ export default function RootLayout() {
       }),
   )
 
+  // Hold the first frame until the real faces are registered. Rendering early would
+  // show a frame of system-ui and then reflow every line once Geist swaps in.
+  // A failed load must not brick the app: fall through to the system face instead.
+  const [fontsLoaded, fontError] = useFonts(fonts)
+  if (!fontsLoaded && !fontError) return null
+
   return (
     <TamaguiProvider config={tamaguiConfig} defaultTheme='light'>
       <QueryClientProvider client={queryClient}>
@@ -31,6 +44,7 @@ export default function RootLayout() {
           <BusinessProvider>
             <SyncProvider>
               <TourProvider>
+                <NavigationGateProvider>
                 {/* Fix status-bar covering: opaque bar, dark content, never translucent so swipe-down shade stays reachable */}
                 <StatusBar
                   barStyle='dark-content'
@@ -107,7 +121,11 @@ export default function RootLayout() {
                 </Stack>
                   </View>
                   <Toast />
+                  {/* Held-navigation feedback: top sweep + spinner while the next page loads */}
+                  <RouteLoadingBar />
+                  <RouteLoadingChip />
                 </View>
+                </NavigationGateProvider>
               </TourProvider>
             </SyncProvider>
           </BusinessProvider>

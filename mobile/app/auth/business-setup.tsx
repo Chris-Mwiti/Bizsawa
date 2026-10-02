@@ -157,10 +157,10 @@ export default function BusinessSetup() {
     <SafeAreaView edges={['top']} className='flex-1 bg-white'>
       <View className='px-6 pt-6 pb-4 border-b border-gray-100'>
         <View className='flex-row items-center justify-between mb-4'>
-          <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
+          <Text className='font-geist-bold text-xs font-bold tracking-widest text-gray-500 uppercase'>
             Step {step + 1} of {STEPS.length}
           </Text>
-          <Text className='text-xs text-gray-500'>{STEPS[step].title}</Text>
+          <Text className='font-sans text-xs text-gray-500'>{STEPS[step].title}</Text>
         </View>
         <View className='flex-row gap-2'>
           {STEPS.map((s, i) => {
@@ -169,7 +169,7 @@ export default function BusinessSetup() {
             return (
               <View
                 key={s.title}
-                className={`flex-1 h-1.5 rounded-full ${done ? 'bg-emerald-500' : active ? 'bg-gray-900' : 'bg-gray-200'}`}
+                className={`flex-1 h-1.5 rounded-full ${done ? 'bg-emerald-500' : active ? 'bg-accent' : 'bg-gray-200'}`}
               />
             )
           })}
@@ -192,7 +192,7 @@ export default function BusinessSetup() {
         {step === 0 && (
           <View className='gap-4'>
             <View>
-              <Text className='text-sm font-semibold text-gray-700 mb-2'>
+              <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
                 Business name *
               </Text>
               <TextInput
@@ -205,7 +205,7 @@ export default function BusinessSetup() {
               />
             </View>
             <View>
-              <Text className='text-sm font-semibold text-gray-700 mb-2'>
+              <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
                 Slug (auto)
               </Text>
               <TextInput
@@ -217,7 +217,7 @@ export default function BusinessSetup() {
               />
             </View>
             <View>
-              <Text className='text-sm font-semibold text-gray-700 mb-2'>
+              <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
                 Category
               </Text>
               <View className='flex-row flex-wrap gap-2'>
@@ -225,10 +225,10 @@ export default function BusinessSetup() {
                   <Pressable
                     key={cat}
                     onPress={() => setForm({ ...form, category: cat })}
-                    className={`px-3 py-2 rounded-full border ${form.category === cat ? 'bg-gray-900 border-gray-900' : 'bg-white border-gray-200'}`}
+                    className={`px-3 py-2 rounded-full border ${form.category === cat ? 'bg-accent border-accent' : 'bg-white border-gray-200'}`}
                   >
                     <Text
-                      className={`text-xs font-bold ${form.category === cat ? 'text-white' : 'text-gray-700'}`}
+                      className={`font-geist-bold text-xs font-bold ${form.category === cat ? 'text-white' : 'text-gray-700'}`}
                     >
                       {cat}
                     </Text>
@@ -237,7 +237,7 @@ export default function BusinessSetup() {
               </View>
             </View>
             <View>
-              <Text className='text-sm font-semibold text-gray-700 mb-2'>
+              <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
                 Business phone *
               </Text>
               <TextInput
@@ -249,7 +249,7 @@ export default function BusinessSetup() {
               />
             </View>
             <View>
-              <Text className='text-sm font-semibold text-gray-700 mb-2'>
+              <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
                 Business email
               </Text>
               <TextInput
@@ -267,7 +267,7 @@ export default function BusinessSetup() {
         {step === 1 && (
           <View className='gap-4'>
             <View>
-              <Text className='text-sm font-semibold text-gray-700 mb-2'>
+              <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
                 Address
               </Text>
               <TextInput
@@ -278,7 +278,7 @@ export default function BusinessSetup() {
               />
             </View>
             <View>
-              <Text className='text-sm font-semibold text-gray-700 mb-2'>
+              <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
                 Years in business (for analytics)
               </Text>
               <View className='flex-row flex-wrap gap-2'>
@@ -292,10 +292,10 @@ export default function BusinessSetup() {
                   <Pressable
                     key={y}
                     onPress={() => setForm({ ...form, yearsInBusiness: y })}
-                    className={`px-3 py-2 rounded-full border ${form.yearsInBusiness === y ? 'bg-gray-900 border-gray-900' : 'bg-white border-gray-200'}`}
+                    className={`px-3 py-2 rounded-full border ${form.yearsInBusiness === y ? 'bg-accent border-accent' : 'bg-white border-gray-200'}`}
                   >
                     <Text
-                      className={`text-xs font-bold ${form.yearsInBusiness === y ? 'text-white' : 'text-gray-700'}`}
+                      className={`font-geist-bold text-xs font-bold ${form.yearsInBusiness === y ? 'text-white' : 'text-gray-700'}`}
                     >
                       {y}
                     </Text>
@@ -309,7 +309,7 @@ export default function BusinessSetup() {
         {step === 2 && (
           <View className='gap-4'>
             <View>
-              <Text className='text-sm font-semibold text-gray-700 mb-2'>
+              <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
                 Currency
               </Text>
               <View className='flex-row flex-wrap gap-2'>
@@ -317,10 +317,10 @@ export default function BusinessSetup() {
                   <Pressable
                     key={c}
                     onPress={() => setForm({ ...form, currency: c })}
-                    className={`px-4 py-3 rounded-full border ${form.currency === c ? 'bg-gray-900 border-gray-900' : 'bg-white border-gray-200'}`}
+                    className={`px-4 py-3 rounded-full border ${form.currency === c ? 'bg-accent border-accent' : 'bg-white border-gray-200'}`}
                   >
                     <Text
-                      className={`text-xs font-bold ${form.currency === c ? 'text-white' : 'text-gray-700'}`}
+                      className={`font-geist-bold text-xs font-bold ${form.currency === c ? 'text-white' : 'text-gray-700'}`}
                     >
                       {c}
                     </Text>
@@ -329,7 +329,7 @@ export default function BusinessSetup() {
               </View>
             </View>
             <View>
-              <Text className='text-sm font-semibold text-gray-700 mb-2'>
+              <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
                 Timezone
               </Text>
               <TextInput
@@ -337,12 +337,12 @@ export default function BusinessSetup() {
                 value={form.timezone}
                 onChangeText={(t) => setForm({ ...form, timezone: t })}
               />
-              <Text className='text-xs text-gray-500 mt-1'>
+              <Text className='font-sans text-xs text-gray-500 mt-1'>
                 Default Africa/Nairobi
               </Text>
             </View>
             <View>
-              <Text className='text-sm font-semibold text-gray-700 mb-2'>
+              <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
                 KRA Tax PIN (optional)
               </Text>
               <TextInput
@@ -358,7 +358,7 @@ export default function BusinessSetup() {
 
         {step === 3 && (
           <View className='gap-4'>
-            <Text className='text-sm font-semibold text-gray-700'>
+            <Text className='font-geist-semibold text-sm font-semibold text-gray-700'>
               M-Pesa (optional)
             </Text>
             <View className='flex-row gap-2'>
@@ -375,7 +375,7 @@ export default function BusinessSetup() {
                   className={`flex-1 py-3 rounded-2xl border items-center ${form.mpesaPaymentType === m.id ? 'bg-green-50 border-green-500' : 'bg-white border-gray-200'}`}
                 >
                   <Text
-                    className={`text-xs font-bold ${form.mpesaPaymentType === m.id ? 'text-green-700' : 'text-gray-700'}`}
+                    className={`font-geist-bold text-xs font-bold ${form.mpesaPaymentType === m.id ? 'text-green-700' : 'text-gray-700'}`}
                   >
                     {m.label}
                   </Text>
@@ -383,7 +383,7 @@ export default function BusinessSetup() {
               ))}
             </View>
             <View>
-              <Text className='text-sm font-semibold text-gray-700 mb-2'>
+              <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
                 Shortcode / Till
               </Text>
               <TextInput
@@ -393,12 +393,12 @@ export default function BusinessSetup() {
                 value={form.mpesaShortcode}
                 onChangeText={(t) => setForm({ ...form, mpesaShortcode: t })}
               />
-              <Text className='text-xs text-gray-500 mt-1'>
+              <Text className='font-sans text-xs text-gray-500 mt-1'>
                 Encrypted on server
               </Text>
             </View>
             <View className='bg-amber-50 border border-amber-200 rounded-2xl p-3'>
-              <Text className='text-xs text-amber-800'>
+              <Text className='font-sans text-xs text-amber-800'>
                 You can skip and configure later in Business Profile.
               </Text>
             </View>
@@ -430,7 +430,7 @@ export default function BusinessSetup() {
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <ArrowLeft size={16} color='#374151' />
-            <Text className='font-bold text-gray-700'>Back</Text>
+            <Text className='font-geist-bold font-bold text-gray-700'>Back</Text>
           </TouchableOpacity>
         ) : (
           <View className='flex-1' />
@@ -438,11 +438,11 @@ export default function BusinessSetup() {
         {step < STEPS.length - 1 ? (
           <TouchableOpacity
             onPress={next}
-            className='flex-1 py-4 rounded-2xl bg-gray-900 items-center flex-row justify-center gap-2'
+            className='flex-1 py-4 rounded-2xl bg-accent items-center flex-row justify-center gap-2'
             style={{ minHeight: 56 }}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Text className='font-bold text-white'>Next</Text>
+            <Text className='font-geist-bold font-bold text-white'>Next</Text>
             <ArrowRight size={16} color='white' />
           </TouchableOpacity>
         ) : (
@@ -458,7 +458,7 @@ export default function BusinessSetup() {
             ) : (
               <>
                 <Check size={16} color='white' />
-                <Text className='font-bold text-white'>Create Business</Text>
+                <Text className='font-geist-bold font-bold text-white'>Create Business</Text>
               </>
             )}
           </TouchableOpacity>

@@ -30,7 +30,18 @@ import {
 import { useOrders, OrderStatus } from '../../hooks/api/useOrders'
 import { useCustomers } from '../../hooks/api/useCustomers'
 import { useProducts } from '../../hooks/api/useProducts'
-import { useInitiatePayment, usePaymentStatus } from '../../hooks/api/usePayments'
+import {
+  useCancelPayment,
+  useInitiatePayment,
+  usePaymentStatus,
+} from '../../hooks/api/usePayments'
+import {
+  isPaymentFailed,
+  isPaymentPending,
+  isPaymentSucceeded,
+  normalizePaymentStatus,
+  paymentFailureMessage,
+} from '../../lib/payment-status'
 import { TAB_BAR_SCROLL_PADDING } from '../../constants/tabBar'
 import { toNumber } from '../../lib/api-dtos'
 import { shortId } from '../../lib/ids'
@@ -89,9 +100,13 @@ export default function OrderDetail() {
   const { products } = useProducts()
   const { mutateAsync: initiatePayment, isPending: isInitiating } =
     useInitiatePayment()
+  const { mutateAsync: cancelPayment, isPending: isCancelling } =
+    useCancelPayment()
   const [paymentId, setPaymentId] = useState<string | null>(null)
+  const [paymentError, setPaymentError] = useState<string | null>(null)
   const paymentStatus = usePaymentStatus(paymentId || undefined, !!paymentId)
   const autoConfirmedRef = useRef(false)
+  const failureNotifiedRef = useRef<string | null>(null)
 
   const query = getOrder(id)
   const order: any = query.data
@@ -145,22 +160,34 @@ export default function OrderDetail() {
       Alert.alert('Already processed', `Order is already ${order.status} — M-Pesa not needed.`)
       return
     }
-    if (paymentId && paymentStatus.data?.status === 'pending') {
+    if (paymentId && isPaymentPending(paymentStatus.data?.status)) {
       Alert.alert('Payment pending', 'An M-Pesa request is already pending for this order.')
       return
     }
     try {
+      setPaymentError(null)
+      failureNotifiedRef.current = null
       const payment = await initiatePayment({
         orderId: id,
         phone: customer.phone,
         amount: order.total,
         currency: 'KES',
       })
+      // The direct-API path returns the server id (pollable); the offline
+      // queue path returns a local id that reconciles on next sync. Either
+      // way the status poller below watches for the terminal outcome.
+      // A synchronous Daraja rejection can already come back as failed — if
+      // the server id is missing we surface the local pending state instead.
+      if (isPaymentFailed((payment as any)?.status)) {
+        setPaymentError(paymentFailureMessage(payment))
+        Alert.alert('M-Pesa failed', paymentFailureMessage(payment))
+        return
+      }
       setPaymentId(payment.id)
       autoConfirmedRef.current = false
       Alert.alert(
         'Payment sent',
-        `M-Pesa request sent (${payment.id.slice(0, 8)}…) — order will auto-confirm on success.`,
+        `M-Pesa request sent (${payment.id.slice(0, 8)}…) — order will auto-confirm on success. If you cancel on your phone, the order stays draft so you can retry.`,
       )
     } catch (e: any) {
       Alert.alert(
@@ -170,11 +197,28 @@ export default function OrderDetail() {
     }
   }
 
-  // Auto-confirm draft → confirmed when M-Pesa succeeds (prevents double charges)
+  const handleCancelPayment = async () => {
+    if (!paymentId) return
+    try {
+      await cancelPayment(paymentId)
+      await paymentStatus.refetch()
+    } catch (e: any) {
+      Alert.alert(
+        'Error',
+        e.friendlyMessage || e.message || 'Failed to cancel payment',
+      )
+    }
+  }
+
+  // Auto-confirm draft → confirmed when M-Pesa succeeds (prevents double charges).
+  // Any terminal failure (cancelled on phone, timeout, insufficient balance)
+  // flips the UI to failed, notifies once, and leaves the order in draft so
+  // the user can retry — the order is NOT auto-confirmed or auto-cancelled.
   useEffect(() => {
-    const status = paymentStatus.data?.status
-    if (!paymentId || autoConfirmedRef.current) return
-    if ((status === 'succeeded' || status === 'success' || status === 'completed') && String(order?.status) === 'draft') {
+    const rawStatus = paymentStatus.data?.status
+    const status = normalizePaymentStatus(rawStatus)
+    if (!paymentId || !rawStatus) return
+    if (isPaymentSucceeded(rawStatus) && !autoConfirmedRef.current && String(order?.status) === 'draft') {
       autoConfirmedRef.current = true
       updateOrder({ id: id as any, data: { status: OrderStatus.confirmed } })
         .then(() => {
@@ -182,6 +226,12 @@ export default function OrderDetail() {
           query.refetch()
         })
         .catch((e: any) => console.error('[OrderDetail] auto-confirm failed', e))
+    }
+    if (isPaymentFailed(rawStatus) && failureNotifiedRef.current !== paymentId) {
+      failureNotifiedRef.current = paymentId
+      const msg = paymentFailureMessage(paymentStatus.data)
+      setPaymentError(msg)
+      Alert.alert('M-Pesa failed', `${msg}\n\nOrder is still draft — you can retry.`)
     }
   }, [paymentStatus.data?.status, order?.status, paymentId, id])
 
@@ -194,12 +244,12 @@ export default function OrderDetail() {
   if (!order)
     return (
       <View className='flex-1 items-center justify-center p-6 bg-gray-50'>
-        <Text className='text-gray-500'>Order not found</Text>
+        <Text className='font-sans text-gray-500'>Order not found</Text>
         <Pressable
           onPress={() => router.back()}
-          className='mt-4 px-4 py-2 bg-gray-900 rounded-full'
+          className='mt-4 px-4 py-2 bg-accent rounded-full'
         >
-          <Text className='text-white font-bold text-sm'>Go back</Text>
+          <Text className='font-geist-bold text-white font-bold text-sm'>Go back</Text>
         </Pressable>
       </View>
     )
@@ -226,10 +276,10 @@ export default function OrderDetail() {
             <ChevronLeft size={22} color='#111827' />
           </TouchableOpacity>
           <View className='flex-1'>
-            <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
+            <Text className='font-geist-bold text-xs font-bold tracking-widest text-gray-500 uppercase'>
               Order
             </Text>
-            <Text className='text-lg font-bold text-gray-900' numberOfLines={1}>
+            <Text className='font-geist-bold text-lg font-bold text-gray-900' numberOfLines={1}>
               Order • {shortId(order.id, 6)}
             </Text>
           </View>
@@ -248,7 +298,7 @@ export default function OrderDetail() {
                       : '#b45309'
               }
             />
-            <Text className={`text-xs font-bold tracking-widest ${s.text}`}>
+            <Text className={`font-geist-bold text-xs font-bold tracking-widest ${s.text}`}>
               {s.label}
             </Text>
           </View>
@@ -268,20 +318,20 @@ export default function OrderDetail() {
           <CardContent className='p-5'>
             <View className='flex-row justify-between items-start gap-4'>
               <View className='flex-1'>
-                <Text className='text-xs font-bold font-mono tracking-widest text-gray-400 uppercase mb-1'>
+                <Text className='font-geist-mono-bold text-xs font-bold tracking-widest text-gray-500 uppercase mb-1'>
                   Total amount
                 </Text>
-                <Text className='text-3xl font-bold font-mono tracking-tight text-gray-900'>
+                <Text className='font-geist-mono-bold text-3xl font-bold tracking-tight text-gray-900'>
                   {formatCurrency(order.total)}
                 </Text>
-                <Text className='text-xs text-gray-500 mt-1'>
+                <Text className='font-sans text-xs text-gray-500 mt-1'>
                   {order.paymentMethod?.toUpperCase()} •{' '}
                   {formatDate(order.createdAt)}
                 </Text>
               </View>
               <View className='items-end'>
-                <Text className='text-xs text-gray-400'>Status</Text>
-                <Text className='text-sm font-bold text-gray-900 capitalize mt-1'>
+                <Text className='font-sans text-xs text-gray-500'>Status</Text>
+                <Text className='font-geist-bold text-sm font-bold text-gray-900 capitalize mt-1'>
                   {order.status}
                 </Text>
               </View>
@@ -289,26 +339,26 @@ export default function OrderDetail() {
             <View className='h-px bg-gray-100 my-4' />
             <View className='flex-row justify-between gap-4'>
               <View className='flex-1'>
-                <Text className='text-xs font-bold font-mono tracking-widest text-gray-400 uppercase'>
+                <Text className='font-geist-mono-bold text-xs font-bold tracking-widest text-gray-500 uppercase'>
                   Subtotal
                 </Text>
-                <Text className='text-sm font-semibold text-gray-900 mt-1'>
+                <Text className='font-geist-semibold text-sm font-semibold text-gray-900 mt-1'>
                   {formatCurrency(order.subtotal)}
                 </Text>
               </View>
               <View className='flex-1'>
-                <Text className='text-xs font-bold font-mono tracking-widest text-gray-400 uppercase'>
+                <Text className='font-geist-mono-bold text-xs font-bold tracking-widest text-gray-500 uppercase'>
                   Tax
                 </Text>
-                <Text className='text-sm font-semibold text-gray-900 mt-1'>
+                <Text className='font-geist-semibold text-sm font-semibold text-gray-900 mt-1'>
                   {formatCurrency(order.taxAmount)}
                 </Text>
               </View>
               <View className='flex-1 items-end'>
-                <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
+                <Text className='font-geist-bold text-xs font-bold tracking-widest text-gray-500 uppercase'>
                   Items
                 </Text>
-                <Text className='text-sm font-bold text-gray-900 mt-1'>
+                <Text className='font-geist-bold text-sm font-bold text-gray-900 mt-1'>
                   {order.lines?.length || 0}
                 </Text>
               </View>
@@ -326,30 +376,30 @@ export default function OrderDetail() {
           </CardHeader>
           <CardContent className='pt-0'>
             <View className='flex-row items-center gap-3 p-3 bg-gray-50 rounded-2xl border border-gray-100'>
-              <View className='w-10 h-10 rounded-full bg-gray-900 items-center justify-center'>
-                <Text className='text-white font-bold'>
+              <View className='w-10 h-10 rounded-full bg-accent items-center justify-center'>
+                <Text className='font-geist-bold text-white font-bold'>
                   {(customer?.name || '?').charAt(0).toUpperCase()}
                 </Text>
               </View>
               <View className='flex-1'>
-                <Text className='font-bold text-gray-900'>
+                <Text className='font-geist-bold font-bold text-gray-900'>
                   {customer?.name ||
                     (order.customerId
                       ? 'Customer • ' + shortId(order.customerId, 6)
                       : 'Walk-in')}
                 </Text>
-                <Text className='text-sm text-gray-500'>
+                <Text className='font-sans text-sm text-gray-500'>
                   {customer?.phone || '-'}
                 </Text>
               </View>
               {customer?.email ? (
-                <Text className='text-xs text-gray-400' numberOfLines={1}>
+                <Text className='font-sans text-xs text-gray-500' numberOfLines={1}>
                   {customer.email}
                 </Text>
               ) : null}
             </View>
             {!order.customerId && (
-              <Text className='text-xs text-gray-400 mt-2 text-center'>
+              <Text className='font-sans text-xs text-gray-500 mt-2 text-center'>
                 No customer linked — walk-in order
               </Text>
             )}
@@ -365,7 +415,7 @@ export default function OrderDetail() {
                 <CardTitle>Items</CardTitle>
               </View>
               <View className='px-3 py-1 rounded-full bg-gray-100'>
-                <Text className='text-xs font-bold font-mono text-gray-600'>
+                <Text className='font-geist-mono-bold text-xs font-bold text-gray-600'>
                   {order.lines?.length || 0}{' '}
                   {(order.lines?.length || 0) === 1 ? 'item' : 'items'}
                 </Text>
@@ -391,25 +441,25 @@ export default function OrderDetail() {
                     </View>
                     <View className='flex-1 gap-1'>
                       <Text
-                        className='font-bold text-gray-900 text-[14px] leading-4'
+                        className='font-geist-bold font-bold text-gray-900 text-[14px] leading-4'
                         numberOfLines={2}
                       >
                         {title}
                       </Text>
                       <View className='flex-row items-center gap-2 flex-wrap'>
                         <View className='px-2 py-1 rounded-full bg-gray-100'>
-                          <Text className='text-xs font-bold text-gray-600'>
+                          <Text className='font-geist-bold text-xs font-bold text-gray-600'>
                             QTY {qty}
                           </Text>
                         </View>
-                        <Text className='text-xs text-gray-500'>× {unit}</Text>
+                        <Text className='font-sans text-xs text-gray-500'>× {unit}</Text>
                       </View>
                     </View>
                     <View className='items-end justify-center shrink-0 ml-2'>
-                      <Text className='font-bold text-gray-900 text-sm'>
+                      <Text className='font-geist-bold font-bold text-gray-900 text-sm'>
                         {total}
                       </Text>
-                      <Text className='text-xs text-gray-400'>
+                      <Text className='font-sans text-xs text-gray-500'>
                         Line total
                       </Text>
                     </View>
@@ -418,7 +468,7 @@ export default function OrderDetail() {
               })}
               {(!order.lines || order.lines.length === 0) && (
                 <View className='p-8 items-center border border-dashed border-gray-200 rounded-2xl'>
-                  <Text className='text-sm text-gray-400'>No items</Text>
+                  <Text className='font-sans text-sm text-gray-500'>No items</Text>
                 </View>
               )}
             </View>
@@ -433,28 +483,28 @@ export default function OrderDetail() {
           <CardContent>
             <View className='gap-3'>
               <View className='flex-row justify-between items-center'>
-                <Text className='text-sm text-gray-600'>Subtotal</Text>
-                <Text className='text-sm font-semibold text-gray-900'>
+                <Text className='font-sans text-sm text-gray-600'>Subtotal</Text>
+                <Text className='font-geist-semibold text-sm font-semibold text-gray-900'>
                   {formatCurrency(order.subtotal)}
                 </Text>
               </View>
               <View className='flex-row justify-between items-center'>
-                <Text className='text-sm text-gray-600'>Tax</Text>
-                <Text className='text-sm font-semibold text-gray-900'>
+                <Text className='font-sans text-sm text-gray-600'>Tax</Text>
+                <Text className='font-geist-semibold text-sm font-semibold text-gray-900'>
                   {formatCurrency(order.taxAmount)}
                 </Text>
               </View>
               <View className='h-px bg-gray-100' />
               <View className='flex-row justify-between items-center'>
-                <Text className='text-sm font-bold font-mono text-gray-900'>Total</Text>
-                <Text className='text-base font-bold font-mono text-gray-900'>
+                <Text className='font-geist-mono-bold text-sm font-bold text-gray-900'>Total</Text>
+                <Text className='font-geist-mono-bold text-base font-bold text-gray-900'>
                   {formatCurrency(order.total)}
                 </Text>
               </View>
               <View className='flex-row justify-between items-center'>
-                <Text className='text-xs text-gray-500'>Payment</Text>
+                <Text className='font-sans text-xs text-gray-500'>Payment</Text>
                 <View className='px-3 py-1 rounded-full bg-gray-100 border border-gray-200'>
-                  <Text className='text-xs font-bold tracking-widest text-gray-600'>
+                  <Text className='font-geist-bold text-xs font-bold tracking-widest text-gray-600'>
                     {(order.paymentMethod || 'cash').toUpperCase()}
                   </Text>
                 </View>
@@ -462,6 +512,70 @@ export default function OrderDetail() {
             </View>
           </CardContent>
         </Card>
+
+        {/* M-Pesa status — pending / failed / succeeded inline feedback */}
+        {paymentId && paymentStatus.data ? (
+          <Card
+            className={`border ${isPaymentFailed(paymentStatus.data.status) ? 'border-red-200' : isPaymentSucceeded(paymentStatus.data.status) ? 'border-emerald-200' : 'border-gray-200'}`}
+          >
+            <CardContent className='p-4'>
+              <View className='flex-row items-center gap-3'>
+                {paymentStatus.isFetching ? (
+                  <ActivityIndicator size='small' color='#111827' />
+                ) : isPaymentFailed(paymentStatus.data.status) ? (
+                  <XCircle size={20} color='#dc2626' />
+                ) : isPaymentSucceeded(paymentStatus.data.status) ? (
+                  <CheckCircle size={20} color='#059669' />
+                ) : (
+                  <Clock size={20} color='#6b7280' />
+                )}
+                <View className='flex-1'>
+                  <Text className='font-geist-bold text-sm font-bold text-gray-900'>
+                    {isPaymentFailed(paymentStatus.data.status)
+                      ? 'M-Pesa failed'
+                      : isPaymentSucceeded(paymentStatus.data.status)
+                        ? 'M-Pesa succeeded'
+                        : 'Waiting for M-Pesa…'}
+                  </Text>
+                  <Text className='font-sans text-xs text-gray-500 mt-0.5'>
+                    {isPaymentFailed(paymentStatus.data.status)
+                      ? paymentError || paymentFailureMessage(paymentStatus.data)
+                      : isPaymentSucceeded(paymentStatus.data.status)
+                        ? 'Payment confirmed.'
+                        : 'Check the phone for the STK prompt and enter PIN. Cancelling on the phone marks this as failed.'}
+                  </Text>
+                </View>
+              </View>
+              <View className='flex-row gap-2 mt-3'>
+                {isPaymentFailed(paymentStatus.data.status) ? (
+                  <TouchableOpacity
+                    className='flex-1 bg-accent py-3 rounded-2xl items-center'
+                    onPress={() => {
+                      setPaymentId(null)
+                      setPaymentError(null)
+                      failureNotifiedRef.current = null
+                      paymentStatus.remove?.()
+                    }}
+                  >
+                    <Text className='font-geist-bold text-white font-bold text-sm'>
+                      Retry M-Pesa
+                    </Text>
+                  </TouchableOpacity>
+                ) : !isPaymentSucceeded(paymentStatus.data.status) ? (
+                  <TouchableOpacity
+                    className='flex-1 bg-white border border-gray-200 py-3 rounded-2xl items-center'
+                    onPress={handleCancelPayment}
+                    disabled={isCancelling}
+                  >
+                    <Text className='font-geist-bold text-gray-900 font-bold text-sm'>
+                      {isCancelling ? 'Cancelling…' : 'Cancel request'}
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            </CardContent>
+          </Card>
+        ) : null}
 
         {/* Actions — impeccable 2x2 */}
         <Card className='border border-gray-200'>
@@ -473,12 +587,12 @@ export default function OrderDetail() {
               <View className='flex-row gap-3'>
                 {isDraft && (
                   <TouchableOpacity
-                    className='flex-1 flex-row items-center justify-center gap-2 bg-gray-900 px-4 py-4 rounded-2xl active:opacity-90'
+                    className='flex-1 flex-row items-center justify-center gap-2 bg-accent px-4 py-4 rounded-2xl active:opacity-90'
                     onPress={() => handleUpdateStatus(OrderStatus.confirmed)}
                     disabled={isUpdating}
                   >
                     <Check size={18} color='white' />
-                    <Text className='text-white font-bold text-sm'>
+                    <Text className='font-geist-bold text-white font-bold text-sm'>
                       {isUpdating ? 'Updating…' : 'Confirm Order'}
                     </Text>
                   </TouchableOpacity>
@@ -490,7 +604,7 @@ export default function OrderDetail() {
                     disabled={isUpdating}
                   >
                     <CheckCircle size={18} color='white' />
-                    <Text className='text-white font-bold text-sm'>
+                    <Text className='font-geist-bold text-white font-bold text-sm'>
                       {isUpdating ? 'Fulfilling…' : 'Fulfill Order'}
                     </Text>
                   </TouchableOpacity>
@@ -500,14 +614,14 @@ export default function OrderDetail() {
                   isDraft === false &&
                   isConfirmed === false && (
                     <View className='flex-1 bg-gray-100 border border-gray-200 px-4 py-4 rounded-2xl items-center'>
-                      <Text className='text-gray-500 font-bold text-sm'>
+                      <Text className='font-geist-bold text-gray-500 font-bold text-sm'>
                         {order.status.toUpperCase()}
                       </Text>
                     </View>
                   )}
                 {isFulfilled || isCancelled ? (
                   <View className='flex-1 bg-gray-50 border border-gray-200 px-4 py-4 rounded-2xl items-center'>
-                    <Text className='text-gray-400 font-bold text-sm'>
+                    <Text className='font-geist-bold text-gray-500 font-bold text-sm'>
                       No further status
                     </Text>
                   </View>
@@ -519,7 +633,7 @@ export default function OrderDetail() {
                     disabled={isUpdating}
                   >
                     <Trash2 size={18} color='#dc2626' />
-                    <Text className='text-red-600 font-bold text-sm'>
+                    <Text className='font-geist-bold text-red-600 font-bold text-sm'>
                       Cancel
                     </Text>
                   </TouchableOpacity>
@@ -533,35 +647,35 @@ export default function OrderDetail() {
                     disabled={isInitiating}
                   >
                     <Smartphone size={18} color='#111827' />
-                    <Text className='text-gray-900 font-bold text-sm'>
+                    <Text className='font-geist-bold text-gray-900 font-bold text-sm'>
                       {isInitiating ? 'Sending…' : 'M-Pesa'}
                     </Text>
                   </TouchableOpacity>
                 ) : (
                   <View className='flex-1 flex-row items-center justify-center gap-2 bg-gray-100 border border-gray-200 px-4 py-4 rounded-2xl opacity-50'>
-                    <Smartphone size={18} color='#9ca3af' />
-                    <Text className='text-gray-400 font-bold text-sm'>
+                    <Smartphone size={18} color='#6b7280' />
+                    <Text className='font-geist-bold text-gray-500 font-bold text-sm'>
                       M-Pesa disabled
                     </Text>
                   </View>
                 )}
                 <TouchableOpacity
                   className='flex-1 flex-row items-center justify-center gap-2 bg-white border border-gray-200 px-4 py-4 rounded-2xl active:bg-gray-50'
-                  onPress={() => router.push('/invoices' as any)}
+                  onPress={() => router.push('/(tabs)/sales/invoices' as any)}
                 >
                   <CreditCard size={18} color='#111827' />
-                  <Text className='text-gray-900 font-bold text-sm'>
+                  <Text className='font-geist-bold text-gray-900 font-bold text-sm'>
                     Invoices
                   </Text>
                 </TouchableOpacity>
               </View>
               {isFulfilled && (
-                <Text className='text-xs text-center text-gray-400'>
+                <Text className='font-sans text-xs text-center text-gray-500'>
                   Fulfilled — M-Pesa and status changes disabled
                 </Text>
               )}
               {isCancelled && (
-                <Text className='text-xs text-center text-gray-400'>
+                <Text className='font-sans text-xs text-center text-gray-500'>
                   Cancelled — no further actions
                 </Text>
               )}

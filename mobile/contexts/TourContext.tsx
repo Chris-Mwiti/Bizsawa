@@ -54,8 +54,8 @@ export const TOUR_STEPS: TourStep[] = [
     description:
       'BizSawa helps you make sales, take orders, send invoices and track stock — with or without internet. Take a quick 60-second look to see where everything is.',
     icon: Sparkles,
-    color: '#111827',
-    bg: 'bg-gray-900',
+    color: '#006B5F',
+    bg: 'bg-accent',
     tips: [
       'Works without internet — updates when you are back online',
       'All prices show in Kenya Shillings (KES)',
@@ -87,8 +87,12 @@ export const TOUR_STEPS: TourStep[] = [
     icon: Package,
     color: '#0369a1',
     bg: 'bg-sky-600',
-    route: '/orders',
-    tips: ['See what each customer ordered', 'Accept M-Pesa or Cash', 'Follow each order until it is done'],
+    route: '/(tabs)/sales/orders',
+    tips: [
+      'See what each customer ordered',
+      'Accept M-Pesa or Cash',
+      'Follow each order until it is done',
+    ],
   },
   {
     id: 'invoices',
@@ -99,7 +103,7 @@ export const TOUR_STEPS: TourStep[] = [
     icon: FileText,
     color: '#7c3aed',
     bg: 'bg-violet-600',
-    route: '/invoices',
+    route: '/(tabs)/sales/invoices',
     tips: [
       'See names, not confusing codes',
       'One payment can clear several bills',
@@ -160,8 +164,8 @@ export const TOUR_STEPS: TourStep[] = [
     description:
       'See your business name and location at the top. Tap Edit to update business details like phone or address, and tap your avatar to update your name or password. Changes are saved even when offline and update when you are back online.',
     icon: User,
-    color: '#111827',
-    bg: 'bg-gray-900',
+    color: '#006B5F',
+    bg: 'bg-accent',
     route: '/(tabs)/profile',
     tips: [
       'Update business info in one tap',
@@ -313,8 +317,8 @@ function TourOverlay() {
     if (!route) return null
     const map: Record<string, string> = {
       '/(tabs)/sales': 'Sales',
-      '/orders': 'Orders',
-      '/invoices': 'Invoices',
+      '/(tabs)/sales/orders': 'Orders',
+      '/(tabs)/sales/invoices': 'Invoices',
       '/(tabs)/stock': 'Stock',
       '/(tabs)/insights/analytics': 'Insights',
       '/(tabs)/insights/expenses': 'Expenses',
@@ -339,7 +343,7 @@ function TourOverlay() {
           <View className='px-6 pt-4'>
             <View className='flex-row items-center justify-between mb-3'>
               <View className='flex-row items-center gap-2'>
-                <View className='w-11 h-11 rounded-full bg-gray-900 items-center justify-center'>
+                <View className='w-11 h-11 rounded-full bg-accent items-center justify-center'>
                   <HelpCircle size={16} color='white' />
                 </View>
                 <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
@@ -357,7 +361,7 @@ function TourOverlay() {
               {TOUR_STEPS.map((_, i) => (
                 <View
                   key={i}
-                  className={`flex-1 h-1.5 rounded-full ${i <= currentStep ? 'bg-gray-900' : 'bg-gray-200'}`}
+                  className={`flex-1 h-1.5 rounded-full ${i <= currentStep ? 'bg-accent' : 'bg-gray-200'}`}
                 />
               ))}
             </View>
@@ -396,7 +400,7 @@ function TourOverlay() {
               </View>
             ) : null}
             {friendlyName ? (
-              <View className='flex-row items-center gap-2 px-3 py-2 rounded-full bg-gray-900 self-start'>
+              <View className='flex-row items-center gap-2 px-3 py-2 rounded-full bg-accent self-start'>
                 <Smartphone size={12} color='white' />
                 <Text className='text-xs font-bold text-white'>
                   Find it in {friendlyName}
@@ -423,7 +427,7 @@ function TourOverlay() {
             )}
             <TouchableOpacity
               onPress={next}
-              className='flex-[2] py-4 rounded-2xl bg-gray-900 items-center flex-row justify-center gap-2'
+              className='flex-[2] py-4 rounded-2xl bg-accent items-center flex-row justify-center gap-2'
             >
               <Text className='font-bold text-white'>
                 {isLast ? 'Finish tour' : 'Next'}

@@ -11,10 +11,11 @@ import {
   Card,
   CardContent,
   CardHeader,
-  CardTitle,
+  SectionHeader,
 } from '../../../components/ui/Card'
 import { useAnalytics } from '../../../hooks/api/useAnalytics'
 import { TAB_BAR_SCROLL_PADDING } from '../../../constants/tabBar'
+import { formatCompactCurrency } from '../../../lib/format'
 import type { Timeframe } from '../../../hooks/api/useAnalytics'
 import {
   BarChart,
@@ -53,7 +54,7 @@ export default function InsightsAnalytics() {
   const Loading = () => (
     <View className='items-center py-8'>
       <ActivityIndicator color='#111827' />
-      <Text className='text-xs text-gray-500 mt-2'>Loading…</Text>
+      <Text className='font-sans text-xs text-gray-500 mt-2'>Loading…</Text>
     </View>
   )
 
@@ -61,14 +62,14 @@ export default function InsightsAnalytics() {
     return (
       <View className='flex-1 bg-gray-50 items-center justify-center px-6'>
         <ActivityIndicator color='#111827' />
-        <Text className='text-sm text-gray-500 mt-2'>Loading business…</Text>
+        <Text className='font-sans text-sm text-gray-500 mt-2'>Loading business…</Text>
       </View>
     )
   if (!hasBusiness)
     return (
       <View className='flex-1 bg-gray-50 items-center justify-center px-6'>
-        <Text className='font-bold text-gray-900'>No business selected</Text>
-        <Text className='text-sm text-gray-500 mt-1 text-center'>
+        <Text className='font-geist-bold font-bold text-gray-900'>No business selected</Text>
+        <Text className='font-sans text-sm text-gray-500 mt-1 text-center'>
           Create or select a business to view analytics.
         </Text>
       </View>
@@ -89,10 +90,10 @@ export default function InsightsAnalytics() {
           <CardContent className='py-3'>
             <View className='gap-3'>
               <View className='flex-row items-center justify-between'>
-                <Text className='text-sm font-semibold text-gray-700'>
+                <Text className='font-geist-semibold text-sm font-semibold text-gray-700'>
                   Timeframe
                 </Text>
-                <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
+                <Text className='font-geist-bold text-xs font-bold tracking-widest text-gray-500 uppercase'>
                   {timeframe}
                 </Text>
               </View>
@@ -143,7 +144,7 @@ export default function InsightsAnalytics() {
                         minWidth: 0,
                       }}
                     >
-                      <Text
+                      <Text className="font-sans"
                         numberOfLines={1}
                         style={{
                           fontSize: 12,
@@ -168,7 +169,7 @@ export default function InsightsAnalytics() {
             {
               label: 'Total revenue',
               value: revenueQuery.data
-                ? formatCurrency(revenueQuery.data.totalRevenue)
+                ? formatCompactCurrency(revenueQuery.data.totalRevenue)
                 : '—',
               sub: revenueQuery.data
                 ? `${revenueQuery.data.growthRate >= 0 ? '+' : ''}${Number(revenueQuery.data.growthRate).toFixed(1)}% growth`
@@ -178,7 +179,7 @@ export default function InsightsAnalytics() {
             {
               label: 'Total profit',
               value: profitQuery.data
-                ? formatCurrency(profitQuery.data.totalProfit)
+                ? formatCompactCurrency(profitQuery.data.totalProfit)
                 : '—',
               sub: profitQuery.data
                 ? `${Number(profitQuery.data.avgMargin).toFixed(1)}% margin`
@@ -205,18 +206,26 @@ export default function InsightsAnalytics() {
             <View key={k.label} className='w-[48%]'>
               <Card className='border border-gray-200'>
                 <CardContent className='p-4'>
-                  <View className='flex-row justify-between items-start mb-2'>
-                    <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
+                  <View className='flex-row items-center gap-2 mb-2'>
+                    <View className='w-9 h-9 rounded-xl bg-accent-soft items-center justify-center shrink-0'>
+                      <k.icon size={15} color='#006B5F' />
+                    </View>
+                    <Text
+                      className='font-geist-bold text-xs font-bold tracking-widest text-gray-500 uppercase flex-1'
+                      numberOfLines={1}
+                    >
                       {k.label}
                     </Text>
-                    <View className='w-11 h-11 rounded-2xl bg-gray-50 border border-gray-100 items-center justify-center'>
-                      <k.icon size={14} color='#6b7280' />
-                    </View>
                   </View>
-                  <Text className='text-lg font-bold tracking-tight text-gray-900 font-mono'>
+                  <Text
+                    className='font-geist-mono-bold text-lg font-bold tracking-tight text-gray-900'
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.7}
+                  >
                     {k.value}
                   </Text>
-                  <Text className='text-xs text-gray-500 mt-1'>{k.sub}</Text>
+                  <Text className='font-sans text-xs text-gray-500 mt-1'>{k.sub}</Text>
                 </CardContent>
               </Card>
             </View>
@@ -224,9 +233,11 @@ export default function InsightsAnalytics() {
         </View>
 
         <Card className='border border-gray-200'>
-          <CardHeader className='flex-row items-center gap-2'>
-            <BarChart3 size={16} color='#111827' />
-            <CardTitle>Revenue • {timeframe}</CardTitle>
+          <CardHeader>
+            <SectionHeader
+              icon={BarChart3}
+              title={`Revenue • ${timeframe}`}
+            />
           </CardHeader>
           <CardContent className='pt-0'>
             {revenueQuery.isLoading ? (
@@ -242,7 +253,7 @@ export default function InsightsAnalytics() {
                 showValues
               />
             ) : (
-              <Text className='text-sm text-gray-500 py-6 text-center'>
+              <Text className='font-sans text-sm text-gray-500 py-6 text-center'>
                 No revenue data
               </Text>
             )}
@@ -251,10 +262,11 @@ export default function InsightsAnalytics() {
 
         <Card className='border border-gray-200'>
           <CardHeader>
-            <CardTitle>Trend • switch</CardTitle>
-            <Text className='text-xs text-gray-500'>
-              revenue / profit / margin — one line
-            </Text>
+            <SectionHeader
+              icon={TrendingUp}
+              title='Trend • switch'
+              subtitle='revenue / profit / margin — one line'
+            />
           </CardHeader>
           <CardContent className='pt-0'>
             {revenueQuery.isLoading || profitQuery.isLoading ? (
@@ -277,7 +289,10 @@ export default function InsightsAnalytics() {
 
         <Card className='border border-gray-200'>
           <CardHeader>
-            <CardTitle>Profit & margin</CardTitle>
+            <SectionHeader
+              icon={TrendingUp}
+              title='Profit & margin'
+            />
           </CardHeader>
           <CardContent className='pt-0'>
             {profitQuery.isLoading ? (
@@ -289,14 +304,14 @@ export default function InsightsAnalytics() {
                     key={i}
                     className='flex-row justify-between items-center p-3 rounded-2xl bg-gray-50 border border-gray-100'
                   >
-                    <Text className='text-xs font-semibold text-gray-700'>
+                    <Text className='font-geist-semibold text-xs font-semibold text-gray-700'>
                       {pt.date.split('T')[0].slice(5)}
                     </Text>
                     <View className='flex-row gap-3'>
-                      <Text className='text-xs font-bold font-mono text-emerald-700'>
+                      <Text className='font-geist-mono-bold text-xs font-bold text-emerald-700'>
                         {formatCurrency(Number(pt.profit))}
                       </Text>
-                      <Text className='text-xs font-bold text-gray-500'>
+                      <Text className='font-geist-bold text-xs font-bold text-gray-500'>
                         {Number(pt.margin).toFixed(1)}%
                       </Text>
                     </View>
@@ -304,7 +319,7 @@ export default function InsightsAnalytics() {
                 ))}
               </View>
             ) : (
-              <Text className='text-sm text-gray-500 py-6 text-center'>
+              <Text className='font-sans text-sm text-gray-500 py-6 text-center'>
                 No profit data
               </Text>
             )}
@@ -312,9 +327,8 @@ export default function InsightsAnalytics() {
         </Card>
 
         <Card className='border border-gray-200'>
-          <CardHeader className='flex-row items-center gap-2'>
-            <PieChart size={16} color='#111827' />
-            <CardTitle>Category sales • pie</CardTitle>
+          <CardHeader>
+            <SectionHeader icon={PieChart} title='Category sales • pie' />
           </CardHeader>
           <CardContent className='pt-0'>
             {categoryQuery.isLoading ? (
@@ -327,7 +341,7 @@ export default function InsightsAnalytics() {
                 size={170}
               />
             ) : (
-              <Text className='text-sm text-gray-500 py-6 text-center'>
+              <Text className='font-sans text-sm text-gray-500 py-6 text-center'>
                 No category data
               </Text>
             )}
@@ -336,7 +350,10 @@ export default function InsightsAnalytics() {
 
         <Card className='border border-gray-200'>
           <CardHeader>
-            <CardTitle>Category performance</CardTitle>
+            <SectionHeader
+              icon={PieChart}
+              title='Category performance'
+            />
           </CardHeader>
           <CardContent className='pt-0'>
             {categoryQuery.isLoading ? (
@@ -346,12 +363,12 @@ export default function InsightsAnalytics() {
                 {categoryQuery.data.categories.map((cat, i) => (
                   <View key={i} className='gap-2'>
                     <View className='flex-row justify-between items-center'>
-                      <Text className='text-sm font-semibold text-gray-900'>
+                      <Text className='font-geist-semibold text-sm font-semibold text-gray-900'>
                         {cat.name}
                       </Text>
-                      <Text className='text-xs font-bold font-mono text-gray-900'>
+                      <Text className='font-geist-mono-bold text-xs font-bold text-gray-900'>
                         {formatCurrency(Number(cat.revenue))}{' '}
-                        <Text className='font-normal text-gray-500'>
+                        <Text className='font-sans font-normal text-gray-500'>
                           ({Number(cat.percentage).toFixed(1)}%)
                         </Text>
                       </Text>
@@ -361,14 +378,14 @@ export default function InsightsAnalytics() {
                         style={{
                           width: `${Math.min(Number(cat.percentage), 100)}%`,
                         }}
-                        className='h-2 bg-gray-900 rounded-full'
+                        className='h-2 bg-accent rounded-full'
                       />
                     </View>
                   </View>
                 ))}
               </View>
             ) : (
-              <Text className='text-sm text-gray-500 py-6 text-center'>
+              <Text className='font-sans text-sm text-gray-500 py-6 text-center'>
                 No category data
               </Text>
             )}
@@ -377,7 +394,7 @@ export default function InsightsAnalytics() {
 
         <Card className='border border-gray-200'>
           <CardHeader>
-            <CardTitle>Customer segments</CardTitle>
+            <SectionHeader icon={Users} title='Customer segments' />
           </CardHeader>
           <CardContent className='pt-0'>
             {customerQuery.isLoading ? (
@@ -390,21 +407,21 @@ export default function InsightsAnalytics() {
                     className='p-3 rounded-2xl bg-white border border-gray-200'
                   >
                     <View className='flex-row justify-between'>
-                      <Text className='text-sm font-bold text-gray-900'>
+                      <Text className='font-geist-bold text-sm font-bold text-gray-900'>
                         {seg.segment}
                       </Text>
-                      <Text className='text-xs text-gray-500'>
+                      <Text className='font-sans text-xs text-gray-500'>
                         {seg.count} customers
                       </Text>
                     </View>
                     <View className='flex-row gap-3 mt-1'>
                       <Text
-                        className={`text-xs font-bold ${Number(seg.growth) >= 0 ? 'text-emerald-700' : 'text-red-700'}`}
+                        className={`font-geist-bold text-xs font-bold ${Number(seg.growth) >= 0 ? 'text-emerald-700' : 'text-red-700'}`}
                       >
                         {Number(seg.growth) >= 0 ? '+' : ''}
                         {Number(seg.growth).toFixed(1)}% growth
                       </Text>
-                      <Text className='text-xs text-gray-600'>
+                      <Text className='font-sans text-xs text-gray-600'>
                         AOV {formatCurrency(Number(seg.avgOrderValue))}
                       </Text>
                     </View>
@@ -412,7 +429,7 @@ export default function InsightsAnalytics() {
                 ))}
               </View>
             ) : (
-              <Text className='text-sm text-gray-500 py-6 text-center'>
+              <Text className='font-sans text-sm text-gray-500 py-6 text-center'>
                 No customer data
               </Text>
             )}

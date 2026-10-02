@@ -2,6 +2,7 @@ import type { BottomTabBarProps } from '@react-navigation/bottom-tabs'
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Receipt, Package, BarChart3, User, Home } from 'lucide-react-native'
+import { useNavigationGate } from '../lib/navigation/NavigationGate'
 
 const COLORS = {
   surface: '#F4F9F7',
@@ -19,6 +20,15 @@ const HOME_CIRCLE = 56
 const HOME_LIFT = -28
 
 type RouteName = 'sales' | 'stock' | 'index' | 'insights' | 'profile'
+
+/** Hrefs the gate warms before a tab switch, keyed by tab route name. */
+const TAB_HREFS: Record<RouteName, string> = {
+  sales: '/(tabs)/sales',
+  stock: '/(tabs)/stock',
+  index: '/(tabs)',
+  insights: '/(tabs)/insights/overview',
+  profile: '/(tabs)/profile',
+}
 
 function TabIcon({
   routeName,
@@ -50,6 +60,8 @@ export function AppTabBar({
   navigation,
 }: BottomTabBarProps) {
   const insets = useSafeAreaInsets()
+  // Hold the current tab and show the top indicator until the destination is warm.
+  const { gate } = useNavigationGate()
   /** Safe area + breathing room above system home indicator */
   const bottomPad = Math.max(insets.bottom, 12) + 10
 
@@ -80,7 +92,13 @@ export function AppTabBar({
               target: route.key,
               canPreventDefault: true,
             })
-            if (!isFocused && !event.defaultPrevented) {
+            if (isFocused || event.defaultPrevented) return
+            const href = TAB_HREFS[routeName]
+            if (href) {
+              gate(href, 'navigate', () =>
+                navigation.navigate(route.name, route.params),
+              )
+            } else {
               navigation.navigate(route.name, route.params)
             }
           }
@@ -150,7 +168,7 @@ export function AppTabBar({
                 <View style={styles.iconWrap}>
                   <TabIcon routeName={routeName} focused={secondaryFocused} />
                 </View>
-                <Text
+                <Text className="font-sans"
                   style={[
                     styles.label,
                     secondaryFocused

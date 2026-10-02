@@ -1,5 +1,6 @@
 import { useCallback } from 'react'
-import { usePathname, useRouter } from 'expo-router'
+import { usePathname } from 'expo-router'
+import { useNavigationGate } from '../lib/navigation/NavigationGate'
 
 export type SwipeDirection = 'left' | 'right'
 
@@ -15,8 +16,10 @@ export interface SwipeRoute {
  * right = prev route
  */
 export function useSwipeNavigation(routes: SwipeRoute[]) {
-  const router = useRouter()
   const pathname = usePathname()
+  // Swipes are page navigations like any other — hold the current page and show the
+  // top indicator while the destination warms up.
+  const { gate } = useNavigationGate()
 
   const currentIndex = (() => {
     // Match by pathname inclusion — handles nested routes like /insights/analytics
@@ -41,17 +44,17 @@ export function useSwipeNavigation(routes: SwipeRoute[]) {
     (dir: SwipeDirection) => {
       if (dir === 'left' && canSwipeLeft) {
         const next = routes[currentIndex + 1]
-        router.replace(next.href as any)
+        gate(next.href, 'replace')
         return true
       }
       if (dir === 'right' && canSwipeRight) {
         const prev = routes[currentIndex - 1]
-        router.replace(prev.href as any)
+        gate(prev.href, 'replace')
         return true
       }
       return false
     },
-    [canSwipeLeft, canSwipeRight, currentIndex, router, routes],
+    [canSwipeLeft, canSwipeRight, currentIndex, gate, routes],
   )
 
   return { swipe, canSwipeLeft, canSwipeRight, currentIndex }

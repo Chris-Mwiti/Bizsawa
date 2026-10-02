@@ -3,6 +3,11 @@
   "compilerOptions": {
     "strict": true,
     "noImplicitAny": false,
+    // lib/theme/palette.js is the machine-readable source of truth for every
+    // colour, shared verbatim with tailwind.config.js. It is plain CJS so both
+    // can read it; allowJs lets colors.ts import it without a duplicate copy.
+    "allowJs": true,
+    "checkJs": false,
     "experimentalDecorators": true,
     "emitDecoratorMetadata": false,
     "useDefineForClassFields": false

@@ -110,15 +110,15 @@ export default function OnboardingScreen() {
         {/* Header Section */}
         <View className='mb-6 max-w-sm'>
           <View className='flex-row items-center bg-[#50616b]/5 self-start px-3 py-1.5 rounded-full mb-4 border border-[#73787b]/20'>
-            <View className='w-1.5 h-1.5 bg-[#006b5f] rounded-full mr-2' />
-            <Text className='text-xs font-bold text-[#43474b] tracking-widest uppercase'>
+            <View className='w-1.5 h-1.5 bg-accent rounded-full mr-2' />
+            <Text className='font-geist-bold text-xs font-bold text-[#43474b] tracking-widest uppercase'>
               {item.badge}
             </Text>
           </View>
-          <Text className='text-3xl font-bold text-[#131b2e] mb-3 leading-tight'>
+          <Text className='font-geist-bold text-3xl font-bold text-[#131b2e] mb-3 leading-tight'>
             {item.title}
           </Text>
-          <Text className='text-[#43474b] text-base leading-relaxed'>
+          <Text className='font-sans text-[#43474b] text-base leading-relaxed'>
             {item.description}
           </Text>
         </View>
@@ -135,14 +135,14 @@ export default function OnboardingScreen() {
           }}
         >
           <View className='flex-row items-start gap-4'>
-            <View className='w-12 h-12 bg-[#006b5f]/5 rounded-2xl items-center justify-center shrink-0'>
+            <View className='w-12 h-12 bg-accent/5 rounded-2xl items-center justify-center shrink-0'>
               <IconComponent size={24} color='#006b5f' />
             </View>
             <View className='flex-1'>
-              <Text className='text-xl font-bold text-[#131b2e] mb-2'>
+              <Text className='font-geist-bold text-xl font-bold text-[#131b2e] mb-2'>
                 {item.featureTitle}
               </Text>
-              <Text className='text-[#43474b] text-sm leading-relaxed'>
+              <Text className='font-sans text-[#43474b] text-sm leading-relaxed'>
                 {item.featureDescription}
               </Text>
             </View>
@@ -164,7 +164,7 @@ export default function OnboardingScreen() {
             style={{ width: 32, height: 32 }}
             resizeMode='contain'
           />
-          <Text className='ml-2 font-bold text-2xl text-[#131b2e] tracking-tight'>
+          <Text className='font-geist-bold ml-2 font-bold text-2xl text-[#131b2e] tracking-tight'>
             BizSawa
           </Text>
         </View>
@@ -238,7 +238,7 @@ export default function OnboardingScreen() {
             <>
               <TouchableOpacity
                 onPress={handleNext}
-                className='w-full bg-[#006b5f] py-4 rounded-full flex-row items-center justify-center shadow-lg'
+                className='w-full bg-accent py-4 rounded-full flex-row items-center justify-center shadow-lg'
                 style={{
                   shadowColor: '#006b5f',
                   shadowOffset: { width: 0, height: 4 },
@@ -247,7 +247,7 @@ export default function OnboardingScreen() {
                   elevation: 4,
                 }}
               >
-                <Text className='text-white font-bold text-lg mr-2'>
+                <Text className='font-geist-bold text-white font-bold text-lg mr-2'>
                   Continue
                 </Text>
                 <ArrowRight size={20} color='white' />
@@ -256,9 +256,9 @@ export default function OnboardingScreen() {
                 onPress={finishOnboarding}
                 className='w-full py-2 items-center justify-center'
               >
-                <Text className='text-[#43474b] font-medium text-base'>
+                <Text className='font-geist-medium text-[#43474b] font-medium text-base'>
                   Already have an account?{' '}
-                  <Text className='text-[#006b5f] font-bold'>Sign In</Text>
+                  <Text className='font-geist-bold text-accent font-bold'>Sign In</Text>
                 </Text>
               </TouchableOpacity>
             </>
@@ -270,12 +270,12 @@ export default function OnboardingScreen() {
                 onPress={finishOnboarding}
                 className='w-1/3 py-4 items-center justify-center rounded-full border border-[#c3c7cb]/50 bg-white'
               >
-                <Text className='text-[#43474b] font-bold text-base'>Skip</Text>
+                <Text className='font-geist-bold text-[#43474b] font-bold text-base'>Skip</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 onPress={handleNext}
-                className='flex-1 bg-[#006b5f] py-4 rounded-full flex-row items-center justify-center shadow-lg'
+                className='flex-1 bg-accent py-4 rounded-full flex-row items-center justify-center shadow-lg'
                 style={{
                   shadowColor: '#006b5f',
                   shadowOffset: { width: 0, height: 4 },
@@ -284,7 +284,7 @@ export default function OnboardingScreen() {
                   elevation: 4,
                 }}
               >
-                <Text className='text-white font-bold text-lg mr-2'>Next</Text>
+                <Text className='font-geist-bold text-white font-bold text-lg mr-2'>Next</Text>
                 <ArrowRight size={20} color='white' />
               </TouchableOpacity>
             </View>
@@ -293,7 +293,7 @@ export default function OnboardingScreen() {
           {currentIndex === ONBOARDING_DATA.length - 1 && (
             <TouchableOpacity
               onPress={finishOnboarding}
-              className='w-full bg-[#006b5f] py-4 rounded-full flex-row items-center justify-center shadow-lg'
+              className='w-full bg-accent py-4 rounded-full flex-row items-center justify-center shadow-lg'
               style={{
                 shadowColor: '#006b5f',
                 shadowOffset: { width: 0, height: 4 },
@@ -302,7 +302,7 @@ export default function OnboardingScreen() {
                 elevation: 4,
               }}
             >
-              <Text className='text-white font-bold text-lg mr-2'>
+              <Text className='font-geist-bold text-white font-bold text-lg mr-2'>
                 Get Started
               </Text>
               <ArrowRight size={20} color='white' />

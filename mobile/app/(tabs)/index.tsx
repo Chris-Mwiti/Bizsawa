@@ -28,6 +28,7 @@ import {
   CardContent,
   CardHeader,
 } from '../../components/ui/Card'
+import { Button } from '../../components/ui/Button'
 import { DashboardSkeleton } from '../../components/ui/Skeleton'
 import { useAuth } from '../../contexts/AuthContext'
 import { useAnalytics } from '../../hooks/api/useAnalytics'
@@ -168,7 +169,7 @@ export default function Dashboard() {
 
         <View className='flex-row gap-2 mt-4 flex-wrap'>
           {[
-            { label: 'Orders', href: '/orders' as const },
+            { label: 'Orders', href: '/(tabs)/sales/orders' as const },
             { label: 'Expenses', href: '/(tabs)/insights/expenses' as const },
             { label: 'Analytics', href: '/(tabs)/insights/analytics' as const },
           ].map((p) => (
@@ -185,24 +186,25 @@ export default function Dashboard() {
         </View>
       </View>
 
-      {/* Primary actions — 48pt, ink */}
+      {/* Primary actions — same component, same size, always uniform */}
       <View className='flex-row gap-3'>
-        <TouchableOpacity
+        <Button
           onPress={() => router.push('/(tabs)/sales?action=new-sale')}
-          className='flex-1 bg-gray-900 py-4 rounded-2xl flex-row items-center justify-center gap-2 active:opacity-90'
+          className='flex-1'
         >
           <Plus size={18} color='white' />
-          <Text className='text-white font-bold text-sm'>Add Sale</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
+          <Text className='font-geist-bold text-white font-bold text-sm'>Add Sale</Text>
+        </Button>
+        <Button
+          variant='secondary'
           onPress={() => router.push('/(tabs)/insights/expenses')}
-          className='flex-1 bg-white border border-gray-200 py-4 rounded-2xl flex-row items-center justify-center gap-2'
+          className='flex-1'
         >
-          <Plus size={18} color='#111827' />
-          <Text className='text-gray-900 font-bold text-sm'>
+          <Plus size={18} color='#0E1F1C' />
+          <Text className='font-geist-bold text-ink font-bold text-sm'>
             Add Expense
           </Text>
-        </TouchableOpacity>
+        </Button>
       </View>
 
       {/* Metrics — restrained, not hero-metric cliché */}
@@ -282,7 +284,7 @@ export default function Dashboard() {
           <View className='h-2 bg-gray-100 rounded-full overflow-hidden'>
             <View
               style={{ width: `${Math.min(Math.abs(weeklyGrowth) * 4, 100)}%` }}
-              className={`h-2 ${weeklyGrowth >= 0 ? 'bg-gray-900' : 'bg-red-600'} rounded-full`}
+              className={`h-2 ${weeklyGrowth >= 0 ? 'bg-accent' : 'bg-red-600'} rounded-full`}
             />
           </View>
           <Text className='text-xs text-gray-500 mt-2'>
@@ -359,7 +361,7 @@ export default function Dashboard() {
       <Card className='border border-gray-200'>
         <CardHeader className='flex-row items-center justify-between'>
           <View className='flex-row items-center gap-2'>
-            <View className='w-11 h-11 rounded-full bg-gray-900 items-center justify-center'>
+            <View className='w-11 h-11 rounded-full bg-accent items-center justify-center'>
               <Text className='text-white text-xs font-bold'>AI</Text>
             </View>
             <Text className='text-sm font-bold text-gray-900'>AI Insights</Text>
@@ -394,7 +396,7 @@ export default function Dashboard() {
               </Text>
               <TouchableOpacity
                 onPress={() => fetchAIInsights()}
-                className='self-start mt-3 px-3 py-2 bg-gray-900 rounded-full'
+                className='self-start mt-3 px-3 py-2 bg-accent rounded-full'
               >
                 <Text className='text-white text-xs font-bold'>Generate</Text>
               </TouchableOpacity>
@@ -437,7 +439,7 @@ export default function Dashboard() {
                       {tip.title}
                     </Text>
                     <View
-                      className={`px-2 py-1 rounded-full ${tip.impact === 'High' ? 'bg-gray-900' : 'bg-white border border-gray-200'}`}
+                      className={`px-2 py-1 rounded-full ${tip.impact === 'High' ? 'bg-accent' : 'bg-white border border-gray-200'}`}
                     >
                       <Text
                         className={`text-xs font-bold ${tip.impact === 'High' ? 'text-white' : 'text-gray-600'}`}

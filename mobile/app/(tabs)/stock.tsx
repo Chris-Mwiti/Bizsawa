@@ -4,15 +4,9 @@ import {
   View,
   Text,
   TouchableOpacity,
-  Modal,
   TextInput,
   Alert,
-  ActivityIndicator,
   Pressable,
-  KeyboardAvoidingView,
-  Platform,
-  Keyboard,
-  TouchableWithoutFeedback,
 } from 'react-native'
 import {
   Package,
@@ -28,12 +22,15 @@ import {
   CardContent,
   CardHeader,
 } from '../../components/ui/Card'
+import { Sheet } from '../../components/ui/Sheet'
+import { Button } from '../../components/ui/Button'
 import { TAB_BAR_SCROLL_PADDING } from '../../constants/tabBar'
 import { SuccessCelebration } from '../../components/ui/SuccessCelebration'
 import { DashboardSkeleton } from '../../components/ui/Skeleton'
 import { useProducts } from '../../hooks/api/useProducts'
 import { useInventory } from '../../hooks/api/useInventory'
 import { shortId } from '../../lib/ids'
+import { formatCompactCurrency } from '../../lib/format'
 
 interface InventoryItem {
   id: string
@@ -70,6 +67,7 @@ export default function StockTab() {
   const [showSuccess, setShowSuccess] = useState(false)
   const [successMsg, setSuccessMsg] = useState('')
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null)
+  const [step, setStep] = useState(0)
   const [formState, setFormState] = useState({
     name: '',
     category: '',
@@ -77,6 +75,7 @@ export default function StockTab() {
     minimumThreshold: '0',
     maximumCapacity: '0',
     unitPrice: '0',
+    buyingPrice: '',
     supplier: '',
     sku: '',
     barcode: '',
@@ -179,8 +178,18 @@ export default function StockTab() {
     0,
   )
 
+  // Live margin math for the pricing step — no estimates, only typed values.
+  const buyNum = parseFloat(formState.buyingPrice)
+  const sellNum = parseFloat(formState.unitPrice)
+  const buyValid = !isNaN(buyNum) && buyNum >= 0 && formState.buyingPrice.trim() !== ''
+  const sellValid = !isNaN(sellNum) && sellNum > 0
+  const profit = sellValid ? sellNum - (buyValid ? buyNum : 0) : 0
+  const marginPct = sellValid && sellNum > 0 ? (profit / sellNum) * 100 : 0
+  const stockNum = parseInt(formState.currentStock) || 0
+
   const handleOpenAddModal = () => {
     setEditingItem(null)
+    setStep(0)
     setFormState({
       name: '',
       category: '',
@@ -188,6 +197,7 @@ export default function StockTab() {
       minimumThreshold: '0',
       maximumCapacity: '0',
       unitPrice: '0',
+      buyingPrice: '',
       supplier: '',
       sku: '',
       barcode: '',
@@ -197,6 +207,7 @@ export default function StockTab() {
   }
   const handleOpenEditModal = (item: InventoryItem) => {
     setEditingItem(item)
+    setStep(0)
     const prod = products.find((p: any) => p.id === item.productId) as any
     setFormState({
       name: item.name,
@@ -205,6 +216,12 @@ export default function StockTab() {
       minimumThreshold: item.minimumThreshold.toString(),
       maximumCapacity: item.maximumCapacity.toString(),
       unitPrice: item.unitPrice.toString(),
+      buyingPrice:
+        prod?.cost != null && Number(prod.cost) > 0
+          ? String(prod.cost)
+          : (prod?.buyingPrice != null && Number(prod.buyingPrice) > 0
+            ? String(prod.buyingPrice)
+            : ''),
       supplier: item.supplier === '—' ? '' : item.supplier,
       sku: prod?.sku || '',
       barcode: prod?.barcode || '',
@@ -245,6 +262,18 @@ export default function StockTab() {
     const min = parseInt(formState.minimumThreshold) || 0
     const max = parseInt(formState.maximumCapacity) || 0
     const price = parseFloat(formState.unitPrice) || 0
+    if (price <= 0) {
+      setInlineError('Set a selling price above zero — margin needs it.')
+      setStep(1)
+      return
+    }
+    // Real buying price, captured on the pricing step. Falls back to the
+    // variant cost, then to zero — never a silent 0.7 estimate again.
+    const buying = parseFloat(formState.buyingPrice)
+    const buyingPrice =
+      !isNaN(buying) && buying >= 0
+        ? buying
+        : 0
     const variantsPayload = formState.variants
       .filter((v) => v.name.trim())
       .map((v) => ({
@@ -263,7 +292,7 @@ export default function StockTab() {
             name: formState.name.trim(),
             category: formState.category,
             price,
-            buyingPrice: Math.round(price * 0.7 * 100) / 100,
+            buyingPrice,
             supplier: formState.supplier.trim(),
             maxStockLevel: max > 0 ? max : null,
             sku: formState.sku.trim() || undefined,
@@ -288,7 +317,7 @@ export default function StockTab() {
           name: formState.name.trim(),
           category: formState.category,
           price,
-          buyingPrice: Math.round(price * 0.7 * 100) / 100,
+          buyingPrice,
           supplier: formState.supplier.trim(),
           maxStockLevel: max > 0 ? max : null,
           sku: formState.sku.trim() || undefined,
@@ -341,22 +370,22 @@ export default function StockTab() {
       <View className='px-4 pt-12 pb-4 bg-white border-b border-gray-200'>
         <View className='flex-row justify-between items-start gap-3'>
           <View className='flex-1'>
-            <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
+            <Text className='font-geist-bold text-xs font-bold tracking-widest text-gray-500 uppercase'>
               Stock
             </Text>
-            <Text className='text-xl font-bold tracking-tight text-gray-900 -mt-0.5'>
+            <Text className='font-geist-bold text-xl font-bold tracking-tight text-gray-900 -mt-0.5'>
               Inventory
             </Text>
-            <Text className='text-xs text-gray-500'>
+            <Text className='font-sans text-xs text-gray-500'>
               Mfumo wa kuhifadhi bidhaa
             </Text>
           </View>
           <TouchableOpacity
             onPress={handleOpenAddModal}
-            className='flex-row items-center gap-2 bg-gray-900 px-4 py-3 rounded-full'
+            className='flex-row items-center gap-2 bg-accent px-4 py-3 rounded-full'
           >
             <Plus size={16} color='white' />
-            <Text className='text-white text-sm font-bold'>Add</Text>
+            <Text className='font-geist-bold text-white text-sm font-bold'>Add</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -380,7 +409,7 @@ export default function StockTab() {
             },
             {
               label: 'Total value',
-              value: formatCurrency(totalValue),
+              value: formatCompactCurrency(totalValue),
               sub: 'stock value',
               icon: TrendingUp,
             },
@@ -401,15 +430,17 @@ export default function StockTab() {
                     <m.icon size={16} color={m.alert ? '#b45309' : '#6b7280'} />
                   </View>
                   <Text
-                    className='text-sm font-bold tracking-tight text-gray-900 font-mono'
+                    className='font-geist-mono-bold text-sm font-bold tracking-tight text-gray-900'
                     numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.75}
                   >
                     {m.value}
                   </Text>
-                  <Text className='text-xs font-medium text-gray-500 text-center'>
+                  <Text className='font-geist-medium text-xs font-medium text-gray-500 text-center'>
                     {m.label}
                   </Text>
-                  <Text className='text-xs text-gray-500'>{m.sub}</Text>
+                  <Text className='font-sans text-xs text-gray-500'>{m.sub}</Text>
                 </CardContent>
               </Card>
             </View>
@@ -418,17 +449,17 @@ export default function StockTab() {
 
         {/* Search */}
         <View className='flex-row items-center gap-2 bg-white border border-gray-300 rounded-2xl px-3'>
-          <Search size={16} color='#9ca3af' />
+          <Search size={16} color='#6b7280' />
           <TextInput
             className='flex-1 py-4 text-sm text-gray-900'
             placeholder='Search products or category…'
-            placeholderTextColor='#9ca3af'
+            placeholderTextColor='#6b7280'
             value={searchTerm}
             onChangeText={setSearchTerm}
           />
           {searchTerm ? (
             <Pressable onPress={() => setSearchTerm('')}>
-              <Text className='text-xs font-bold text-gray-500'>Clear</Text>
+              <Text className='font-geist-bold text-xs font-bold text-gray-500'>Clear</Text>
             </Pressable>
           ) : null}
         </View>
@@ -438,7 +469,7 @@ export default function StockTab() {
           <Card className='border border-amber-200 bg-amber-50/60'>
             <CardHeader className='flex-row items-center gap-2'>
               <AlertTriangle size={16} color='#b45309' />
-              <Text className='text-sm font-bold text-amber-900'>
+              <Text className='font-geist-bold text-sm font-bold text-amber-900'>
                 Stock alert • {lowStockItems.length} items low
               </Text>
             </CardHeader>
@@ -448,16 +479,16 @@ export default function StockTab() {
                   key={it.id}
                   className='flex-row justify-between items-center'
                 >
-                  <Text className='text-sm font-medium text-gray-900'>
+                  <Text className='font-geist-medium text-sm font-medium text-gray-900'>
                     {it.name}
                   </Text>
-                  <Text className='text-xs font-bold text-amber-800'>
+                  <Text className='font-geist-bold text-xs font-bold text-amber-800'>
                     {it.currentStock} left • min {it.minimumThreshold}
                   </Text>
                 </View>
               ))}
               {lowStockItems.length > 3 && (
-                <Text className='text-xs text-amber-700'>
+                <Text className='font-sans text-xs text-amber-700'>
                   +{lowStockItems.length - 3} more
                 </Text>
               )}
@@ -479,30 +510,30 @@ export default function StockTab() {
                   <View className='flex-row justify-between items-start gap-3 mb-3'>
                     <View className='flex-1'>
                       <View className='flex-row items-center gap-2 flex-wrap'>
-                        <Text className='text-sm font-bold text-gray-900'>
+                        <Text className='font-geist-bold text-sm font-bold text-gray-900'>
                           {item.name}
                         </Text>
                         <View className='px-2 py-1 rounded-full bg-white border border-gray-200'>
-                          <Text className='text-xs font-bold tracking-widest text-gray-500'>
+                          <Text className='font-geist-bold text-xs font-bold tracking-widest text-gray-500'>
                             {shortId(item.productId, 6)}
                           </Text>
                         </View>
                         <View className='px-2 py-1 rounded-full bg-gray-100 border border-gray-200'>
-                          <Text className='text-xs font-bold text-gray-600'>
+                          <Text className='font-geist-bold text-xs font-bold text-gray-600'>
                             {item.category}
                           </Text>
                         </View>
                         {(item as any)._status === 'created' || (item as any)._status === 'updated' ? (
                           <View className='px-2 py-1 rounded-full bg-amber-50 border border-amber-200 flex-row items-center gap-1'>
                             <View className='w-1.5 h-1.5 rounded-full bg-amber-500' />
-                            <Text className='text-xs font-bold text-amber-700'>Pending</Text>
+                            <Text className='font-geist-bold text-xs font-bold text-amber-700'>Pending</Text>
                           </View>
                         ) : null}
                       </View>
-                      <Text className='text-xs text-gray-500 mt-1'>
+                      <Text className='font-sans text-xs text-gray-500 mt-1'>
                         Supplier • {item.supplier} • Last {item.lastRestocked}
                       </Text>
-                      <Text className='text-xs font-semibold text-gray-900 mt-1'>
+                      <Text className='font-geist-semibold text-xs font-semibold text-gray-900 mt-1'>
                         {formatCurrency(item.unitPrice)} / unit
                       </Text>
                       {(() => {
@@ -514,11 +545,11 @@ export default function StockTab() {
                         return (
                           <View className='flex-row items-center gap-2 mt-1'>
                             <View className='px-2 py-1 rounded-full bg-amber-50 border border-amber-200'>
-                              <Text className='text-xs font-bold text-amber-700'>
+                              <Text className='font-geist-bold text-xs font-bold text-amber-700'>
                                 {vcount} variant{vcount === 1 ? '' : 's'}
                               </Text>
                             </View>
-                            <Text className='text-xs text-gray-500'>
+                            <Text className='font-sans text-xs text-gray-500'>
                               from{' '}
                               {formatCurrency(
                                 Math.min(
@@ -537,17 +568,17 @@ export default function StockTab() {
                         <View
                           className={`w-2.5 h-2.5 rounded-full ${st.color}`}
                         />
-                        <Text className='text-sm font-bold text-gray-900'>
+                        <Text className='font-geist-bold text-sm font-bold text-gray-900'>
                           {item.currentStock}
                         </Text>
                       </View>
-                      <Text className='text-xs text-gray-400'>
+                      <Text className='font-sans text-xs text-gray-500'>
                         of {item.maximumCapacity}
                       </Text>
                       <View
                         className={`mt-1 px-2 py-1 rounded-full border ${st.bg}`}
                       >
-                        <Text className={`text-xs font-bold ${st.text}`}>
+                        <Text className={`font-geist-bold text-xs font-bold ${st.text}`}>
                           {st.label}
                         </Text>
                       </View>
@@ -556,22 +587,22 @@ export default function StockTab() {
 
                   <View className='gap-2'>
                     <View className='flex-row justify-between'>
-                      <Text className='text-xs text-gray-500'>Stock level</Text>
-                      <Text className='text-xs font-medium text-gray-700'>
+                      <Text className='font-sans text-xs text-gray-500'>Stock level</Text>
+                      <Text className='font-geist-medium text-xs font-medium text-gray-700'>
                         {Math.round(pct)}%
                       </Text>
                     </View>
                     <View className='h-2 bg-gray-100 rounded-full overflow-hidden'>
                       <View
                         style={{ width: `${pct}%` }}
-                        className={`h-2 rounded-full ${item.currentStock <= item.minimumThreshold ? 'bg-red-500' : pct <= 50 ? 'bg-amber-500' : 'bg-gray-900'}`}
+                        className={`h-2 rounded-full ${item.currentStock <= item.minimumThreshold ? 'bg-red-500' : pct <= 50 ? 'bg-amber-500' : 'bg-accent'}`}
                       />
                     </View>
                     <View className='flex-row justify-between'>
-                      <Text className='text-xs text-gray-400'>
+                      <Text className='font-sans text-xs text-gray-500'>
                         Min {item.minimumThreshold}
                       </Text>
-                      <Text className='text-xs font-bold text-gray-700'>
+                      <Text className='font-geist-bold text-xs font-bold text-gray-700'>
                         Value{' '}
                         {formatCurrency(item.currentStock * item.unitPrice)}
                       </Text>
@@ -584,7 +615,7 @@ export default function StockTab() {
                       className='flex-row items-center gap-2 px-3 py-2 rounded-full bg-white border border-gray-200'
                     >
                       <Edit size={14} color='#374151' />
-                      <Text className='text-xs font-semibold text-gray-700'>
+                      <Text className='font-geist-semibold text-xs font-semibold text-gray-700'>
                         Edit
                       </Text>
                     </TouchableOpacity>
@@ -594,7 +625,7 @@ export default function StockTab() {
                       className='flex-row items-center gap-2 px-3 py-2 rounded-full bg-white border border-red-200'
                     >
                       <Trash2 size={14} color='#dc2626' />
-                      <Text className='text-xs font-bold text-red-600'>
+                      <Text className='font-geist-bold text-xs font-bold text-red-600'>
                         Delete
                       </Text>
                     </TouchableOpacity>
@@ -606,11 +637,11 @@ export default function StockTab() {
           {filteredInventory.length === 0 && (
             <Card className='border border-dashed border-gray-300'>
               <CardContent className='items-center py-12'>
-                <Package size={28} color='#9ca3af' />
-                <Text className='text-sm font-semibold text-gray-700 mt-3'>
+                <Package size={28} color='#6b7280' />
+                <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mt-3'>
                   {searchTerm ? 'No matches' : 'No inventory'}
                 </Text>
-                <Text className='text-xs text-gray-500 mt-1'>
+                <Text className='font-sans text-xs text-gray-500 mt-1'>
                   Try a different search or add a product
                 </Text>
               </CardContent>
@@ -619,50 +650,101 @@ export default function StockTab() {
         </View>
       </ScrollView>
 
-      <Modal
+      <Sheet
         visible={showItemModal}
-        animationType='slide'
-        presentationStyle='pageSheet'
-      >
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-        >
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <View className='flex-1 bg-gray-50'>
-              <View className='flex-row justify-between items-center p-4 bg-white border-b border-gray-200'>
-                <View>
-                  <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
-                    {editingItem ? 'Edit' : 'New'}
-                  </Text>
-                  <Text className='text-lg font-bold text-gray-900 -mt-0.5'>
-                    {editingItem ? 'Edit item' : 'Add item'}
-                  </Text>
-                </View>
-                <Pressable
-                  onPress={() => setShowItemModal(false)}
-                  className='w-11 h-11 rounded-full bg-gray-100 items-center justify-center'
-                >
-                  <Text className='font-bold text-gray-600'>✕</Text>
-                </Pressable>
-              </View>
-              <ScrollView
-                contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 40 }}
-                keyboardShouldPersistTaps='handled'
-                keyboardDismissMode='interactive'
-                showsVerticalScrollIndicator={false}
+        onClose={() => setShowItemModal(false)}
+        eyebrow={`Step ${step + 1} of 3 • ${['Basics', 'Pricing', 'Stock & sizes'][step]}${editingItem ? ' • editing' : ''}`}
+        title={editingItem ? 'Edit item' : 'Add item'}
+        subtitle={
+          [
+            'Name it like the shelf tag reads',
+            'Cost vs price — margin updates live',
+            'Quantities, sizes, review and save',
+          ][step]
+        }
+        footer={
+          <View className='flex-row gap-2'>
+            {step > 0 ? (
+              <Button
+                variant='secondary'
+                onPress={() => {
+                  setInlineError(null)
+                  setStep(step - 1)
+                }}
+                className='flex-1'
               >
-            {inlineError ? (
-              <View className='bg-red-50 border border-red-200 rounded-2xl px-4 py-3 flex-row items-center gap-2'>
-                <Text className='text-sm text-red-700 flex-1'>{inlineError}</Text>
-                <Pressable onPress={() => setInlineError(null)} className='px-3 py-1 rounded-full bg-white border border-red-200'>
-                  <Text className='text-xs font-bold text-red-700'>Dismiss</Text>
-                </Pressable>
-              </View>
-            ) : null}
+                Back
+              </Button>
+            ) : (
+              <Button
+                variant='secondary'
+                onPress={() => setShowItemModal(false)}
+                className='flex-1'
+              >
+                Cancel
+              </Button>
+            )}
+            {step < 2 ? (
+              <Button
+                onPress={() => {
+                  if (step === 0) {
+                    if (
+                      !formState.name.trim() ||
+                      !formState.category.trim()
+                    ) {
+                      setInlineError(
+                        'Give the product a name and category first.',
+                      )
+                      return
+                    }
+                  }
+                  setInlineError(null)
+                  setStep(step + 1)
+                }}
+                className='flex-[2]'
+              >
+                Next
+              </Button>
+            ) : (
+              <Button
+                onPress={handleSaveItem}
+                loading={!!isAdjustingStock}
+                className='flex-[2]'
+              >
+                {editingItem ? 'Update product' : 'Save item'}
+              </Button>
+            )}
+          </View>
+        }
+      >
+        {inlineError ? (
+          <View className='bg-red-50 border border-red-200 rounded-2xl px-4 py-3 flex-row items-center gap-2'>
+            <Text className='font-sans text-sm text-red-700 flex-1'>
+              {inlineError}
+            </Text>
+            <Pressable
+              onPress={() => setInlineError(null)}
+              className='px-3 py-1 rounded-full bg-white border border-red-200'
+            >
+              <Text className='font-geist-bold text-xs font-bold text-red-700'>
+                Dismiss
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
+        {/* Step dots */}
+        <View className='flex-row gap-1.5 px-1'>
+          {[0, 1, 2].map((i) => (
+            <View
+              key={i}
+              className={`flex-1 h-1.5 rounded-full ${i <= step ? 'bg-accent' : 'bg-gray-200'}`}
+            />
+          ))}
+        </View>
+        {step === 0 && (
+          <View className='gap-4'>
             <View>
-              <Text className='text-sm font-semibold text-gray-700 mb-2'>
+              <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
                 Product name *
               </Text>
               <TextInput
@@ -673,7 +755,7 @@ export default function StockTab() {
               />
             </View>
             <View>
-              <Text className='text-sm font-semibold text-gray-700 mb-2'>
+              <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
                 Category *
               </Text>
               <TextInput
@@ -701,79 +783,23 @@ export default function StockTab() {
                       onPress={() =>
                         setFormState({ ...formState, category: cat })
                       }
-                      className={`px-3 py-1.5 rounded-full border ${formState.category === cat ? 'bg-gray-900 border-gray-900' : 'bg-white border-gray-200'}`}
+                      className={`px-3 py-1.5 rounded-full border ${formState.category === cat ? 'bg-accent border-accent' : 'bg-white border-gray-200'}`}
                     >
                       <Text
-                        className={`text-xs font-bold ${formState.category === cat ? 'text-white' : 'text-gray-700'}`}
+                        className={`font-geist-bold text-xs font-bold ${formState.category === cat ? 'text-white' : 'text-gray-700'}`}
                       >
                         {cat}
                       </Text>
                     </Pressable>
                   ))}
               </View>
-              <Text className='text-xs text-gray-400 mt-1'>
+              <Text className='font-sans text-xs text-gray-500 mt-1'>
                 You can create a new category — just type it. Existing
                 categories are suggested above.
               </Text>
             </View>
-            <View className='flex-row gap-3'>
-              <View className='flex-1'>
-                <Text className='text-sm font-semibold text-gray-700 mb-2'>
-                  Current stock
-                </Text>
-                <TextInput
-                  className='bg-white border border-gray-300 rounded-2xl px-4 py-4 text-sm'
-                  keyboardType='numeric'
-                  value={formState.currentStock}
-                  onChangeText={(t) =>
-                    setFormState({ ...formState, currentStock: t })
-                  }
-                />
-              </View>
-              <View className='flex-1'>
-                <Text className='text-sm font-semibold text-gray-700 mb-2'>
-                  Unit price
-                </Text>
-                <TextInput
-                  className='bg-white border border-gray-300 rounded-2xl px-4 py-4 text-sm'
-                  keyboardType='numeric'
-                  value={formState.unitPrice}
-                  onChangeText={(t) =>
-                    setFormState({ ...formState, unitPrice: t })
-                  }
-                />
-              </View>
-            </View>
-            <View className='flex-row gap-3'>
-              <View className='flex-1'>
-                <Text className='text-sm font-semibold text-gray-700 mb-2'>
-                  Min threshold
-                </Text>
-                <TextInput
-                  className='bg-white border border-gray-300 rounded-2xl px-4 py-4 text-sm'
-                  keyboardType='numeric'
-                  value={formState.minimumThreshold}
-                  onChangeText={(t) =>
-                    setFormState({ ...formState, minimumThreshold: t })
-                  }
-                />
-              </View>
-              <View className='flex-1'>
-                <Text className='text-sm font-semibold text-gray-700 mb-2'>
-                  Max capacity
-                </Text>
-                <TextInput
-                  className='bg-white border border-gray-300 rounded-2xl px-4 py-4 text-sm'
-                  keyboardType='numeric'
-                  value={formState.maximumCapacity}
-                  onChangeText={(t) =>
-                    setFormState({ ...formState, maximumCapacity: t })
-                  }
-                />
-              </View>
-            </View>
             <View>
-              <Text className='text-sm font-semibold text-gray-700 mb-2'>
+              <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
                 Supplier
               </Text>
               <TextInput
@@ -785,10 +811,9 @@ export default function StockTab() {
                 }
               />
             </View>
-
             <View className='flex-row gap-3'>
               <View className='flex-1'>
-                <Text className='text-sm font-semibold text-gray-700 mb-2'>
+                <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
                   SKU (optional)
                 </Text>
                 <TextInput
@@ -800,7 +825,7 @@ export default function StockTab() {
                 />
               </View>
               <View className='flex-1'>
-                <Text className='text-sm font-semibold text-gray-700 mb-2'>
+                <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
                   Barcode
                 </Text>
                 <TextInput
@@ -813,17 +838,146 @@ export default function StockTab() {
                 />
               </View>
             </View>
+          </View>
+        )}
+        {step === 1 && (
+          <View className='gap-4'>
+            <View className='flex-row gap-3'>
+              <View className='flex-1'>
+                <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
+                  Buying price *
+                </Text>
+                <TextInput
+                  className='bg-white border border-gray-300 rounded-2xl px-4 py-4 text-sm'
+                  keyboardType='numeric'
+                  placeholder='What you paid'
+                  value={formState.buyingPrice}
+                  onChangeText={(t) =>
+                    setFormState({ ...formState, buyingPrice: t })
+                  }
+                />
+              </View>
+              <View className='flex-1'>
+                <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
+                  Selling price *
+                </Text>
+                <TextInput
+                  className='bg-white border border-gray-300 rounded-2xl px-4 py-4 text-sm'
+                  keyboardType='numeric'
+                  placeholder='What you charge'
+                  value={formState.unitPrice}
+                  onChangeText={(t) =>
+                    setFormState({ ...formState, unitPrice: t })
+                  }
+                />
+              </View>
+            </View>
+            {/* Live margin — the reason buying price exists */}
+            <View
+              className={`rounded-2xl border p-4 ${!sellValid ? 'bg-gray-50 border-gray-200' : profit < 0 ? 'bg-red-50 border-red-200' : 'bg-emerald-50 border-emerald-200'}`}
+            >
+              <Text className='font-geist-bold text-xs font-bold tracking-widest text-gray-500 uppercase'>
+                Margin preview
+              </Text>
+              {!sellValid ? (
+                <Text className='font-sans text-sm text-gray-500 mt-1'>
+                  Enter a selling price to see your margin.
+                </Text>
+              ) : (
+                <View className='flex-row gap-3 mt-2'>
+                  <View className='flex-1'>
+                    <Text className='font-geist-mono-bold text-base font-bold text-gray-900'>
+                      {formatCurrency(profit)}
+                    </Text>
+                    <Text className='font-sans text-xs text-gray-500'>
+                      profit / unit
+                    </Text>
+                  </View>
+                  <View className='flex-1'>
+                    <Text
+                      className={`font-geist-mono-bold text-base font-bold ${profit < 0 ? 'text-red-700' : 'text-emerald-700'}`}
+                    >
+                      {marginPct.toFixed(1)}%
+                    </Text>
+                    <Text className='font-sans text-xs text-gray-500'>
+                      margin
+                    </Text>
+                  </View>
+                  <View className='flex-1'>
+                    <Text className='font-geist-mono-bold text-base font-bold text-gray-900'>
+                      {buyValid
+                        ? formatCurrency(stockNum * profit)
+                        : '—'}
+                    </Text>
+                    <Text className='font-sans text-xs text-gray-500'>
+                      on current stock
+                    </Text>
+                  </View>
+                </View>
+              )}
+              {sellValid && buyValid && profit < 0 ? (
+                <Text className='font-sans text-xs text-red-700 mt-2'>
+                  Below cost — you lose {formatCurrency(-profit)} per unit.
+                </Text>
+              ) : null}
+            </View>
+          </View>
+        )}
+        {step === 2 && (
+          <View className='gap-4'>
+            <View>
+              <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
+                Current stock
+              </Text>
+              <TextInput
+                className='bg-white border border-gray-300 rounded-2xl px-4 py-4 text-sm'
+                keyboardType='numeric'
+                placeholder='How many on the shelf right now'
+                value={formState.currentStock}
+                onChangeText={(t) =>
+                  setFormState({ ...formState, currentStock: t })
+                }
+              />
+            </View>
+            <View className='flex-row gap-3'>
+              <View className='flex-1'>
+                <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
+                  Min threshold
+                </Text>
+                <TextInput
+                  className='bg-white border border-gray-300 rounded-2xl px-4 py-4 text-sm'
+                  keyboardType='numeric'
+                  value={formState.minimumThreshold}
+                  onChangeText={(t) =>
+                    setFormState({ ...formState, minimumThreshold: t })
+                  }
+                />
+              </View>
+              <View className='flex-1'>
+                <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
+                  Max capacity
+                </Text>
+                <TextInput
+                  className='bg-white border border-gray-300 rounded-2xl px-4 py-4 text-sm'
+                  keyboardType='numeric'
+                  value={formState.maximumCapacity}
+                  onChangeText={(t) =>
+                    setFormState({ ...formState, maximumCapacity: t })
+                  }
+                />
+              </View>
+            </View>
 
             {/* Variants — sizes/colors with per-variant pricing */}
             <View className='bg-white border border-gray-200 rounded-2xl p-4 gap-3'>
               <View className='flex-row justify-between items-center'>
                 <View className='flex-row items-center gap-2'>
                   <Package size={16} color='#6b7280' />
-                  <Text className='text-sm font-bold text-gray-900'>
+                  <Text className='font-geist-bold text-sm font-bold text-gray-900'>
                     Variants
                   </Text>
                   <View className='px-2 py-1 rounded-full bg-gray-100 border border-gray-200'>
-                    <Text className='text-xs font-bold text-gray-600'>
+                    <Text className='font-geist-bold text-xs font-bold text-gray-600'>
                       {formState.variants.length} options
                     </Text>
                   </View>
@@ -839,25 +993,20 @@ export default function StockTab() {
                           sku: '',
                           barcode: '',
                           price: formState.unitPrice || '0',
-                          cost: String(
-                            Math.round(
-                              parseFloat(formState.unitPrice || '0') *
-                                0.7 *
-                                100,
-                            ) / 100,
-                          ),
+                          // Prefill from the pricing step, not an estimate.
+                          cost: formState.buyingPrice || '0',
                         },
                       ],
                     })
                   }
-                  className='px-3 py-1.5 rounded-full bg-gray-900 flex-row items-center gap-2'
+                  className='px-3 py-1.5 rounded-full bg-accent flex-row items-center gap-2'
                 >
                   <Plus size={12} color='white' />
-                  <Text className='text-xs font-bold text-white'>Add</Text>
+                  <Text className='font-geist-bold text-xs font-bold text-white'>Add</Text>
                 </TouchableOpacity>
               </View>
 
-              <Text className='text-xs text-gray-500'>
+              <Text className='font-sans text-xs text-gray-500'>
                 Define sizes, colors, or packs — each can have its own price.
                 Example: Unga 1kg / 2kg / 5kg. Sales will let customer pick
                 variant.
@@ -865,10 +1014,10 @@ export default function StockTab() {
 
               {formState.variants.length === 0 ? (
                 <View className='border border-dashed border-gray-200 rounded-2xl py-6 items-center bg-gray-50/50'>
-                  <Text className='text-sm font-medium text-gray-500'>
+                  <Text className='font-geist-medium text-sm font-medium text-gray-500'>
                     No variants
                   </Text>
-                  <Text className='text-xs text-gray-400 mt-1 text-center px-4'>
+                  <Text className='font-sans text-xs text-gray-500 mt-1 text-center px-4'>
                     Leave empty for single-price product. Add variants if same
                     product sells in different sizes/colors.
                   </Text>
@@ -881,7 +1030,7 @@ export default function StockTab() {
                       className='border border-gray-200 rounded-2xl p-3 gap-2 bg-gray-50/50'
                     >
                       <View className='flex-row justify-between items-center'>
-                        <Text className='text-xs font-bold tracking-widest text-gray-500 uppercase'>
+                        <Text className='font-geist-bold text-xs font-bold tracking-widest text-gray-500 uppercase'>
                           Variant {idx + 1}
                         </Text>
                         <TouchableOpacity
@@ -900,7 +1049,7 @@ export default function StockTab() {
                       </View>
 
                       <View>
-                        <Text className='text-xs font-semibold text-gray-700 mb-1'>
+                        <Text className='font-geist-semibold text-xs font-semibold text-gray-700 mb-1'>
                           Name * (e.g., 500ml, Red, Small)
                         </Text>
                         <TextInput
@@ -917,7 +1066,7 @@ export default function StockTab() {
 
                       <View className='flex-row gap-2'>
                         <View className='flex-1'>
-                          <Text className='text-xs font-semibold text-gray-700 mb-1'>
+                          <Text className='font-geist-semibold text-xs font-semibold text-gray-700 mb-1'>
                             Price *
                           </Text>
                           <TextInput
@@ -933,7 +1082,7 @@ export default function StockTab() {
                           />
                         </View>
                         <View className='flex-1'>
-                          <Text className='text-xs font-semibold text-gray-700 mb-1'>
+                          <Text className='font-geist-semibold text-xs font-semibold text-gray-700 mb-1'>
                             Cost
                           </Text>
                           <TextInput
@@ -952,7 +1101,7 @@ export default function StockTab() {
 
                       <View className='flex-row gap-2'>
                         <View className='flex-1'>
-                          <Text className='text-xs font-semibold text-gray-700 mb-1'>
+                          <Text className='font-geist-semibold text-xs font-semibold text-gray-700 mb-1'>
                             SKU
                           </Text>
                           <TextInput
@@ -968,7 +1117,7 @@ export default function StockTab() {
                           />
                         </View>
                         <View className='flex-1'>
-                          <Text className='text-xs font-semibold text-gray-700 mb-1'>
+                          <Text className='font-geist-semibold text-xs font-semibold text-gray-700 mb-1'>
                             Barcode
                           </Text>
                           <TextInput
@@ -988,27 +1137,67 @@ export default function StockTab() {
                 </View>
               )}
             </View>
-            <TouchableOpacity
-              onPress={handleSaveItem}
-              disabled={!!isAdjustingStock}
-              className='bg-gray-900 py-4 rounded-2xl items-center flex-row justify-center gap-2 mt-2'
-            >
-              {isAdjustingStock ? (
-                <ActivityIndicator color='white' />
-              ) : (
-                <>
-                  <Plus size={18} color='white' />
-                  <Text className='text-white font-bold'>
-                    {editingItem ? 'Update product' : 'Save item'}
+            {/* Review — what this product earns before it exists */}
+            <View className='bg-white border border-gray-200 rounded-2xl p-4 gap-2'>
+              <Text className='font-geist-bold text-xs font-bold tracking-widest text-gray-500 uppercase'>
+                Review
+              </Text>
+              <View className='flex-row justify-between items-center'>
+                <Text
+                  className='font-geist-semibold text-sm font-semibold text-gray-900 flex-1'
+                  numberOfLines={1}
+                >
+                  {formState.name.trim() || 'Unnamed product'}
+                </Text>
+                <Text className='font-sans text-xs text-gray-500'>
+                  {formState.category.trim() || 'No category'}
+                </Text>
+              </View>
+              <View className='flex-row gap-3 mt-1'>
+                <View className='flex-1'>
+                  <Text className='font-geist-mono-bold text-sm font-bold text-gray-900'>
+                    {sellValid
+                      ? `${formatCurrency(buyValid ? buyNum : 0)} → ${formatCurrency(sellNum)}`
+                      : '—'}
                   </Text>
-                </>
-              )}
-            </TouchableOpacity>
-              </ScrollView>
+                  <Text className='font-sans text-xs text-gray-500'>
+                    cost → price
+                  </Text>
+                </View>
+                <View className='flex-1'>
+                  <Text
+                    className={`font-geist-mono-bold text-sm font-bold ${sellValid && profit < 0 ? 'text-red-700' : 'text-emerald-700'}`}
+                  >
+                    {sellValid
+                      ? `${marginPct.toFixed(1)}% margin`
+                      : '—'}
+                  </Text>
+                  <Text className='font-sans text-xs text-gray-500'>
+                    per unit
+                  </Text>
+                </View>
+                <View className='flex-1'>
+                  <Text className='font-geist-mono-bold text-sm font-bold text-gray-900'>
+                    {formatCurrency(
+                      stockNum * (sellValid ? sellNum : 0),
+                    )}
+                  </Text>
+                  <Text className='font-sans text-xs text-gray-500'>
+                    potential revenue
+                  </Text>
+                </View>
+              </View>
+              {formState.variants.length > 0 ? (
+                <Text className='font-sans text-xs text-gray-500 mt-1'>
+                  + {formState.variants.length} variant
+                  {formState.variants.length === 1 ? '' : 's'} with
+                  own prices
+                </Text>
+              ) : null}
             </View>
-          </TouchableWithoutFeedback>
-        </KeyboardAvoidingView>
-      </Modal>
+          </View>
+        )}
+      </Sheet>
       <SuccessCelebration visible={showSuccess} title='Stock updated!' message={successMsg} onClose={() => setShowSuccess(false)} />
     </View>
   )

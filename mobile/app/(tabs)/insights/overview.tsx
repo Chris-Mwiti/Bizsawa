@@ -125,14 +125,14 @@ export default function InsightsOverview() {
     return (
       <View className='flex-1 bg-gray-50 items-center justify-center px-6'>
         <ActivityIndicator color='#111827' />
-        <Text className='text-sm text-gray-500 mt-2'>Loading business…</Text>
+        <Text className='font-sans text-sm text-gray-500 mt-2'>Loading business…</Text>
       </View>
     )
   if (!hasBusiness)
     return (
       <View className='flex-1 bg-gray-50 items-center justify-center px-6'>
-        <Text className='font-bold text-gray-900'>No business selected</Text>
-        <Text className='text-sm text-gray-500 mt-1'>
+        <Text className='font-geist-bold font-bold text-gray-900'>No business selected</Text>
+        <Text className='font-sans text-sm text-gray-500 mt-1'>
           Create or select a business to see overview.
         </Text>
       </View>
@@ -178,7 +178,7 @@ export default function InsightsOverview() {
               <Card className='border border-gray-200'>
                 <CardContent className='p-4'>
                   <View className='flex-row justify-between items-start mb-2'>
-                    <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
+                    <Text className='font-geist-bold text-xs font-bold tracking-widest text-gray-500 uppercase'>
                       {m.label}
                     </Text>
                     <View className='w-11 h-11 rounded-2xl bg-gray-50 border border-gray-100 items-center justify-center'>
@@ -186,7 +186,7 @@ export default function InsightsOverview() {
                     </View>
                   </View>
                   <Text
-                    className={`text-lg font-bold tracking-tight ${m.tint || 'text-gray-900'}`}
+                    className={`font-geist-bold text-lg font-bold tracking-tight ${m.tint || 'text-gray-900'}`}
                     numberOfLines={1}
                   >
                     {m.value}
@@ -202,13 +202,13 @@ export default function InsightsOverview() {
           <CardHeader className='flex-row items-center gap-2'>
             <BarChart3 size={16} color='#111827' />
             <CardTitle>Day sales • week</CardTitle>
-            <Text className='ml-auto text-xs text-gray-400'>7 days • 0 baseline</Text>
+            <Text className='font-sans ml-auto text-xs text-gray-500'>7 days • 0 baseline</Text>
           </CardHeader>
           <CardContent className='pt-0'>
             {isOverviewLoading ? (
               <View className='items-center py-8'>
                 <ActivityIndicator color='#111827' />
-                <Text className='text-xs text-gray-500 mt-2'>Loading…</Text>
+                <Text className='font-sans text-xs text-gray-500 mt-2'>Loading…</Text>
               </View>
             ) : weeklyOverview.length ? (
               <BarChart
@@ -221,7 +221,7 @@ export default function InsightsOverview() {
                 showValues
               />
             ) : (
-              <Text className='text-sm text-gray-500 py-6 text-center'>
+              <Text className='font-sans text-sm text-gray-500 py-6 text-center'>
                 No sales this week
               </Text>
             )}
@@ -246,7 +246,7 @@ export default function InsightsOverview() {
                   showValues
                 />
               ) : (
-                <Text className='text-xs text-gray-500 py-4 text-center'>
+                <Text className='font-sans text-xs text-gray-500 py-4 text-center'>
                   No revenue
                 </Text>
               )}
@@ -268,7 +268,7 @@ export default function InsightsOverview() {
                   showValues
                 />
               ) : (
-                <Text className='text-xs text-gray-500 py-4 text-center'>
+                <Text className='font-sans text-xs text-gray-500 py-4 text-center'>
                   No profit
                 </Text>
               )}
@@ -280,7 +280,7 @@ export default function InsightsOverview() {
         <Card className='border border-gray-200'>
           <CardHeader>
             <CardTitle>Trend • switch metric</CardTitle>
-            <Text className='text-xs text-gray-500'>
+            <Text className='font-sans text-xs text-gray-500'>
               sales / revenue / profit — one line
             </Text>
           </CardHeader>
@@ -311,7 +311,7 @@ export default function InsightsOverview() {
           <Card className='border border-gray-200'>
             <CardHeader>
               <CardTitle>Profit margin • week</CardTitle>
-              <Text className='text-xs text-gray-500'>margin % • 0 baseline</Text>
+              <Text className='font-sans text-xs text-gray-500'>margin % • 0 baseline</Text>
             </CardHeader>
             <CardContent className='pt-0'>
               <BarChart
@@ -350,7 +350,7 @@ export default function InsightsOverview() {
                 size={170}
               />
             ) : (
-              <Text className='text-sm text-gray-500 py-4 text-center'>
+              <Text className='font-sans text-sm text-gray-500 py-4 text-center'>
                 No category data yet
               </Text>
             )}
@@ -374,19 +374,19 @@ export default function InsightsOverview() {
                     className='flex-row justify-between items-center'
                   >
                     <View className='flex-1 pr-3'>
-                      <Text className='text-sm font-semibold text-gray-900'>
+                      <Text className='font-geist-semibold text-sm font-semibold text-gray-900'>
                         {cat.name}
                       </Text>
-                      <Text className='text-xs text-gray-500'>sales</Text>
+                      <Text className='font-sans text-xs text-gray-500'>sales</Text>
                     </View>
-                    <Text className='text-sm font-bold font-mono text-gray-900'>
+                    <Text className='font-geist-mono-bold text-sm font-bold text-gray-900'>
                       {formatCurrency(cat.value)}
                     </Text>
                   </View>
                 ))}
               </View>
             ) : (
-              <Text className='text-sm text-gray-500 py-4 text-center'>
+              <Text className='font-sans text-sm text-gray-500 py-4 text-center'>
                 No category data yet
               </Text>
             )}
@@ -409,17 +409,17 @@ export default function InsightsOverview() {
                     key={cat.category}
                     className='flex-row justify-between items-center p-3 rounded-2xl bg-gray-50 border border-gray-100'
                   >
-                    <Text className='text-sm font-medium text-gray-900'>
+                    <Text className='font-geist-medium text-sm font-medium text-gray-900'>
                       {cat.category}
                     </Text>
-                    <Text className='text-sm font-bold font-mono text-red-700'>
+                    <Text className='font-geist-mono-bold text-sm font-bold text-red-700'>
                       {formatCurrency(cat.amount)}
                     </Text>
                   </View>
                 ))}
               </View>
             ) : (
-              <Text className='text-sm text-gray-500 py-4 text-center'>
+              <Text className='font-sans text-sm text-gray-500 py-4 text-center'>
                 No expenses breakdown
               </Text>
             )}
@@ -428,35 +428,35 @@ export default function InsightsOverview() {
 
         <Card className='border border-gray-200 bg-white'>
           <CardHeader className='flex-row items-center gap-2'>
-            <View className='w-11 h-11 rounded-full bg-gray-900 items-center justify-center'>
-              <Text className='text-white text-xs font-bold'>AI</Text>
+            <View className='w-11 h-11 rounded-full bg-accent items-center justify-center'>
+              <Text className='font-geist-bold text-white text-xs font-bold'>AI</Text>
             </View>
             <CardTitle>AI Insights</CardTitle>
             <Pressable
               onPress={() => fetchAIInsights()}
               className='ml-auto px-3 py-1.5 rounded-full bg-white border border-gray-200'
             >
-              <Text className='text-xs font-bold text-gray-700'>Refresh</Text>
+              <Text className='font-geist-bold text-xs font-bold text-gray-700'>Refresh</Text>
             </Pressable>
           </CardHeader>
           <CardContent className='pt-0'>
             {isAIInsightsLoading ? (
               <View className='flex-row items-center gap-2 py-2'>
                 <ActivityIndicator size='small' color='#111827' />
-                <Text className='text-sm text-gray-500'>Loading…</Text>
+                <Text className='font-sans text-sm text-gray-500'>Loading…</Text>
               </View>
             ) : aiInsights?.summary ? (
-              <Text className='text-sm leading-5 text-gray-700'>
+              <Text className='font-sans text-sm leading-5 text-gray-700'>
                 {aiInsights.summary}
               </Text>
             ) : (
               <View>
-                <Text className='text-sm text-gray-600'>No summary yet.</Text>
+                <Text className='font-sans text-sm text-gray-600'>No summary yet.</Text>
                 <TouchableOpacity
                   onPress={() => fetchAIInsights()}
-                  className='self-start mt-3 px-3 py-2 bg-gray-900 rounded-full'
+                  className='self-start mt-3 px-3 py-2 bg-accent rounded-full'
                 >
-                  <Text className='text-white text-xs font-bold'>Generate</Text>
+                  <Text className='font-geist-bold text-white text-xs font-bold'>Generate</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -470,16 +470,16 @@ export default function InsightsOverview() {
           <CardContent className='pt-0 flex-row gap-3'>
             <TouchableOpacity
               onPress={() => setShowExpenseModal(true)}
-              className='flex-1 p-3.5 rounded-2xl bg-gray-900 flex-row items-center justify-center gap-2'
+              className='flex-1 p-3.5 rounded-2xl bg-accent flex-row items-center justify-center gap-2'
             >
               <Receipt size={16} color='white' />
-              <Text className='text-sm font-bold text-white'>Add Expense</Text>
+              <Text className='font-geist-bold text-sm font-bold text-white'>Add Expense</Text>
             </TouchableOpacity>
             <View className='flex-1 p-3.5 rounded-2xl bg-white border border-gray-200 items-center justify-center'>
-              <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
+              <Text className='font-geist-bold text-xs font-bold tracking-widest text-gray-500 uppercase'>
                 Profit
               </Text>
-              <Text className='text-sm font-bold text-gray-900 mt-1'>
+              <Text className='font-geist-bold text-sm font-bold text-gray-900 mt-1'>
                 {profitMargin.toFixed(1)}% margin
               </Text>
             </View>
@@ -495,17 +495,17 @@ export default function InsightsOverview() {
       >
         <View className='flex-1 bg-gray-50'>
           <View className='flex-row justify-between items-center p-4 bg-white border-b border-gray-200'>
-            <Text className='text-lg font-bold text-gray-900'>Add Expense</Text>
+            <Text className='font-geist-bold text-lg font-bold text-gray-900'>Add Expense</Text>
             <Pressable
               onPress={() => setShowExpenseModal(false)}
               className='w-11 h-11 rounded-full bg-gray-100 items-center justify-center'
             >
-              <Text className='font-bold'>✕</Text>
+              <Text className='font-geist-bold font-bold'>✕</Text>
             </Pressable>
           </View>
           <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
             <View>
-              <Text className='text-sm font-semibold text-gray-700 mb-2'>
+              <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
                 Category *
               </Text>
               <TextInput
@@ -516,7 +516,7 @@ export default function InsightsOverview() {
               />
             </View>
             <View>
-              <Text className='text-sm font-semibold text-gray-700 mb-2'>
+              <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
                 Description
               </Text>
               <TextInput
@@ -527,7 +527,7 @@ export default function InsightsOverview() {
               />
             </View>
             <View>
-              <Text className='text-sm font-semibold text-gray-700 mb-2'>
+              <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
                 Amount *
               </Text>
               <TextInput
@@ -539,14 +539,14 @@ export default function InsightsOverview() {
               />
             </View>
             <TouchableOpacity
-              className='bg-gray-900 py-4 rounded-2xl items-center mt-2'
+              className='bg-accent py-4 rounded-2xl items-center mt-2'
               onPress={handleExpenseSubmit}
               disabled={isCreatingExpense}
             >
               {isCreatingExpense ? (
                 <ActivityIndicator color='white' />
               ) : (
-                <Text className='text-white font-bold'>Save</Text>
+                <Text className='font-geist-bold text-white font-bold'>Save</Text>
               )}
             </TouchableOpacity>
           </ScrollView>

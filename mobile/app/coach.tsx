@@ -21,6 +21,7 @@ import {
   MessageCircle,
   Mic,
   MicOff,
+  X,
 } from 'lucide-react-native'
 import { router } from 'expo-router'
 import { useChat, type ChatMessage } from '../hooks/api/useChat'
@@ -183,46 +184,49 @@ export default function AICoachModal() {
 
         <KeyboardAvoidingView
           style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
         >
           <View className='flex-row items-center justify-between p-4 bg-white border-b border-gray-200'>
             <View className='flex-row items-center'>
-              <View className='w-10 h-10 bg-primary-600 rounded-full items-center justify-center mr-3'>
+              <View className='w-10 h-10 bg-accent rounded-full items-center justify-center mr-3'>
                 <Bot size={20} color='white' />
               </View>
               <View>
-                <Text className='text-lg font-bold text-gray-900'>
+                <Text className='font-geist-bold text-lg font-bold text-gray-900'>
                   AI Business Coach
                 </Text>
-                <Text className='text-xs text-gray-500'>Mshauri wa biashara</Text>
+                <Text className='font-sans text-xs text-gray-500'>Mshauri wa biashara</Text>
               </View>
             </View>
             <TouchableOpacity
               onPress={() => router.back()}
-              className='p-2 bg-gray-100 rounded-full'
+              hitSlop={8}
+              accessibilityRole='button'
+              accessibilityLabel='Close coach'
+              className='w-11 h-11 bg-gray-100 rounded-full items-center justify-center'
             >
-              <Text className='font-bold text-gray-500'>X</Text>
+              <X size={18} color='#374151' />
             </TouchableOpacity>
           </View>
 
           <View className='flex-row justify-center py-2 bg-white border-b border-gray-100 space-x-2'>
             <TouchableOpacity
               onPress={toggleLanguage}
-              className={`px-4 py-1.5 rounded-full ${language === 'en' ? 'bg-primary-600' : 'bg-gray-100'}`}
+              className={`px-4 py-1.5 rounded-full ${language === 'en' ? 'bg-accent' : 'bg-gray-100'}`}
             >
               <Text
-                className={`font-medium text-xs ${language === 'en' ? 'text-white' : 'text-gray-900'}`}
+                className={`font-geist-medium font-medium text-xs ${language === 'en' ? 'text-white' : 'text-gray-900'}`}
               >
                 English
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={toggleLanguage}
-              className={`px-4 py-1.5 rounded-full ${language === 'sw' ? 'bg-primary-600' : 'bg-gray-100'}`}
+              className={`px-4 py-1.5 rounded-full ${language === 'sw' ? 'bg-accent' : 'bg-gray-100'}`}
             >
               <Text
-                className={`font-medium text-xs ${language === 'sw' ? 'text-white' : 'text-gray-900'}`}
+                className={`font-geist-medium font-medium text-xs ${language === 'sw' ? 'text-white' : 'text-gray-900'}`}
               >
                 Kiswahili
               </Text>
@@ -241,6 +245,7 @@ export default function AICoachModal() {
             scrollEventThrottle={16}
             showsVerticalScrollIndicator={false}
             contentInsetAdjustmentBehavior='automatic'
+            automaticallyAdjustKeyboardInsets
             automaticallyAdjustContentInsets={false}
             alwaysBounceVertical={false}
           >
@@ -251,7 +256,7 @@ export default function AICoachModal() {
                   onPress={() => handleQuickAction(action.query)}
                   className='bg-white border border-gray-200 rounded-2xl py-2 px-3 m-1'
                 >
-                  <Text className='text-xs text-gray-700 font-medium'>
+                  <Text className='font-geist-medium text-xs text-gray-700 font-medium'>
                     {action.label}
                   </Text>
                 </TouchableOpacity>
@@ -264,20 +269,20 @@ export default function AICoachModal() {
                 className={`flex-row mb-4 ${msg.isBot ? 'justify-start' : 'justify-end'}`}
               >
                 {msg.isBot && (
-                  <View className='w-11 h-11 rounded-full bg-primary-600 items-center justify-center mr-2'>
+                  <View className='w-11 h-11 rounded-full bg-accent items-center justify-center mr-2'>
                     <Bot size={16} color='white' />
                   </View>
                 )}
                 <View
-                  className={`p-3 rounded-2xl max-w-[80%] ${msg.isBot ? 'bg-white border border-gray-200 rounded-tl-none' : 'bg-primary-600 rounded-tr-none'}`}
+                  className={`p-3 rounded-2xl max-w-[80%] ${msg.isBot ? 'bg-white border border-gray-200 rounded-tl-none' : 'bg-accent rounded-tr-none'}`}
                 >
                   {msg.isBot ? (
                     <CoachMessageMarkdown content={msg.content} />
                   ) : (
-                    <Text className='text-sm text-white'>{msg.content}</Text>
+                    <Text className='font-sans text-sm text-white'>{msg.content}</Text>
                   )}
                   <Text
-                    className={`text-xs mt-1 ${msg.isBot ? 'text-gray-400' : 'text-primary-200 text-right'}`}
+                    className={`font-sans text-xs mt-1 ${msg.isBot ? 'text-gray-500' : 'text-primary-200 text-right'}`}
                   >
                     {formatTime(msg.timestamp)}
                   </Text>
@@ -291,7 +296,7 @@ export default function AICoachModal() {
             ))}
             {isTyping && (
               <View className='flex-row justify-start mb-4'>
-                <View className='w-11 h-11 rounded-full bg-primary-600 items-center justify-center mr-2'>
+                <View className='w-11 h-11 rounded-full bg-accent items-center justify-center mr-2'>
                   <Bot size={16} color='white' />
                 </View>
                 <View className='p-4 bg-white border border-gray-200 rounded-2xl rounded-tl-none'>
@@ -338,7 +343,7 @@ export default function AICoachModal() {
             />
             <TouchableOpacity
               onPress={handleSend}
-              className='w-12 h-12 bg-primary-600 rounded-full items-center justify-center shadow-md active:opacity-90'
+              className='w-12 h-12 bg-accent rounded-full items-center justify-center shadow-md active:opacity-90'
             >
               <Send size={18} color='white' />
             </TouchableOpacity>

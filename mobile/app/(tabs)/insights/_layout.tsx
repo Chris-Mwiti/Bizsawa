@@ -103,21 +103,21 @@ export default function InsightsLayout() {
           <View className='flex-row items-start justify-between gap-3'>
             <View className='flex-1'>
               <View className='flex-row items-center gap-2'>
-                <View className='w-11 h-11 rounded-2xl bg-gray-900 items-center justify-center'>
+                <View className='w-11 h-11 rounded-2xl bg-accent items-center justify-center'>
                   <BarChart3 size={14} color='white' />
                 </View>
-                <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
+                <Text className='font-geist-bold text-xs font-bold tracking-widest text-gray-500 uppercase'>
                   Insights
                 </Text>
                 {activeBusiness?.name ? (
                   <View className='ml-1 px-2 py-1 rounded-full bg-gray-50 border border-gray-200'>
-                    <Text className='text-xs font-bold text-gray-600' numberOfLines={1}>
+                    <Text className='font-geist-bold text-xs font-bold text-gray-600' numberOfLines={1}>
                       {activeBusiness.name.slice(0, 18)}
                     </Text>
                   </View>
                 ) : null}
               </View>
-              <Text className='text-lg font-bold tracking-tight text-gray-900 mt-1'>
+              <Text className='font-geist-bold text-lg font-bold tracking-tight text-gray-900 mt-1'>
                 {active === 'analytics'
                   ? 'Analytics'
                   : active === 'tax'
@@ -126,7 +126,7 @@ export default function InsightsLayout() {
                       ? 'Expenses'
                       : 'Overview'}
               </Text>
-              <Text className='text-xs leading-4 text-gray-500' numberOfLines={1}>
+              <Text className='font-sans text-xs leading-4 text-gray-500' numberOfLines={1}>
                 {active === 'analytics'
                   ? 'Revenue, profit & segments • tap timeframe to filter'
                   : active === 'tax'
@@ -191,7 +191,7 @@ export default function InsightsLayout() {
                       elevation: isActive ? 1 : 0,
                     }}
                   >
-                    <Text
+                    <Text className="font-sans"
                       style={{
                         fontSize: 13,
                         fontWeight: isActive ? '700' : '500',
@@ -233,7 +233,7 @@ export default function InsightsLayout() {
                 >
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                     <MoreHorizontal size={14} color={isOverflowActive ? '#111827' : '#6b7280'} />
-                    <Text
+                    <Text className="font-sans"
                       style={{
                         fontSize: 13,
                         fontWeight: isOverflowActive ? '700' : '500',
@@ -256,7 +256,7 @@ export default function InsightsLayout() {
                           marginLeft: 2,
                         }}
                       >
-                        <Text style={{ fontSize: 10, fontWeight: '700', color: 'white' }}>
+                        <Text className="font-sans" style={{ fontSize: 10, fontWeight: '700', color: 'white' }}>
                           {overflowTabs.length}
                         </Text>
                       </View>
@@ -309,10 +309,10 @@ export default function InsightsLayout() {
               </View>
               <View className='flex-row items-center justify-between px-2 pb-2'>
                 <View>
-                  <Text className='text-sm font-bold tracking-tight text-gray-900'>
+                  <Text className='font-geist-bold text-sm font-bold tracking-tight text-gray-900'>
                     More sections
                   </Text>
-                  <Text className='text-xs text-gray-500 mt-0.5'>
+                  <Text className='font-sans text-xs text-gray-500 mt-0.5'>
                     {overflowTabs.length} more • tap to switch
                   </Text>
                 </View>
@@ -362,7 +362,7 @@ export default function InsightsLayout() {
                       <Icon size={16} color={isActive ? 'white' : '#6b7280'} />
                     </View>
                     <View className='flex-1'>
-                      <Text
+                      <Text className="font-sans"
                         style={{
                           fontSize: 14,
                           fontWeight: '700',
@@ -372,7 +372,7 @@ export default function InsightsLayout() {
                       >
                         {t.label}
                       </Text>
-                      <Text
+                      <Text className="font-sans"
                         style={{
                           fontSize: 12,
                           color: isActive ? 'rgba(255,255,255,0.72)' : '#6b7280',
@@ -388,7 +388,7 @@ export default function InsightsLayout() {
                       </View>
                     ) : (
                       <View className='w-8 h-8 rounded-full bg-gray-50 border border-gray-200 items-center justify-center'>
-                        <Text className='text-gray-400 font-bold text-xs'>›</Text>
+                        <Text className='font-geist-bold text-gray-500 font-bold text-xs'>›</Text>
                       </View>
                     )}
                   </TouchableOpacity>
@@ -413,7 +413,7 @@ export default function InsightsLayout() {
                         alignItems: 'center',
                       }}
                     >
-                      <Text
+                      <Text className="font-sans"
                         style={{
                           fontSize: 12,
                           fontWeight: isActive ? '700' : '500',
@@ -427,7 +427,7 @@ export default function InsightsLayout() {
                 })}
               </View>
 
-              <Text className='text-center text-[11px] text-gray-400 mt-3 mb-1'>
+              <Text className='font-sans text-center text-[11px] text-gray-500 mt-3 mb-1'>
                 Tamagui tabs • squeeze-free • 3 pills + More
               </Text>
             </Pressable>

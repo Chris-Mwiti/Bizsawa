@@ -226,13 +226,13 @@ export default function ProfileTab() {
   return (
     <View className='flex-1 bg-gray-50'>
       <View className='px-4 pt-12 pb-4 bg-white border-b border-gray-200'>
-        <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
+        <Text className='font-geist-bold text-xs font-bold tracking-widest text-gray-500 uppercase'>
           Account
         </Text>
-        <Text className='text-xl font-bold tracking-tight text-gray-900 -mt-0.5'>
+        <Text className='font-geist-bold text-xl font-bold tracking-tight text-gray-900 -mt-0.5'>
           Profile
         </Text>
-        <Text className='text-xs text-gray-500'>
+        <Text className='font-sans text-xs text-gray-500'>
           Dhibiti maelezo yako • Manage your details
         </Text>
       </View>
@@ -248,7 +248,7 @@ export default function ProfileTab() {
         {isLoading && (
           <View className='py-8 items-center bg-white rounded-2xl border border-gray-200'>
             <ActivityIndicator color='#111827' />
-            <Text className='text-sm text-gray-500 mt-2'>
+            <Text className='font-sans text-sm text-gray-500 mt-2'>
               Loading business profile…
             </Text>
           </View>
@@ -258,28 +258,28 @@ export default function ProfileTab() {
             onPress={() => refetch()}
             className='p-4 bg-amber-50 rounded-2xl border border-amber-200'
           >
-            <Text className='text-sm font-semibold text-amber-900'>
+            <Text className='font-geist-semibold text-sm font-semibold text-amber-900'>
               Could not load profile
             </Text>
-            <Text className='text-xs text-amber-700 mt-1'>Tap to retry</Text>
+            <Text className='font-sans text-xs text-amber-700 mt-1'>Tap to retry</Text>
           </Pressable>
         )}
 
         <Card className='border border-gray-200'>
           <CardContent className='p-5 flex-row items-center gap-4'>
-            <View className='w-14 h-14 rounded-2xl bg-gray-900 items-center justify-center'>
-              <Text className='text-base font-bold text-white'>
+            <View className='w-14 h-14 rounded-2xl bg-accent items-center justify-center'>
+              <Text className='font-geist-bold text-base font-bold text-white'>
                 {ownerParts.initials}
               </Text>
             </View>
             <View className='flex-1'>
-              <Text className='text-base font-bold text-gray-900'>
+              <Text className='font-geist-bold text-base font-bold text-gray-900'>
                 {ownerParts.first} {ownerParts.last}
               </Text>
-              <Text className='text-sm text-gray-600'>{businessName}</Text>
+              <Text className='font-sans text-sm text-gray-600'>{businessName}</Text>
               <View className='flex-row items-center gap-1 mt-1'>
-                <MapPin size={12} color='#9ca3af' />
-                <Text className='text-xs text-gray-500' numberOfLines={1}>
+                <MapPin size={12} color='#6b7280' />
+                <Text className='font-sans text-xs text-gray-500' numberOfLines={1}>
                   {address}
                 </Text>
               </View>
@@ -312,8 +312,8 @@ export default function ProfileTab() {
                 <Phone size={14} color='#6b7280' />
               </View>
               <View className='flex-1'>
-                <Text className='text-xs font-semibold text-gray-500'>Phone</Text>
-                <Text className='text-sm font-medium text-gray-900'>{phone}</Text>
+                <Text className='font-geist-semibold text-xs font-semibold text-gray-500'>Phone</Text>
+                <Text className='font-geist-medium text-sm font-medium text-gray-900'>{phone}</Text>
               </View>
             </View>
             <View className='h-px bg-gray-100' />
@@ -322,8 +322,8 @@ export default function ProfileTab() {
                 <Building size={14} color='#6b7280' />
               </View>
               <View className='flex-1'>
-                <Text className='text-xs font-semibold text-gray-500'>Email</Text>
-                <Text className='text-sm font-medium text-gray-900' numberOfLines={1}>{email}</Text>
+                <Text className='font-geist-semibold text-xs font-semibold text-gray-500'>Email</Text>
+                <Text className='font-geist-medium text-sm font-medium text-gray-900' numberOfLines={1}>{email}</Text>
               </View>
             </View>
             <View className='h-px bg-gray-100' />
@@ -332,8 +332,8 @@ export default function ProfileTab() {
                 <MapPin size={14} color='#6b7280' />
               </View>
               <View className='flex-1'>
-                <Text className='text-xs font-semibold text-gray-500'>Address</Text>
-                <Text className='text-sm font-medium text-gray-900' numberOfLines={2}>{address}</Text>
+                <Text className='font-geist-semibold text-xs font-semibold text-gray-500'>Address</Text>
+                <Text className='font-geist-medium text-sm font-medium text-gray-900' numberOfLines={2}>{address}</Text>
               </View>
             </View>
             <View className='h-px bg-gray-100' />
@@ -343,8 +343,8 @@ export default function ProfileTab() {
                   <Calendar size={14} color='#6b7280' />
                 </View>
                 <View>
-                  <Text className='text-xs font-semibold text-gray-500'>Currency</Text>
-                  <Text className='text-sm font-medium text-gray-900'>{currency}</Text>
+                  <Text className='font-geist-semibold text-xs font-semibold text-gray-500'>Currency</Text>
+                  <Text className='font-geist-medium text-sm font-medium text-gray-900'>{currency}</Text>
                 </View>
               </View>
               <View className='flex-1 flex-row items-center gap-3'>
@@ -352,31 +352,31 @@ export default function ProfileTab() {
                   <Building size={14} color='#6b7280' />
                 </View>
                 <View>
-                  <Text className='text-xs font-semibold text-gray-500'>Tax PIN</Text>
-                  <Text className='text-sm font-medium text-gray-900'>{taxPin}</Text>
+                  <Text className='font-geist-semibold text-xs font-semibold text-gray-500'>Tax PIN</Text>
+                  <Text className='font-geist-medium text-sm font-medium text-gray-900'>{taxPin}</Text>
                 </View>
               </View>
             </View>
             <View className='h-px bg-gray-100' />
             <View className='flex-row gap-3 py-2'>
               <View className='flex-1'>
-                <Text className='text-xs font-semibold text-gray-500'>Slug</Text>
-                <Text className='text-sm font-medium text-gray-900'>{slug}</Text>
+                <Text className='font-geist-semibold text-xs font-semibold text-gray-500'>Slug</Text>
+                <Text className='font-geist-medium text-sm font-medium text-gray-900'>{slug}</Text>
               </View>
               <View className='flex-1'>
-                <Text className='text-xs font-semibold text-gray-500'>Timezone</Text>
-                <Text className='text-sm font-medium text-gray-900' numberOfLines={1}>{timezone}</Text>
+                <Text className='font-geist-semibold text-xs font-semibold text-gray-500'>Timezone</Text>
+                <Text className='font-geist-medium text-sm font-medium text-gray-900' numberOfLines={1}>{timezone}</Text>
               </View>
             </View>
             <View className='h-px bg-gray-100' />
             <View className='flex-row items-center justify-between py-2'>
               <View>
-                <Text className='text-xs font-semibold text-gray-500'>M-Pesa type</Text>
-                <Text className='text-sm font-medium text-gray-900 capitalize'>{mpesaPaymentType}</Text>
+                <Text className='font-geist-semibold text-xs font-semibold text-gray-500'>M-Pesa type</Text>
+                <Text className='font-geist-medium text-sm font-medium text-gray-900 capitalize'>{mpesaPaymentType}</Text>
               </View>
               <View className='items-end'>
-                <Text className='text-xs font-semibold text-gray-500'>Member since</Text>
-                <Text className='text-sm font-medium text-gray-900'>{createdAt}</Text>
+                <Text className='font-geist-semibold text-xs font-semibold text-gray-500'>Member since</Text>
+                <Text className='font-geist-medium text-sm font-medium text-gray-900'>{createdAt}</Text>
               </View>
             </View>
 
@@ -385,7 +385,7 @@ export default function ProfileTab() {
               className='flex-row items-center justify-center gap-2 py-4 rounded-2xl bg-white border border-red-200 mt-2'
             >
               <LogOut size={16} color='#dc2626' />
-              <Text className='font-bold text-red-700 text-sm'>Sign out</Text>
+              <Text className='font-geist-bold font-bold text-red-700 text-sm'>Sign out</Text>
             </TouchableOpacity>
           </CardContent>
         </Card>
@@ -397,26 +397,26 @@ export default function ProfileTab() {
                 <Users size={16} color='#111827' />
                 <CardTitle>Team • {activeRole}</CardTitle>
               </View>
-              <TouchableOpacity onPress={() => setShowInvite(true)} className='px-4 py-2 rounded-full bg-gray-900 flex-row items-center gap-2'>
+              <TouchableOpacity onPress={() => setShowInvite(true)} className='px-4 py-2 rounded-full bg-accent flex-row items-center gap-2'>
                 <UserPlus size={14} color='white' />
-                <Text className='text-xs font-bold text-white'>Invite</Text>
+                <Text className='font-geist-bold text-xs font-bold text-white'>Invite</Text>
               </TouchableOpacity>
             </CardHeader>
             <CardContent className='pt-0 gap-3'>
-              <Text className='text-xs leading-4 text-gray-600'>
+              <Text className='font-sans text-xs leading-4 text-gray-600'>
                 {activeRole === 'OWNER' ? 'Owner can invite Manager, Cashier or Viewer.' : 'Manager can invite Cashiers only.'} Invite sends an email with OTP + download instructions; the recipient enters the code to join as that role.
               </Text>
               {members.length > 0 && (
                 <View className='gap-2'>
-                  <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>Members ({members.length})</Text>
+                  <Text className='font-geist-bold text-xs font-bold tracking-widest text-gray-500 uppercase'>Members ({members.length})</Text>
                   {members.map((m:any) => (
                     <View key={m.id} className='flex-row items-center justify-between p-3 rounded-2xl bg-white border border-gray-200'>
                       <View className='flex-1'>
-                        <Text className='text-sm font-semibold text-gray-900' numberOfLines={1}>{m.userId.slice(0,8)}…</Text>
-                        <Text className='text-xs text-gray-500'>{m.role} • {m.isActive ? 'Active' : 'Inactive'}</Text>
+                        <Text className='font-geist-semibold text-sm font-semibold text-gray-900' numberOfLines={1}>{m.userId.slice(0,8)}…</Text>
+                        <Text className='font-sans text-xs text-gray-500'>{m.role} • {m.isActive ? 'Active' : 'Inactive'}</Text>
                       </View>
-                      <View className={`px-3 py-1 rounded-full ${m.role==='OWNER'?'bg-gray-900':m.role==='MANAGER'?'bg-blue-600':'bg-emerald-600'}`}>
-                        <Text className='text-xs font-bold text-white'>{m.role}</Text>
+                      <View className={`px-3 py-1 rounded-full ${m.role==='OWNER'?'bg-accent':m.role==='MANAGER'?'bg-blue-600':'bg-emerald-600'}`}>
+                        <Text className='font-geist-bold text-xs font-bold text-white'>{m.role}</Text>
                       </View>
                     </View>
                   ))}
@@ -424,24 +424,24 @@ export default function ProfileTab() {
               )}
               {invites.length > 0 && (
                 <View className='gap-2'>
-                  <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>Pending invites ({invites.length})</Text>
+                  <Text className='font-geist-bold text-xs font-bold tracking-widest text-gray-500 uppercase'>Pending invites ({invites.length})</Text>
                   {invites.map((inv:any) => (
                     <View key={inv.id} className='flex-row items-center gap-3 p-3 rounded-2xl bg-amber-50 border border-amber-200'>
                       <Mail size={14} color='#b45309' />
                       <View className='flex-1'>
-                        <Text className='text-sm font-medium text-gray-900' numberOfLines={1}>{inv.email}</Text>
-                        <Text className='text-xs text-gray-500'>{inv.role} • expires {new Date(inv.expiresAt).toLocaleDateString('en-KE')}</Text>
+                        <Text className='font-geist-medium text-sm font-medium text-gray-900' numberOfLines={1}>{inv.email}</Text>
+                        <Text className='font-sans text-xs text-gray-500'>{inv.role} • expires {new Date(inv.expiresAt).toLocaleDateString('en-KE')}</Text>
                       </View>
                       <View className='flex-row items-center gap-1'>
                         <Clock size={12} color='#b45309' />
-                        <Text className='text-xs font-bold text-amber-700'>Pending</Text>
+                        <Text className='font-geist-bold text-xs font-bold text-amber-700'>Pending</Text>
                       </View>
                     </View>
                   ))}
                 </View>
               )}
               {members.length===0 && invites.length===0 && (
-                <Text className='text-xs text-gray-500 text-center py-2'>No team yet — invite your first cashier.</Text>
+                <Text className='font-sans text-xs text-gray-500 text-center py-2'>No team yet — invite your first cashier.</Text>
               )}
             </CardContent>
           </Card>
@@ -454,17 +454,17 @@ export default function ProfileTab() {
               <CardTitle>Subscription {isPremium?'• Premium':`• Free`}</CardTitle>
             </View>
             {!isPremium && (
-              <TouchableOpacity onPress={() => setShowPaywall(true)} className='px-3 py-1.5 rounded-full bg-gray-900'>
-                <Text className='text-xs font-bold text-white'>Upgrade</Text>
+              <TouchableOpacity onPress={() => setShowPaywall(true)} className='px-3 py-1.5 rounded-full bg-accent'>
+                <Text className='font-geist-bold text-xs font-bold text-white'>Upgrade</Text>
               </TouchableOpacity>
             )}
           </CardHeader>
           <CardContent className='pt-0 gap-2'>
             <View className='flex-row justify-between items-center p-3 rounded-2xl bg-white border border-gray-200'>
-              <Text className='text-sm font-semibold text-gray-900'>{subscription?.planCode ? subscription.planCode.toUpperCase() : 'FREE'}</Text>
-              <Text className='text-xs text-gray-500'>{subscription?.endsAt ? `Ends ${new Date(subscription.endsAt).toLocaleDateString('en-KE')}` : isPremium ? 'Active' : '1 biz • basic reports'}</Text>
+              <Text className='font-geist-semibold text-sm font-semibold text-gray-900'>{subscription?.planCode ? subscription.planCode.toUpperCase() : 'FREE'}</Text>
+              <Text className='font-sans text-xs text-gray-500'>{subscription?.endsAt ? `Ends ${new Date(subscription.endsAt).toLocaleDateString('en-KE')}` : isPremium ? 'Active' : '1 biz • basic reports'}</Text>
             </View>
-            <Text className='text-xs text-gray-500'>{isPremium ? 'Premium: 5 businesses, AI + full analytics, WAHA' : 'Free: 1 business, 50 products, week analytics only. Unlock premium for KES 399/mo via M-Pesa STK — isolated from business payments.'}</Text>
+            <Text className='font-sans text-xs text-gray-500'>{isPremium ? 'Premium: 5 businesses, AI + full analytics, WAHA' : 'Free: 1 business, 50 products, week analytics only. Unlock premium for KES 399/mo via M-Pesa STK — isolated from business payments.'}</Text>
             <PaywallModal visible={showPaywall} onClose={() => setShowPaywall(false)} feature="Premium — unlock everything" />
           </CardContent>
         </Card>
@@ -486,13 +486,13 @@ export default function ProfileTab() {
             <View className='flex-row items-center justify-between p-3.5 rounded-2xl bg-gray-50 border border-gray-200'>
               <View className='flex-row items-center gap-3'>
                 <View className='w-10 h-10 rounded-2xl bg-emerald-600 items-center justify-center'>
-                  <Text className='text-white font-bold text-xs'>MP</Text>
+                  <Text className='font-geist-bold text-white font-bold text-xs'>MP</Text>
                 </View>
                 <View>
-                  <Text className='text-sm font-bold text-gray-900'>
+                  <Text className='font-geist-bold text-sm font-bold text-gray-900'>
                     M-Pesa
                   </Text>
-                  <Text className='text-xs text-gray-500'>{mpesaDisplay}</Text>
+                  <Text className='font-sans text-xs text-gray-500'>{mpesaDisplay}</Text>
                 </View>
               </View>
               <CheckCircle size={18} color='#059669' />
@@ -504,11 +504,11 @@ export default function ProfileTab() {
           <CardHeader className='flex-row items-center gap-2'>
             <ShieldAlert size={16} color={conflictCount>0?'#b45309':'#111827'} />
             <CardTitle>Sync & conflicts</CardTitle>
-            {conflictCount>0 && <View className='ml-auto bg-amber-500 rounded-full px-3 py-1'><Text className='text-xs font-bold text-white'>{conflictCount} conflict{conflictCount>1?'s':''}</Text></View>}
-            {conflictCount===0 && pendingCount>0 && <View className='ml-auto bg-gray-900 rounded-full px-3 py-1'><Text className='text-xs font-bold text-white'>{pendingCount} pending</Text></View>}
+            {conflictCount>0 && <View className='ml-auto bg-amber-500 rounded-full px-3 py-1'><Text className='font-geist-bold text-xs font-bold text-white'>{conflictCount} conflict{conflictCount>1?'s':''}</Text></View>}
+            {conflictCount===0 && pendingCount>0 && <View className='ml-auto bg-accent rounded-full px-3 py-1'><Text className='font-geist-bold text-xs font-bold text-white'>{pendingCount} pending</Text></View>}
           </CardHeader>
           <CardContent className='pt-0 gap-3'>
-            <Text className='text-xs leading-4 text-gray-600'>
+            <Text className='font-sans text-xs leading-4 text-gray-600'>
               Owner-only: review and resolve sync conflicts when the same record was edited offline on two devices. Pending shows local changes not yet pushed.
             </Text>
             <View className='flex-row gap-2'>
@@ -517,19 +517,19 @@ export default function ProfileTab() {
                 className={`flex-1 flex-row items-center justify-center gap-2 py-4 rounded-2xl border ${conflictCount>0?'bg-amber-500 border-amber-600':'bg-white border-gray-200'}`}
               >
                 <AlertTriangle size={16} color={conflictCount>0?'white':'#111827'} />
-                <Text className={`text-sm font-bold ${conflictCount>0?'text-white':'text-gray-900'}`}>
+                <Text className={`font-geist-bold text-sm font-bold ${conflictCount>0?'text-white':'text-gray-900'}`}>
                   {conflictCount>0?'Resolve conflicts':'View conflicts'}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={async () => { try { await triggerSync(); Alert.alert('Sync', 'Sync completed')} catch(e:any){ Alert.alert('Sync failed', e?.message||'Failed')} }}
-                className='w-[112px] flex-row items-center justify-center gap-2 py-4 rounded-2xl bg-gray-900'
+                className='w-[112px] flex-row items-center justify-center gap-2 py-4 rounded-2xl bg-accent'
               >
                 <RefreshCw size={14} color='white' />
-                <Text className='text-sm font-bold text-white'>Sync now</Text>
+                <Text className='font-geist-bold text-sm font-bold text-white'>Sync now</Text>
               </TouchableOpacity>
             </View>
-            {(pendingCount>0 || conflictCount>0) && <Text className='text-xs text-gray-500 text-center'>Tap Sync now to push {pendingCount} pending, or View conflicts when push returns version mismatch.</Text>}
+            {(pendingCount>0 || conflictCount>0) && <Text className='font-sans text-xs text-gray-500 text-center'>Tap Sync now to push {pendingCount} pending, or View conflicts when push returns version mismatch.</Text>}
           </CardContent>
         </Card>
 
@@ -542,11 +542,11 @@ export default function ProfileTab() {
             <View className='bg-white rounded-2xl border border-amber-100 p-3'>
               <View className='flex-row items-center gap-2 mb-1'>
                 <Sparkles size={14} color='#b45309' />
-                <Text className='text-sm font-bold text-gray-900'>
+                <Text className='font-geist-bold text-sm font-bold text-gray-900'>
                   Briefing
                 </Text>
               </View>
-              <Text className='text-xs leading-4 text-gray-700'>
+              <Text className='font-sans text-xs leading-4 text-gray-700'>
                 Pop-up menus brief you on each button and page: what
                 Sales/Orders/Invoices do, how variants change price, how cart
                 removal works, how to navigate tabs, and how offline sync
@@ -557,10 +557,10 @@ export default function ProfileTab() {
 
             <View className='flex-row items-center justify-between p-3 bg-white rounded-2xl border border-gray-200'>
               <View>
-                <Text className='text-sm font-bold text-gray-900'>
+                <Text className='font-geist-bold text-sm font-bold text-gray-900'>
                   Interactive tour
                 </Text>
-                <Text className='text-xs text-gray-500'>
+                <Text className='font-sans text-xs text-gray-500'>
                   {tourEnabled
                     ? hasSeenTour
                       ? 'Enabled • will auto-show for new users'
@@ -570,7 +570,7 @@ export default function ProfileTab() {
               </View>
               <Pressable
                 onPress={() => setTourEnabled(!tourEnabled)}
-                className={`w-12 h-7 rounded-full p-1 ${tourEnabled ? 'bg-gray-900' : 'bg-gray-200'}`}
+                className={`w-12 h-7 rounded-full p-1 ${tourEnabled ? 'bg-accent' : 'bg-gray-200'}`}
               >
                 <View
                   className={`w-5 h-5 rounded-full bg-white ${tourEnabled ? 'ml-5' : 'ml-0'}`}
@@ -581,21 +581,21 @@ export default function ProfileTab() {
             <View className='flex-row gap-2'>
               <TouchableOpacity
                 onPress={startTour}
-                className='flex-1 flex-row items-center justify-center gap-2 py-3 rounded-2xl bg-gray-900'
+                className='flex-1 flex-row items-center justify-center gap-2 py-3 rounded-2xl bg-accent'
               >
                 <Play size={14} color='white' />
-                <Text className='text-sm font-bold text-white'>Start tour</Text>
+                <Text className='font-geist-bold text-sm font-bold text-white'>Start tour</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={resetTour}
                 className='flex-1 py-3 rounded-2xl bg-white border border-gray-200 items-center'
               >
-                <Text className='text-sm font-bold text-gray-700'>
+                <Text className='font-geist-bold text-sm font-bold text-gray-700'>
                   Reset & replay
                 </Text>
               </TouchableOpacity>
             </View>
-            <Text className='text-xs text-gray-500 text-center'>
+            <Text className='font-sans text-xs text-gray-500 text-center'>
               Toggle off in profile when you understand the app. Tour covers
               Sales variants, cart, Invoices settlement, Stock, Profile edits,
               navigation and offline.
@@ -613,17 +613,17 @@ export default function ProfileTab() {
       >
         <View className='flex-1 bg-gray-50'>
           <View className='flex-row justify-between items-center p-4 bg-white border-b border-gray-200'>
-            <Text className='text-lg font-bold'>Edit Business</Text>
+            <Text className='font-geist-bold text-lg font-bold'>Edit Business</Text>
             <TouchableOpacity
               onPress={() => setShowBusinessEdit(false)}
               className='w-11 h-11 rounded-full bg-gray-100 items-center justify-center'
             >
-              <Text className='font-bold'>✕</Text>
+              <Text className='font-geist-bold font-bold'>✕</Text>
             </TouchableOpacity>
           </View>
           <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
             <View>
-              <Text className='text-sm font-semibold text-gray-700 mb-2'>
+              <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
                 Business name *
               </Text>
               <TextInput
@@ -635,7 +635,7 @@ export default function ProfileTab() {
               />
             </View>
             <View>
-              <Text className='text-sm font-semibold text-gray-700 mb-2'>
+              <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
                 Phone
               </Text>
               <TextInput
@@ -648,7 +648,7 @@ export default function ProfileTab() {
               />
             </View>
             <View>
-              <Text className='text-sm font-semibold text-gray-700 mb-2'>
+              <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
                 Email
               </Text>
               <TextInput
@@ -662,7 +662,7 @@ export default function ProfileTab() {
               />
             </View>
             <View>
-              <Text className='text-sm font-semibold text-gray-700 mb-2'>
+              <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
                 Address
               </Text>
               <TextInput
@@ -675,7 +675,7 @@ export default function ProfileTab() {
             </View>
             <View className='flex-row gap-3'>
               <View className='flex-1'>
-                <Text className='text-sm font-semibold text-gray-700 mb-2'>
+                <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
                   Currency
                 </Text>
                 <TextInput
@@ -687,7 +687,7 @@ export default function ProfileTab() {
                 />
               </View>
               <View className='flex-1'>
-                <Text className='text-sm font-semibold text-gray-700 mb-2'>
+                <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
                   Tax PIN
                 </Text>
                 <TextInput
@@ -703,14 +703,14 @@ export default function ProfileTab() {
             <TouchableOpacity
               onPress={handleSaveBusiness}
               disabled={saving}
-              className='bg-gray-900 py-4 rounded-2xl items-center flex-row justify-center gap-2'
+              className='bg-accent py-4 rounded-2xl items-center flex-row justify-center gap-2'
             >
               {saving ? (
                 <ActivityIndicator color='white' />
               ) : (
                 <>
                   <Save size={16} color='white' />
-                  <Text className='text-white font-bold'>Save Business</Text>
+                  <Text className='font-geist-bold text-white font-bold'>Save Business</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -727,18 +727,18 @@ export default function ProfileTab() {
       >
         <View className='flex-1 bg-gray-50'>
           <View className='flex-row justify-between items-center p-4 bg-white border-b border-gray-200'>
-            <Text className='text-lg font-bold'>Edit Profile</Text>
+            <Text className='font-geist-bold text-lg font-bold'>Edit Profile</Text>
             <TouchableOpacity
               onPress={() => setShowProfileEdit(false)}
               className='w-11 h-11 rounded-full bg-gray-100 items-center justify-center'
             >
-              <Text className='font-bold'>✕</Text>
+              <Text className='font-geist-bold font-bold'>✕</Text>
             </TouchableOpacity>
           </View>
           <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
             <View className='flex-row gap-3'>
               <View className='flex-1'>
-                <Text className='text-sm font-semibold text-gray-700 mb-2'>
+                <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
                   First name
                 </Text>
                 <TextInput
@@ -750,7 +750,7 @@ export default function ProfileTab() {
                 />
               </View>
               <View className='flex-1'>
-                <Text className='text-sm font-semibold text-gray-700 mb-2'>
+                <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
                   Last name
                 </Text>
                 <TextInput
@@ -763,7 +763,7 @@ export default function ProfileTab() {
               </View>
             </View>
             <View>
-              <Text className='text-sm font-semibold text-gray-700 mb-2'>
+              <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
                 Phone
               </Text>
               <TextInput
@@ -776,11 +776,11 @@ export default function ProfileTab() {
               />
             </View>
             <View className='h-px bg-gray-200 my-2' />
-            <Text className='text-sm font-bold text-gray-900'>
+            <Text className='font-geist-bold text-sm font-bold text-gray-900'>
               Change password
             </Text>
             <View>
-              <Text className='text-sm font-semibold text-gray-700 mb-2'>
+              <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
                 Current password
               </Text>
               <TextInput
@@ -793,7 +793,7 @@ export default function ProfileTab() {
               />
             </View>
             <View>
-              <Text className='text-sm font-semibold text-gray-700 mb-2'>
+              <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
                 New password
               </Text>
               <TextInput
@@ -806,7 +806,7 @@ export default function ProfileTab() {
               />
             </View>
             <View>
-              <Text className='text-sm font-semibold text-gray-700 mb-2'>
+              <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
                 Confirm new password
               </Text>
               <TextInput
@@ -821,14 +821,14 @@ export default function ProfileTab() {
             <TouchableOpacity
               onPress={handleSaveProfile}
               disabled={saving}
-              className='bg-gray-900 py-4 rounded-2xl items-center flex-row justify-center gap-2'
+              className='bg-accent py-4 rounded-2xl items-center flex-row justify-center gap-2'
             >
               {saving ? (
                 <ActivityIndicator color='white' />
               ) : (
                 <>
                   <Save size={16} color='white' />
-                  <Text className='text-white font-bold'>Save Profile</Text>
+                  <Text className='font-geist-bold text-white font-bold'>Save Profile</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -841,27 +841,27 @@ export default function ProfileTab() {
         <View className='flex-1 bg-gray-50'>
           <View className='flex-row justify-between items-center p-4 bg-white border-b border-gray-200'>
             <View>
-              <Text className='text-lg font-bold'>Invite team member</Text>
-              <Text className='text-xs text-gray-500'>{activeRole==='OWNER'?'Owner can invite any role':'Manager can invite Cashier'}</Text>
+              <Text className='font-geist-bold text-lg font-bold'>Invite team member</Text>
+              <Text className='font-sans text-xs text-gray-500'>{activeRole==='OWNER'?'Owner can invite any role':'Manager can invite Cashier'}</Text>
             </View>
-            <TouchableOpacity onPress={() => setShowInvite(false)} className='w-11 h-11 rounded-full bg-gray-100 items-center justify-center'><Text className='font-bold'>✕</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => setShowInvite(false)} className='w-11 h-11 rounded-full bg-gray-100 items-center justify-center'><Text className='font-geist-bold font-bold'>✕</Text></TouchableOpacity>
           </View>
           <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
             <View>
-              <Text className='text-sm font-semibold text-gray-700 mb-2'>Email *</Text>
+              <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>Email *</Text>
               <TextInput className='bg-white border border-gray-300 rounded-2xl px-4 py-4' keyboardType='email-address' autoCapitalize='none' placeholder='colleague@example.com' value={inviteEmail} onChangeText={setInviteEmail} />
-              <Text className='text-xs text-gray-500 mt-1'>An OTP code will be sent with download instructions.</Text>
+              <Text className='font-sans text-xs text-gray-500 mt-1'>An OTP code will be sent with download instructions.</Text>
             </View>
             <View>
-              <Text className='text-sm font-semibold text-gray-700 mb-2'>Role *</Text>
+              <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>Role *</Text>
               <View className='flex-row gap-2'>
                 {availableRoles.map((r) => (
-                  <TouchableOpacity key={r} onPress={() => setInviteRole(r)} className={`flex-1 py-3 rounded-2xl border items-center ${inviteRole===r?'bg-gray-900 border-gray-900':'bg-white border-gray-200'}`}>
-                    <Text className={`text-sm font-bold ${inviteRole===r?'text-white':'text-gray-700'}`}>{r}</Text>
+                  <TouchableOpacity key={r} onPress={() => setInviteRole(r)} className={`flex-1 py-3 rounded-2xl border items-center ${inviteRole===r?'bg-accent border-accent':'bg-white border-gray-200'}`}>
+                    <Text className={`font-geist-bold text-sm font-bold ${inviteRole===r?'text-white':'text-gray-700'}`}>{r}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
-              <Text className='text-xs text-gray-500 mt-1'>Manager → Cashier only; Owner → any.</Text>
+              <Text className='font-sans text-xs text-gray-500 mt-1'>Manager → Cashier only; Owner → any.</Text>
             </View>
             <TouchableOpacity disabled={isInviting || !inviteEmail.trim()} onPress={async () => {
               try {
@@ -869,12 +869,12 @@ export default function ProfileTab() {
                 Alert.alert('Invite sent', `OTP sent to ${inviteEmail.trim()} as ${inviteRole}. They will get download instructions and can enter the code in Login → Have an invite code?`)
                 setInviteEmail(''); setShowInvite(false)
               } catch (e:any) { Alert.alert('Invite failed', e.friendlyMessage || e.message || 'Failed') }
-            }} className={`py-4 rounded-2xl items-center flex-row justify-center gap-2 ${isInviting || !inviteEmail.trim() ? 'bg-gray-300' : 'bg-gray-900'}`}>
-              {isInviting ? <ActivityIndicator color='white' /> : <><Mail size={16} color='white' /><Text className='text-white font-bold'>Send invite</Text></>}
+            }} className={`py-4 rounded-2xl items-center flex-row justify-center gap-2 ${isInviting || !inviteEmail.trim() ? 'bg-gray-300' : 'bg-accent'}`}>
+              {isInviting ? <ActivityIndicator color='white' /> : <><Mail size={16} color='white' /><Text className='font-geist-bold text-white font-bold'>Send invite</Text></>}
             </TouchableOpacity>
             <View className='bg-white rounded-2xl border border-gray-200 p-3'>
-              <Text className='text-xs font-bold text-gray-900'>How it works</Text>
-              <Text className='text-xs leading-4 text-gray-600 mt-1'>1. Email delivers OTP (24h) + Play Store / App Store links.{"\n"}2. If app not installed → download, open, Login → “Have an invite code?” → enter email + OTP.{"\n"}3. If app installed → Login → “Have an invite code?” → enter OTP → instantly joined with role.</Text>
+              <Text className='font-geist-bold text-xs font-bold text-gray-900'>How it works</Text>
+              <Text className='font-sans text-xs leading-4 text-gray-600 mt-1'>1. Email delivers OTP (24h) + Play Store / App Store links.{"\n"}2. If app not installed → download, open, Login → “Have an invite code?” → enter email + OTP.{"\n"}3. If app installed → Login → “Have an invite code?” → enter OTP → instantly joined with role.</Text>
             </View>
           </ScrollView>
         </View>

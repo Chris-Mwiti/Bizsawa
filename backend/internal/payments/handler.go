@@ -75,6 +75,56 @@ func (h Handler) Get(w http.ResponseWriter, r *http.Request) {
 	sharedhttp.JSON(w, http.StatusOK, cmd)
 }
 
+// Cancel marks a pending/processing payment as failed so the app can stop
+// polling, notify the user, and allow a retry. Terminal payments are returned
+// untouched (idempotent).
+func (h Handler) Cancel(w http.ResponseWriter, r *http.Request) {
+	bid, ok := middleware.BusinessIDFromCtx(r.Context())
+	if !ok {
+		sharedhttp.Error(w, errBusinessRequired())
+		return
+	}
+
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		sharedhttp.Error(w, err)
+		return
+	}
+
+	cmd, err := h.svc.Cancel(r.Context(), bid, id)
+	if err != nil {
+		sharedhttp.Error(w, err)
+		return
+	}
+
+	sharedhttp.JSON(w, http.StatusOK, cmd)
+}
+
+// Check re-queries Daraja for a processing payment's outcome (STK query).
+// Daraja still answers async via callback; this confirms the query was
+// accepted so the app can keep polling instead of hanging.
+func (h Handler) Check(w http.ResponseWriter, r *http.Request) {
+	bid, ok := middleware.BusinessIDFromCtx(r.Context())
+	if !ok {
+		sharedhttp.Error(w, errBusinessRequired())
+		return
+	}
+
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		sharedhttp.Error(w, err)
+		return
+	}
+
+	result, err := h.svc.CheckSTK(r.Context(), bid, id)
+	if err != nil {
+		sharedhttp.Error(w, err)
+		return
+	}
+
+	sharedhttp.JSON(w, http.StatusAccepted, result)
+}
+
 type registerC2BRequest struct {
 	ResponseType string `json:"responseType"`
 }

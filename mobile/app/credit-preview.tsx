@@ -42,7 +42,7 @@ export default function CreditPreviewScreen() {
         {creditQuery.isLoading && (
           <View style={{ paddingVertical: 32, alignItems: 'center' }}>
             <ActivityIndicator size='small' color='#006b5f' />
-            <Text style={{ marginTop: 8, fontSize: 14, color: '#6b7280' }}>
+            <Text className="font-sans" style={{ marginTop: 8, fontSize: 14, color: '#6b7280' }}>
               Loading trust preview…
             </Text>
           </View>
@@ -59,7 +59,7 @@ export default function CreditPreviewScreen() {
               borderColor: '#fecaca',
             }}
           >
-            <Text style={{ color: '#991b1b', fontSize: 14 }}>
+            <Text className="font-sans" style={{ color: '#991b1b', fontSize: 14 }}>
               Could not load credit preview. Tap to retry.
             </Text>
           </TouchableOpacity>
@@ -73,40 +73,40 @@ export default function CreditPreviewScreen() {
                     <View className='mr-2'>
                       <Shield size={16} color='#374151' />
                     </View>
-                    <Text className='font-bold'>Trust score</Text>
+                    <Text className='font-geist-bold font-bold'>Trust score</Text>
                   </View>
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <Text className='text-xs text-gray-500 mb-2'>
+                <Text className='font-sans text-xs text-gray-500 mb-2'>
                   {creditQuery.data.disclaimer}
                 </Text>
-                <Text className='text-sm font-semibold text-gray-900 mb-1'>
+                <Text className='font-geist-semibold text-sm font-semibold text-gray-900 mb-1'>
                   {creditQuery.data.strings.headline}
                 </Text>
-                <Text className='text-xs text-gray-600 mb-4'>
+                <Text className='font-sans text-xs text-gray-600 mb-4'>
                   {creditQuery.data.strings.summary}
                 </Text>
                 <View className='items-center mb-4'>
                   <Text
-                    className={`text-4xl font-bold ${getTrustScoreColor(creditQuery.data.trustScore)}`}
+                    className={`font-geist-bold text-4xl font-bold ${getTrustScoreColor(creditQuery.data.trustScore)}`}
                   >
                     {creditQuery.data.trustScore}
                   </Text>
-                  <Text className='text-gray-500 text-sm'>
+                  <Text className='font-sans text-gray-500 text-sm'>
                     {creditQuery.data.ratingLabel}
                   </Text>
                 </View>
                 {creditQuery.data.components.map((c) => (
                   <View key={c.id} className='mb-3'>
                     <View className='flex-row justify-between mb-1'>
-                      <Text className='text-xs text-gray-600 flex-1 pr-2'>
+                      <Text className='font-sans text-xs text-gray-600 flex-1 pr-2'>
                         {c.label}
                       </Text>
-                      <Text className='text-xs font-bold'>{c.score}</Text>
+                      <Text className='font-geist-bold text-xs font-bold'>{c.score}</Text>
                     </View>
                     <Progress value={c.score} className='my-1' />
-                    <Text className='text-xs text-gray-400'>
+                    <Text className='font-sans text-xs text-gray-500'>
                       {c.detail}
                     </Text>
                   </View>
@@ -117,7 +117,7 @@ export default function CreditPreviewScreen() {
             <Card className='mb-4'>
               <CardHeader>
                 <CardTitle>
-                  <Text className='font-bold'>How weights work</Text>
+                  <Text className='font-geist-bold font-bold'>How weights work</Text>
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -126,10 +126,10 @@ export default function CreditPreviewScreen() {
                     key={w.id}
                     className='mb-3 pb-3 border-b border-gray-100 last:border-0'
                   >
-                    <Text className='text-xs font-semibold text-gray-800'>
+                    <Text className='font-geist-semibold text-xs font-semibold text-gray-800'>
                       {w.label}
                     </Text>
-                    <Text className='text-xs text-gray-600 mt-1'>
+                    <Text className='font-sans text-xs text-gray-600 mt-1'>
                       {w.description}
                     </Text>
                   </View>
@@ -140,7 +140,7 @@ export default function CreditPreviewScreen() {
             <Card className='mb-4'>
               <CardHeader>
                 <CardTitle>
-                  <Text className='font-bold'>Suggested next steps</Text>
+                  <Text className='font-geist-bold font-bold'>Suggested next steps</Text>
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -149,10 +149,10 @@ export default function CreditPreviewScreen() {
                     key={i}
                     className='mb-3 p-3 bg-blue-50 border border-blue-100 rounded-2xl'
                   >
-                    <Text className='text-xs font-bold text-blue-900'>
+                    <Text className='font-geist-bold text-xs font-bold text-blue-900'>
                       {a.title}
                     </Text>
-                    <Text className='text-xs text-blue-800 mt-1'>
+                    <Text className='font-sans text-xs text-blue-800 mt-1'>
                       {a.detail}
                     </Text>
                   </View>
@@ -167,28 +167,28 @@ export default function CreditPreviewScreen() {
                     <View className='mr-2'>
                       <CreditCard size={16} color='#16a34a' />
                     </View>
-                    <Text className='font-bold text-green-800'>
+                    <Text className='font-geist-bold font-bold text-green-800'>
                       Illustrative loan ceiling
                     </Text>
                   </View>
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <Text className='text-xs text-gray-600 mb-3'>
+                <Text className='font-sans text-xs text-gray-600 mb-3'>
                   Not a lender offer — based on recent on-platform sales only.
                 </Text>
                 <View className='flex-row justify-between text-center mb-4'>
                   <View className='items-center flex-1'>
-                    <Text className='text-2xl font-bold text-green-600 font-mono'>
+                    <Text className='font-geist-mono-bold text-2xl font-bold text-green-600'>
                 {formatCurrency(creditQuery.data.illustrativeLoanCeiling)}
                     </Text>
-                    <Text className='text-xs text-gray-600'>Ceiling</Text>
+                    <Text className='font-sans text-xs text-gray-600'>Ceiling</Text>
                   </View>
                   <View className='items-center flex-1'>
-                    <Text className='text-lg font-bold text-green-700 font-mono'>
+                    <Text className='font-geist-mono-bold text-lg font-bold text-green-700'>
                 {formatCurrency(creditQuery.data.signals.totalSales90d)}
                     </Text>
-                    <Text className='text-xs text-gray-600'>Sales (90d)</Text>
+                    <Text className='font-sans text-xs text-gray-600'>Sales (90d)</Text>
                   </View>
                 </View>
                 <TouchableOpacity
@@ -196,7 +196,7 @@ export default function CreditPreviewScreen() {
                   onPress={openSaccoResources}
                   activeOpacity={0.85}
                 >
-                  <Text className='text-white font-bold'>
+                  <Text className='font-geist-bold text-white font-bold'>
                     Licensed SACCOs (SASRA)
                   </Text>
                 </TouchableOpacity>
@@ -206,11 +206,11 @@ export default function CreditPreviewScreen() {
             <Card className='mb-4'>
               <CardHeader>
                 <CardTitle>
-                  <Text className='font-bold'>Loan providers</Text>
+                  <Text className='font-geist-bold font-bold'>Loan providers</Text>
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <Text className='text-xs text-gray-500 mb-3'>
+                <Text className='font-sans text-xs text-gray-500 mb-3'>
                   Filtered for your business type ({businessType}). Verify rates
                   with each institution.
                 </Text>
@@ -225,13 +225,13 @@ export default function CreditPreviewScreen() {
                       key={loan.id}
                       className='mb-3 p-3 border border-gray-200 rounded-2xl bg-white'
                     >
-                      <Text className='text-sm font-bold text-gray-900'>
+                      <Text className='font-geist-bold text-sm font-bold text-gray-900'>
                         {loan.institution}
                       </Text>
-                      <Text className='text-xs text-gray-600'>
+                      <Text className='font-sans text-xs text-gray-600'>
                         {loan.product}
                       </Text>
-                      <Text className='text-xs text-gray-500 mt-1'>
+                      <Text className='font-sans text-xs text-gray-500 mt-1'>
                         Up to {formatCurrency(loan.maxAmount)} ·{' '}
                         {loan.interestRate}
                       </Text>
@@ -242,7 +242,7 @@ export default function CreditPreviewScreen() {
                             Linking.openURL(loan.applyUrl).catch(() => {})
                           }
                         >
-                          <Text className='text-xs font-bold text-primary-700'>
+                          <Text className='font-geist-bold text-xs font-bold text-primary-700'>
                             Open link
                           </Text>
                         </TouchableOpacity>

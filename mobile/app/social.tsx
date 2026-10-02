@@ -288,7 +288,7 @@ export default function SocialMediaModal() {
 
         <KeyboardAvoidingView
           style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
         >
           <View className='flex-row items-center p-4 border-b border-gray-100'>
@@ -296,8 +296,8 @@ export default function SocialMediaModal() {
               <ArrowLeft size={20} color='#374151' />
             </TouchableOpacity>
             <View>
-              <Text className='text-lg font-bold'>Create Content</Text>
-              <Text className='text-xs text-gray-500'>
+              <Text className='font-geist-bold text-lg font-bold'>Create Content</Text>
+              <Text className='font-sans text-xs text-gray-500'>
                 Pick a goal and we'll handle the rest
               </Text>
             </View>
@@ -307,6 +307,7 @@ export default function SocialMediaModal() {
             className='flex-1 px-4 pt-4'
             contentContainerStyle={{ paddingBottom: 24 + insets.bottom, flexGrow: 1 }}
             keyboardShouldPersistTaps='handled'
+            automaticallyAdjustKeyboardInsets
             keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
             bounces
             overScrollMode='never'
@@ -322,13 +323,13 @@ export default function SocialMediaModal() {
                 <View className='mr-2'>
                   <AlertCircle size={16} color='#d97706' />
                 </View>
-                <Text className='text-sm text-amber-700 font-medium flex-1'>
+                <Text className='font-geist-medium text-sm text-amber-700 font-medium flex-1'>
                   {errorMsg}
                 </Text>
               </View>
             ) : null}
 
-            <Text className='text-xs font-bold uppercase text-gray-500 mb-2'>
+            <Text className='font-geist-bold text-xs font-bold uppercase text-gray-500 mb-2'>
               Choose Platform
             </Text>
             <View className='flex-row justify-between mb-6'>
@@ -339,7 +340,7 @@ export default function SocialMediaModal() {
                   className={`flex-1 mx-1 py-3 rounded-2xl items-center ${selectedPlatform === platform.id ? platform.color : 'bg-gray-100'}`}
                 >
                   <Text
-                    className={`font-bold text-xs ${selectedPlatform === platform.id ? 'text-white' : 'text-gray-600'}`}
+                    className={`font-geist-bold font-bold text-xs ${selectedPlatform === platform.id ? 'text-white' : 'text-gray-600'}`}
                   >
                     {platform.label}
                   </Text>
@@ -347,7 +348,7 @@ export default function SocialMediaModal() {
               ))}
             </View>
 
-            <Text className='text-xs font-bold uppercase text-gray-500 mb-2'>
+            <Text className='font-geist-bold text-xs font-bold uppercase text-gray-500 mb-2'>
               What's your goal?
             </Text>
             <View className='flex-row flex-wrap justify-between mb-6'>
@@ -359,17 +360,17 @@ export default function SocialMediaModal() {
                   }
                   className={`w-[48%] mb-2 p-3 rounded-2xl border-2 ${selectedGoal?.id === g.id ? g.color + ' bg-gray-50' : 'border-gray-100 bg-white'}`}
                 >
-                  <Text className='font-bold text-sm text-gray-800'>
+                  <Text className='font-geist-bold font-bold text-sm text-gray-800'>
                     {g.label}
                   </Text>
-                  <Text className='text-xs text-gray-500 mt-1'>
+                  <Text className='font-sans text-xs text-gray-500 mt-1'>
                     {g.sublabel}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
 
-            <Text className='text-xs font-bold uppercase text-gray-500 mb-2'>
+            <Text className='font-geist-bold text-xs font-bold uppercase text-gray-500 mb-2'>
               Tone
             </Text>
             <View className='flex-row flex-wrap justify-between mb-6'>
@@ -377,10 +378,10 @@ export default function SocialMediaModal() {
                 <TouchableOpacity
                   key={t.id}
                   onPress={() => setTone(tone === t.id ? '' : t.id)}
-                  className={`w-[31%] mb-2 py-3 rounded-2xl border items-center ${tone === t.id ? 'bg-[#00C4B4] border-[#00C4B4]' : 'bg-white border-gray-200'}`}
+                  className={`w-[31%] mb-2 py-3 rounded-2xl border items-center ${tone === t.id ? 'bg-accent border-accent' : 'bg-white border-gray-200'}`}
                 >
                   <Text
-                    className={`font-bold text-xs ${tone === t.id ? 'text-white' : 'text-gray-600'}`}
+                    className={`font-geist-bold font-bold text-xs ${tone === t.id ? 'text-white' : 'text-gray-600'}`}
                   >
                     {t.label}
                   </Text>
@@ -388,7 +389,7 @@ export default function SocialMediaModal() {
               ))}
             </View>
 
-            <Text className='text-xs font-bold uppercase text-gray-500 mb-2'>
+            <Text className='font-geist-bold text-xs font-bold uppercase text-gray-500 mb-2'>
               What are you promoting?
             </Text>
             <TextInput
@@ -408,7 +409,7 @@ export default function SocialMediaModal() {
               disabled={
                 !selectedGoal || !tone || !description.trim() || isGenerating
               }
-              className={`py-4 rounded-2xl items-center flex-row justify-center mb-6 active:opacity-90 ${!selectedGoal || !tone || !description.trim() || isGenerating ? 'bg-gray-300' : 'bg-[#00C4B4]'}`}
+              className={`py-4 rounded-2xl items-center flex-row justify-center mb-6 active:opacity-90 ${!selectedGoal || !tone || !description.trim() || isGenerating ? 'bg-gray-300' : 'bg-accent'}`}
             >
               {isGenerating ? (
                 <ActivityIndicator size='small' color='white' />
@@ -417,7 +418,7 @@ export default function SocialMediaModal() {
                   <Sparkles size={20} color='white' />
                 </View>
               )}
-              <Text className='text-white font-bold text-base'>
+              <Text className='font-geist-bold text-white font-bold text-base'>
                 {isGenerating ? 'Generating...' : 'Generate Content'}
               </Text>
             </TouchableOpacity>
@@ -425,8 +426,8 @@ export default function SocialMediaModal() {
             {generatedContent && (
               <View className='mt-2'>
                 <View className='flex-row justify-between mb-2 items-center'>
-                  <Text className='font-bold'>Preview</Text>
-                  <Text className='text-xs text-gray-400 uppercase tracking-widest'>
+                  <Text className='font-geist-bold font-bold'>Preview</Text>
+                  <Text className='font-sans text-xs text-gray-500 uppercase tracking-widest'>
                     {generatedContent.platform} {generatedContent.type}
                   </Text>
                 </View>
@@ -434,13 +435,13 @@ export default function SocialMediaModal() {
                   <View className='flex-row items-center p-3 border-b border-gray-100 justify-between'>
                     <View className='flex-row items-center'>
                       <View className='w-11 h-11 rounded-full bg-blue-600 mr-3 items-center justify-center'>
-                        <Text className='text-white text-xs font-bold'>NM</Text>
+                        <Text className='font-geist-bold text-white text-xs font-bold'>NM</Text>
                       </View>
-                      <Text className='font-medium text-sm'>
+                      <Text className='font-geist-medium font-medium text-sm'>
                         bizsawa_official
                       </Text>
                     </View>
-                    <Text className='text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-sm'>
+                    <Text className='font-sans text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-sm'>
                       {generatedContent.source}
                     </Text>
                   </View>
@@ -452,23 +453,23 @@ export default function SocialMediaModal() {
                     />
                   )}
                   <View className='p-4'>
-                    <Text className='text-sm text-gray-800 mb-2 leading-5'>
+                    <Text className='font-sans text-sm text-gray-800 mb-2 leading-5'>
                       {generatedContent.content}
                     </Text>
-                    <Text className='text-blue-600 text-xs font-medium'>
+                    <Text className='font-geist-medium text-blue-600 text-xs font-medium'>
                       {generatedContent.hashtags.join(' ')}
                     </Text>
                   </View>
                 </View>
                 <TouchableOpacity
                   onPress={handleShare}
-                  className='mt-4 bg-gray-900 py-4 rounded-2xl items-center flex-row justify-center active:opacity-90'
+                  className='mt-4 bg-accent py-4 rounded-2xl items-center flex-row justify-center active:opacity-90'
                   style={{ marginBottom: insets.bottom }}
                 >
                   <View className='mr-2'>
                     <ShareIcon size={18} color='white' />
                   </View>
-                  <Text className='text-white font-bold text-base'>Share Now</Text>
+                  <Text className='font-geist-bold text-white font-bold text-base'>Share Now</Text>
                 </TouchableOpacity>
               </View>
             )}

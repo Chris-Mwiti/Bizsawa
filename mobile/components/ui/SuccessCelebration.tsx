@@ -48,8 +48,8 @@ export function SuccessCelebration({
           className='bg-white rounded-[32px] p-8 items-center w-full max-w-[320px]'
         >
           {/* Glow behind badge */}
-          <View className='absolute top-6 w-24 h-24 rounded-full bg-[#006b5f]/10' style={{ opacity: 0.6 }} />
-          <View className='w-16 h-16 rounded-full bg-[#006b5f] items-center justify-center mb-4 border border-white/20'>
+          <View className='absolute top-6 w-24 h-24 rounded-full bg-accent/10' style={{ opacity: 0.6 }} />
+          <View className='w-16 h-16 rounded-full bg-accent items-center justify-center mb-4 border border-white/20'>
             <Check size={28} color='white' />
           </View>
           <Animated.View style={{ transform: [{ scale: sparkleScale }], opacity: sparkleOpacity }} className='absolute top-4 right-8'>
@@ -58,19 +58,19 @@ export function SuccessCelebration({
           <Animated.View style={{ transform: [{ scale: sparkleScale }], opacity: sparkleOpacity }} className='absolute top-8 left-6'>
             <Sparkles size={14} color='#006b5f' />
           </Animated.View>
-          <Text className='text-lg font-bold text-gray-900 tracking-tight'>{title}</Text>
-          <Text className='text-sm text-gray-500 text-center mt-2 leading-5'>{message}</Text>
+          <Text className='font-geist-bold text-lg font-bold text-gray-900 tracking-tight'>{title}</Text>
+          <Text className='font-sans text-sm text-gray-500 text-center mt-2 leading-5'>{message}</Text>
           <View className='mt-6 w-full'>
             <TouchableOpacity
               onPress={onClose}
-              className='bg-gray-900 py-4 rounded-full items-center active:opacity-90'
+              className='bg-accent py-4 rounded-full items-center active:opacity-90'
               style={{ shadowColor: '#006b5f', shadowOpacity: 0.15, shadowRadius: 12, shadowOffset: { width: 0, height: 4 } }}
             >
-              <Text className='text-white font-bold text-sm'>Continue</Text>
+              <Text className='font-geist-bold text-white font-bold text-sm'>Continue</Text>
             </TouchableOpacity>
           </View>
-          <View className='mt-3 px-3 py-1 rounded-full bg-[#006b5f]/5 border border-[#006b5f]/10'>
-            <Text className='text-xs font-bold text-[#006b5f]'>✦ Keep it up!</Text>
+          <View className='mt-3 px-3 py-1 rounded-full bg-accent/5 border border-accent/10'>
+            <Text className='font-geist-bold text-xs font-bold text-accent'>✦ Keep it up!</Text>
           </View>
         </Animated.View>
       </View>

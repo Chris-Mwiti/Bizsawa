@@ -135,18 +135,18 @@ export default function InsightsExpenses() {
         {/* Hero total — impeccable: generous padding, hierarchy */}
         <Card className='border border-gray-200'>
           <CardContent className='p-5'>
-            <Text className='text-xs font-bold font-mono tracking-widest text-gray-400 uppercase'>
+            <Text className='font-geist-mono-bold text-xs font-bold tracking-widest text-gray-500 uppercase'>
               Total spend
             </Text>
             <View className='flex-row items-end justify-between mt-1'>
-              <Text className='text-3xl font-bold font-mono tracking-tight text-gray-900'>
+              <Text className='font-geist-mono-bold text-3xl font-bold tracking-tight text-gray-900'>
                 {formatCurrency(totalExpenses)}
               </Text>
               <View className='w-11 h-11 rounded-2xl bg-red-50 border border-red-100 items-center justify-center'>
                 <Receipt size={20} color='#dc2626' />
               </View>
             </View>
-            <Text className='text-xs text-gray-500 mt-2'>
+            <Text className='font-sans text-xs text-gray-500 mt-2'>
               {expenses.length} {expenses.length === 1 ? 'record' : 'records'} •{' '}
               {totalExpenses > 0 ? 'Tap + to add' : 'No spend yet'}
             </Text>
@@ -159,34 +159,34 @@ export default function InsightsExpenses() {
               <Tag size={16} color='#6b7280' />
               <CardTitle>Expenses</CardTitle>
               <View className='ml-1 px-2 py-1 rounded-full bg-gray-100'>
-                <Text className='text-xs font-bold text-gray-600'>
+                <Text className='font-geist-bold text-xs font-bold text-gray-600'>
                   {expenses.length}
                 </Text>
               </View>
             </View>
             <TouchableOpacity
-              className='flex-row items-center gap-2 bg-gray-900 px-4 py-3 rounded-full active:opacity-90'
+              className='flex-row items-center gap-2 bg-accent px-4 py-3 rounded-full active:opacity-90'
               onPress={handleNew}
             >
               <Plus size={16} color='white' />
-              <Text className='text-white font-bold text-sm'>Add</Text>
+              <Text className='font-geist-bold text-white font-bold text-sm'>Add</Text>
             </TouchableOpacity>
           </CardHeader>
           <CardContent>
             {isLoading ? (
               <View className='items-center py-12'>
                 <ActivityIndicator size='small' color='#111827' />
-                <Text className='text-gray-500 mt-2 text-sm'>
+                <Text className='font-sans text-gray-500 mt-2 text-sm'>
                   Loading expenses…
                 </Text>
               </View>
             ) : expenses.length === 0 ? (
               <View className='items-center py-12 px-4'>
                 <View className='w-14 h-14 rounded-full bg-gray-100 items-center justify-center mb-3'>
-                  <DollarSign size={22} color='#9ca3af' />
+                  <DollarSign size={22} color='#6b7280' />
                 </View>
-                <Text className='font-bold text-gray-900'>No expenses yet</Text>
-                <Text className='text-sm text-gray-500 text-center mt-1'>
+                <Text className='font-geist-bold font-bold text-gray-900'>No expenses yet</Text>
+                <Text className='font-sans text-sm text-gray-500 text-center mt-1'>
                   Record feed, rent, transport… they will appear here and in
                   analytics.
                 </Text>
@@ -194,7 +194,7 @@ export default function InsightsExpenses() {
                   className='mt-5 bg-white border border-gray-200 px-5 py-3 rounded-full'
                   onPress={handleNew}
                 >
-                  <Text className='font-bold text-gray-900 text-sm'>
+                  <Text className='font-geist-bold font-bold text-gray-900 text-sm'>
                     Add first expense
                   </Text>
                 </TouchableOpacity>
@@ -210,23 +210,23 @@ export default function InsightsExpenses() {
                       <View className='flex-1 gap-2'>
                         <View className='flex-row items-center gap-2 flex-wrap'>
                           <View className='px-2 py-1 rounded-full bg-white border border-gray-200'>
-                            <Text className='text-xs font-bold tracking-widest text-gray-500'>
+                            <Text className='font-geist-bold text-xs font-bold tracking-widest text-gray-500'>
                               EXP-{shortId(e.id, 6)}
                             </Text>
                           </View>
                           <View className='px-3 py-1 rounded-full bg-slate-100 border border-slate-200'>
-                            <Text className='text-xs font-bold tracking-widest text-slate-700'>
+                            <Text className='font-geist-bold text-xs font-bold tracking-widest text-slate-700'>
                               {e.category.toUpperCase()}
                             </Text>
                           </View>
                           {e.vendor ? (
-                            <Text className='text-xs text-gray-500'>
+                            <Text className='font-sans text-xs text-gray-500'>
                               • {e.vendor}
                             </Text>
                           ) : null}
                         </View>
                         <Text
-                          className='font-bold text-gray-900 text-[14px] leading-4'
+                          className='font-geist-bold font-bold text-gray-900 text-[14px] leading-4'
                           numberOfLines={2}
                         >
                           {e.description?.trim()
@@ -234,20 +234,20 @@ export default function InsightsExpenses() {
                             : 'No description'}
                         </Text>
                         <View className='flex-row items-center gap-2 mt-1'>
-                          <Calendar size={12} color='#9ca3af' />
-                          <Text className='text-xs text-gray-500'>
+                          <Calendar size={12} color='#6b7280' />
+                          <Text className='font-sans text-xs text-gray-500'>
                             {formatDate(e.spentAt)}
                           </Text>
-                          <Text className='text-xs text-gray-300'>•</Text>
+                          <Text className='font-sans text-xs text-gray-300'>•</Text>
                           <Badge className='bg-emerald-50 border border-emerald-100 px-2 py-0'>
-                            <Text className='text-xs font-bold font-mono text-emerald-700'>
+                            <Text className='font-geist-mono-bold text-xs font-bold text-emerald-700'>
                               KES {toNumber(e.amount).toLocaleString('en-KE')}
                             </Text>
                           </Badge>
                         </View>
                       </View>
                       <View className='items-end gap-2 shrink-0 ml-2'>
-                        <Text className='font-bold font-mono text-red-600 text-sm'>
+                        <Text className='font-geist-mono-bold font-bold text-red-600 text-sm'>
                           {formatCurrency(toNumber(e.amount))}
                         </Text>
                         <View className='flex-row gap-1'>
@@ -278,10 +278,10 @@ export default function InsightsExpenses() {
         <View className='flex-1 bg-gray-50'>
           <View className='flex-row justify-between items-center p-4 bg-white border-b border-gray-200'>
             <View>
-              <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
+              <Text className='font-geist-bold text-xs font-bold tracking-widest text-gray-500 uppercase'>
                 New
               </Text>
-              <Text className='text-lg font-bold text-gray-900 -mt-0.5'>
+              <Text className='font-geist-bold text-lg font-bold text-gray-900 -mt-0.5'>
                 Add Expense
               </Text>
             </View>
@@ -289,23 +289,23 @@ export default function InsightsExpenses() {
               onPress={() => setShowModal(false)}
               className='w-11 h-11 rounded-full bg-gray-100 items-center justify-center'
             >
-              <Text className='text-gray-600 font-bold'>✕</Text>
+              <Text className='font-geist-bold text-gray-600 font-bold'>✕</Text>
             </Pressable>
           </View>
 
           <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
             <View className='p-4 bg-amber-50 rounded-2xl border border-amber-100'>
-              <Text className='text-xs font-bold text-amber-800'>
+              <Text className='font-geist-bold text-xs font-bold text-amber-800'>
                 Required by backend
               </Text>
-              <Text className='text-xs text-amber-700 mt-1'>
+              <Text className='font-sans text-xs text-amber-700 mt-1'>
                 Category • Amount • Date (ISO via spentAt). Sent as
                 X-Business-ID header + body; handler validates category.
               </Text>
             </View>
 
             <View>
-              <Text className='text-sm font-semibold text-gray-700 mb-2'>
+              <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
                 Category *
               </Text>
               <TextInput
@@ -318,7 +318,7 @@ export default function InsightsExpenses() {
             </View>
 
             <View>
-              <Text className='text-sm font-semibold text-gray-700 mb-2'>
+              <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
                 Amount (KES) *
               </Text>
               <TextInput
@@ -328,13 +328,13 @@ export default function InsightsExpenses() {
                 value={formData.amount}
                 onChangeText={(v) => setFormData({ ...formData, amount: v })}
               />
-              <Text className='text-xs text-gray-400 mt-1'>
+              <Text className='font-sans text-xs text-gray-500 mt-1'>
                 Sent as DecimalString via toDecimalString()
               </Text>
             </View>
 
             <View>
-              <Text className='text-sm font-semibold text-gray-700 mb-2'>
+              <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
                 Description
               </Text>
               <TextInput
@@ -349,7 +349,7 @@ export default function InsightsExpenses() {
             </View>
 
             <View>
-              <Text className='text-sm font-semibold text-gray-700 mb-2'>
+              <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
                 Vendor
               </Text>
               <TextInput
@@ -361,13 +361,13 @@ export default function InsightsExpenses() {
             </View>
 
             <View>
-              <Text className='text-sm font-semibold text-gray-700 mb-2'>
+              <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>
                 Date *
               </Text>
               <View className='flex-row gap-3'>
                 <View className='flex-1 border border-gray-300 rounded-2xl px-4 py-4 bg-white flex-row items-center gap-2'>
                   <Calendar size={16} color='#6b7280' />
-                  <Text className='text-sm text-gray-900'>
+                  <Text className='font-sans text-sm text-gray-900'>
                     {formData.spentAt.split('T')[0]}
                   </Text>
                 </View>
@@ -380,27 +380,27 @@ export default function InsightsExpenses() {
                   }
                   className='px-4 py-4 rounded-2xl bg-white border border-gray-200'
                 >
-                  <Text className='font-bold text-sm text-gray-900'>Today</Text>
+                  <Text className='font-geist-bold font-bold text-sm text-gray-900'>Today</Text>
                 </Pressable>
               </View>
-              <Text className='text-xs text-gray-400 mt-1'>
+              <Text className='font-sans text-xs text-gray-500 mt-1'>
                 Stored as ISO spentAt — handler parses time.RFC3339
               </Text>
             </View>
 
             <TouchableOpacity
-              className='mt-2 bg-gray-900 py-4 rounded-2xl items-center active:opacity-90 disabled:opacity-50'
+              className='mt-2 bg-accent py-4 rounded-2xl items-center active:opacity-90 disabled:opacity-50'
               onPress={handleSubmit}
               disabled={isCreating}
             >
               {isCreating ? (
                 <ActivityIndicator color='white' />
               ) : (
-                <Text className='text-white font-bold'>Save Expense</Text>
+                <Text className='font-geist-bold text-white font-bold'>Save Expense</Text>
               )}
             </TouchableOpacity>
 
-            <Text className='text-xs text-center text-gray-400'>
+            <Text className='font-sans text-xs text-center text-gray-500'>
               POST /api/v1/expenses with X-Business-ID — creates Expense +
               optional tax record
             </Text>

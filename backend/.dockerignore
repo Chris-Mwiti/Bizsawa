@@ -6,3 +6,15 @@
 tmp/
 *.md
 .DS_Store
+
+*.md
+*.log
+.vscode/
+
+# Go-specific: the build happens INSIDE the image, so a binary compiled
+# on your laptop must not be copied in. It is built for the wrong OS
+# half the time, and it silently shadows the one the Dockerfile builds.
+/server
+*.test
+vendor/         # only if you are NOT using vendored deps
+
