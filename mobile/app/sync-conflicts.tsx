@@ -235,7 +235,7 @@ export default function SyncConflictsScreen() {
     return (
       <View className="flex-1 bg-gray-50 items-center justify-center">
         <ActivityIndicator color="#111827" />
-        <Text className="text-sm text-gray-500 mt-2">Checking for conflicts…</Text>
+        <Text className="font-sans text-sm text-gray-500 mt-2">Checking for conflicts…</Text>
       </View>
     )
 
@@ -249,10 +249,10 @@ export default function SyncConflictsScreen() {
               {conflicts.length ? <AlertTriangle size={18} color="white" /> : <ShieldCheck size={18} color="white" />}
             </View>
             <View className="flex-1">
-              <Text className="text-sm font-bold text-gray-900">
+              <Text className="font-geist-bold text-sm font-bold text-gray-900">
                 {conflicts.length ? `${conflicts.length} conflict${conflicts.length > 1 ? 's' : ''} needs attention` : 'All synced — no conflicts'}
               </Text>
-              <Text className="text-xs text-gray-500 mt-0.5">
+              <Text className="font-sans text-xs text-gray-500 mt-0.5">
                 {conflicts.length
                   ? 'Same record edited offline on two devices. Pick which to keep — we handle the rest.'
                   : 'Your data is in sync across devices.'}
@@ -261,11 +261,11 @@ export default function SyncConflictsScreen() {
           </View>
           {conflicts.length > 1 && (
             <View className="flex-row gap-2 mt-3">
-              <TouchableOpacity onPress={() => handleResolveAll('kept_client')} className="flex-1 py-2.5 rounded-xl bg-gray-900 items-center">
-                <Text className="text-white font-bold text-xs">Keep all mine</Text>
+              <TouchableOpacity onPress={() => handleResolveAll('kept_client')} className="flex-1 py-2.5 rounded-xl bg-accent items-center">
+                <Text className="font-geist-bold text-white font-bold text-xs">Keep all mine</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={() => handleResolveAll('kept_server')} className="flex-1 py-2.5 rounded-xl bg-white border border-gray-200 items-center">
-                <Text className="text-gray-700 font-bold text-xs">Use all server</Text>
+                <Text className="font-geist-bold text-gray-700 font-bold text-xs">Use all server</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -275,8 +275,8 @@ export default function SyncConflictsScreen() {
         {conflicts.length > 0 && (
           <View className="bg-sky-50 border border-sky-100 rounded-2xl p-3 flex-row gap-2">
             <Sparkles size={14} color="#0369a1" style={{ marginTop: 2 }} />
-            <Text className="text-xs leading-4 text-sky-900 flex-1">
-              <Text className="font-bold">What happened?</Text> You and someone else edited the same thing while offline. We keep both versions safe — just tap which one you want to keep. No data is lost.
+            <Text className="font-sans text-xs leading-4 text-sky-900 flex-1">
+              <Text className="font-geist-bold font-bold">What happened?</Text> You and someone else edited the same thing while offline. We keep both versions safe — just tap which one you want to keep. No data is lost.
             </Text>
           </View>
         )}
@@ -287,11 +287,11 @@ export default function SyncConflictsScreen() {
               <View className="w-14 h-14 rounded-2xl bg-emerald-50 border border-emerald-100 items-center justify-center mb-3">
                 <Check size={22} color="#059669" />
               </View>
-              <Text className="font-bold text-gray-900">No conflicts</Text>
-              <Text className="text-sm text-gray-500 mt-1 text-center px-6">All records in sync — no action needed.</Text>
+              <Text className="font-geist-bold font-bold text-gray-900">No conflicts</Text>
+              <Text className="font-sans text-sm text-gray-500 mt-1 text-center px-6">All records in sync — no action needed.</Text>
               <TouchableOpacity onPress={() => fetch()} className="mt-4 px-4 py-2 bg-white border border-gray-200 rounded-full flex-row items-center gap-2">
                 <RefreshCw size={14} color="#374151" />
-                <Text className="text-sm font-semibold text-gray-700">Refresh</Text>
+                <Text className="font-geist-semibold text-sm font-semibold text-gray-700">Refresh</Text>
               </TouchableOpacity>
             </CardContent>
           </Card>
@@ -318,10 +318,10 @@ export default function SyncConflictsScreen() {
                       <View className="flex-row items-center gap-2">
                         <CardTitle className="text-gray-900">{meta.label}</CardTitle>
                         <View className="px-2 py-0.5 rounded-full bg-amber-50 border border-amber-100">
-                          <Text className="text-xs font-bold text-amber-700">Conflict</Text>
+                          <Text className="font-geist-bold text-xs font-bold text-amber-700">Conflict</Text>
                         </View>
                       </View>
-                      <Text className="text-xs text-gray-500" numberOfLines={1}>
+                      <Text className="font-sans text-xs text-gray-500" numberOfLines={1}>
                         {displayName} • {String(c.record_id || c.recordId || '').slice(0, 6).toUpperCase()} • v{c.client_version ?? '?'} vs v{c.server_version ?? '?'}
                       </Text>
                     </View>
@@ -332,21 +332,21 @@ export default function SyncConflictsScreen() {
                   <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
                     <View className="flex-row items-center gap-2 px-3 py-2 bg-gray-50 border-b border-gray-100">
                       <ArrowLeftRight size={12} color="#6b7280" />
-                      <Text className="text-xs font-bold tracking-widest text-gray-500 uppercase">What changed</Text>
+                      <Text className="font-geist-bold text-xs font-bold tracking-widest text-gray-500 uppercase">What changed</Text>
                     </View>
                     {diffs.map((d, i) => (
                       <View key={d.field} className={`px-3 py-2.5 ${i !== 0 ? 'border-t border-gray-50' : ''}`}>
-                        <Text className="text-xs font-semibold text-gray-500">{d.label}</Text>
+                        <Text className="font-geist-semibold text-xs font-semibold text-gray-500">{d.label}</Text>
                         <View className="flex-row gap-2 mt-1.5">
-                          <View className="flex-1 p-2.5 rounded-xl bg-gray-900 border border-gray-900">
-                            <Text className="text-xs font-bold tracking-widest text-gray-400 uppercase">Your version</Text>
-                            <Text className="text-sm font-medium text-white mt-1" numberOfLines={2}>
+                          <View className="flex-1 p-2.5 rounded-xl bg-accent border border-accent">
+                            <Text className="font-geist-bold text-xs font-bold tracking-widest text-gray-500 uppercase">Your version</Text>
+                            <Text className="font-geist-medium text-sm font-medium text-white mt-1" numberOfLines={2}>
                               {d.client}
                             </Text>
                           </View>
                           <View className="flex-1 p-2.5 rounded-xl bg-sky-50 border border-sky-100">
-                            <Text className="text-xs font-bold tracking-widest text-sky-700 uppercase">Server</Text>
-                            <Text className="text-sm font-medium text-sky-900 mt-1" numberOfLines={2}>
+                            <Text className="font-geist-bold text-xs font-bold tracking-widest text-sky-700 uppercase">Server</Text>
+                            <Text className="font-geist-medium text-sm font-medium text-sky-900 mt-1" numberOfLines={2}>
                               {d.server}
                             </Text>
                           </View>
@@ -360,7 +360,7 @@ export default function SyncConflictsScreen() {
                     <TouchableOpacity
                       onPress={() => handleResolve(c, 'kept_client')}
                       disabled={!!resolvingId}
-                      className={`flex-1 py-3.5 rounded-2xl items-center flex-row justify-center gap-2 ${resolvingId ? 'bg-gray-100' : 'bg-gray-900'}`}
+                      className={`flex-1 py-3.5 rounded-2xl items-center flex-row justify-center gap-2 ${resolvingId ? 'bg-gray-100' : 'bg-accent'}`}
                     >
                       {isResolving ? (
                         <ActivityIndicator color="white" size="small" />
@@ -368,8 +368,8 @@ export default function SyncConflictsScreen() {
                         <>
                           <Check size={16} color="white" />
                           <View>
-                            <Text className="text-white font-bold text-sm text-center">Keep my version</Text>
-                            <Text className="text-white/70 text-xs text-center">Your edits win</Text>
+                            <Text className="font-geist-bold text-white font-bold text-sm text-center">Keep my version</Text>
+                            <Text className="font-sans text-white/70 text-xs text-center">Your edits win</Text>
                           </View>
                         </>
                       )}
@@ -385,8 +385,8 @@ export default function SyncConflictsScreen() {
                         <>
                           <Download size={16} color="#111827" />
                           <View>
-                            <Text className="font-bold text-sm text-gray-900 text-center">Use server</Text>
-                            <Text className="text-gray-500 text-xs text-center">Discard mine</Text>
+                            <Text className="font-geist-bold font-bold text-sm text-gray-900 text-center">Use server</Text>
+                            <Text className="font-sans text-gray-500 text-xs text-center">Discard mine</Text>
                           </View>
                         </>
                       )}
@@ -395,10 +395,10 @@ export default function SyncConflictsScreen() {
 
                   {/* Technical details collapsible */}
                   <Pressable onPress={() => setExpandedId(isExpanded ? null : String(c.id))} className="flex-row items-center justify-center gap-1 py-1">
-                    <Text className="text-xs font-semibold text-gray-400">
+                    <Text className="font-geist-semibold text-xs font-semibold text-gray-500">
                       {isExpanded ? 'Hide technical details' : 'Show technical details'}
                     </Text>
-                    {isExpanded ? <ChevronUp size={12} color="#9ca3af" /> : <ChevronDown size={12} color="#9ca3af" />}
+                    {isExpanded ? <ChevronUp size={12} color="#6b7280" /> : <ChevronDown size={12} color="#6b7280" />}
                   </Pressable>
                   {isExpanded && (
                     <View className="gap-2">
@@ -407,7 +407,7 @@ export default function SyncConflictsScreen() {
                           {JSON.stringify({ client, server }, null, 2)}
                         </Text>
                       </View>
-                      <Text className="text-xs text-gray-400 text-center">IDs: {String(c.id).slice(0, 8)} • Record {String(c.record_id || '').slice(0, 8)}</Text>
+                      <Text className="font-sans text-xs text-gray-500 text-center">IDs: {String(c.id).slice(0, 8)} • Record {String(c.record_id || '').slice(0, 8)}</Text>
                     </View>
                   )}
                 </CardContent>
@@ -418,7 +418,7 @@ export default function SyncConflictsScreen() {
 
         <TouchableOpacity onPress={() => fetch()} className="py-3 rounded-2xl bg-white border border-gray-200 items-center flex-row justify-center gap-2">
           <RefreshCw size={14} color="#374151" />
-          <Text className="text-sm font-semibold text-gray-700">Refresh</Text>
+          <Text className="font-geist-semibold text-sm font-semibold text-gray-700">Refresh</Text>
         </TouchableOpacity>
       </ScrollView>
     </View>
