@@ -37,6 +37,8 @@ func (m *Module) RegisterRoutes(r chi.Router) {
 	h := Handler{svc: m.svc}
 	r.Get("/", h.List)
 	r.Post("/", h.Initiate)
+	r.Post("/{id}/cancel", h.Cancel)
+	r.Post("/{id}/check", h.Check)
 	r.Get("/{id}", h.Get)
 	r.Post("/mpesa/c2b/register", h.RegisterC2BURLs)
 	r.Post("/mpesa/transaction-status", h.QueryTransactionStatus)
