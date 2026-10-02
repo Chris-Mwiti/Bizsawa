@@ -110,10 +110,10 @@ export const TabWrapper: React.FC<TabWrapperProps> = ({ children }) => {
             accessibilityLabel='Open Social Content Generator'
           >
             <View className='bg-white px-3 py-2 rounded-full border border-gray-200' style={{ shadowColor: '#006b5f', shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 2 } }}>
-              <Text className='text-xs font-bold text-gray-900 tracking-wide'>
+              <Text className='font-geist-bold text-xs font-bold text-gray-900 tracking-wide'>
                 Social Studio
               </Text>
-              <Text className='text-xs text-gray-500 -mt-0.5'>
+              <Text className='font-sans text-xs text-gray-500 -mt-0.5'>
                 AI content • posts
               </Text>
             </View>
@@ -150,10 +150,10 @@ export const TabWrapper: React.FC<TabWrapperProps> = ({ children }) => {
             accessibilityLabel='Open AI Coach'
           >
             <View className='bg-white px-3 py-2 rounded-full border border-gray-200' style={{ shadowColor: '#006b5f', shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 2 } }}>
-              <Text className='text-xs font-bold text-gray-900 tracking-wide'>
+              <Text className='font-geist-bold text-xs font-bold text-gray-900 tracking-wide'>
                 AI Coach
               </Text>
-              <Text className='text-xs text-gray-500 -mt-0.5'>
+              <Text className='font-sans text-xs text-gray-500 -mt-0.5'>
                 Ask • Kiswahili & English
               </Text>
             </View>
