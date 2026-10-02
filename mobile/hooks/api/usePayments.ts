@@ -6,6 +6,7 @@ import type {
   UUID,
 } from '../../lib/api-dtos'
 import { toDecimalString, toNumber } from '../../lib/api-dtos'
+import { isPaymentTerminal } from '../../lib/payment-status'
 import { database } from '../../db/database'
 import { randomUUID } from 'expo-crypto'
 import { Q } from '@nozbe/watermelondb'
@@ -204,13 +205,45 @@ export const usePaymentStatus = (
     },
     enabled: shouldRun,
     refetchInterval: (query) => {
+      // Keep polling while the STK prompt may still resolve (pending /
+      // processing / unknown). Stop on every terminal outcome — succeeded,
+      // failed, cancelled, expired — so a mid-processing cancel flips the UI
+      // to "failed" via the Daraja callback instead of spinning forever.
       const status = query.state.data?.status
-      if (status === 'succeeded' || status === 'failed') return false
-      // If local is pending, keep polling after sync may update server status
+      if (status && isPaymentTerminal(status)) return false
       return 3000
     },
   })
   // Offline-first merge: if remote not yet available, show local; if both, prefer remote newer status
   const data = remote.data || localPayment
   return { ...remote, data } as any
+}
+
+/** Mark a stuck pending/processing payment as failed (user gave up waiting). */
+export const useCancelPayment = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (paymentId: string) => {
+      const res = await api.post<PaymentCommand>(`/payments/${paymentId}/cancel`)
+      return res.data
+    },
+    onSuccess: (_data, paymentId) => {
+      queryClient.invalidateQueries({ queryKey: ['paymentStatus', String(paymentId)] })
+      queryClient.invalidateQueries({ queryKey: ['paymentCommands'] })
+    },
+  })
+}
+
+/** Ask Daraja for a processing payment's outcome (STK query, async via callback). */
+export const useCheckPayment = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (paymentId: string) => {
+      const res = await api.post(`/payments/${paymentId}/check`)
+      return res.data
+    },
+    onSuccess: (_data, paymentId) => {
+      queryClient.invalidateQueries({ queryKey: ['paymentStatus', String(paymentId)] })
+    },
+  })
 }
