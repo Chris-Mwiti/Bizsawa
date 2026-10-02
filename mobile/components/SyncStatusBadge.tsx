@@ -34,7 +34,7 @@ export function SyncStatusBadge({
   const s = map[status] || map.pending
   return (
     <View className={`px-2 py-1 rounded-full border ${s.bg}`}>
-      <Text className={`text-xs font-bold tracking-widest ${s.text}`}>
+      <Text className={`font-geist-bold text-xs font-bold tracking-widest ${s.text}`}>
         {s.label}
       </Text>
     </View>
