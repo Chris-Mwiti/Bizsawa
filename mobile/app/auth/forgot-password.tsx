@@ -118,18 +118,18 @@ export default function ForgotPasswordScreen() {
           </TouchableOpacity>
 
           <View className="items-center mt-6 mb-6">
-            <View className="w-16 h-16 bg-gray-900 rounded-full items-center justify-center mb-3">
+            <View className="w-16 h-16 bg-accent rounded-full items-center justify-center mb-3">
               <Lock size={24} color="white" />
             </View>
-            <Text className="text-2xl font-bold text-gray-900">Reset password</Text>
-            <Text className="text-gray-500 text-center mt-2 px-4">
+            <Text className="font-geist-bold text-2xl font-bold text-gray-900">Reset password</Text>
+            <Text className="font-sans text-gray-500 text-center mt-2 px-4">
               Enter your email to receive a 6-digit code, then set a new password.
             </Text>
           </View>
 
           <View className="gap-4">
             <View>
-              <Text className="text-gray-700 font-medium mb-2">Email</Text>
+              <Text className="font-geist-medium text-gray-700 font-medium mb-2">Email</Text>
               <View className="relative">
                 <Mail size={18} color="#6b7280" style={{ position: 'absolute', left: 12, top: 14 }} />
                 <TextInput
@@ -146,10 +146,10 @@ export default function ForgotPasswordScreen() {
             <TouchableOpacity
               onPress={handleSend}
               disabled={isSending || cooldown > 0}
-              className={`rounded-2xl py-3.5 items-center flex-row justify-center gap-2 ${cooldown > 0 ? 'bg-gray-100 border border-gray-200' : 'bg-gray-900'}`}
+              className={`rounded-2xl py-3.5 items-center flex-row justify-center gap-2 ${cooldown > 0 ? 'bg-gray-100 border border-gray-200' : 'bg-accent'}`}
             >
               {isSending ? <ActivityIndicator color={cooldown > 0 ? '#111827' : 'white'} /> : <RefreshCw size={16} color={cooldown > 0 ? '#111827' : 'white'} />}
-              <Text className={`font-bold ${cooldown > 0 ? 'text-gray-700' : 'text-white'}`}>
+              <Text className={`font-geist-bold font-bold ${cooldown > 0 ? 'text-gray-700' : 'text-white'}`}>
                 {cooldown > 0 ? `Resend in ${cooldown}s` : sent ? 'Resend code' : 'Send code'}
               </Text>
             </TouchableOpacity>
@@ -158,12 +158,12 @@ export default function ForgotPasswordScreen() {
               <>
                 <View className="h-[1px] bg-gray-100 my-1" />
                 <View>
-                  <Text className="text-gray-700 font-medium mb-2">6-digit code</Text>
+                  <Text className="font-geist-medium text-gray-700 font-medium mb-2">6-digit code</Text>
                   <TextInput
                     ref={otpRef}
                     className={`border rounded-2xl px-4 py-4 text-center text-2xl tracking-[10px] font-bold text-gray-900 ${error ? 'border-red-500' : 'border-gray-300'}`}
                     placeholder="------"
-                    placeholderTextColor="#9ca3af"
+                    placeholderTextColor="#6b7280"
                     value={otp}
                     onChangeText={(t) => {
                       const v = t.replace(/[^0-9]/g, '').slice(0, 6)
@@ -176,7 +176,7 @@ export default function ForgotPasswordScreen() {
                 </View>
 
                 <View>
-                  <Text className="text-gray-700 font-medium mb-2">New password</Text>
+                  <Text className="font-geist-medium text-gray-700 font-medium mb-2">New password</Text>
                   <View className="relative">
                     <Lock size={18} color="#6b7280" style={{ position: 'absolute', left: 12, top: 14 }} />
                     <TextInput
@@ -193,7 +193,7 @@ export default function ForgotPasswordScreen() {
                 </View>
 
                 <View>
-                  <Text className="text-gray-700 font-medium mb-2">Confirm password</Text>
+                  <Text className="font-geist-medium text-gray-700 font-medium mb-2">Confirm password</Text>
                   <View className="relative">
                     <Lock size={18} color="#6b7280" style={{ position: 'absolute', left: 12, top: 14 }} />
                     <TextInput
@@ -209,7 +209,7 @@ export default function ForgotPasswordScreen() {
                   </View>
                 </View>
 
-                {error ? <Text className="text-red-500 text-sm text-center">{error}</Text> : null}
+                {error ? <Text className="font-sans text-red-500 text-sm text-center">{error}</Text> : null}
 
                 <TouchableOpacity
                   onPress={handleReset}
@@ -217,13 +217,13 @@ export default function ForgotPasswordScreen() {
                   className={`rounded-2xl py-4 items-center ${otp.length === 6 && password.length >= 8 ? 'bg-emerald-600' : 'bg-gray-200'}`}
                   style={{ opacity: isResetting ? 0.7 : 1 }}
                 >
-                  {isResetting ? <ActivityIndicator color="white" /> : <Text className={`font-bold text-lg ${otp.length === 6 && password.length >= 8 ? 'text-white' : 'text-gray-500'}`}>Reset password</Text>}
+                  {isResetting ? <ActivityIndicator color="white" /> : <Text className={`font-geist-bold font-bold text-lg ${otp.length === 6 && password.length >= 8 ? 'text-white' : 'text-gray-500'}`}>Reset password</Text>}
                 </TouchableOpacity>
               </>
             )}
 
             <TouchableOpacity onPress={() => router.replace('/auth/login')} className="items-center mt-2">
-              <Text className="text-gray-500">Back to sign in</Text>
+              <Text className="font-sans text-gray-500">Back to sign in</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
