@@ -112,15 +112,15 @@ export default function VerifyEmailScreen() {
             <View className="w-16 h-16 bg-blue-600 rounded-full items-center justify-center mb-3">
               <BadgeCheck size={26} color="white" />
             </View>
-            <Text className="text-2xl font-bold text-gray-900">Verify your email</Text>
-            <Text className="text-gray-500 text-center mt-2 px-4">
+            <Text className="font-geist-bold text-2xl font-bold text-gray-900">Verify your email</Text>
+            <Text className="font-sans text-gray-500 text-center mt-2 px-4">
               We sent a code to confirm you own this email. Enter it below.
             </Text>
           </View>
 
           <View className="gap-4">
             <View>
-              <Text className="text-gray-700 font-medium mb-2">Email</Text>
+              <Text className="font-geist-medium text-gray-700 font-medium mb-2">Email</Text>
               <View className="relative">
                 <Mail size={18} color="#6b7280" style={{ position: 'absolute', left: 12, top: 14 }} />
                 <TextInput
@@ -137,10 +137,10 @@ export default function VerifyEmailScreen() {
             <TouchableOpacity
               onPress={handleSend}
               disabled={isSending || cooldown > 0}
-              className={`rounded-2xl py-3.5 items-center flex-row justify-center gap-2 ${cooldown > 0 ? 'bg-gray-100 border border-gray-200' : 'bg-gray-900'}`}
+              className={`rounded-2xl py-3.5 items-center flex-row justify-center gap-2 ${cooldown > 0 ? 'bg-gray-100 border border-gray-200' : 'bg-accent'}`}
             >
               {isSending ? <ActivityIndicator color={cooldown > 0 ? '#111827' : 'white'} /> : <RefreshCw size={16} color={cooldown > 0 ? '#111827' : 'white'} />}
-              <Text className={`font-bold ${cooldown > 0 ? 'text-gray-700' : 'text-white'}`}>
+              <Text className={`font-geist-bold font-bold ${cooldown > 0 ? 'text-gray-700' : 'text-white'}`}>
                 {cooldown > 0 ? `Resend in ${cooldown}s` : 'Send verification code'}
               </Text>
             </TouchableOpacity>
@@ -148,12 +148,12 @@ export default function VerifyEmailScreen() {
             <View className="h-[1px] bg-gray-100 my-1" />
 
             <View>
-              <Text className="text-gray-700 font-medium mb-2">6-digit code</Text>
+              <Text className="font-geist-medium text-gray-700 font-medium mb-2">6-digit code</Text>
               <TextInput
                 ref={otpRef}
                 className={`border rounded-2xl px-4 py-4 text-center text-2xl tracking-[10px] font-bold text-gray-900 ${error ? 'border-red-500' : 'border-gray-300'}`}
                 placeholder="------"
-                placeholderTextColor="#9ca3af"
+                placeholderTextColor="#6b7280"
                 value={otp}
                 onChangeText={(t) => {
                   const v = t.replace(/[^0-9]/g, '').slice(0, 6)
@@ -163,7 +163,7 @@ export default function VerifyEmailScreen() {
                 keyboardType="number-pad"
                 maxLength={6}
               />
-              {error ? <Text className="text-red-500 text-sm mt-2 text-center">{error}</Text> : null}
+              {error ? <Text className="font-sans text-red-500 text-sm mt-2 text-center">{error}</Text> : null}
             </View>
 
             <TouchableOpacity
@@ -172,11 +172,11 @@ export default function VerifyEmailScreen() {
               className={`rounded-2xl py-4 items-center ${otp.length === 6 ? 'bg-blue-600' : 'bg-gray-200'}`}
               style={{ opacity: isVerifying ? 0.7 : 1 }}
             >
-              {isVerifying ? <ActivityIndicator color="white" /> : <Text className={`font-bold text-lg ${otp.length === 6 ? 'text-white' : 'text-gray-500'}`}>Verify email</Text>}
+              {isVerifying ? <ActivityIndicator color="white" /> : <Text className={`font-geist-bold font-bold text-lg ${otp.length === 6 ? 'text-white' : 'text-gray-500'}`}>Verify email</Text>}
             </TouchableOpacity>
 
             <TouchableOpacity onPress={() => router.replace('/auth/login')} className="items-center mt-2">
-              <Text className="text-gray-500">Back to sign in</Text>
+              <Text className="font-sans text-gray-500">Back to sign in</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
