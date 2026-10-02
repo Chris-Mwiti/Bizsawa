@@ -19,7 +19,7 @@ export function RevenueChart({
         </CardHeader>
         <CardContent>
           <View className='items-center py-8'>
-            <Text className='text-gray-500'>No revenue data</Text>
+            <Text className='font-sans text-gray-500'>No revenue data</Text>
           </View>
         </CardContent>
       </Card>
@@ -53,7 +53,7 @@ export function RevenueChart({
                   }}
                 />
                 <Text
-                  className='text-xs text-gray-500 mt-1'
+                  className='font-sans text-xs text-gray-500 mt-1'
                   numberOfLines={1}
                 >
                   {point.date.split('T')[0].slice(5)}
@@ -65,10 +65,10 @@ export function RevenueChart({
         <View className='space-y-2 max-h-40'>
           {data.slice(-7).map((point, i) => (
             <View key={i} className='flex-row justify-between text-sm'>
-              <Text className='text-gray-700'>
+              <Text className='font-sans text-gray-700'>
                 {point.date.split('T')[0].slice(5)}
               </Text>
-              <Text className='font-bold font-mono text-gray-900'>
+              <Text className='font-geist-mono-bold font-bold text-gray-900'>
                 {formatCurrency(point.revenue)}
               </Text>
             </View>
