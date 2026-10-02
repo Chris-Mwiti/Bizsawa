@@ -22,31 +22,31 @@ export const OrdersHeader = memo(
         <View className='flex-row justify-between mb-4'>
           <Card className='w-[31%]'>
             <CardContent className='p-3 items-center'>
-              <Text className='text-lg font-bold'>{stats.open}</Text>
-              <Text className='text-xs text-gray-500'>Open</Text>
+              <Text className='font-geist-bold text-lg font-bold'>{stats.open}</Text>
+              <Text className='font-sans text-xs text-gray-500'>Open</Text>
             </CardContent>
           </Card>
           <Card className='w-[31%]'>
             <CardContent className='p-3 items-center'>
-              <Text className='text-lg font-bold'>{stats.fulfilled}</Text>
-              <Text className='text-xs text-gray-500'>Done</Text>
+              <Text className='font-geist-bold text-lg font-bold'>{stats.fulfilled}</Text>
+              <Text className='font-sans text-xs text-gray-500'>Done</Text>
             </CardContent>
           </Card>
           <Card className='w-[31%]'>
             <CardContent className='p-3 items-center'>
-              <Text className='text-lg font-bold font-mono'>
+              <Text className='font-geist-mono-bold text-lg font-bold'>
                 {formatCurrency(stats.value)}
               </Text>
-              <Text className='text-xs text-gray-500'>Value</Text>
+              <Text className='font-sans text-xs text-gray-500'>Value</Text>
             </CardContent>
           </Card>
         </View>
         <TouchableOpacity
-          className='bg-gray-900 h-12 rounded-2xl flex-row items-center justify-center mb-4'
+          className='bg-accent h-12 rounded-2xl flex-row items-center justify-center mb-4'
           onPress={onCreateOrder}
         >
           <Plus size={18} color='white' />
-          <Text className='text-white font-bold ml-2'>Create Order</Text>
+          <Text className='font-geist-bold text-white font-bold ml-2'>Create Order</Text>
         </TouchableOpacity>
       </View>
     )
