@@ -4,12 +4,15 @@ import { View, Text, ViewProps } from 'react-native'
 export function Card({ className, ...props }: ViewProps) {
   return (
     <View
-      className={`bg-white rounded-2xl border border-gray-200 ${className || ''}`}
+      // Soft clinical taste: ultra-rounded (24px), borderless white, large
+      // diffuse tinted shadow — matches the reference card language.
+      // Border + tight 16px radius was the old ledger look.
+      className={`bg-surface rounded-3xl ${className || ''}`}
       style={{
-        shadowColor: '#006b5f',
-        shadowOffset: { width: 0, height: 2 },
+        shadowColor: '#0E1F1C',
+        shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.06,
-        shadowRadius: 16,
+        shadowRadius: 20,
         elevation: 2,
       }}
       {...props}
@@ -65,8 +68,8 @@ export function SectionHeader({
 }) {
   return (
     <View className='flex-row items-center gap-2.5'>
-      <View className='w-9 h-9 rounded-xl bg-accent-soft items-center justify-center shrink-0'>
-        <Icon size={16} color={iconColor} />
+      <View className='w-11 h-11 rounded-2xl bg-accent-soft items-center justify-center shrink-0'>
+        <Icon size={18} color={iconColor} />
       </View>
       <View className='flex-1'>
         <Text className='font-geist-bold text-sm font-bold text-gray-900 leading-5'>
