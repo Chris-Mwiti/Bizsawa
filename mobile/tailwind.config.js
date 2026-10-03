@@ -104,10 +104,14 @@ module.exports = {
         lg: ['22px', { lineHeight: '28px', letterSpacing: '-0.02em' }],
       },
       borderRadius: {
-        // Shape lock: cards 2xl (16), pills full, buttons xl (12) unified
+        // Shape lock v2 — soft clinical taste (reference: ultra-rounded
+        // white cards on a cool canvas, pill CTAs, tile grids).
+        // Rule: screens/cards 24–28px, tiles 20px, buttons/inputs full pill.
         xl: '12px',
         '2xl': '16px',
         '3xl': '24px',
+        '4xl': '28px',
+        '5xl': '32px',
       },
       boxShadow: {
         // Tinted to the accent hue, not black — a black drop shadow on a
@@ -116,6 +120,10 @@ module.exports = {
         // `colors.accent`.
         soft: `0 2px 16px ${hexToRgba(accent.DEFAULT, 0.06)}`,
         'soft-lg': `0 8px 32px ${hexToRgba(accent.DEFAULT, 0.08)}`,
+        // Reference-style clinical lift: large, diffuse, barely-there.
+        // For floating pill bars and hero cards on the cool canvas.
+        clinical: `0 12px 40px ${hexToRgba(ink.DEFAULT, 0.1)}`,
+        'clinical-sm': `0 4px 20px ${hexToRgba(ink.DEFAULT, 0.07)}`,
       },
     },
   },
