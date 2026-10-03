@@ -50,7 +50,17 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   })()
   const hasRedirectedRef = useRef(false)
 
+  const refreshBusyRef = useRef(false)
+
   const refreshCounts = useCallback(async () => {
+    // JSI SQLite calls run synchronously on the JS thread: a full 14-table
+    // scan blocks input, timers and buttons for its whole duration. Never let
+    // polls pile up — if one is in flight (slow device / big local DB), skip.
+    if (refreshBusyRef.current) {
+      console.log('[SyncProvider] refreshCounts skipped — previous still running')
+      return
+    }
+    refreshBusyRef.current = true
     try {
       const [pending, conflicts] = await Promise.all([
         getPendingChangesCount(),
@@ -61,6 +71,9 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       if (pending > 0) console.log('[SyncProvider] pending=', pending, 'conflicts=', conflicts)
       if (conflicts > 0) setState((s) => (s === 'syncing' ? 'conflict' : 'conflict'))
     } catch (e) { console.warn('[SyncProvider] refreshCounts failed', (e as any)?.message) }
+    finally {
+      refreshBusyRef.current = false
+    }
   }, [])
 
   // Auto-redirect to /sync-conflicts when conflicts appear (existing screen was never reached)
