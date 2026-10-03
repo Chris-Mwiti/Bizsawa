@@ -2,20 +2,12 @@ import React, { useEffect, useState } from 'react'
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
   Alert,
 } from 'react-native'
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
   Eye,
   EyeOff,
-  Lock,
-  ArrowRight,
   Mail,
   WifiOff,
   Shield,
@@ -27,7 +19,6 @@ import { useRouter } from 'expo-router'
 // Lazy-load so missing native module (dev-client without rebuild) doesn't crash bundle
 let LocalAuthentication: any = null
 try {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const mod = require('expo-local-authentication')
   LocalAuthentication = mod?.default ?? mod
 } catch {
@@ -39,9 +30,18 @@ import {
   hasOfflineCredential,
   getOfflineGraceDaysLeft,
 } from '../../lib/offlineAuth'
+import {
+  AuthShell,
+  FieldLabel,
+  AuthInput,
+  FieldError,
+  PrimaryCta,
+  OrDivider,
+  SocialRow,
+  SwitchLink,
+} from '../../components/auth/AuthShell'
 
 export default function LoginScreen() {
-  const insets = useSafeAreaInsets()
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -54,7 +54,7 @@ export default function LoginScreen() {
   const [graceDays, setGraceDays] = useState(0)
   const [biometricAvailable, setBiometricAvailable] = useState(false)
 
-  const { login, loginWithGoogle, loginWithBiometrics } = useAuth()
+  const { login, loginWithBiometrics } = useAuth()
   const router = useRouter()
 
   useEffect(() => {
@@ -119,29 +119,6 @@ export default function LoginScreen() {
     }
   }
 
-  const handleGoogleSubmit = async () => {
-    setIsLoading(true)
-    try {
-      await loginWithGoogle()
-      // Business-aware redirect: new Google users have no business yet
-      try {
-        const res = await api.get<{ businesses: any[] }>('/businesses')
-        const hasBusiness = Array.isArray(res.data.businesses) && res.data.businesses.length > 0
-        if (hasBusiness) {
-          router.replace('/(tabs)')
-        } else {
-          router.replace('/auth/business-setup')
-        }
-      } catch {
-        router.replace('/auth/business-setup')
-      }
-    } catch (error: any) {
-      Alert.alert('Google Login Failed', error.message)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
   const handleBiometricLogin = async () => {
     if (!LocalAuthentication?.authenticateAsync) {
       Alert.alert('Not available', 'Biometrics not available in this build. Run a dev-client build to enable.')
@@ -176,228 +153,156 @@ export default function LoginScreen() {
   }
 
   return (
-    <SafeAreaView className='flex-1 bg-white'>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-        className='flex-1'
-      >
-        <ScrollView
-          className='flex-1 px-6'
-          keyboardShouldPersistTaps='handled'
-          keyboardDismissMode='interactive'
-          contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
-        >
-          <View className='flex-1 justify-center py-12'>
-            {/* Header */}
-            <View className='items-center mb-8'>
-              <View className='w-20 h-20 bg-primary-600 rounded-full items-center justify-center mb-4'>
-                <Text className='font-geist-bold text-white text-2xl font-bold'>BS</Text>
-              </View>
-              <Text className='font-geist-bold text-3xl font-bold text-gray-900 mb-2'>
-                BizSawa
+    <AuthShell
+      title='Welcome Back!'
+      subtitle='Sign in to manage your business'
+      footer={
+        <View className='gap-3 items-center'>
+          <View className='flex-row justify-center'>
+            <Text className='font-sans text-sm text-ink-muted'>Have an invite code? </Text>
+            <TouchableOpacity onPress={() => router.push({ pathname: '/auth/accept-invite', params: formData.email ? { email: formData.email } : undefined } as any)}>
+              <Text className='font-geist-bold text-sm font-bold text-accent'>
+                Accept invite
               </Text>
-              <Text className='font-sans text-gray-500 text-center'>
-                {'Welcome back! \nSign in to manage your business'}
-              </Text>
-              {isOffline && (
-                <View className='mt-3 px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200 flex-row items-center gap-2'>
-                  <WifiOff size={12} color='#b45309' />
-                  <Text className='font-geist-bold text-xs font-bold text-amber-700'>
-                    Offline mode
-                  </Text>
-                </View>
-              )}
-              {offlineAvailable && (
-                <View className='mt-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 flex-row items-center gap-2'>
-                  <Shield size={12} color='#047857' />
-                  <Text className='font-sans text-xs text-emerald-700'>
-                    Offline login available • {graceDays} days left
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            {/* Form */}
-            <View className='space-y-4'>
-              {/* Email Field */}
-              <View>
-                <Text className='font-geist-medium text-gray-700 font-medium mb-2'>Email</Text>
-                <View className='relative'>
-                  <Mail
-                    size={20}
-                    color='#6b7280'
-                    style={{ position: 'absolute', left: 12, top: 12 }}
-                  />
-                  <TextInput
-                    className={`border rounded-2xl px-12 py-3 text-gray-900 ${
-                      errors.email ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    placeholder='Enter your email'
-                    value={formData.email}
-                    onChangeText={(text) =>
-                      setFormData({ ...formData, email: text })
-                    }
-                    keyboardType='email-address'
-                    autoCapitalize='none'
-                  />
-                </View>
-                {errors.email && (
-                  <Text className='font-sans text-red-500 text-sm mt-1'>
-                    {errors.email}
-                  </Text>
-                )}
-              </View>
-
-              {/* Password Field */}
-              <View>
-                <Text className='font-geist-medium text-gray-700 font-medium mb-2'>Password</Text>
-                <View className='relative'>
-                  <Lock
-                    size={20}
-                    color='#6b7280'
-                    style={{ position: 'absolute', left: 12, top: 12 }}
-                  />
-                  <TextInput
-                    className={`border rounded-2xl px-12 pr-12 py-3 text-gray-900 ${
-                      errors.password ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    placeholder='Enter your password'
-                    value={formData.password}
-                    onChangeText={(text) =>
-                      setFormData({ ...formData, password: text })
-                    }
-                    secureTextEntry={!showPassword}
-                  />
-                  <TouchableOpacity
-                    onPress={() => setShowPassword(!showPassword)}
-                    style={{ position: 'absolute', right: 12, top: 12 }}
-                  >
-                    {showPassword ? (
-                      <EyeOff size={20} color='#6b7280' />
-                    ) : (
-                      <Eye size={20} color='#6b7280' />
-                    )}
-                  </TouchableOpacity>
-                </View>
-                {errors.password && (
-                  <Text className='font-sans text-red-500 text-sm mt-1'>
-                    {errors.password}
-                  </Text>
-                )}
-              </View>
-
-              {/* Forgot password */}
-              <TouchableOpacity
-                onPress={() =>
-                  router.push({
-                    pathname: '/auth/forgot-password',
-                    params: formData.email ? { email: formData.email } : undefined,
-                  } as any)
-                }
-                className='self-end mt-3'
-              >
-                <Text className='font-geist-semibold text-primary-600 font-semibold text-sm'>Forgot password?</Text>
-              </TouchableOpacity>
-
-              {/* Login Button */}
-              <TouchableOpacity
-                onPress={handleSubmit}
-                disabled={isLoading}
-                className={`bg-primary-600 rounded-2xl mt-6 py-4 items-center ${
-                  isLoading ? 'opacity-50' : ''
-                }`}
-              >
-                {isLoading ? (
-                  <ActivityIndicator color='white' size='small' />
-                ) : (
-                  <View className='flex-row items-center'>
-                    <Text className='font-geist-semibold text-white font-semibold text-lg mr-2'>
-                      Sign In
-                    </Text>
-                    <ArrowRight size={20} color='white' />
-                  </View>
-                )}
-              </TouchableOpacity>
-
-              {/* OTP sign-in */}
-              <TouchableOpacity
-                onPress={() =>
-                  router.push({
-                    pathname: '/auth/verify-otp',
-                    params: formData.email ? { email: formData.email } : undefined,
-                  } as any)
-                }
-                className='border border-accent rounded-2xl mt-3 py-4 items-center bg-white flex-row justify-center gap-2'
-              >
-                <Mail size={16} color='#111827' />
-                <Text className='font-geist-semibold text-gray-900 font-semibold'>Sign in with email code</Text>
-              </TouchableOpacity>
-
-              {/* Divider */}
-              <View className='flex-row items-center my-6'>
-                <View className='flex-1 h-[1px] bg-gray-200' />
-                <Text className='font-geist-medium mx-4 text-gray-500 font-medium'>OR</Text>
-                <View className='flex-1 h-[1px] bg-gray-200' />
-              </View>
-
-              {/* Biometric / Offline hint */}
-              {biometricAvailable && offlineAvailable && (
-                <TouchableOpacity
-                  onPress={handleBiometricLogin}
-                  className='flex-row items-center justify-center border border-emerald-200 rounded-2xl py-3 bg-emerald-50 mt-2'
-                >
-                  <Fingerprint size={18} color='#047857' />
-                  <Text className='font-geist-semibold text-emerald-700 font-semibold ml-2'>
-                    Unlock with Biometrics
-                  </Text>
-                </TouchableOpacity>
-              )}
-
-              {/* Google Login Button — temporarily disabled: callback goes silent after consent, tracking in server logs */}
-              <TouchableOpacity
-                onPress={() => Alert.alert('Temporarily disabled', 'Google sign-in is paused while we fix the OAuth callback. Please use email/password or email code.')}
-                disabled={true}
-                className='flex-row items-center justify-center border border-gray-200 rounded-2xl py-4 bg-gray-100 opacity-60'
-              >
-                <Text className='font-geist-semibold text-gray-500 font-semibold text-lg'>
-                  Continue with Google — disabled
-                </Text>
-              </TouchableOpacity>
-              <Text className='font-sans text-xs text-gray-500 text-center mt-2'>We’ll re-enable after fixing the silent callback error (mobile ↔ /api/v1/auth/google).</Text>
-
-              {isOffline && !offlineAvailable && formData.email ? (
-                <View className='bg-amber-50 border border-amber-200 rounded-2xl px-3 py-3 mt-4'>
-                  <Text className='font-sans text-xs text-amber-800 text-center'>
-                    Offline login not yet enabled for this email. Connect once
-                    online to cache credentials (7-day grace).
-                  </Text>
-                </View>
-              ) : null}
-
-              {/* Invite code Link */}
-              <View className='flex-row justify-center mt-4'>
-                <Text className='font-sans text-gray-600'>Have an invite code? </Text>
-                <TouchableOpacity onPress={() => router.push({ pathname: '/auth/accept-invite', params: formData.email ? { email: formData.email } : undefined } as any)}>
-                  <Text className='font-geist-semibold text-primary-600 font-semibold'>
-                    Accept invite
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Register Link */}
-              <View className='flex-row justify-center mt-2'>
-                <Text className='font-sans text-gray-600'>Don't have an account? </Text>
-                <TouchableOpacity onPress={() => router.push('/auth/register')}>
-                  <Text className='font-geist-semibold text-primary-600 font-semibold'>
-                    Sign Up
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
+            </TouchableOpacity>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+          <SwitchLink
+            prompt="Don't have an account?"
+            action='Sign Up'
+            onPress={() => router.push('/auth/register')}
+          />
+        </View>
+      }
+    >
+      {(isOffline || offlineAvailable) && (
+        <View className='flex-row justify-center gap-2 mb-4 flex-wrap'>
+          {isOffline && (
+            <View className='px-3 py-1.5 rounded-full bg-warn-soft border border-hairline flex-row items-center gap-1.5'>
+              <WifiOff size={12} color='#8A5A0B' />
+              <Text className='font-geist-bold text-xs font-bold text-warn'>
+                Offline mode
+              </Text>
+            </View>
+          )}
+          {offlineAvailable && (
+            <View className='px-3 py-1.5 rounded-full bg-pos-soft border border-hairline flex-row items-center gap-1.5'>
+              <Shield size={12} color='#1F6F4A' />
+              <Text className='font-sans text-xs text-pos'>
+                Offline login • {graceDays}d left
+              </Text>
+            </View>
+          )}
+        </View>
+      )}
+
+      <View className='gap-4'>
+        <View>
+          <FieldLabel>Email</FieldLabel>
+          <AuthInput
+            placeholder='Enter your email'
+            value={formData.email}
+            onChangeText={(text) =>
+              setFormData({ ...formData, email: text })
+            }
+            keyboardType='email-address'
+            autoCapitalize='none'
+            style={errors.email ? { borderColor: '#A32C21' } : undefined}
+          />
+          <FieldError message={errors.email} />
+        </View>
+
+        <View>
+          <FieldLabel>Password</FieldLabel>
+          <View className='relative'>
+            <AuthInput
+              placeholder='Enter your password'
+              value={formData.password}
+              onChangeText={(text) =>
+                setFormData({ ...formData, password: text })
+              }
+              secureTextEntry={!showPassword}
+              className='pr-12'
+              style={errors.password ? { borderColor: '#A32C21' } : undefined}
+            />
+            <TouchableOpacity
+              onPress={() => setShowPassword(!showPassword)}
+              accessibilityRole='button'
+              accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+              style={{ position: 'absolute', right: 8, top: 8 }}
+              className='w-11 h-11 items-center justify-center'
+            >
+              {showPassword ? (
+                <EyeOff size={20} color='#64746F' />
+              ) : (
+                <Eye size={20} color='#64746F' />
+              )}
+            </TouchableOpacity>
+          </View>
+          <FieldError message={errors.password} />
+        </View>
+
+        <View className='flex-row items-center justify-between'>
+          {biometricAvailable && offlineAvailable ? (
+            <TouchableOpacity
+              onPress={handleBiometricLogin}
+              className='flex-row items-center gap-1.5'
+            >
+              <Fingerprint size={16} color='#006B5F' />
+              <Text className='font-geist-semibold text-accent font-semibold text-sm'>
+                Biometrics
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <View />
+          )}
+          <TouchableOpacity
+            onPress={() =>
+              router.push({
+                pathname: '/auth/forgot-password',
+                params: formData.email ? { email: formData.email } : undefined,
+              } as any)
+            }
+          >
+            <Text className='font-geist-semibold text-accent font-semibold text-sm'>Forgot password?</Text>
+          </TouchableOpacity>
+        </View>
+
+        <PrimaryCta
+          label='Login'
+          loading={isLoading}
+          onPress={handleSubmit}
+        />
+
+        <TouchableOpacity
+          onPress={() =>
+            router.push({
+              pathname: '/auth/verify-otp',
+              params: formData.email ? { email: formData.email } : undefined,
+            } as any)
+          }
+          className='border border-hairline rounded-full py-3.5 items-center bg-surface flex-row justify-center gap-2'
+        >
+          <Mail size={16} color='#0E1F1C' />
+          <Text className='font-geist-semibold text-ink font-semibold text-sm'>Sign in with email code</Text>
+        </TouchableOpacity>
+
+        {isOffline && !offlineAvailable && formData.email ? (
+          <View className='bg-warn-soft border border-hairline rounded-2xl px-3 py-3'>
+            <Text className='font-sans text-xs text-warn text-center'>
+              Offline login not yet enabled for this email. Connect once
+              online to cache credentials (7-day grace).
+            </Text>
+          </View>
+        ) : null}
+
+        <OrDivider />
+
+        <SocialRow
+          onGoogle={() => Alert.alert('Temporarily disabled', 'Google sign-in is paused while we fix the OAuth callback. Please use email/password or email code.')}
+          onApple={() => Alert.alert('Coming soon', 'Apple sign-in is not available yet. Please use email/password or email code.')}
+          onFacebook={() => Alert.alert('Coming soon', 'Facebook sign-in is not available yet. Please use email/password or email code.')}
+        />
+      </View>
+    </AuthShell>
   )
 }
