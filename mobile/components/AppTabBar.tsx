@@ -5,19 +5,17 @@ import { Receipt, Package, BarChart3, User, Home } from 'lucide-react-native'
 import { useNavigationGate } from '../lib/navigation/NavigationGate'
 
 const COLORS = {
-  surface: '#F4F9F7',
-  secondary: '#555f6d',
+  surface: '#FFFFFF',
+  secondary: '#64746F',
   primary: '#006b5f',
   homeActiveBg: '#006b5f',
-  homeIdleBg: '#e7e8e9',
+  homeIdleBg: '#E4EBEE',
   onPrimary: '#ffffff',
-  borderCutout: '#F4F9F7',
 } as const
 
-const ICON_SIZE = 24
-const LABEL_SIZE = 12
-const HOME_CIRCLE = 56
-const HOME_LIFT = -28
+const ICON_SIZE = 22
+const LABEL_SIZE = 11
+const HOME_CIRCLE = 52
 
 type RouteName = 'sales' | 'stock' | 'index' | 'insights' | 'profile'
 
@@ -74,6 +72,8 @@ export function AppTabBar({
         },
       ]}
     >
+      {/* Floating clinical pill — the reference bottom bar: white pill,
+          centered dark-teal active home, soft diffuse lift off the canvas. */}
       <View style={styles.row}>
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key]
@@ -190,46 +190,48 @@ export function AppTabBar({
 
 const styles = StyleSheet.create({
   outer: {
-    overflow: 'visible',
-    backgroundColor: COLORS.surface,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    backgroundColor: 'transparent',
+    paddingHorizontal: 16,
     paddingTop: 8,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#006b5f',
-        shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.06,
-        shadowRadius: 16,
-      },
-      android: {
-        elevation: 4,
-      },
-    }),
   },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    alignItems: 'flex-end',
-    paddingHorizontal: 12,
-    paddingBottom: 4,
-    minHeight: 56,
-    overflow: 'visible',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    minHeight: 68,
+    backgroundColor: COLORS.surface,
+    borderRadius: 36,
+    borderWidth: 1,
+    borderColor: '#E4EBEE',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#0E1F1C',
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.1,
+        shadowRadius: 32,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
   },
   sideTab: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'flex-end',
-    paddingVertical: 12,
-    paddingHorizontal: 4,
-    maxWidth: 88,
-    minHeight: 44,
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 2,
+    maxWidth: 72,
+    minHeight: 52,
+    borderRadius: 26,
   },
   sideTabActive: {
-    transform: [{ scale: 1.08 }],
+    backgroundColor: '#E4F0ED',
   },
   sideTabInactive: {
-    opacity: 0.7,
+    opacity: 0.85,
   },
   sideTabContent: {
     width: '100%',
@@ -237,7 +239,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   iconWrap: {
-    marginBottom: 4,
+    marginBottom: 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -258,14 +260,11 @@ const styles = StyleSheet.create({
   homeSlot: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'flex-end',
-    marginTop: HOME_LIFT,
-    maxWidth: 88,
-    overflow: 'visible',
+    justifyContent: 'center',
+    maxWidth: 72,
   },
   homePressable: {
-    borderRadius: HOME_CIRCLE / 2 + 4,
-    overflow: 'visible',
+    borderRadius: HOME_CIRCLE / 2,
   },
   homeCircle: {
     width: HOME_CIRCLE,
@@ -273,17 +272,15 @@ const styles = StyleSheet.create({
     borderRadius: HOME_CIRCLE / 2,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 4,
-    borderColor: COLORS.borderCutout,
     ...Platform.select({
       ios: {
         shadowColor: '#006b5f',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.08,
-        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.22,
+        shadowRadius: 14,
       },
       android: {
-        elevation: 4,
+        elevation: 5,
       },
     }),
   },
