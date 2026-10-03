@@ -135,32 +135,44 @@ export default function Index() {
     })
 
     return (
-      <View
-        className='flex-1 items-center justify-center'
-        style={{ backgroundColor: '#F4F9F7' }}
-      >
+      <View className='flex-1 items-center justify-center bg-accent'>
         <Animated.View
           style={{ opacity: fadeAnim, alignItems: 'center', width: '100%' }}
         >
-          {/* Central Splash Icon matches native splash perfectly */}
-          <Image
-            source={require('../assets/splash-icon.png')}
-            style={{ width: 250, height: 250 }}
-            resizeMode='contain'
-          />
+          {/* Reference taste: full-bleed deep teal, white mark + wordmark */}
+          <View className='items-center justify-center rounded-full bg-white/10 p-8'>
+            <View className='items-center justify-center rounded-full bg-white shadow-clinical'
+              style={{ width: 148, height: 148 }}
+            >
+              <Image
+                source={require('../assets/adaptive-icon.png')}
+                style={{ width: 104, height: 104 }}
+                resizeMode='contain'
+              />
+            </View>
+          </View>
+          <Text
+            className='font-geist-bold text-white font-bold mt-6'
+            style={{ letterSpacing: 6, fontSize: 18 }}
+          >
+            BIZSAWA
+          </Text>
+          <Text className='font-sans text-white/70 text-xs mt-2 tracking-wide'>
+            Your AI powered business companion
+          </Text>
 
           {/* Container with generous margin to avoid cluttering */}
-          <View className='mt-24 items-center w-full px-12'>
+          <View className='mt-16 items-center w-full px-12'>
             {/* Loading Bar */}
-            <View className='w-full max-w-[200px] h-1 bg-[#d3e5f1] rounded-full overflow-hidden mb-6'>
+            <View className='w-full max-w-[200px] h-1 bg-white/25 rounded-full overflow-hidden mb-6'>
               <Animated.View
                 style={{ width: progressWidth }}
-                className='h-full bg-accent'
+                className='h-full bg-white'
               />
             </View>
 
             {/* Typewriter Text */}
-            <Text className='font-geist-bold text-xs text-[#43474b]/80 font-bold tracking-widest uppercase h-6'>
+            <Text className='font-geist-bold text-xs text-white/70 font-bold tracking-widest uppercase h-6'>
               {typewriterText}
             </Text>
           </View>

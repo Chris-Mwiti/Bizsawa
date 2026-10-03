@@ -62,6 +62,7 @@ export default function StockTab() {
   } = useInventory()
 
   const [searchTerm, setSearchTerm] = useState('')
+  const [filter, setFilter] = useState<'all' | 'low'>('all')
   const [showItemModal, setShowItemModal] = useState(false)
   const [inlineError, setInlineError] = useState<string | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
@@ -163,8 +164,9 @@ export default function StockTab() {
 
   const filteredInventory = combinedInventory.filter(
     (item) =>
-      item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.category.toLowerCase().includes(searchTerm.toLowerCase()),
+      (filter === 'all' || item.currentStock <= item.minimumThreshold) &&
+      (item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.category.toLowerCase().includes(searchTerm.toLowerCase())),
   )
   const lowStockItems = combinedInventory.filter(
     (item) => item.currentStock <= item.minimumThreshold,
@@ -365,24 +367,24 @@ export default function StockTab() {
   }
 
   return (
-    <View className='flex-1 bg-gray-50'>
-      {/* Header */}
-      <View className='px-4 pt-12 pb-4 bg-white border-b border-gray-200'>
-        <View className='flex-row justify-between items-start gap-3'>
+    <View className='flex-1 bg-paper'>
+      {/* Header — soft clinical card with pill Add */}
+      <View className='px-4 pt-12 pb-3'>
+        <View className='bg-surface rounded-4xl p-5 border border-hairline shadow-clinical-sm flex-row justify-between items-start gap-3'>
           <View className='flex-1'>
-            <Text className='font-geist-bold text-xs font-bold tracking-widest text-gray-500 uppercase'>
+            <Text className='font-geist-bold text-xs font-bold tracking-widest text-ink-subtle uppercase'>
               Stock
             </Text>
-            <Text className='font-geist-bold text-xl font-bold tracking-tight text-gray-900 -mt-0.5'>
+            <Text className='font-geist-bold text-xl font-bold tracking-tight text-ink -mt-0.5'>
               Inventory
             </Text>
-            <Text className='font-sans text-xs text-gray-500'>
+            <Text className='font-sans text-xs text-ink-muted'>
               Mfumo wa kuhifadhi bidhaa
             </Text>
           </View>
           <TouchableOpacity
             onPress={handleOpenAddModal}
-            className='flex-row items-center gap-2 bg-accent px-4 py-3 rounded-full'
+            className='flex-row items-center gap-2 bg-accent px-4 py-3 rounded-full shadow-clinical-sm'
           >
             <Plus size={16} color='white' />
             <Text className='font-geist-bold text-white text-sm font-bold'>Add</Text>
@@ -398,6 +400,51 @@ export default function StockTab() {
         }}
         showsVerticalScrollIndicator={false}
       >
+        {/* Inventory actions — prominent CTA + live filters */}
+        <View className='bg-surface rounded-5xl p-4 border border-hairline shadow-clinical-sm gap-3'>
+          <TouchableOpacity
+            onPress={handleOpenAddModal}
+            accessibilityRole='button'
+            accessibilityLabel='Add inventory item'
+            className='flex-row items-center justify-center gap-2 bg-accent rounded-full py-4 shadow-clinical-sm active:bg-accent-active'
+          >
+            <Plus size={18} color='white' />
+            <Text className='font-geist-bold text-white text-[15px] font-bold'>
+              Add Inventory
+            </Text>
+          </TouchableOpacity>
+          <View className='flex-row gap-2'>
+            {(
+              [
+                { key: 'all', label: `All Items • ${combinedInventory.length}` },
+                { key: 'low', label: `Low Stock • ${lowStockItems.length}` },
+              ] as const
+            ).map((f) => {
+              const active = filter === f.key
+              return (
+                <Pressable
+                  key={f.key}
+                  onPress={() => setFilter(f.key)}
+                  accessibilityRole='button'
+                  accessibilityState={{ selected: active }}
+                  className={`flex-1 py-3 rounded-full border items-center ${
+                    active
+                      ? 'bg-accent border-accent'
+                      : 'bg-paper border-hairline'
+                  }`}
+                >
+                  <Text
+                    className={`text-xs font-bold ${active ? 'text-on-accent' : 'text-ink-muted'}`}
+                    numberOfLines={1}
+                  >
+                    {f.label}
+                  </Text>
+                </Pressable>
+              )
+            })}
+          </View>
+        </View>
+
         {/* Metrics */}
         <View className='flex-row gap-3'>
           {[
@@ -422,12 +469,12 @@ export default function StockTab() {
             },
           ].map((m) => (
             <View key={m.label} className='flex-1'>
-              <Card className='border border-gray-200'>
+              <Card>
                 <CardContent className='p-3 items-center'>
                   <View
-                    className={`w-11 h-11 rounded-2xl items-center justify-center mb-2 ${m.alert ? 'bg-amber-50 border border-amber-100' : 'bg-gray-50 border border-gray-100'}`}
+                    className={`w-11 h-11 rounded-full items-center justify-center mb-2 ${m.alert ? 'bg-warn-soft border border-hairline' : 'bg-paper border border-hairline'}`}
                   >
-                    <m.icon size={16} color={m.alert ? '#b45309' : '#6b7280'} />
+                    <m.icon size={18} color={m.alert ? '#8A5A0B' : '#4F625E'} />
                   </View>
                   <Text
                     className='font-geist-mono-bold text-sm font-bold tracking-tight text-gray-900'
@@ -447,13 +494,13 @@ export default function StockTab() {
           ))}
         </View>
 
-        {/* Search */}
-        <View className='flex-row items-center gap-2 bg-white border border-gray-300 rounded-2xl px-3'>
-          <Search size={16} color='#6b7280' />
+        {/* Search — pill like the reference */}
+        <View className='flex-row items-center gap-2 bg-surface border border-hairline rounded-full px-4 shadow-clinical-sm'>
+          <Search size={16} color='#64746F' />
           <TextInput
             className='flex-1 py-4 text-sm text-gray-900'
             placeholder='Search products or category…'
-            placeholderTextColor='#6b7280'
+            placeholderTextColor='#64746F'
             value={searchTerm}
             onChangeText={setSearchTerm}
           />
@@ -639,7 +686,7 @@ export default function StockTab() {
               <CardContent className='items-center py-12'>
                 <Package size={28} color='#6b7280' />
                 <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mt-3'>
-                  {searchTerm ? 'No matches' : 'No inventory'}
+                  {searchTerm ? 'No matches' : filter === 'low' ? 'All stocked up' : 'No inventory'}
                 </Text>
                 <Text className='font-sans text-xs text-gray-500 mt-1'>
                   Try a different search or add a product

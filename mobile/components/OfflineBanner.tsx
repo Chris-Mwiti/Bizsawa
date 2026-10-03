@@ -11,15 +11,13 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import NetInfo from '@react-native-community/netinfo'
 import {
-  WifiOff,
   Wifi,
-  CloudOff,
+  WifiOff,
   CheckCircle2,
   X,
   RefreshCw,
   Trash2,
   AlertTriangle,
-  ArrowLeftRight,
 } from 'lucide-react-native'
 import { useSync } from '../sync/SyncProvider'
 import { resetLocalDatabase, syncNow, refreshFromRemote } from '../sync/client'
@@ -34,7 +32,8 @@ export function OfflineBanner() {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isResetting, setIsResetting] = useState(false)
   const [dismissed, setDismissed] = useState(false)
-  const slideAnim = useRef(new Animated.Value(-100)).current
+  const [expanded, setExpanded] = useState(false)
+  const slideAnim = useRef(new Animated.Value(-60)).current
   const prevConnectedRef = useRef<boolean | null>(true)
 
   const {
@@ -108,7 +107,7 @@ export function OfflineBanner() {
       }).start()
     } else {
       Animated.timing(slideAnim, {
-        toValue: -100,
+        toValue: -60,
         duration: 250,
         useNativeDriver: true,
       }).start()
@@ -192,257 +191,187 @@ export function OfflineBanner() {
     )
   }
 
-  // Inline mode: flows in layout, pushes content down instead of overlaying
-  const topPadding = Math.max(insets.top, Platform.OS === 'ios' ? 12 : 8)
+  // Toast mode: compact floating pill centered at the top of each page.
+  // Overlays content (absolute) instead of pushing layout down, single-line
+  // text, small icon. Tap to expand details + recovery actions.
+  const topOffset = Math.max(insets.top, Platform.OS === 'ios' ? 12 : 8) + 4
+
+  const pillTone = isOffline
+    ? 'bg-ink text-ink-inverse'
+    : showRecovery
+      ? 'bg-white border border-orange-200'
+      : 'bg-white border border-hairline'
+  const pillIcon = isOffline ? (
+    <WifiOff size={14} color='#FFFFFF' />
+  ) : showRecovery ? (
+    <AlertTriangle size={14} color='#c2410c' />
+  ) : (
+    <CheckCircle2 size={14} color='#047857' />
+  )
+  const pillText = isOffline
+    ? pendingCount > 0
+      ? `Offline • ${pendingCount} saved locally`
+      : 'Offline • saving locally'
+    : showRecovery
+      ? pendingCount > 0 && conflictCount > 0
+        ? `Back online • ${pendingCount} to sync • ${conflictCount} conflicts`
+        : pendingCount > 0
+          ? `Back online • ${pendingCount} to sync`
+          : `Back online • ${conflictCount} conflict${conflictCount === 1 ? '' : 's'}`
+      : 'Offline mode ready'
+  const pillTextColor = isOffline
+    ? 'text-ink-inverse'
+    : showRecovery
+      ? 'text-orange-900'
+      : 'text-ink'
+
+  const dismiss = () => {
+    if (isOffline) setDismissed(true)
+    if (showRecovery) setShowRecovery(false)
+    setShowOfflineCapabilities(false)
+    setExpanded(false)
+  }
+
   return (
     <Animated.View
       style={{
+        position: 'absolute',
+        top: topOffset,
+        left: 0,
+        right: 0,
+        alignItems: 'center',
+        zIndex: 50,
         transform: [{ translateY: slideAnim }],
-        position: 'relative',
-        zIndex: 1,
-        width: '100%',
-        // Collapse when hidden via height animation - keep transform for slide
         opacity: slideAnim.interpolate({
-          inputRange: [-100, 0],
+          inputRange: [-60, 0],
           outputRange: [0, 1],
           extrapolate: 'clamp',
         }) as any,
       }}
-      className='px-4 pb-3'
-      pointerEvents='auto'
+      pointerEvents='box-none'
     >
-      <View style={{ height: topPadding }} />
-      <View
-        className={`rounded-2xl border px-4 py-3 shadow-sm ${
-          isOffline
-            ? 'bg-amber-50 border-amber-200'
-            : showRecovery
-              ? 'bg-orange-50 border-orange-200'
-              : 'bg-emerald-50 border-emerald-200'
-        }`}
-      >
-        {/* Header row */}
-        <View className='flex-row items-center gap-3'>
-          <View
-            className={`w-11 h-11 rounded-2xl items-center justify-center ${
-              isOffline
-                ? 'bg-amber-100'
-                : showRecovery
-                  ? 'bg-orange-100'
-                  : 'bg-emerald-100'
-            }`}
-          >
-            {isOffline ? (
-              <WifiOff size={18} color='#b45309' />
-            ) : showRecovery ? (
-              <AlertTriangle size={18} color='#c2410c' />
-            ) : (
-              <CheckCircle2 size={18} color='#047857' />
-            )}
-          </View>
-
-          <View className='flex-1'>
-            {isOffline ? (
-              <>
-                <Text className='font-geist-bold text-sm font-bold text-amber-900'>
-                  You are offline
-                </Text>
-                <Text className='font-sans text-xs text-amber-700 mt-0.5'>
-                  Offline mode enabled — changes are saved locally and will sync
-                  when you reconnect.
-                </Text>
-                {syncState === 'syncing' || syncState === 'conflict' ? (
-                  <View className='flex-row items-center gap-2 mt-1'>
-                    <CloudOff size={12} color='#b45309' />
-                    <Text className='font-geist-bold text-xs font-bold tracking-widest text-amber-700 uppercase'>
-                      {syncState === 'syncing'
-                        ? 'Syncing…'
-                        : 'Conflicts need review'}
-                    </Text>
-                  </View>
-                ) : null}
-              </>
-            ) : showRecovery ? (
-              <>
-                <Text className='font-geist-bold text-sm font-bold text-orange-900'>
-                  Back online — sync needed
-                </Text>
-                <Text className='font-sans text-xs text-orange-700 mt-0.5'>
-                  {pendingCount > 0 && conflictCount > 0
-                    ? `${pendingCount} local change${pendingCount === 1 ? '' : 's'} to push • ${conflictCount} conflict${conflictCount === 1 ? '' : 's'} to resolve`
-                    : pendingCount > 0
-                      ? `${pendingCount} local change${pendingCount === 1 ? '' : 's'} waiting to sync to server`
-                      : `${conflictCount} conflict${conflictCount === 1 ? '' : 's'} need${conflictCount === 1 ? 's' : ''} resolution`}
-                </Text>
-                <View className='flex-row items-center gap-2 mt-1'>
-                  <ArrowLeftRight size={12} color='#c2410c' />
-                  <Text className='font-geist-bold text-xs font-bold tracking-widest text-orange-600 uppercase'>
-                    Choose how to continue
-                  </Text>
-                </View>
-              </>
-            ) : (
-              <>
-                <Text className='font-geist-bold text-sm font-bold text-emerald-900'>
-                  Offline capabilities enabled
-                </Text>
-                <Text className='font-sans text-xs text-emerald-700 mt-0.5'>
-                  Your data is available offline. Edits made without internet
-                  will sync automatically on reconnect.
-                </Text>
-                <View className='flex-row items-center gap-2 mt-1'>
-                  <Wifi size={12} color='#047857' />
-                  <Text className='font-geist-bold text-xs font-bold tracking-widest text-emerald-600 uppercase'>
-                    Back online • Synced
-                  </Text>
-                </View>
-              </>
-            )}
-          </View>
-
+      <View className='px-4 w-full items-center' pointerEvents='box-none'>
+        <View
+          className={`flex-row items-center gap-2 pl-3 pr-1.5 py-1.5 rounded-full shadow-clinical-sm ${pillTone}`}
+          style={{ maxWidth: 360 }}
+        >
           <Pressable
-            onPress={() => {
-              if (isOffline) setDismissed(true)
-              if (showRecovery) setShowRecovery(false)
-              setShowOfflineCapabilities(false)
-            }}
-            className='w-11 h-11 rounded-full bg-white/60 items-center justify-center'
+            onPress={() => setExpanded((v) => !v)}
+            accessibilityRole='button'
+            accessibilityLabel={pillText}
+            className='flex-row items-center gap-2 flex-1'
+            style={{ minHeight: 32 }}
+          >
+            <View
+              className={`w-7 h-7 rounded-full items-center justify-center shrink-0 ${
+                isOffline
+                  ? 'bg-white/15'
+                  : showRecovery
+                    ? 'bg-orange-100'
+                    : 'bg-emerald-100'
+              }`}
+            >
+              {pillIcon}
+            </View>
+            <Text
+              className={`font-geist-bold text-xs font-bold flex-1 ${pillTextColor}`}
+              numberOfLines={1}
+            >
+              {pillText}
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={dismiss}
+            accessibilityRole='button'
+            accessibilityLabel='Dismiss'
+            className='w-8 h-8 rounded-full items-center justify-center'
+            hitSlop={8}
           >
             <X
-              size={14}
+              size={13}
               color={
-                isOffline ? '#92400e' : showRecovery ? '#7c2d12' : '#065f46'
+                isOffline ? '#FFFFFF' : showRecovery ? '#7c2d12' : '#4F625E'
               }
             />
           </Pressable>
         </View>
 
-        {/* Recovery actions — only when back online with pending/conflicts */}
-        {showRecovery && !isOffline ? (
-          <View className='mt-3 pt-3 border-t border-orange-200 gap-2'>
-            {conflictCount > 0 ? (
-              <Pressable
-                onPress={() => {
-                  try { router?.push('/sync-conflicts' as any) } catch {}
-                  setShowRecovery(false)
-                }}
-                className='py-3 rounded-full bg-red-600 flex-row items-center justify-center gap-2 active:bg-red-700'
-              >
-                <AlertTriangle size={14} color='#fff' />
-                <Text className='font-geist-bold text-xs font-bold text-white'>
-                  Resolve {conflictCount} conflict{conflictCount === 1 ? '' : 's'} →
-                </Text>
-              </Pressable>
-            ) : null}
-            <View className='flex-row gap-2'>
-              <Pressable
-                onPress={handleRefresh}
-                disabled={isRefreshing || isResetting}
-                className={`flex-1 py-3 rounded-full flex-row items-center justify-center gap-2 ${
-                  isRefreshing
-                    ? 'bg-orange-200'
-                    : 'bg-orange-600 active:bg-orange-700'
-                }`}
-              >
-                {isRefreshing ? (
-                  <ActivityIndicator size='small' color='#fff' />
-                ) : (
-                  <RefreshCw size={14} color='#fff' />
-                )}
-                <Text className='font-geist-bold text-xs font-bold text-white'>
-                  {isRefreshing ? 'Refreshing…' : 'Refresh from server'}
-                </Text>
-              </Pressable>
-
-              <Pressable
-                onPress={handleReset}
-                disabled={isRefreshing || isResetting}
-                className={`flex-1 py-3 rounded-full border flex-row items-center justify-center gap-2 ${
-                  isResetting
-                    ? 'bg-gray-100 border-gray-200'
-                    : 'bg-white border-orange-200 active:bg-orange-50'
-                }`}
-              >
-                {isResetting ? (
-                  <ActivityIndicator size='small' color='#c2410c' />
-                ) : (
-                  <Trash2 size={14} color='#c2410c' />
-                )}
-                <Text className='font-geist-bold text-xs font-bold text-orange-700'>
-                  {isResetting ? 'Resetting…' : 'Reset local store'}
-                </Text>
-              </Pressable>
-            </View>
-
-            <Text className='font-sans text-xs text-orange-600 text-center'>
-              Refresh pulls latest server data and pushes pending changes. Reset
-              clears local and re-pulls — use if data looks corrupted.
-            </Text>
-          </View>
-        ) : null}
-        {conflictCount > 0 && !showRecovery && !isOffline ? (
-          <Pressable
-            onPress={() => { try { router?.push('/sync-conflicts' as any) } catch {} }}
-            className='mt-2 py-2 rounded-full bg-red-50 border border-red-200 flex-row items-center justify-center gap-2'
-          >
-            <AlertTriangle size={12} color='#dc2626' />
-            <Text className='font-geist-bold text-xs font-bold tracking-widest text-red-700'>
-              {conflictCount} CONFLICT{conflictCount===1?'':'S'} — TAP TO RESOLVE
-            </Text>
-          </Pressable>
-        ) : null}
-
-        {/* Gentle offline heal actions (always when online, no pending) */}
-        {!showRecovery && !isOffline ? (
-          <View className='flex-row gap-2 mt-2'>
-            <Pressable
-              onPress={async () => {
-                try {
-                  await syncNow()
-                  Alert.alert('Synced', 'Offline data refreshed from server')
-                } catch (e: any) {
-                  Alert.alert('Sync failed', e?.message || 'Try again')
-                }
-              }}
-              className='px-3 py-1.5 rounded-full bg-emerald-600 flex-row items-center gap-2'
-            >
-              <RefreshCw size={12} color='#fff' />
-              <Text className='font-geist-bold text-xs font-bold text-white'>Refresh</Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() =>
-                Alert.alert(
-                  'Reset offline data?',
-                  'This clears local data and re-pulls from server. Offline changes not yet synced will be lost.',
-                  [
-                    {
-                      text: 'Cancel',
-                      style: 'cancel',
-                    },
-                    {
-                      text: 'Reset',
-                      style: 'destructive',
-                      onPress: async () => {
-                        try {
-                          await resetLocalDatabase()
-                          await syncNow()
-                          Alert.alert('Done', 'Local data cleared')
-                        } catch (e: any) {
-                          Alert.alert('Failed', e?.message)
-                        }
-                      },
-                    },
-                  ],
-                )
-              }
-              className='px-3 py-1.5 rounded-full bg-white border border-emerald-200 flex-row items-center gap-2'
-            >
-              <Trash2 size={12} color='#047857' />
-              <Text className='font-geist-bold text-xs font-bold text-emerald-700'>
-                Reset local
+        {/* Expanded details — only on tap, keeps the toast compact */}
+        {expanded ? (
+          <View className='mt-2 bg-surface rounded-3xl border border-hairline shadow-clinical-sm px-4 py-3 w-full' style={{ maxWidth: 360 }}>
+            {isOffline ? (
+              <Text className='font-sans text-xs text-ink-muted'>
+                Changes are saved on this device and will sync when you
+                reconnect.
+                {syncState === 'syncing'
+                  ? ' Syncing…'
+                  : syncState === 'conflict'
+                    ? ' Some items need review.'
+                    : ''}
               </Text>
-            </Pressable>
+            ) : showRecovery ? (
+              <>
+                <Text className='font-sans text-xs text-ink-muted'>
+                  {pendingCount > 0 && conflictCount > 0
+                    ? `${pendingCount} local change${pendingCount === 1 ? '' : 's'} to push • ${conflictCount} conflict${conflictCount === 1 ? '' : 's'} to resolve.`
+                    : pendingCount > 0
+                      ? `${pendingCount} local change${pendingCount === 1 ? '' : 's'} waiting to sync to the server.`
+                      : `${conflictCount} conflict${conflictCount === 1 ? '' : 's'} need${conflictCount === 1 ? 's' : ''} resolution.`}
+                </Text>
+                <View className='flex-row gap-2 mt-2'>
+                  {conflictCount > 0 ? (
+                    <Pressable
+                      onPress={() => {
+                        try { router?.push('/sync-conflicts' as any) } catch {}
+                        setShowRecovery(false)
+                        setExpanded(false)
+                      }}
+                      className='flex-1 py-2.5 rounded-full bg-neg flex-row items-center justify-center gap-1.5'
+                    >
+                      <AlertTriangle size={13} color='#fff' />
+                      <Text className='font-geist-bold text-xs font-bold text-white'>
+                        Resolve ({conflictCount})
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                  <Pressable
+                    onPress={handleRefresh}
+                    disabled={isRefreshing || isResetting}
+                    className={`flex-1 py-2.5 rounded-full flex-row items-center justify-center gap-1.5 ${
+                      isRefreshing ? 'bg-orange-200' : 'bg-orange-600 active:bg-orange-700'
+                    }`}
+                  >
+                    {isRefreshing ? (
+                      <ActivityIndicator size='small' color='#fff' />
+                    ) : (
+                      <RefreshCw size={13} color='#fff' />
+                    )}
+                    <Text className='font-geist-bold text-xs font-bold text-white'>
+                      {isRefreshing ? 'Refreshing…' : 'Refresh'}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={handleReset}
+                    disabled={isRefreshing || isResetting}
+                    className='py-2.5 px-3 rounded-full bg-white border border-orange-200 flex-row items-center justify-center gap-1.5'
+                  >
+                    {isResetting ? (
+                      <ActivityIndicator size='small' color='#c2410c' />
+                    ) : (
+                      <Trash2 size={13} color='#c2410c' />
+                    )}
+                    <Text className='font-geist-bold text-xs font-bold text-orange-700'>
+                      {isResetting ? '…' : 'Reset'}
+                    </Text>
+                  </Pressable>
+                </View>
+              </>
+            ) : (
+              <Text className='font-sans text-xs text-ink-muted'>
+                Your data is available offline. Edits made without internet
+                sync automatically on reconnect.
+              </Text>
+            )}
           </View>
         ) : null}
       </View>

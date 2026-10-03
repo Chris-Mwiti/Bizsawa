@@ -222,7 +222,7 @@ export default function SalesTab() {
   }
 
   return (
-    <View className='flex-1 bg-gray-50'>
+    <View className='flex-1 bg-paper'>
       {inlineError ? (
         <View className='mx-4 mt-3 bg-red-50 border border-red-200 rounded-2xl px-4 py-3 flex-row items-center gap-2'>
           <Text className='font-sans text-sm text-red-700 flex-1'>{inlineError}</Text>
@@ -239,31 +239,31 @@ export default function SalesTab() {
         }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Metrics — restrained */}
+        {/* Metrics — soft clinical 2-up */}
         <View className='flex-row gap-3'>
-          <Card className='flex-1 border border-gray-200'>
+          <Card className='flex-1'>
             <CardContent className='p-6'>
-              <Text className='font-geist-medium text-xs font-medium text-gray-500'>
+              <Text className='font-geist-medium text-xs font-medium text-ink-muted'>
                 Today
               </Text>
-              <Text className='font-geist-mono-bold text-lg font-bold tracking-tight text-gray-900 mt-1'>
+              <Text className='font-geist-mono-bold text-lg font-bold tracking-tight text-ink mt-1'>
                 {formatCurrency(todaysRevenue)}
               </Text>
               <View className='flex-row items-center gap-1 mt-1'>
-                <ArrowUpRight size={12} color='#6b7280' />
-                <Text className='font-sans text-xs text-gray-500'>revenue</Text>
+                <ArrowUpRight size={12} color='#4F625E' />
+                <Text className='font-sans text-xs text-ink-muted'>revenue</Text>
               </View>
             </CardContent>
           </Card>
-          <Card className='flex-1 border border-gray-200'>
+          <Card className='flex-1'>
             <CardContent className='p-6'>
-              <Text className='font-geist-medium text-xs font-medium text-gray-500'>
+              <Text className='font-geist-medium text-xs font-medium text-ink-muted'>
                 Transactions
               </Text>
-              <Text className='font-geist-mono-bold text-lg font-bold tracking-tight text-gray-900 mt-1'>
+              <Text className='font-geist-mono-bold text-lg font-bold tracking-tight text-ink mt-1'>
                 {todaysSales.length}
               </Text>
-              <Text className='font-sans text-xs text-gray-500 mt-1'>
+              <Text className='font-sans text-xs text-ink-muted mt-1'>
                 {sales.length} total
               </Text>
             </CardContent>
@@ -272,13 +272,13 @@ export default function SalesTab() {
 
         {/* List — consistent card language */}
         {sales.length === 0 ? (
-          <Card className='border border-dashed border-gray-300'>
+          <Card className='border border-dashed border-hairline'>
             <CardContent className='items-center py-12'>
-              <View className='w-12 h-12 rounded-2xl bg-gray-50 border border-gray-200 items-center justify-center mb-3'>
-                <Receipt size={20} color='#6b7280' />
+              <View className='w-12 h-12 rounded-full bg-paper border border-hairline items-center justify-center mb-3'>
+                <Receipt size={20} color='#4F625E' />
               </View>
-              <Text className='font-geist-bold font-bold text-gray-900'>No sales today</Text>
-              <Text className='font-sans text-sm text-gray-500 text-center mt-1 px-6'>
+              <Text className='font-geist-bold font-bold text-ink'>No sales today</Text>
+              <Text className='font-sans text-sm text-ink-muted text-center mt-1 px-6'>
                 Sales appear here as you record them. Tap Record Sale to start.
               </Text>
             </CardContent>
@@ -286,26 +286,26 @@ export default function SalesTab() {
         ) : (
           <View className='gap-3'>
             {sales.map((sale) => (
-              <Card key={sale.id} className='border border-gray-200'>
+              <Card key={sale.id}>
                 <CardContent className='p-6'>
                   <View className='flex-row justify-between gap-3'>
                     <View className='flex-1'>
                       <Text
-                        className='font-geist-bold text-sm font-bold text-gray-900'
+                        className='font-geist-bold text-sm font-bold text-ink'
                         numberOfLines={1}
                       >
                         {sale.receiptNumber}
                       </Text>
-                      <Text className='font-sans text-xs text-gray-500 mt-1'>
+                      <Text className='font-sans text-xs text-ink-muted mt-1'>
                         {formatDate(sale.soldAt)} • {sale.paymentMethod}
                       </Text>
                     </View>
                     <View className='items-end gap-1'>
-                      <Text className='font-geist-mono-bold text-sm font-bold tracking-tight text-gray-900'>
+                      <Text className='font-geist-mono-bold text-sm font-bold tracking-tight text-ink'>
                         {formatCurrency(toNumber(sale.total))}
                       </Text>
-                      <View className='px-2 py-1 rounded-full bg-gray-100 border border-gray-200'>
-                        <Text className='font-geist-bold text-xs font-bold text-gray-600 tracking-wide'>
+                      <View className='px-2 py-1 rounded-full bg-paper border border-hairline'>
+                        <Text className='font-geist-bold text-xs font-bold text-ink-muted tracking-wide'>
                           {String(sale.status).toUpperCase()}
                         </Text>
                       </View>

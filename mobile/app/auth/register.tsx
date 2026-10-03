@@ -5,12 +5,8 @@ import {
   TextInput,
   TouchableOpacity,
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
   Alert,
 } from 'react-native'
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
   Eye,
   EyeOff,
@@ -26,11 +22,16 @@ import { useRouter } from 'expo-router'
 import { useAuth } from '../../contexts/AuthContext'
 import { api } from '../../lib/api'
 import { Tabs } from 'tamagui'
+import {
+  AuthShell,
+  OrDivider,
+  SocialRow,
+  SwitchLink,
+} from '../../components/auth/AuthShell'
 
 type Mode = 'otp' | 'password'
 
 export default function RegisterScreen() {
-  const insets = useSafeAreaInsets()
   const router = useRouter()
   const {
     register,
@@ -229,43 +230,26 @@ export default function RegisterScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-        className="flex-1"
-      >
-        <ScrollView
-          className="flex-1 px-6"
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="interactive"
-          contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
-        >
-          <View className="flex-1 justify-center py-6">
-            {/* Header */}
-            <View className="items-center mb-6">
-              <View className="w-16 h-16 bg-primary-600 rounded-full items-center justify-center mb-3">
-                <Text className="font-geist-bold text-white text-2xl font-bold">BS</Text>
-              </View>
-              <Text className="font-geist-bold text-3xl font-bold text-gray-900 mb-1">Create Account</Text>
-              <Text className="font-sans text-gray-500 text-center">Join BizSawa and grow your business</Text>
-            </View>
+    <AuthShell
+      title='Create Account'
+      subtitle='Join BizSawa and grow your business'
+      footer={
+        <SwitchLink
+          prompt='Already have an account?'
+          action='Sign In'
+          onPress={() => router.replace('/auth/login')}
+        />
+      }
+    >
+      {/* Social — Google temporarily disabled (silent OAuth callback), Apple/Facebook coming soon */}
+      <SocialRow
+        onGoogle={() => Alert.alert('Temporarily disabled', 'Google sign-up is paused while we fix the OAuth callback. Please use Email code or Password.')}
+        onApple={() => Alert.alert('Coming soon', 'Apple sign-up is not available yet. Please use Email code or Password.')}
+        onFacebook={() => Alert.alert('Coming soon', 'Facebook sign-up is not available yet. Please use Email code or Password.')}
+      />
+      <Text className="font-sans text-xs text-ink-subtle text-center mt-2">Google re-enabling soon — Email code works today.</Text>
 
-            {/* Google — temporarily disabled: silent callback failure after consent */}
-            <TouchableOpacity
-              onPress={() => Alert.alert('Temporarily disabled', 'Google sign-up is paused while we fix the OAuth callback. Please use Email code or Password.')}
-              disabled={true}
-              className="flex-row items-center justify-center border border-gray-200 rounded-2xl py-4 bg-gray-100 opacity-60 mb-4"
-            >
-              <Text className="font-geist-semibold text-gray-500 font-semibold text-[15px]">Continue with Google — disabled</Text>
-            </TouchableOpacity>
-            <Text className="font-sans text-xs text-gray-500 text-center mb-4 -mt-2">Re-enabling soon after mobile ↔ /api/v1/auth/google callback logging is fixed.</Text>
-
-            <View className="flex-row items-center my-4">
-              <View className="flex-1 h-[1px] bg-gray-200" />
-              <Text className="font-geist-bold mx-3 text-gray-500 text-xs font-bold tracking-widest">OR</Text>
-              <View className="flex-1 h-[1px] bg-gray-200" />
-            </View>
+      <OrDivider />
 
             {/* Mode switch — Tamagui Tabs (fixes hang from re-mounting large form on TouchableOpacity switch) */}
             <Tabs
@@ -277,8 +261,8 @@ export default function RegisterScreen() {
               marginBottom={18}
             >
               <Tabs.List
-                backgroundColor="#f3f4f6"
-                borderRadius={16}
+                backgroundColor="#E1EBE8"
+                borderRadius={999}
                 padding={4}
                 gap={4}
                 flexDirection="row"
@@ -292,14 +276,14 @@ export default function RegisterScreen() {
                   flexDirection="row"
                   gap={6}
                   paddingVertical={10}
-                  borderRadius={12}
+                  borderRadius={999}
                   backgroundColor={mode === 'otp' ? 'white' : 'transparent'}
                   borderWidth={mode === 'otp' ? 1 : 0}
-                  borderColor={mode === 'otp' ? '#e5e7eb' : 'transparent'}
-                  pressStyle={{ backgroundColor: mode === 'otp' ? 'white' : '#e5e7eb' }}
+                  borderColor={mode === 'otp' ? '#DCE7E4' : 'transparent'}
+                  pressStyle={{ backgroundColor: mode === 'otp' ? 'white' : '#DCE7E4' }}
                 >
-                  <ShieldCheck size={16} color={mode === 'otp' ? '#111827' : '#6b7280'} />
-                  <Text className="font-sans" style={{ fontWeight: '700', fontSize: 13, color: mode === 'otp' ? '#111827' : '#6b7280' }}>Email code</Text>
+                  <ShieldCheck size={16} color={mode === 'otp' ? '#0E1F1C' : '#64746F'} />
+                  <Text className="font-sans" style={{ fontWeight: '700', fontSize: 13, color: mode === 'otp' ? '#0E1F1C' : '#64746F' }}>Email code</Text>
                 </Tabs.Tab>
                 <Tabs.Tab
                   value="password"
@@ -309,30 +293,30 @@ export default function RegisterScreen() {
                   flexDirection="row"
                   gap={6}
                   paddingVertical={10}
-                  borderRadius={12}
+                  borderRadius={999}
                   backgroundColor={mode === 'password' ? 'white' : 'transparent'}
                   borderWidth={mode === 'password' ? 1 : 0}
-                  borderColor={mode === 'password' ? '#e5e7eb' : 'transparent'}
-                  pressStyle={{ backgroundColor: mode === 'password' ? 'white' : '#e5e7eb' }}
+                  borderColor={mode === 'password' ? '#DCE7E4' : 'transparent'}
+                  pressStyle={{ backgroundColor: mode === 'password' ? 'white' : '#DCE7E4' }}
                 >
-                  <Lock size={16} color={mode === 'password' ? '#111827' : '#6b7280'} />
-                  <Text className="font-sans" style={{ fontWeight: '700', fontSize: 13, color: mode === 'password' ? '#111827' : '#6b7280' }}>Password</Text>
+                  <Lock size={16} color={mode === 'password' ? '#0E1F1C' : '#64746F'} />
+                  <Text className="font-sans" style={{ fontWeight: '700', fontSize: 13, color: mode === 'password' ? '#0E1F1C' : '#64746F' }}>Password</Text>
                 </Tabs.Tab>
               </Tabs.List>
             </Tabs>
 
             {mode === 'otp' ? (
               <View className="gap-4">
-                <Text className="font-sans text-xs text-gray-500 text-center -mt-2 mb-2">
+                <Text className="font-sans text-xs text-ink-muted text-center -mt-2 mb-2">
                   We&apos;ll create your account and send a 6-digit code. No password needed. After verification you&apos;ll set up your business.
                 </Text>
 
                 <View>
-                  <Text className="font-geist-medium text-gray-700 font-medium mb-2">Full Name *</Text>
+                  <Text className="font-geist-medium text-ink-strong font-medium mb-2">Full Name *</Text>
                   <View className="relative">
-                    <User size={18} color="#6b7280" style={{ position: 'absolute', left: 12, top: 14 }} />
+                    <User size={18} color="#64746F" style={{ position: 'absolute', left: 12, top: 14 }} />
                     <TextInput
-                      className={`border rounded-2xl px-11 py-3.5 text-gray-900 ${otpError && !otpName.trim() ? 'border-red-500' : 'border-gray-300'}`}
+                      className={`border rounded-2xl px-11 py-3.5 text-ink ${otpError && !otpName.trim() ? 'border-neg' : 'border-hairline'}`}
                       placeholder="Enter your full name"
                       value={otpName}
                       onChangeText={(t) => { setOtpName(t); if (otpError) setOtpError('') }}
@@ -341,11 +325,11 @@ export default function RegisterScreen() {
                 </View>
 
                 <View>
-                  <Text className="font-geist-medium text-gray-700 font-medium mb-2">Email *</Text>
+                  <Text className="font-geist-medium text-ink-strong font-medium mb-2">Email *</Text>
                   <View className="relative">
-                    <Mail size={18} color="#6b7280" style={{ position: 'absolute', left: 12, top: 14 }} />
+                    <Mail size={18} color="#64746F" style={{ position: 'absolute', left: 12, top: 14 }} />
                     <TextInput
-                      className={`border rounded-2xl px-11 py-3.5 text-gray-900 ${otpError && !validateEmail(otpEmail) ? 'border-red-500' : 'border-gray-300'}`}
+                      className={`border rounded-2xl px-11 py-3.5 text-ink ${otpError && !validateEmail(otpEmail) ? 'border-neg' : 'border-hairline'}`}
                       placeholder="you@example.com"
                       value={otpEmail}
                       onChangeText={(t) => { setOtpEmail(t); if (otpError) setOtpError('') }}
@@ -358,25 +342,25 @@ export default function RegisterScreen() {
                 <TouchableOpacity
                   onPress={handleSendOtp}
                   disabled={isSendingOtp || otpCooldown > 0}
-                  className={`rounded-2xl py-3.5 items-center flex-row justify-center gap-2 ${otpCooldown > 0 ? 'bg-gray-100 border border-gray-200' : 'bg-accent'}`}
+                  className={`rounded-full py-4 items-center flex-row justify-center gap-2 ${otpCooldown > 0 ? 'bg-paper border border-hairline' : 'bg-accent shadow-clinical-sm'}`}
                   style={{ opacity: isSendingOtp ? 0.6 : 1 }}
                 >
-                  {isSendingOtp ? <ActivityIndicator color={otpCooldown > 0 ? '#111827' : 'white'} /> : <RefreshCw size={16} color={otpCooldown > 0 ? '#111827' : 'white'} />}
-                  <Text className={`font-geist-bold font-bold ${otpCooldown > 0 ? 'text-gray-700' : 'text-white'}`}>
+                  {isSendingOtp ? <ActivityIndicator color={otpCooldown > 0 ? '#0E1F1C' : 'white'} /> : <RefreshCw size={16} color={otpCooldown > 0 ? '#0E1F1C' : 'white'} />}
+                  <Text className={`font-geist-bold font-bold ${otpCooldown > 0 ? 'text-ink-strong' : 'text-white'}`}>
                     {otpCooldown > 0 ? `Resend in ${otpCooldown}s` : otpSent ? 'Resend code' : 'Send verification code'}
                   </Text>
                 </TouchableOpacity>
 
                 {otpSent && (
                   <>
-                    <View className="h-[1px] bg-gray-100 my-1" />
+                    <View className="h-[1px] bg-hairline my-1" />
                     <View>
-                      <Text className="font-geist-medium text-gray-700 font-medium mb-2">6-digit code *</Text>
+                      <Text className="font-geist-medium text-ink-strong font-medium mb-2">6-digit code *</Text>
                       <TextInput
                         ref={otpInputRef}
-                        className={`border rounded-2xl px-4 py-4 text-center text-2xl tracking-[10px] font-bold text-gray-900 ${otpError ? 'border-red-500' : 'border-gray-300'}`}
+                        className={`border rounded-2xl px-4 py-4 text-center text-2xl tracking-[10px] font-bold text-ink ${otpError ? 'border-neg' : 'border-hairline'}`}
                         placeholder="------"
-                        placeholderTextColor="#6b7280"
+                        placeholderTextColor="#64746F"
                         value={otpCode}
                         onChangeText={(t) => {
                           const v = t.replace(/[^0-9]/g, '').slice(0, 6)
@@ -384,46 +368,45 @@ export default function RegisterScreen() {
                           if (otpError) setOtpError('')
                         }}
                         keyboardType="number-pad"
-                        maxLength={6}
                       />
-                      <Text className="font-sans text-xs text-gray-500 mt-2 text-center">Code expires in 5 minutes. Check spam folder if missing.</Text>
-                      {otpError ? <Text className="font-sans text-red-500 text-sm mt-2 text-center">{otpError}</Text> : null}
+                      <Text className="font-sans text-xs text-ink-muted mt-2 text-center">Code expires in 5 minutes. Check spam folder if missing.</Text>
+                      {otpError ? <Text className="font-sans text-neg text-sm mt-2 text-center">{otpError}</Text> : null}
                     </View>
 
                     <TouchableOpacity
                       onPress={handleVerifyOtp}
                       disabled={isVerifyingOtp || otpCode.length !== 6}
-                      className={`rounded-2xl py-4 items-center ${otpCode.length === 6 ? 'bg-emerald-600' : 'bg-gray-200'}`}
+                      className={`rounded-full py-4 items-center ${otpCode.length === 6 ? 'bg-accent shadow-clinical-sm' : 'bg-paper border border-hairline'}`}
                       style={{ opacity: isVerifyingOtp ? 0.7 : 1 }}
                     >
-                      {isVerifyingOtp ? <ActivityIndicator color="white" /> : <Text className={`font-geist-bold font-bold text-lg ${otpCode.length === 6 ? 'text-white' : 'text-gray-500'}`}>Verify & Continue</Text>}
+                      {isVerifyingOtp ? <ActivityIndicator color="white" /> : <Text className={`font-geist-bold font-bold text-lg ${otpCode.length === 6 ? 'text-white' : 'text-ink-muted'}`}>Verify & Continue</Text>}
                     </TouchableOpacity>
                   </>
                 )}
-                {!otpSent && otpError ? <Text className="font-sans text-red-500 text-sm text-center">{otpError}</Text> : null}
+                {!otpSent && otpError ? <Text className="font-sans text-neg text-sm text-center">{otpError}</Text> : null}
               </View>
             ) : (
               <View className="gap-4">
                 <View>
-                  <Text className="font-geist-medium text-gray-700 font-medium mb-2">Full Name *</Text>
+                  <Text className="font-geist-medium text-ink-strong font-medium mb-2">Full Name *</Text>
                   <View className="relative">
-                    <User size={18} color="#6b7280" style={{ position: 'absolute', left: 12, top: 14 }} />
+                    <User size={18} color="#64746F" style={{ position: 'absolute', left: 12, top: 14 }} />
                     <TextInput
-                      className={`border rounded-2xl px-11 py-3.5 text-gray-900 ${errors.ownerName ? 'border-red-500' : 'border-gray-300'}`}
+                      className={`border rounded-2xl px-11 py-3.5 text-ink ${errors.ownerName ? 'border-neg' : 'border-hairline'}`}
                       placeholder="Enter your full name"
                       value={formData.ownerName}
                       onChangeText={(t) => setFormData({ ...formData, ownerName: t })}
                     />
                   </View>
-                  {errors.ownerName && <Text className="font-sans text-red-500 text-sm mt-1">{errors.ownerName}</Text>}
+                  {errors.ownerName && <Text className="font-sans text-neg text-sm mt-1">{errors.ownerName}</Text>}
                 </View>
 
                 <View>
-                  <Text className="font-geist-medium text-gray-700 font-medium mb-2">Email *</Text>
+                  <Text className="font-geist-medium text-ink-strong font-medium mb-2">Email *</Text>
                   <View className="relative">
-                    <Mail size={18} color="#6b7280" style={{ position: 'absolute', left: 12, top: 14 }} />
+                    <Mail size={18} color="#64746F" style={{ position: 'absolute', left: 12, top: 14 }} />
                     <TextInput
-                      className={`border rounded-2xl px-11 py-3.5 text-gray-900 ${errors.ownerEmail ? 'border-red-500' : 'border-gray-300'}`}
+                      className={`border rounded-2xl px-11 py-3.5 text-ink ${errors.ownerEmail ? 'border-neg' : 'border-hairline'}`}
                       placeholder="you@example.com"
                       value={formData.ownerEmail}
                       onChangeText={(t) => setFormData({ ...formData, ownerEmail: t })}
@@ -431,64 +414,64 @@ export default function RegisterScreen() {
                       autoCapitalize="none"
                     />
                   </View>
-                  {errors.ownerEmail && <Text className="font-sans text-red-500 text-sm mt-1">{errors.ownerEmail}</Text>}
+                  {errors.ownerEmail && <Text className="font-sans text-neg text-sm mt-1">{errors.ownerEmail}</Text>}
                 </View>
 
                 <View>
-                  <Text className="font-geist-medium text-gray-700 font-medium mb-2">WhatsApp Number *</Text>
+                  <Text className="font-geist-medium text-ink-strong font-medium mb-2">WhatsApp Number *</Text>
                   <View className="relative">
-                    <Smartphone size={18} color="#6b7280" style={{ position: 'absolute', left: 12, top: 14 }} />
+                    <Smartphone size={18} color="#64746F" style={{ position: 'absolute', left: 12, top: 14 }} />
                     <TextInput
-                      className={`border rounded-2xl px-11 py-3.5 text-gray-900 ${errors.whatsappNumber ? 'border-red-500' : 'border-gray-300'}`}
+                      className={`border rounded-2xl px-11 py-3.5 text-ink ${errors.whatsappNumber ? 'border-neg' : 'border-hairline'}`}
                       placeholder="+254 XXX XXX XXX"
                       value={formData.whatsappNumber}
                       onChangeText={(t) => setFormData({ ...formData, whatsappNumber: t })}
                       keyboardType="phone-pad"
                     />
                   </View>
-                  {errors.whatsappNumber && <Text className="font-sans text-red-500 text-sm mt-1">{errors.whatsappNumber}</Text>}
+                  {errors.whatsappNumber && <Text className="font-sans text-neg text-sm mt-1">{errors.whatsappNumber}</Text>}
                 </View>
 
                 <View>
-                  <Text className="font-geist-medium text-gray-700 font-medium mb-2">Password *</Text>
+                  <Text className="font-geist-medium text-ink-strong font-medium mb-2">Password *</Text>
                   <View className="relative">
-                    <Lock size={18} color="#6b7280" style={{ position: 'absolute', left: 12, top: 14 }} />
+                    <Lock size={18} color="#64746F" style={{ position: 'absolute', left: 12, top: 14 }} />
                     <TextInput
-                      className={`border rounded-2xl px-11 pr-11 py-3.5 text-gray-900 ${errors.password ? 'border-red-500' : 'border-gray-300'}`}
+                      className={`border rounded-2xl px-11 pr-11 py-3.5 text-ink ${errors.password ? 'border-neg' : 'border-hairline'}`}
                       placeholder="At least 6 characters"
                       value={formData.password}
                       onChangeText={(t) => setFormData({ ...formData, password: t })}
                       secureTextEntry={!showPassword}
                     />
                     <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={{ position: 'absolute', right: 12, top: 14 }}>
-                      {showPassword ? <EyeOff size={18} color="#6b7280" /> : <Eye size={18} color="#6b7280" />}
+                      {showPassword ? <EyeOff size={18} color="#64746F" /> : <Eye size={18} color="#64746F" />}
                     </TouchableOpacity>
                   </View>
-                  {errors.password && <Text className="font-sans text-red-500 text-sm mt-1">{errors.password}</Text>}
+                  {errors.password && <Text className="font-sans text-neg text-sm mt-1">{errors.password}</Text>}
                 </View>
 
                 <View>
-                  <Text className="font-geist-medium text-gray-700 font-medium mb-2">Confirm Password *</Text>
+                  <Text className="font-geist-medium text-ink-strong font-medium mb-2">Confirm Password *</Text>
                   <View className="relative">
-                    <Lock size={18} color="#6b7280" style={{ position: 'absolute', left: 12, top: 14 }} />
+                    <Lock size={18} color="#64746F" style={{ position: 'absolute', left: 12, top: 14 }} />
                     <TextInput
-                      className={`border rounded-2xl px-11 pr-11 py-3.5 text-gray-900 ${errors.confirmPassword ? 'border-red-500' : 'border-gray-300'}`}
+                      className={`border rounded-2xl px-11 pr-11 py-3.5 text-ink ${errors.confirmPassword ? 'border-neg' : 'border-hairline'}`}
                       placeholder="Repeat password"
                       value={formData.confirmPassword}
                       onChangeText={(t) => setFormData({ ...formData, confirmPassword: t })}
                       secureTextEntry={!showConfirmPassword}
                     />
                     <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)} style={{ position: 'absolute', right: 12, top: 14 }}>
-                      {showConfirmPassword ? <EyeOff size={18} color="#6b7280" /> : <Eye size={18} color="#6b7280" />}
+                      {showConfirmPassword ? <EyeOff size={18} color="#64746F" /> : <Eye size={18} color="#64746F" />}
                     </TouchableOpacity>
                   </View>
-                  {errors.confirmPassword && <Text className="font-sans text-red-500 text-sm mt-1">{errors.confirmPassword}</Text>}
+                  {errors.confirmPassword && <Text className="font-sans text-neg text-sm mt-1">{errors.confirmPassword}</Text>}
                 </View>
 
                 <TouchableOpacity
                   onPress={handlePasswordSubmit}
                   disabled={isLoadingPassword}
-                  className={`bg-primary-600 rounded-2xl py-4 items-center ${isLoadingPassword ? 'opacity-50' : ''}`}
+                  className={`bg-primary-600 rounded-full py-4 items-center shadow-clinical-sm ${isLoadingPassword ? 'opacity-50' : ''}`}
                 >
                   {isLoadingPassword ? (
                     <ActivityIndicator color="white" size="small" />
@@ -502,15 +485,6 @@ export default function RegisterScreen() {
               </View>
             )}
 
-            <View className="flex-row justify-center mt-6">
-              <Text className="font-sans text-gray-600">Already have an account? </Text>
-              <TouchableOpacity onPress={() => router.replace('/auth/login')}>
-                <Text className="font-geist-semibold text-primary-600 font-semibold">Sign In</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+    </AuthShell>
   )
 }
