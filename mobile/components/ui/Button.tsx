@@ -22,8 +22,10 @@ const containerByVariant: Record<ButtonVariant, string> = {
   // Brand teal. Flat, not gradient — the ledger premise is ink on paper, and
   // `BrandGradient name="action"` stays reserved for the single raised action
   // per screen (FAB / hero CTA). Everything else uses this flat accent.
-  primary: 'bg-accent active:bg-accent-active',
-  secondary: 'bg-white border border-gray-200 active:bg-gray-50',
+  // Soft clinical taste: pill CTAs (rounded-full) with a diffuse tinted lift
+  // on primary, matching the reference "Next / Save Item / Continue" pills.
+  primary: 'bg-accent active:bg-accent-active shadow-clinical-sm',
+  secondary: 'bg-surface active:bg-gray-50 border border-hairline',
   ghost: 'bg-transparent active:bg-accent-soft',
   destructive: 'bg-neg active:opacity-90',
 }
@@ -36,9 +38,10 @@ const textByVariant: Record<ButtonVariant, string> = {
 }
 
 const containerBySize: Record<ButtonSize, string> = {
-  // lg = 48pt+ touch target for primary screen actions
-  lg: 'py-4 rounded-2xl px-5',
-  md: 'py-3.5 rounded-2xl px-4',
+  // lg = 48pt+ touch target for primary screen actions.
+  // All sizes are pills in the soft clinical language.
+  lg: 'py-4 rounded-full px-5',
+  md: 'py-3.5 rounded-full px-4',
   sm: 'py-2 px-4 rounded-full',
 }
 
