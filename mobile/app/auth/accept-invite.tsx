@@ -57,7 +57,7 @@ export default function AcceptInviteScreen() {
         </View>
         <View>
           <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mb-2'>Invite code (OTP)</Text>
-          <TextInput className='bg-white border border-gray-300 rounded-2xl px-4 py-4 text-center tracking-widest' placeholder='123456' keyboardType='number-pad' maxLength={6} value={otp} onChangeText={setOtp} />
+          <TextInput className='bg-white border border-gray-300 rounded-2xl px-4 py-4 text-center tracking-widest' placeholder='123456' keyboardType='number-pad' value={otp} onChangeText={(t) => setOtp(t.replace(/[^0-9]/g, '').slice(0, 6))} />
           <Text className='font-sans text-xs text-gray-500 mt-1'>6-digit code from email — expires in 24h.</Text>
         </View>
         <View>
