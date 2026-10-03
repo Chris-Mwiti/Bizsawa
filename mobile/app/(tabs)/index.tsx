@@ -147,7 +147,7 @@ export default function Dashboard() {
 
   return (
     <ScrollView
-      className='flex-1 bg-gray-50'
+      className='flex-1 bg-paper'
       contentContainerStyle={{
         padding: 16,
         paddingBottom: TAB_BAR_SCROLL_PADDING + 24,
@@ -155,16 +155,16 @@ export default function Dashboard() {
       }}
       showsVerticalScrollIndicator={false}
     >
-      {/* Header — ink, restrained */}
-      <View className='pt-2 pb-1'>
-        <Text className='text-xs font-bold tracking-widest text-gray-400 uppercase'>
+      {/* Header — soft clinical: date eyebrow + greeting, pill shortcuts */}
+      <View className='bg-surface rounded-lg p-6 border border-hairline shadow-clinical-sm'>
+        <Text className='text-xs font-bold tracking-widest text-ink-subtle uppercase'>
           {today}
         </Text>
-        <Text className='text-lg font-bold tracking-tight text-gray-900 mt-1'>
+        <Text className='text-lg font-bold tracking-tight text-ink mt-1'>
           Good morning, {firstName}
         </Text>
-        <Text className='text-sm text-gray-500 mt-1'>
-          Here's what's happening in your shop today
+        <Text className='text-sm text-ink-muted mt-1'>
+          Here&apos;s what&apos;s happening in your shop today
         </Text>
 
         <View className='flex-row gap-2 mt-4 flex-wrap'>
@@ -176,9 +176,9 @@ export default function Dashboard() {
             <Pressable
               key={p.label}
               onPress={() => router.push(p.href)}
-              className='px-4 py-2 bg-white border border-gray-200 rounded-full'
+              className='px-4 py-2 bg-paper border border-hairline rounded-full active:bg-accent-soft'
             >
-              <Text className='text-xs font-semibold text-gray-700'>
+              <Text className='text-xs font-semibold text-ink-strong'>
                 {p.label}
               </Text>
             </Pressable>
@@ -237,13 +237,13 @@ export default function Dashboard() {
           },
         ].map((m) => (
           <View key={m.label} className='w-[48%]'>
-            <Card className='border border-gray-200'>
+            <Card>
               <CardContent className='p-4'>
                 <View className='flex-row items-start justify-between mb-2'>
                   <View
-                    className={`w-11 h-11 rounded-2xl items-center justify-center ${m.alert ? 'bg-amber-50 border border-amber-100' : 'bg-gray-50 border border-gray-100'}`}
+                    className={`w-11 h-11 rounded-full items-center justify-center ${m.alert ? 'bg-warn-soft border border-hairline' : 'bg-paper border border-hairline'}`}
                   >
-                    <m.icon size={16} color={m.alert ? '#b45309' : '#6b7280'} />
+                    <m.icon size={18} color={m.alert ? '#8A5A0B' : '#4F625E'} />
                   </View>
                   {m.label === 'Cash in' && (
                     <ArrowUpRight size={14} color='#6b7280' />
