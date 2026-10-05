@@ -12,9 +12,9 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	promexporter "go.opentelemetry.io/otel/exporters/prometheus"
 	"go.opentelemetry.io/otel/exporters/stdout/stdoutmetric"
 	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
-	promexporter "go.opentelemetry.io/otel/exporters/prometheus"
 	"go.opentelemetry.io/otel/propagation"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -24,8 +24,8 @@ import (
 
 // Provider holds shutdown funcs for OTel SDK.
 type Provider struct {
-	tp *sdktrace.TracerProvider
-	mp *sdkmetric.MeterProvider
+	tp  *sdktrace.TracerProvider
+	mp  *sdkmetric.MeterProvider
 	cfg Config
 }
 
@@ -38,6 +38,7 @@ func Setup(ctx context.Context, cfg Config) (*Provider, error) {
 		otel.SetTracerProvider(sdktrace.NewTracerProvider())
 		otel.SetMeterProvider(sdkmetric.NewMeterProvider())
 		otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
+
 		return &Provider{cfg: cfg}, nil
 	}
 
@@ -51,6 +52,7 @@ func Setup(ctx context.Context, cfg Config) (*Provider, error) {
 		resource.WithHost(),
 		resource.WithOS(),
 	)
+
 	if err != nil {
 		return nil, fmt.Errorf("otel resource: %w", err)
 	}
@@ -59,40 +61,49 @@ func Setup(ctx context.Context, cfg Config) (*Provider, error) {
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 
 	var tp *sdktrace.TracerProvider
+
 	if cfg.TracingEnabled {
 		var exp sdktrace.SpanExporter
+
 		tracesTarget := cfg.TracesTarget()
 		if tracesTarget != "" {
 			opts := []otlptracehttp.Option{}
 			host, path, plainHTTP := splitEndpoint(tracesTarget)
+
 			if plainHTTP || cfg.Insecure {
 				opts = append(opts, otlptracehttp.WithInsecure())
 			}
+
 			opts = append(opts, otlptracehttp.WithEndpoint(host))
 			// Vendors like Honeycomb ingest on a signal-specific path (/v1/traces).
 			// Dropping it silently 404s every export.
 			if path != "" {
 				opts = append(opts, otlptracehttp.WithURLPath(path))
 			}
+
 			if len(cfg.Headers) > 0 {
 				opts = append(opts, otlptracehttp.WithHeaders(cfg.Headers))
 			}
+
 			exp, err = otlptracehttp.New(ctx, opts...)
 			if err != nil {
 				return nil, fmt.Errorf("otlp trace exporter: %w", err)
 			}
+
 			slog.InfoContext(ctx, "otel tracing via OTLP", "endpoint", tracesTarget, "path", path, "headers", len(cfg.Headers), "service", cfg.ServiceName)
 		} else if cfg.StdoutFallback {
 			exp, err = stdouttrace.New(stdouttrace.WithPrettyPrint())
 			if err != nil {
 				return nil, fmt.Errorf("stdout trace exporter: %w", err)
 			}
+
 			slog.InfoContext(ctx, "otel tracing via stdout (no OTEL_EXPORTER_OTLP_ENDPOINT)")
 		} else {
 			slog.InfoContext(ctx, "otel tracing disabled: no endpoint and stdout fallback off")
 		}
 
 		var opts []sdktrace.TracerProviderOption
+
 		opts = append(opts, sdktrace.WithResource(res))
 		if exp != nil {
 			opts = append(opts, sdktrace.WithBatcher(exp, sdktrace.WithBatchTimeout(2*time.Second)))
@@ -105,6 +116,7 @@ func Setup(ctx context.Context, cfg Config) (*Provider, error) {
 		} else {
 			opts = append(opts, sdktrace.WithSampler(sdktrace.TraceIDRatioBased(cfg.SampleRatio)))
 		}
+
 		tp = sdktrace.NewTracerProvider(opts...)
 		otel.SetTracerProvider(tp)
 	} else {
@@ -113,6 +125,7 @@ func Setup(ctx context.Context, cfg Config) (*Provider, error) {
 	}
 
 	var mp *sdkmetric.MeterProvider
+
 	if cfg.MetricsEnabled {
 		var readers []sdkmetric.Option
 
@@ -122,6 +135,7 @@ func Setup(ctx context.Context, cfg Config) (*Provider, error) {
 				slog.WarnContext(ctx, "prometheus exporter failed, continuing without it", "err", err)
 			} else {
 				readers = append(readers, sdkmetric.WithReader(promExp))
+
 				slog.InfoContext(ctx, "otel prometheus metrics enabled", "service", cfg.ServiceName)
 			}
 		}
@@ -130,27 +144,33 @@ func Setup(ctx context.Context, cfg Config) (*Provider, error) {
 		if metricsTarget != "" {
 			metricOpts := []otlpmetrichttp.Option{}
 			host, path, plainHTTP := splitEndpoint(metricsTarget)
+
 			if plainHTTP || cfg.Insecure {
 				metricOpts = append(metricOpts, otlpmetrichttp.WithInsecure())
 			}
+
 			metricOpts = append(metricOpts, otlpmetrichttp.WithEndpoint(host))
 			if path != "" {
 				metricOpts = append(metricOpts, otlpmetrichttp.WithURLPath(path))
 			}
+
 			if len(cfg.Headers) > 0 {
 				metricOpts = append(metricOpts, otlpmetrichttp.WithHeaders(cfg.Headers))
 			}
+
 			otlpExp, err := otlpmetrichttp.New(ctx, metricOpts...)
 			if err != nil {
 				slog.WarnContext(ctx, "otlp metric exporter failed", "err", err)
 			} else {
 				readers = append(readers, sdkmetric.WithReader(sdkmetric.NewPeriodicReader(otlpExp, sdkmetric.WithInterval(15*time.Second))))
+
 				slog.InfoContext(ctx, "otel metrics via OTLP", "endpoint", metricsTarget, "path", path, "headers", len(cfg.Headers))
 			}
 		} else if cfg.StdoutFallback {
 			stdExp, err := stdoutmetric.New()
 			if err == nil {
 				readers = append(readers, sdkmetric.WithReader(sdkmetric.NewPeriodicReader(stdExp, sdkmetric.WithInterval(30*time.Second))))
+
 				slog.InfoContext(ctx, "otel metrics via stdout")
 			}
 		}
@@ -180,11 +200,13 @@ func (p *Provider) Shutdown(ctx context.Context) error {
 			firstErr = err
 		}
 	}
+
 	if p.mp != nil {
 		if err := p.mp.Shutdown(ctx); err != nil && firstErr == nil {
 			firstErr = err
 		}
 	}
+
 	return firstErr
 }
 
@@ -199,14 +221,17 @@ func splitEndpoint(raw string) (hostPort string, urlPath string, plainHTTP bool)
 	if raw == "" {
 		return "", "", false
 	}
+
 	scheme := ""
 	if idx := strings.Index(raw, "://"); idx != -1 {
 		scheme = strings.ToLower(raw[:idx])
 		raw = raw[idx+3:]
 	}
+
 	u, err := url.Parse("https://" + raw)
 	if err != nil || u.Host == "" {
 		return strings.TrimSuffix(strings.TrimSpace(raw), "/"), "", scheme == "http"
 	}
+
 	return u.Host, strings.TrimSuffix(u.Path, "/"), scheme == "http"
 }

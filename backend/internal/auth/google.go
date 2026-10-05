@@ -16,7 +16,7 @@ import (
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/config"
 )
 
-// GoogleIDToken mirrors better-auth idToken: {token, accessToken} per GoogleSocialLogin.md Cross-Platform
+// GoogleIDToken mirrors better-auth idToken: {token, accessToken} per GoogleSocialLogin.md Cross-Platform.
 type GoogleIDToken struct {
 	Token       string `json:"token"`
 	AccessToken string `json:"accessToken"`
@@ -47,22 +47,28 @@ type googleTokenInfo struct {
 func (s *Service) LoginWithGoogle(ctx context.Context, req GoogleLoginRequest) (*AuthResponse, error) {
 	rawIDToken := ""
 	accessTok := ""
+
 	if req.IDToken != nil {
 		rawIDToken = strings.TrimSpace(req.IDToken.Token)
 		accessTok = strings.TrimSpace(req.IDToken.AccessToken)
 	}
+
 	if rawIDToken == "" {
 		rawIDToken = strings.TrimSpace(req.Token)
 	}
+
 	if rawIDToken == "" {
 		rawIDToken = strings.TrimSpace(req.IDTokenStr)
 	}
+
 	if rawIDToken == "" {
 		rawIDToken = strings.TrimSpace(req.AccessToken) // not ideal but fallback
 	}
+
 	if accessTok == "" {
 		accessTok = strings.TrimSpace(req.AccessToken)
 	}
+
 	if rawIDToken == "" {
 		return nil, ErrUnauthorized.WithMessage("missing id_token")
 	}
@@ -88,7 +94,9 @@ func (s *Service) LoginWithGoogle(ctx context.Context, req GoogleLoginRequest) (
 	if email == "" {
 		return nil, ErrUnauthorized.WithMessage("google email missing")
 	}
+
 	verified := info.EmailVerified == "true"
+
 	sub := strings.TrimSpace(info.Sub)
 	if sub == "" {
 		return nil, ErrUnauthorized.WithMessage("google sub missing")
@@ -113,12 +121,14 @@ func (s *Service) LoginWithGoogle(ctx context.Context, req GoogleLoginRequest) (
 		// business scoping same as Login
 		businessID := uuid.Nil
 		roles := []string(nil)
+
 		if req.BusinessID != nil && *req.BusinessID != uuid.Nil && s.memberships != nil {
 			if role, err := s.memberships.RoleForUser(ctx, *req.BusinessID, existing.ID); err == nil {
 				businessID = *req.BusinessID
 				roles = []string{string(role)}
 			}
 		}
+
 		return s.issue(ctx, existing.ID, businessID, businessID, roles)
 	}
 	// Also check account table directly (in case user migrated)
@@ -127,6 +137,7 @@ func (s *Service) LoginWithGoogle(ctx context.Context, req GoogleLoginRequest) (
 			if !u.IsActive {
 				return nil, ErrInactiveUser
 			}
+
 			if err := s.repo.UpsertAccount(ctx, &Account{
 				UserID:            u.ID,
 				Provider:          "google",
@@ -136,14 +147,17 @@ func (s *Service) LoginWithGoogle(ctx context.Context, req GoogleLoginRequest) (
 			}); err != nil {
 				slog.ErrorContext(ctx, "failed to upsert google account for linked user", "user", u.ID, "err", err)
 			}
+
 			businessID := uuid.Nil
 			roles := []string(nil)
+
 			if req.BusinessID != nil && *req.BusinessID != uuid.Nil && s.memberships != nil {
 				if role, err := s.memberships.RoleForUser(ctx, *req.BusinessID, u.ID); err == nil {
 					businessID = *req.BusinessID
 					roles = []string{string(role)}
 				}
 			}
+
 			return s.issue(ctx, u.ID, businessID, businessID, roles)
 		}
 	}
@@ -159,25 +173,31 @@ func (s *Service) LoginWithGoogle(ctx context.Context, req GoogleLoginRequest) (
 		if u.Provider == "credential" || u.Provider == "" {
 			updates["provider"] = "google"
 		}
+
 		if u.ProviderAccountID == nil || *u.ProviderAccountID == "" {
 			updates["provider_account_id"] = sub
 		}
+
 		if !verified {
 			// keep existing verification but set if google says verified
 		} else {
 			updates["email_verified"] = true
 		}
+
 		if info.Picture != "" && u.Image == "" {
 			updates["image"] = info.Picture
 		}
+
 		if info.Name != "" && u.Name == "" {
 			updates["name"] = info.Name
 		}
+
 		if len(updates) > 0 {
 			if err := s.repo.db.WithContext(ctx).Model(&User{}).Where("id = ?", u.ID).Updates(updates).Error; err != nil {
 				slog.ErrorContext(ctx, "failed to update user for google link", "user", u.ID, "err", err)
 			}
 		}
+
 		if err := s.repo.UpsertAccount(ctx, &Account{
 			UserID:            u.ID,
 			Provider:          "google",
@@ -187,14 +207,17 @@ func (s *Service) LoginWithGoogle(ctx context.Context, req GoogleLoginRequest) (
 		}); err != nil {
 			slog.ErrorContext(ctx, "failed to upsert google account for email-linked user", "user", u.ID, "err", err)
 		}
+
 		businessID := uuid.Nil
 		roles := []string(nil)
+
 		if req.BusinessID != nil && *req.BusinessID != uuid.Nil && s.memberships != nil {
 			if role, err := s.memberships.RoleForUser(ctx, *req.BusinessID, u.ID); err == nil {
 				businessID = *req.BusinessID
 				roles = []string{string(role)}
 			}
 		}
+
 		return s.issue(ctx, u.ID, businessID, businessID, roles)
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) && err != nil {
 		return nil, err
@@ -211,10 +234,12 @@ func (s *Service) LoginWithGoogle(ctx context.Context, req GoogleLoginRequest) (
 		Provider:      "google",
 	}
 	subCopy := sub
+
 	newUser.ProviderAccountID = &subCopy
 	if err := s.repo.CreateUser(ctx, newUser); err != nil {
 		return nil, err
 	}
+
 	if err := s.repo.UpsertAccount(ctx, &Account{
 		UserID:            newUser.ID,
 		Provider:          "google",
@@ -224,15 +249,18 @@ func (s *Service) LoginWithGoogle(ctx context.Context, req GoogleLoginRequest) (
 	}); err != nil {
 		slog.ErrorContext(ctx, "failed to upsert google account for new user", "user", newUser.ID, "err", err)
 	}
+
 	if s.subscriptions != nil {
 		if err := s.subscriptions.EnsureDefaultSubscriptionForUser(ctx, newUser.ID); err != nil {
 			slog.ErrorContext(ctx, "failed to ensure subscription for google user", "user", newUser.ID, "err", err)
 		}
 	}
+
 	businessID := uuid.Nil
 	if req.BusinessID != nil {
 		businessID = *req.BusinessID
 	}
+
 	return s.issue(ctx, newUser.ID, businessID, businessID, nil)
 }
 
@@ -247,14 +275,18 @@ func (s *Service) verifyGoogleIDToken(ctx context.Context, raw string) (*googleT
 	url := "https://oauth2.googleapis.com/tokeninfo?id_token=" + raw
 	req, _ := http.NewRequestWithContext(ctx, "GET", url, nil)
 	client := &http.Client{Timeout: 8 * time.Second}
+
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("tokeninfo fetch failed: %w", err)
 	}
+
 	defer resp.Body.Close()
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("tokeninfo status %d", resp.StatusCode)
 	}
+
 	var info googleTokenInfo
 	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
 		return nil, fmt.Errorf("decode tokeninfo: %w", err)
@@ -266,12 +298,14 @@ func (s *Service) verifyGoogleIDToken(ctx context.Context, raw string) (*googleT
 	// aud check against allowed clientIds
 	if s.googleCfg != nil && len(s.googleCfg.ClientIDs) > 0 {
 		allowed := false
+
 		for _, cid := range s.googleCfg.ClientIDs {
 			if strings.TrimSpace(cid) == strings.TrimSpace(info.Aud) {
 				allowed = true
 				break
 			}
 		}
+
 		if !allowed {
 			return nil, fmt.Errorf("aud mismatch %s not in allowed %v", info.Aud, s.googleCfg.ClientIDs)
 		}
@@ -279,15 +313,18 @@ func (s *Service) verifyGoogleIDToken(ctx context.Context, raw string) (*googleT
 	// exp check
 	if expStr := strings.TrimSpace(info.Exp); expStr != "" {
 		var expInt int64
+
 		fmt.Sscan(expStr, &expInt)
+
 		if expInt > 0 && time.Now().Unix() > expInt+60 {
 			return nil, errors.New("token expired")
 		}
 	}
+
 	return &info, nil
 }
 
-// GoogleConfig wiring helper
+// GoogleConfig wiring helper.
 func (s *Service) WithGoogleConfig(cfg config.GoogleConfig) {
 	s.googleCfg = &cfg
 }

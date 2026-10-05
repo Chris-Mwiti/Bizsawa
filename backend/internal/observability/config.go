@@ -56,6 +56,7 @@ func (c Config) TracesTarget() string {
 	if c.TracesEndpoint != "" {
 		return c.TracesEndpoint
 	}
+
 	return c.Endpoint
 }
 
@@ -65,6 +66,7 @@ func (c Config) MetricsTarget() string {
 	if c.MetricsEndpoint != "" {
 		return c.MetricsEndpoint
 	}
+
 	return c.Endpoint
 }
 
@@ -72,6 +74,7 @@ func envOr(k, fallback string) string {
 	if v := strings.TrimSpace(os.Getenv(k)); v != "" {
 		return v
 	}
+
 	return fallback
 }
 
@@ -80,10 +83,12 @@ func boolEnv(k string, fb bool) bool {
 	if v == "" {
 		return fb
 	}
+
 	b, err := strconv.ParseBool(v)
 	if err != nil {
 		return fb
 	}
+
 	return b
 }
 
@@ -92,16 +97,20 @@ func floatEnv(k string, fb float64) float64 {
 	if v == "" {
 		return fb
 	}
+
 	f, err := strconv.ParseFloat(v, 64)
 	if err != nil {
 		return fb
 	}
+
 	if f < 0 {
 		return 0
 	}
+
 	if f > 1 {
 		return 1
 	}
+
 	return f
 }
 
@@ -110,9 +119,11 @@ func durationEnv(k string, fb time.Duration) time.Duration {
 	if v == "" {
 		return fb
 	}
+
 	d, err := time.ParseDuration(v)
 	if err != nil {
 		return fb
 	}
+
 	return d
 }

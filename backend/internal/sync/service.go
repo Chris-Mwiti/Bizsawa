@@ -127,6 +127,7 @@ func (s *Service) pullTable(ctx context.Context, businessID uuid.UUID, table str
 				delete(row, k)
 			}
 		}
+
 		for k, v := range row {
 			// Handle []uint8 from pg driver (numeric/uuid as bytes) -> string
 			if b, ok := v.([]uint8); ok {
@@ -224,11 +225,13 @@ func (s *Service) PushWithUser(ctx context.Context, businessID uuid.UUID, userID
 		// Go map iteration is random, so inventory_items could be attempted before its product and hit
 		// ERROR 23503 violates foreign key constraint "inventory_items_product_id_fkey".
 		processed := map[string]bool{}
+
 		for _, table := range syncableTables {
 			changes, ok := req.Changes[table]
 			if !ok {
 				continue
 			}
+
 			processed[table] = true
 			// Validate table is syncable
 			if !isSyncable(table) {
@@ -269,6 +272,7 @@ func (s *Service) PushWithUser(ctx context.Context, businessID uuid.UUID, userID
 					} else {
 						result.Applied[table] = append(result.Applied[table], idStr)
 					}
+
 					continue
 				}
 
@@ -312,6 +316,7 @@ func (s *Service) PushWithUser(ctx context.Context, businessID uuid.UUID, userID
 					clientBytes = json.RawMessage(strings.ReplaceAll(string(clientBytes), "\x00", ""))
 
 					var srvJSONString string
+
 					var srvJSON json.RawMessage
 					// Use ::text to avoid driver jsonb -> []uint8 scan mismatch (was: Scan error converting []uint8 to uint8)
 					if err := tx.Raw(fmt.Sprintf(`SELECT to_jsonb(t)::text FROM %s t WHERE id = ?`, table), id).Scan(&srvJSONString).Error; err != nil {
@@ -320,6 +325,7 @@ func (s *Service) PushWithUser(ctx context.Context, businessID uuid.UUID, userID
 					}
 					// Remove NUL bytes (0x00) that cause "invalid byte sequence for encoding UTF8: 0x00" on conflicts insert
 					srvJSONString = strings.ReplaceAll(srvJSONString, "\x00", "")
+
 					srvJSON = json.RawMessage(srvJSONString)
 					if len(srvJSON) == 0 {
 						srvJSON = json.RawMessage("{}")
@@ -361,6 +367,7 @@ func (s *Service) PushWithUser(ctx context.Context, businessID uuid.UUID, userID
 						if newStatus == "" {
 							newStatus, _ = rec["Status"].(string)
 						}
+
 						newStatus = strings.TrimSpace(strings.ToLower(newStatus))
 						if prevStatus == "draft" && newStatus == "confirmed" {
 							if err := s.ensureInvoiceForOrder(tx, businessID, id); err != nil {
@@ -368,6 +375,7 @@ func (s *Service) PushWithUser(ctx context.Context, businessID uuid.UUID, userID
 								result.Errors[table] = append(result.Errors[table], fmt.Sprintf("ensureInvoiceForOrder %s: %v", idStr, err))
 							}
 						}
+
 						if prevStatus != "fulfilled" && newStatus == "fulfilled" {
 							_ = s.ensureSaleForOrder(tx, businessID, id)
 						}
@@ -396,9 +404,11 @@ func (s *Service) PushWithUser(ctx context.Context, businessID uuid.UUID, userID
 						result.reject(table, idStr, err.Error())
 						continue
 					}
+
 					if err := s.restoreInventoryForSale(tx, businessID, id); err != nil {
 						result.Errors[table] = append(result.Errors[table], fmt.Sprintf("restoreInventoryForSale %s: %v", idStr, err))
 					}
+
 					result.Applied[table] = append(result.Applied[table], idStr)
 				case "orders":
 					// Deleted order: soft-delete and return any stock it removed when
@@ -407,9 +417,11 @@ func (s *Service) PushWithUser(ctx context.Context, businessID uuid.UUID, userID
 						result.reject(table, idStr, err.Error())
 						continue
 					}
+
 					if err := s.restoreInventoryForOrder(tx, businessID, id); err != nil {
 						result.Errors[table] = append(result.Errors[table], fmt.Sprintf("restoreInventoryForOrder %s: %v", idStr, err))
 					}
+
 					result.Applied[table] = append(result.Applied[table], idStr)
 				default:
 					// soft delete: set deleted_at, increment version if not already deleted
@@ -426,6 +438,7 @@ func (s *Service) PushWithUser(ctx context.Context, businessID uuid.UUID, userID
 			if processed[table] {
 				continue
 			}
+
 			result.Errors[table] = append(result.Errors[table], "table not syncable")
 		}
 		// Post-pass: newly pushed standalone (walk-in) sales must remove stock. Their own
@@ -436,16 +449,19 @@ func (s *Service) PushWithUser(ctx context.Context, businessID uuid.UUID, userID
 			if err != nil {
 				continue
 			}
+
 			if err := s.ensureSaleDeducted(tx, businessID, sid); err != nil {
 				result.Errors["sales"] = append(result.Errors["sales"], fmt.Sprintf("ensureSaleDeducted %s: %v", idStr, err))
 			}
 		}
+
 		return nil
 	})
 
 	// Invalidate analytics snapshots if we applied any sales/expenses mutation — next GET will recompute synchronously (TTL fast path).
 	if err == nil {
 		needsInvalidate := false
+
 		for tbl := range result.Applied {
 			if tbl == "sales" || tbl == "sale_lines" || tbl == "expenses" {
 				if len(result.Applied[tbl]) > 0 {
@@ -454,10 +470,12 @@ func (s *Service) PushWithUser(ctx context.Context, businessID uuid.UUID, userID
 				}
 			}
 		}
+
 		if needsInvalidate {
 			_ = s.db.WithContext(ctx).Exec(`DELETE FROM analytics_snapshots WHERE business_id = ?`, businessID).Error
 		}
 	}
+
 	return result, err
 }
 
@@ -527,12 +545,15 @@ func (s *Service) insertRecord(tx *gorm.DB, businessID uuid.UUID, userID uuid.UU
 		if v, ok := rec["status"]; !ok || v == nil || strings.TrimSpace(fmt.Sprint(v)) == "" || strings.EqualFold(fmt.Sprint(v), "null") {
 			rec["status"] = "draft"
 		}
+
 		if v, ok := rec["payment_status"]; !ok || v == nil || strings.TrimSpace(fmt.Sprint(v)) == "" || strings.EqualFold(fmt.Sprint(v), "null") || strings.EqualFold(fmt.Sprint(v), "undefined") {
 			rec["payment_status"] = "pending"
 		}
+
 		if v, ok := rec["payment_method"]; !ok || v == nil || strings.TrimSpace(fmt.Sprint(v)) == "" {
 			rec["payment_method"] = "cash"
 		}
+
 		for _, col := range []string{"subtotal", "tax_amount", "total"} {
 			if _, ok := rec[col]; !ok || rec[col] == nil {
 				rec[col] = "0"
@@ -549,6 +570,7 @@ func (s *Service) insertRecord(tx *gorm.DB, businessID uuid.UUID, userID uuid.UU
 				rec["idempotency_key"] = uuid.New().String()
 			}
 		}
+
 		if v, ok := rec["idempotency_key"].(string); !ok || strings.TrimSpace(v) == "" {
 			if idStr, ok := rec["id"].(string); ok && idStr != "" {
 				rec["idempotency_key"] = idStr
@@ -560,12 +582,15 @@ func (s *Service) insertRecord(tx *gorm.DB, businessID uuid.UUID, userID uuid.UU
 		if _, ok := rec["status"]; !ok {
 			rec["status"] = "pending"
 		}
+
 		if _, ok := rec["provider"]; !ok {
 			rec["provider"] = "mpesa"
 		}
+
 		if _, ok := rec["type"]; !ok {
 			rec["type"] = "stk_push"
 		}
+
 		if _, ok := rec["currency"]; !ok {
 			rec["currency"] = "KES"
 		}
@@ -615,22 +640,29 @@ func (s *Service) insertRecord(tx *gorm.DB, businessID uuid.UUID, userID uuid.UU
 //     a phantom restore with no prior deduction is recorded without changing quantity.
 func (s *Service) insertPushedMovement(tx *gorm.DB, businessID uuid.UUID, rec map[string]any) error {
 	productStr := strings.TrimSpace(fmt.Sprint(rec["product_id"]))
+
 	productID, err := uuid.Parse(productStr)
 	if err != nil {
 		// no product → record-only row, nothing to apply
 		return s.insertRecord(tx, businessID, uuid.Nil, "stock_movements", rec)
 	}
+
 	deltaStr := strings.TrimSpace(fmt.Sprint(rec["quantity_delta"]))
 	delta, err := decimal.NewFromString(deltaStr)
+
 	if err != nil {
 		return fmt.Errorf("invalid quantity_delta %q", deltaStr)
 	}
+
 	refType := strings.TrimSpace(fmt.Sprint(rec["reference_type"]))
 	refIDStr := strings.TrimSpace(fmt.Sprint(rec["reference_id"]))
+
 	var refID uuid.UUID
+
 	if refIDStr != "" && refIDStr != "<nil>" {
 		refID, _ = uuid.Parse(refIDStr)
 	}
+
 	hasRef := refType != "" && refIDStr != "" && refIDStr != "<nil>" && refID != uuid.Nil
 
 	if hasRef {
@@ -638,6 +670,7 @@ func (s *Service) insertPushedMovement(tx *gorm.DB, businessID uuid.UUID, rec ma
 		if delta.Sign() < 0 {
 			tx.Raw(`SELECT COUNT(*) FROM stock_movements WHERE business_id = ? AND reference_type = ? AND reference_id = ? AND product_id = ? AND quantity_delta < 0`,
 				businessID, refType, refID, productID).Scan(&applied)
+
 			if applied > 0 {
 				// already deducted by a prior ledger entry (e.g. REST confirm applied it)
 				return nil
@@ -645,13 +678,17 @@ func (s *Service) insertPushedMovement(tx *gorm.DB, businessID uuid.UUID, rec ma
 		} else {
 			tx.Raw(`SELECT COUNT(*) FROM stock_movements WHERE business_id = ? AND reference_type = ? AND reference_id = ? AND product_id = ? AND quantity_delta > 0`,
 				businessID, refType, refID, productID).Scan(&applied)
+
 			if applied > 0 {
 				// restore already applied — treat as no-op
 				return nil
 			}
+
 			var deducted int64
+
 			tx.Raw(`SELECT COUNT(*) FROM stock_movements WHERE business_id = ? AND reference_type = ? AND reference_id = ? AND product_id = ? AND quantity_delta < 0`,
 				businessID, refType, refID, productID).Scan(&deducted)
+
 			if deducted == 0 {
 				// phantom restore (never deducted server-side) — record, do not change qty
 				return s.insertRecord(tx, businessID, uuid.Nil, "stock_movements", rec)
@@ -662,6 +699,7 @@ func (s *Service) insertPushedMovement(tx *gorm.DB, businessID uuid.UUID, rec ma
 	if err := s.insertRecord(tx, businessID, uuid.Nil, "stock_movements", rec); err != nil {
 		return err
 	}
+
 	return tx.Exec(`UPDATE inventory_items SET quantity = quantity + ?::numeric, updated_at = NOW() WHERE business_id = ? AND product_id = ? AND deleted_at IS NULL`,
 		delta.String(), businessID, productID).Error
 }
@@ -672,6 +710,7 @@ func (s *Service) validateFKs(tx *gorm.DB, businessID uuid.UUID, table string, r
 		parent   string
 		required bool
 	}
+
 	var checks []fkCheck
 	switch table {
 	case "product_variants":
@@ -695,26 +734,34 @@ func (s *Service) validateFKs(tx *gorm.DB, businessID uuid.UUID, table string, r
 	case "payment_commands":
 		checks = []fkCheck{{"order_id", "orders", true}}
 	}
+
 	for _, c := range checks {
 		raw, ok := rec[c.col]
 		if !ok || raw == nil {
 			continue
 		}
+
 		idStr, ok := raw.(string)
 		if !ok || idStr == "" {
 			continue
 		}
+
 		if !isValidUUID(idStr) {
 			if c.required {
 				return fmt.Errorf("FK violation: %s=%s invalid UUID for %s — parent %s missing", c.col, idStr, table, c.parent)
 			}
+
 			delete(rec, c.col)
+
 			continue
 		}
+
 		pid, _ := uuid.Parse(idStr)
+
 		var exists int64
 		// parent must exist for this business and not soft-deleted
 		tx.Raw(fmt.Sprintf(`SELECT COUNT(*) FROM %s WHERE id = ? AND business_id = ? AND deleted_at IS NULL`, c.parent), pid, businessID).Scan(&exists)
+
 		if exists == 0 {
 			if c.required {
 				return fmt.Errorf("FK violation: %s=%s references %s not found for %s — ensure parent synced before child (SQLSTATE 23503)", c.col, idStr, c.parent, table)
@@ -723,6 +770,7 @@ func (s *Service) validateFKs(tx *gorm.DB, businessID uuid.UUID, table string, r
 			delete(rec, c.col)
 		}
 	}
+
 	return nil
 }
 
@@ -738,15 +786,18 @@ func (s *Service) updateRecord(tx *gorm.DB, businessID uuid.UUID, table string, 
 		if v == nil {
 			continue
 		}
+
 		if s, ok := v.(string); ok {
 			trim := strings.TrimSpace(s)
 			if trim == "" && k != "notes" && k != "description" && k != "address" {
 				// allow empty for nullable text but skip "undefined" sentinel
 			}
+
 			if strings.EqualFold(trim, "undefined") || strings.EqualFold(trim, "null") {
 				continue
 			}
 		}
+
 		if allowed, ok := allowedUpdateColumns[table]; ok {
 			if !allowed[k] {
 				continue
@@ -788,6 +839,7 @@ func (s *Service) ensureInvoiceForOrder(tx *gorm.DB, businessID, orderID uuid.UU
 	if err := tx.Raw(`SELECT COUNT(*) FROM invoices WHERE business_id = ? AND order_id = ? AND deleted_at IS NULL`, businessID, orderID).Scan(&cnt).Error; err != nil {
 		return err
 	}
+
 	if cnt > 0 {
 		return nil
 	}
@@ -800,6 +852,7 @@ func (s *Service) ensureInvoiceForOrder(tx *gorm.DB, businessID, orderID uuid.UU
 		Total         string     `gorm:"column:total"`
 		PaymentMethod string     `gorm:"column:payment_method"`
 	}
+
 	if err := tx.Raw(`SELECT id, customer_id, subtotal::text, tax_amount::text, total::text, payment_method FROM orders WHERE id = ? AND business_id = ?`, orderID, businessID).Scan(&order).Error; err != nil {
 		return err
 	}
@@ -810,28 +863,34 @@ func (s *Service) ensureInvoiceForOrder(tx *gorm.DB, businessID, orderID uuid.UU
 		UnitPrice string     `gorm:"column:unit_price"`
 		LineTotal string     `gorm:"column:line_total"`
 	}
+
 	var lines []lineRow
 	if err := tx.Raw(`SELECT product_id, quantity::text, unit_price::text, line_total::text FROM order_lines WHERE order_id = ? AND business_id = ? AND deleted_at IS NULL`, orderID, businessID).Scan(&lines).Error; err != nil {
 		return err
 	}
+
 	if len(lines) == 0 {
 		return fmt.Errorf("no order lines for order %s", orderID)
 	}
 	// Generate invoice number (INV- + first 8 of business + count)
 	var invCount int64
+
 	_ = tx.Raw(`SELECT COUNT(*) FROM invoices WHERE business_id = ?`, businessID).Scan(&invCount).Error
 	invoiceID := uuid.New()
 	invoiceNumber := fmt.Sprintf("INV-%s-%06d", businessID.String()[:8], invCount+1)
 	now := time.Now().UTC()
 	dueAt := now.AddDate(0, 0, 5)
+
 	subtotal := order.Subtotal
 	if subtotal == "" {
 		subtotal = "0"
 	}
+
 	tax := order.TaxAmount
 	if tax == "" {
 		tax = "0"
 	}
+
 	total := order.Total
 	if total == "" {
 		total = subtotal
@@ -848,8 +907,10 @@ func (s *Service) ensureInvoiceForOrder(tx *gorm.DB, businessID, orderID uuid.UU
 			if l.ProductID != nil {
 				return l.ProductID.String()[:6]
 			}
+
 			return "Item"
 		}())
+
 		if err := tx.Exec(`INSERT INTO invoice_lines (id, business_id, tenant_id, invoice_id, product_id, description, quantity, unit_price, line_total, created_at, updated_at, sync_version) VALUES (?, ?, ?, ?, ?, ?, ?::numeric, ?::numeric, ?::numeric, ?, ?, 1)`,
 			lineID, businessID, businessID, invoiceID, l.ProductID, desc, l.Quantity, l.UnitPrice, l.LineTotal, now, now).Error; err != nil {
 			return err
@@ -859,16 +920,20 @@ func (s *Service) ensureInvoiceForOrder(tx *gorm.DB, businessID, orderID uuid.UU
 	// client already mirrored the stock_movements never double-deducts.
 	if len(lines) > 0 {
 		dl := make([]inventory.DecrementLine, 0, len(lines))
+
 		for _, l := range lines {
 			if l.ProductID == nil {
 				continue
 			}
+
 			q, qerr := decimal.NewFromString(l.Quantity)
 			if qerr != nil {
 				continue
 			}
+
 			dl = append(dl, inventory.DecrementLine{ProductID: *l.ProductID, Quantity: q})
 		}
+
 		if err := inventory.ApplyLedger(tx, businessID, "order", orderID, dl, -1, "out", "order confirmed"); err != nil {
 			return err
 		}
@@ -876,25 +941,31 @@ func (s *Service) ensureInvoiceForOrder(tx *gorm.DB, businessID, orderID uuid.UU
 	// Auto-create pending payment_command to trigger FIFO settlement via River worker
 	// (mirrors orders.Service.Confirm → emit OrderPaymentInit → InitiateOrder)
 	var payCnt int64
+
 	_ = tx.Raw(`SELECT COUNT(*) FROM payment_commands WHERE business_id = ? AND order_id = ? AND deleted_at IS NULL`, businessID, orderID).Scan(&payCnt).Error
+
 	if payCnt == 0 {
 		// Lookup customer phone for mpesa
 		var phone string
 		if order.CustomerID != nil {
 			_ = tx.Raw(`SELECT phone FROM customers WHERE id = ? AND business_id = ? AND deleted_at IS NULL`, *order.CustomerID, businessID).Scan(&phone).Error
 		}
+
 		prov := "cash"
 		typ := "cash"
+
 		if order.PaymentMethod == "mpesa" {
 			prov = "mpesa"
 			typ = "stk_push"
 		}
+
 		payload := "{}"
 		if order.CustomerID != nil {
 			payload = fmt.Sprintf(`{"customerId":"%s","orderId":"%s"}`, order.CustomerID.String(), orderID.String())
 		} else {
 			payload = fmt.Sprintf(`{"orderId":"%s"}`, orderID.String())
 		}
+
 		payID := uuid.New()
 		idemKey := orderID.String() // idempotent per order confirm
 		_ = tx.Exec(`INSERT INTO payment_commands (id, business_id, tenant_id, order_id, type, status, idempotency_key, amount, currency, phone, account_reference, provider, payload, created_at, updated_at, sync_version) VALUES (?, ?, ?, ?, ?, 'pending', ?, ?::numeric, 'KES', ?, ?, ?, ?::jsonb, ?, ?, 1)`,
@@ -907,6 +978,7 @@ func (s *Service) ensureInvoiceForOrder(tx *gorm.DB, businessID, orderID uuid.UU
 			// The worker will also handle it idempotently if job later created
 		}
 	}
+
 	return nil
 }
 
@@ -915,9 +987,11 @@ func (s *Service) ensureSaleForOrder(tx *gorm.DB, businessID, orderID uuid.UUID)
 	if err := tx.Raw(`SELECT COUNT(*) FROM sales WHERE business_id = ? AND order_id = ? AND deleted_at IS NULL`, businessID, orderID).Scan(&cnt).Error; err != nil {
 		return err
 	}
+
 	if cnt > 0 {
 		return nil
 	}
+
 	var order struct {
 		CustomerID    *uuid.UUID `gorm:"column:customer_id"`
 		PaymentMethod string     `gorm:"column:payment_method"`
@@ -925,9 +999,11 @@ func (s *Service) ensureSaleForOrder(tx *gorm.DB, businessID, orderID uuid.UUID)
 		TaxAmount     string     `gorm:"column:tax_amount"`
 		Total         string     `gorm:"column:total"`
 	}
+
 	if err := tx.Raw(`SELECT customer_id, payment_method, subtotal::text, tax_amount::text, total::text FROM orders WHERE id = ? AND business_id = ?`, orderID, businessID).Scan(&order).Error; err != nil {
 		return err
 	}
+
 	type lineRow struct {
 		ProductID        *uuid.UUID `gorm:"column:product_id"`
 		ProductVariantID *uuid.UUID `gorm:"column:product_variant_id"`
@@ -935,10 +1011,12 @@ func (s *Service) ensureSaleForOrder(tx *gorm.DB, businessID, orderID uuid.UUID)
 		UnitPrice        string     `gorm:"column:unit_price"`
 		LineTotal        string     `gorm:"column:line_total"`
 	}
+
 	var lines []lineRow
 	if err := tx.Raw(`SELECT product_id, product_variant_id, quantity::text, unit_price::text, line_total::text FROM order_lines WHERE order_id = ? AND business_id = ? AND deleted_at IS NULL`, orderID, businessID).Scan(&lines).Error; err != nil {
 		return err
 	}
+
 	saleID := uuid.New()
 	receipt := fmt.Sprintf("RCPT-%s", saleID.String()[:6])
 	now := time.Now().UTC()
@@ -947,11 +1025,13 @@ func (s *Service) ensureSaleForOrder(tx *gorm.DB, businessID, orderID uuid.UUID)
 		saleID, businessID, businessID, orderID, order.CustomerID, receipt, businessID, order.PaymentMethod, order.Subtotal, order.TaxAmount, order.Total, now, now, now).Error; err != nil {
 		return err
 	}
+
 	for _, l := range lines {
 		lineID := uuid.New()
 		_ = tx.Exec(`INSERT INTO sale_lines (id, business_id, tenant_id, sale_id, product_id, product_variant_id, quantity, unit_price, line_total, created_at, updated_at, sync_version) VALUES (?, ?, ?, ?, ?, ?, ?::numeric, ?::numeric, ?::numeric, ?, ?, 1)`,
 			lineID, businessID, businessID, saleID, l.ProductID, l.ProductVariantID, l.Quantity, l.UnitPrice, l.LineTotal, now, now).Error
 	}
+
 	return nil
 }
 
@@ -991,6 +1071,7 @@ func (s *Service) saleLedgerLines(tx *gorm.DB, businessID, saleID uuid.UUID) ([]
 	if err := tx.Raw(`SELECT product_id, quantity::text FROM sale_lines WHERE sale_id = ? AND business_id = ? AND deleted_at IS NULL`, saleID, businessID).Scan(&rows).Error; err != nil {
 		return nil, err
 	}
+
 	return toLedgerLines(rows), nil
 }
 
@@ -999,21 +1080,26 @@ func (s *Service) orderLedgerLines(tx *gorm.DB, businessID, orderID uuid.UUID) (
 	if err := tx.Raw(`SELECT product_id, quantity::text FROM order_lines WHERE order_id = ? AND business_id = ? AND deleted_at IS NULL`, orderID, businessID).Scan(&rows).Error; err != nil {
 		return nil, err
 	}
+
 	return toLedgerLines(rows), nil
 }
 
 func toLedgerLines(rows []ledgerLineRow) []inventory.DecrementLine {
 	lines := make([]inventory.DecrementLine, 0, len(rows))
+
 	for _, r := range rows {
 		if r.ProductID == nil {
 			continue
 		}
+
 		q, err := decimal.NewFromString(r.Quantity)
 		if err != nil {
 			continue
 		}
+
 		lines = append(lines, inventory.DecrementLine{ProductID: *r.ProductID, Quantity: q})
 	}
+
 	return lines
 }
 
@@ -1024,6 +1110,7 @@ func (s *Service) restoreInventoryForOrder(tx *gorm.DB, businessID, orderID uuid
 	if err != nil || len(lines) == 0 {
 		return err
 	}
+
 	return inventory.ApplyLedger(tx, businessID, "order", orderID, lines, 1, "in", "order cancelled")
 }
 
@@ -1034,6 +1121,7 @@ func (s *Service) restoreInventoryForSale(tx *gorm.DB, businessID, saleID uuid.U
 	if err != nil || len(lines) == 0 {
 		return err
 	}
+
 	return inventory.ApplyLedger(tx, businessID, "sale", saleID, lines, 1, "in", "sale voided")
 }
 
@@ -1045,19 +1133,24 @@ func (s *Service) ensureSaleDeducted(tx *gorm.DB, businessID, saleID uuid.UUID) 
 		OrderID sql.NullString `gorm:"column:order_id"`
 		Status  string         `gorm:"column:status"`
 	}
+
 	err := tx.Raw(`SELECT order_id::text, status FROM sales WHERE id = ? AND business_id = ? AND deleted_at IS NULL`, saleID, businessID).Scan(&row).Error
 	if err != nil {
 		return err
 	}
+
 	if row.OrderID.Valid && row.OrderID.String != "" {
 		return nil
 	}
+
 	if !strings.EqualFold(strings.TrimSpace(row.Status), "completed") {
 		return nil
 	}
+
 	lines, err := s.saleLedgerLines(tx, businessID, saleID)
 	if err != nil || len(lines) == 0 {
 		return err
 	}
+
 	return inventory.ApplyLedger(tx, businessID, "sale", saleID, lines, -1, "out", "sale created")
 }

@@ -21,6 +21,7 @@ func TestDeterministicPDF(t *testing.T) {
 		Address string `gorm:"column:address"`
 		TaxPIN  string `gorm:"column:tax_pin"`
 	}
+
 	biz.Name = "Test Shop"
 	first := deterministicPDF(invoice, biz)
 	second := deterministicPDF(invoice, biz)

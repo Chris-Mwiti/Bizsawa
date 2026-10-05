@@ -95,9 +95,11 @@ func (s *Server) handleProfile(profile Profile) http.HandlerFunc {
 			// Auth failure is a workflow error — trace it
 			aCtx, authSpan := observability.StartWorkflowSpan(ctx, "auth", string(profile))
 			_ = aCtx
+
 			w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer resource_metadata="%s/.well-known/oauth-protected-resource", error="invalid_token"`, strings.TrimRight(s.cfg.MCP.PublicURL, "/")))
 			sharedhttp.JSON(w, http.StatusUnauthorized, ErrorEnvelope{Status: "error", Error: "unauthorized", Message: "A valid bearer token for the MCP resource is required.", Retryable: false})
 			observability.EndWorkflowSpan(aCtx, authSpan, "auth", string(profile), workflowStart, err)
+
 			return
 		}
 
@@ -107,21 +109,27 @@ func (s *Server) handleProfile(profile Profile) http.HandlerFunc {
 
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			aCtx, span := observability.StartWorkflowSpan(ctx, "invalid_jsonrpc", string(profile))
+
 			sharedhttp.JSON(w, http.StatusBadRequest, RPCResponse{JSONRPC: "2.0", Error: &RPCError{Code: -32700, Message: "invalid JSON-RPC request"}})
 			observability.EndWorkflowSpan(aCtx, span, "invalid_jsonrpc", string(profile), workflowStart, err)
+
 			return
 		}
 
 		// Per-method workflow span (parent of any tool span)
 		wCtx, methodSpan := observability.StartWorkflowSpan(ctx, req.Method, string(profile))
 		resp := s.dispatch(r.WithContext(wCtx), session, req)
+
 		var wfErr error
+
 		if resp.Error != nil {
 			wfErr = fmt.Errorf("rpc error %d: %s", resp.Error.Code, resp.Error.Message)
 		}
+
 		observability.EndWorkflowSpan(wCtx, methodSpan, req.Method, string(profile), workflowStart, wfErr)
 
 		sharedhttp.JSON(w, http.StatusOK, resp)
+
 		_ = context.Background // silence import if tracing disabled
 	}
 }
@@ -129,6 +137,7 @@ func (s *Server) handleProfile(profile Profile) http.HandlerFunc {
 func (s *Server) dispatch(r *http.Request, session Session, req RPCRequest) RPCResponse {
 	ctx := r.Context()
 	slog.InfoContext(ctx, "mcp dispatch", "method", req.Method, "profile", session.Profile, "business", session.BusinessID.String(), "user", session.UserID.String(), "id", req.ID)
+
 	resp := RPCResponse{JSONRPC: "2.0", ID: req.ID}
 
 	switch req.Method {
@@ -166,6 +175,7 @@ func (s *Server) dispatch(r *http.Request, session Session, req RPCRequest) RPCR
 
 		if err != nil {
 			observability.EndToolSpan(toolCtx, toolSpan, call.Name, string(session.Profile), start, err)
+
 			code, payload := ErrorPayload(err)
 			if errors.Is(err, ErrToolNotFound) {
 				payload.Message = "Not found: " + payload.Message
@@ -181,6 +191,7 @@ func (s *Server) dispatch(r *http.Request, session Session, req RPCRequest) RPCR
 		}
 
 		observability.EndToolSpan(toolCtx, toolSpan, call.Name, string(session.Profile), start, nil)
+
 		body, _ := json.Marshal(envelope)
 		resp.Result = CallResponse{Content: []ContentBlock{{Type: "text", Text: string(body)}}}
 	default:

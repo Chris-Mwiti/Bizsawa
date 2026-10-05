@@ -1,9 +1,9 @@
 package invoices
 
 import (
-	"log/slog"
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -87,6 +87,7 @@ func (r *Repository) Find(ctx context.Context, businessID, invoiceID uuid.UUID) 
 		if err := r.db.WithContext(ctx).Table("customers").Select("name, phone").Where("business_id = ? AND id = ?", businessID, *invoice.CustomerID).First(&cr).Error; err != nil {
 			slog.ErrorContext(ctx, "database operation failed", "err", err)
 		}
+
 		invoice.CustomerName = cr.Name
 		invoice.CustomerPhone = cr.Phone
 	}

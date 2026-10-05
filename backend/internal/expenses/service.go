@@ -97,6 +97,7 @@ func (s *Service) Delete(ctx context.Context, businessID, id uuid.UUID) error {
 	if err == nil {
 		_ = s.repo.DB().WithContext(ctx).Exec(`DELETE FROM analytics_snapshots WHERE business_id = ?`, businessID).Error
 	}
+
 	return err
 }
 

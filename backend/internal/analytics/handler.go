@@ -21,19 +21,20 @@ func (h Handler) TaxSummary(w http.ResponseWriter, r *http.Request) {
 		sharedhttp.Error(w, errBusinessRequired())
 		return
 	}
+
 	tf := Timeframe(r.URL.Query().Get("timeframe"))
 	if !tf.Valid() {
 		tf = TimeframeMonth
 	}
+
 	summary, err := h.svc.TaxSummary(r.Context(), bid, tf)
 	if err != nil {
 		sharedhttp.Error(w, err)
 		return
 	}
+
 	sharedhttp.JSON(w, http.StatusOK, summary)
 }
-
-
 
 // Get returns the snapshot for the requested timeframe, computing it
 // synchronously if nothing has been pre-computed yet.
@@ -66,15 +67,18 @@ func (h Handler) AIInsights(w http.ResponseWriter, r *http.Request) {
 		sharedhttp.Error(w, errBusinessRequired())
 		return
 	}
+
 	tf := Timeframe(r.URL.Query().Get("timeframe"))
 	if !tf.Valid() {
 		tf = TimeframeMonth
 	}
+
 	insights, err := h.svc.GetAIInsights(r.Context(), bid, tf)
 	if err != nil {
 		sharedhttp.Error(w, err)
 		return
 	}
+
 	sharedhttp.JSON(w, http.StatusOK, insights)
 }
 

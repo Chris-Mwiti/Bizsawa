@@ -26,6 +26,7 @@ type Registry struct {
 
 func NewRegistry(enforcer *authz.Enforcer, tools ...Tool) *Registry {
 	r := &Registry{tools: map[string]Tool{}, enforcer: enforcer}
+
 	for _, tool := range tools {
 		key := string(tool.Profile) + ":" + tool.Name
 		r.tools[key] = tool
@@ -55,6 +56,7 @@ func (r *Registry) Call(session Session, name string, args json.RawMessage) (Env
 func (r *Registry) CallWithContext(ctx context.Context, session Session, name string, args json.RawMessage) (Envelope, error) {
 	// Profile-scoped lookup: prefer exact profile:name, fallback to name alone for backwards compat
 	key := string(session.Profile) + ":" + name
+
 	tool, ok := r.tools[key]
 	if !ok {
 		// Fallback: try bare name (legacy) and ensure profile matches
@@ -65,10 +67,12 @@ func (r *Registry) CallWithContext(ctx context.Context, session Session, name st
 				if t.Name == name && t.Profile == session.Profile {
 					tool = t
 					ok = true
+
 					break
 				}
 			}
 		}
+
 		if !ok {
 			return Envelope{}, ErrToolNotFound
 		}
@@ -89,6 +93,7 @@ func (r *Registry) CallWithContext(ctx context.Context, session Session, name st
 	// Ensure ToolHandler can access traced context if it uses context.Background internally we still have parent span
 	// Handlers currently use context.Background() — they will be migrated to use passed ctx, but this keeps trace parent linkage
 	_ = ctx
+
 	data, meta, err := tool.Handler(ToolContext{Session: session, Now: time.Now().UTC()}, args)
 	if err != nil {
 		return Envelope{}, err
@@ -135,8 +140,10 @@ func enrichMeta(meta map[string]any, data any, args json.RawMessage) {
 				}
 			}
 		}
+
 		conf := "high"
 		reason := "Sufficient data"
+
 		if rcVal == 0 {
 			conf = "low"
 			reason = "No data in window — check date range or uncategorized backlog; may be stale if offline-sync conflicts unresolved"

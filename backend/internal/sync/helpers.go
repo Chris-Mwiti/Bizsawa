@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 )
+
 func isSyncable(t string) bool {
 	for _, s := range syncableTables {
 		if s == t {
@@ -209,7 +210,6 @@ func isValidUUID(v any) bool {
 	return err == nil
 }
 
-
 var allowedUpdateColumns = map[string]map[string]bool{
 	"products":         {"name": true, "description": true, "sku": true, "category": true, "barcode": true, "image_url": true, "tax_rule_id": true, "price": true, "cost": true, "is_active": true, "sync_version": true, "deleted_at": true},
 	"product_variants": {"business_id": true, "product_id": true, "name": true, "sku": true, "barcode": true, "price": true, "cost": true, "is_active": true, "sync_version": true, "deleted_at": true},
@@ -227,5 +227,3 @@ var allowedUpdateColumns = map[string]map[string]bool{
 	"payment_commands": {"order_id": true, "amount": true, "currency": true, "phone": true, "status": true, "provider": true, "type": true, "idempotency_key": true, "sync_version": true, "deleted_at": true},
 	"tax_rules":        {"name": true, "rate": true, "country": true, "is_default": true, "is_active": true, "sync_version": true, "deleted_at": true},
 }
-
-

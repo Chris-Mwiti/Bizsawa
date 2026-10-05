@@ -50,25 +50,33 @@ func main() {
 		PrometheusEnabled: cfg.Observability.PrometheusEnabled,
 		StdoutFallback:    cfg.Observability.StdoutFallback,
 	}
+
 	if v := cfg.Observability.ServiceName; v != "" && v != "bizsawa-api" {
 		otelCfg.ServiceName = v + "-mcp"
 	}
+
 	bootstrapCtx := context.Background()
+
 	otelProvider, err := observability.Setup(bootstrapCtx, otelCfg)
 	if err != nil {
 		slog.Error("observability setup failed, continuing without telemetry", "err", err)
 	}
+
 	if _, err := observability.InitMetrics(); err != nil {
 		slog.Error("metrics init failed", "err", err)
 	}
+
 	logger := observability.NewLogger(otelCfg.ServiceName)
+
 	if otelProvider != nil {
 		defer func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
+
 			_ = otelProvider.Shutdown(ctx)
 		}()
 	}
+
 	logger.Info("mcp observability initialized", "enabled", otelCfg.Enabled, "endpoint", otelCfg.Endpoint, "service", otelCfg.ServiceName)
 
 	gormDB, err := shareddb.Open(cfg.Database)

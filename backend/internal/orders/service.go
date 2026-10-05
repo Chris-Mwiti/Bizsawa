@@ -502,6 +502,7 @@ func (s *Service) Cancel(ctx context.Context, businessID, orderID uuid.UUID) err
 			for _, l := range order.Lines {
 				restoreLines = append(restoreLines, inventory.DecrementLine{ProductID: l.ProductID, Quantity: l.Quantity})
 			}
+
 			if err := s.inventory.WithTx(tx).RestoreForOrder(ctx, businessID, orderID, restoreLines); err != nil {
 				s.logger.ErrorContext(ctx, "[ORDER/INVENTORY]-could not restore inventory", "businessID", businessID.String(), "orderID", orderID.String(), "err", err.Error())
 				return err

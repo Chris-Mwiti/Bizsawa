@@ -100,7 +100,7 @@ type MpesaConfig struct {
 }
 
 type EmailConfig struct {
-	Provider string // "resend" | "log" (default: resend if API key set, else log)
+	Provider     string // "resend" | "log" (default: resend if API key set, else log)
 	ResendAPIKey string
 	FromEmail    string
 	FromName     string
@@ -130,6 +130,7 @@ func (o ObservabilityConfig) TracesTarget() string {
 	if o.TracesEndpoint != "" {
 		return o.TracesEndpoint
 	}
+
 	return o.Endpoint
 }
 
@@ -139,6 +140,7 @@ func (o ObservabilityConfig) MetricsTarget() string {
 	if o.MetricsEndpoint != "" {
 		return o.MetricsEndpoint
 	}
+
 	return o.Endpoint
 }
 
@@ -244,25 +246,33 @@ func ParseOTLPHeaders(raw string) map[string]string {
 	if raw == "" {
 		return nil
 	}
+
 	out := make(map[string]string)
+
 	for _, pair := range strings.Split(raw, ",") {
 		pair = strings.TrimSpace(pair)
 		if pair == "" {
 			continue
 		}
+
 		k, v, ok := strings.Cut(pair, "=")
 		k = strings.TrimSpace(k)
+
 		if !ok || k == "" {
 			continue
 		}
+
 		if dec, err := url.QueryUnescape(strings.TrimSpace(v)); err == nil {
 			v = dec
 		}
+
 		out[k] = v
 	}
+
 	if len(out) == 0 {
 		return nil
 	}
+
 	return out
 }
 
@@ -325,16 +335,20 @@ func floatEnv(key string, fallback float64) float64 {
 	if value == "" {
 		return fallback
 	}
+
 	parsed, err := strconv.ParseFloat(value, 64)
 	if err != nil {
 		return fallback
 	}
+
 	if parsed < 0 {
 		return 0
 	}
+
 	if parsed > 1 {
 		return 1
 	}
+
 	return parsed
 }
 
@@ -358,16 +372,20 @@ func googleClientIDs() []string {
 	web := strings.TrimSpace(os.Getenv("GOOGLE_WEB_CLIENT_ID"))
 	ios := strings.TrimSpace(os.Getenv("GOOGLE_IOS_CLIENT_ID"))
 	android := strings.TrimSpace(os.Getenv("GOOGLE_ANDROID_CLIENT_ID"))
+
 	var ids []string
 	if single != "" {
 		ids = append(ids, single)
 	}
+
 	if web != "" {
 		ids = append(ids, web)
 	}
+
 	if ios != "" {
 		ids = append(ids, ios)
 	}
+
 	if android != "" {
 		ids = append(ids, android)
 	}
@@ -383,12 +401,15 @@ func googleClientIDs() []string {
 	// Deduplicate
 	seen := map[string]bool{}
 	out := []string{}
+
 	for _, id := range ids {
 		if !seen[id] {
 			seen[id] = true
+
 			out = append(out, id)
 		}
 	}
+
 	return out
 }
 

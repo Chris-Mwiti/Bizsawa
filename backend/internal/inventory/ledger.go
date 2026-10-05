@@ -56,12 +56,14 @@ func ApplyLedger(db *gorm.DB, businessID uuid.UUID, refType string, refID uuid.U
 			Count(&deducted).Error; err != nil {
 			return err
 		}
+
 		if deducted == 0 {
 			return nil
 		}
 	}
 
 	now := time.Now().UTC()
+
 	for _, line := range lines {
 		delta := line.Quantity.Mul(decimal.NewFromInt(sign))
 		// Only adjust products that have tracked stock; skip phantom creations like
@@ -73,9 +75,11 @@ func ApplyLedger(db *gorm.DB, businessID uuid.UUID, refType string, refID uuid.U
 				"updated_at":   now,
 				"sync_version": gorm.Expr("sync_version + 1"),
 			})
+
 		if res.Error != nil {
 			return res.Error
 		}
+
 		if res.RowsAffected == 0 {
 			continue
 		}
@@ -91,6 +95,7 @@ func ApplyLedger(db *gorm.DB, businessID uuid.UUID, refType string, refID uuid.U
 			Notes:         notes,
 			OccurredAt:    now,
 		}
+
 		if err := db.Create(mv).Error; err != nil {
 			return err
 		}

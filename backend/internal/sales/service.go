@@ -197,12 +197,15 @@ func (s *Service) Void(ctx context.Context, businessID, saleID uuid.UUID) error 
 		if err != nil {
 			return err
 		}
+
 		if sale.Status == "void" {
 			return nil
 		}
+
 		if err := s.repo.WithTx(tx).Void(ctx, businessID, saleID); err != nil {
 			return err
 		}
+
 		if s.inventory != nil && len(sale.Lines) > 0 {
 			restoreLines := make([]inventory.DecrementLine, 0, len(sale.Lines))
 			for _, l := range sale.Lines {
@@ -214,13 +217,16 @@ func (s *Service) Void(ctx context.Context, businessID, saleID uuid.UUID) error 
 				return err
 			}
 		}
+
 		return nil
 	})
+
 	if err == nil {
 		if err := s.repo.DB().WithContext(ctx).Exec(`DELETE FROM analytics_snapshots WHERE business_id = ?`, businessID).Error; err != nil {
 			slog.ErrorContext(ctx, "database operation failed", "err", err)
 		}
 	}
+
 	return err
 }
 

@@ -77,6 +77,7 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 	if len(preview) > 80 {
 		preview = preview[:80] + "…"
 	}
+
 	slog.InfoContext(r.Context(), "chat request",
 		"business", bid.String(), "lang", req.Language,
 		"msgLen", len(req.Message), "msg", preview)
@@ -85,6 +86,7 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.WarnContext(r.Context(), "chat failed", "business", bid.String(), "err", err.Error())
 		sharedhttp.Error(w, err)
+
 		return
 	}
 

@@ -17,6 +17,7 @@ func NewLogger(serviceName string) *slog.Logger {
 	})}
 	logger := slog.New(h).With("service", serviceName)
 	slog.SetDefault(logger)
+
 	return logger
 }
 
@@ -37,6 +38,7 @@ func (h *TraceHandler) Handle(ctx context.Context, r slog.Record) error {
 			slog.String("trace_flags", sc.TraceFlags().String()),
 		)
 	}
+
 	return h.inner.Handle(ctx, r)
 }
 
@@ -53,9 +55,11 @@ func LoggerWithTrace(ctx context.Context, base *slog.Logger) *slog.Logger {
 	if base == nil {
 		base = slog.Default()
 	}
+
 	sc := trace.SpanContextFromContext(ctx)
 	if !sc.IsValid() {
 		return base
 	}
+
 	return base.With("trace_id", sc.TraceID().String(), "span_id", sc.SpanID().String())
 }

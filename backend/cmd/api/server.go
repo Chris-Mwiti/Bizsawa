@@ -134,6 +134,7 @@ func NewRouter(deps Dependencies) http.Handler {
 					if deps.Auth != nil {
 						r.Use(deps.Auth.Middleware)
 					}
+
 					deps.Tenancy.RegisterRoutes(r)
 				})
 			})

@@ -35,15 +35,18 @@ func (h Handler) InitiateUpgrade(w http.ResponseWriter, r *http.Request) {
 		sharedhttp.Error(w, apperrUnauthorized())
 		return
 	}
+
 	var req InitiateUpgradeRequest
 	if err := sharedhttp.Decode(r, &req); err != nil {
 		sharedhttp.Error(w, err)
 		return
 	}
+
 	key, _ := middleware.IdempotencyKeyFromCtx(r.Context())
 	if key == "" {
 		key = uuid.NewString()
 	}
+
 	p, err := h.svc.InitiateUpgrade(r.Context(), userID, req, key)
 	if err != nil {
 		sharedhttp.Error(w, err)
@@ -57,6 +60,7 @@ func (h Handler) InitiateUpgrade(w http.ResponseWriter, r *http.Request) {
 			_ = h.svc.TriggerSTKIfConfigured(r.Context(), p.ID)
 		}()
 	}
+
 	sharedhttp.JSON(w, http.StatusAccepted, p)
 }
 
@@ -66,16 +70,19 @@ func (h Handler) GetSubscriptionPayment(w http.ResponseWriter, r *http.Request) 
 		sharedhttp.Error(w, apperrUnauthorized())
 		return
 	}
+
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		sharedhttp.Error(w, err)
 		return
 	}
+
 	p, err := h.svc.GetSubscriptionPayment(r.Context(), id, userID)
 	if err != nil {
 		sharedhttp.Error(w, err)
 		return
 	}
+
 	sharedhttp.JSON(w, http.StatusOK, p)
 }
 
@@ -85,9 +92,11 @@ func (h Handler) SubscriptionCallback(w http.ResponseWriter, r *http.Request) {
 		sharedhttp.Error(w, err)
 		return
 	}
+
 	if err := h.svc.HandleSubscriptionCallback(r.Context(), raw); err != nil {
 		sharedhttp.Error(w, err)
 		return
 	}
+
 	sharedhttp.JSON(w, http.StatusOK, sharedhttp.Envelope{"ResultCode": 0, "ResultDesc": "Accepted"})
 }

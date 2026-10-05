@@ -147,11 +147,13 @@ func (h Handler) InviteByEmail(w http.ResponseWriter, r *http.Request) {
 		sharedhttp.Error(w, errBusinessRequired())
 		return
 	}
+
 	businessID, ok := middleware.BusinessIDFromCtx(r.Context())
 	if !ok {
 		sharedhttp.Error(w, errBusinessRequired())
 		return
 	}
+
 	userID, ok := middleware.UserIDFromCtx(r.Context())
 	if !ok {
 		sharedhttp.Error(w, errUnauthorized())
@@ -163,25 +165,30 @@ func (h Handler) InviteByEmail(w http.ResponseWriter, r *http.Request) {
 		sharedhttp.Error(w, errUnauthorized())
 		return
 	}
+
 	var req InviteByEmailRequest
 	if err := sharedhttp.Decode(r, &req); err != nil {
 		sharedhttp.Error(w, err)
 		return
 	}
+
 	req.Role = strings.ToUpper(strings.TrimSpace(req.Role))
 	if inviterMember.Role == "MANAGER" && req.Role != "CASHIER" {
 		sharedhttp.Error(w, errForbiddenRole())
 		return
 	}
+
 	if inviterMember.Role != "OWNER" && inviterMember.Role != "MANAGER" {
 		sharedhttp.Error(w, errForbiddenRole())
 		return
 	}
+
 	invite, err := h.inviteSvc.InviteByEmail(r.Context(), businessID, userID, req)
 	if err != nil {
 		sharedhttp.Error(w, err)
 		return
 	}
+
 	sharedhttp.JSON(w, http.StatusCreated, invite)
 }
 
@@ -190,16 +197,19 @@ func (h Handler) ListInvites(w http.ResponseWriter, r *http.Request) {
 		sharedhttp.Error(w, errBusinessRequired())
 		return
 	}
+
 	businessID, ok := middleware.BusinessIDFromCtx(r.Context())
 	if !ok {
 		sharedhttp.Error(w, errBusinessRequired())
 		return
 	}
+
 	invites, err := h.inviteSvc.ListInvites(r.Context(), businessID)
 	if err != nil {
 		sharedhttp.Error(w, err)
 		return
 	}
+
 	sharedhttp.JSON(w, http.StatusOK, sharedhttp.Envelope{"invites": invites})
 }
 
@@ -208,25 +218,30 @@ func (h Handler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 		sharedhttp.Error(w, errBusinessRequired())
 		return
 	}
+
 	businessID, ok := middleware.BusinessIDFromCtx(r.Context())
 	if !ok {
 		sharedhttp.Error(w, errBusinessRequired())
 		return
 	}
+
 	var req struct {
 		Email string `json:"email"`
 		Otp   string `json:"otp"`
 		Name  string `json:"name"`
 	}
+
 	if err := sharedhttp.Decode(r, &req); err != nil {
 		sharedhttp.Error(w, err)
 		return
 	}
+
 	invite, userID, role, err := h.inviteSvc.AcceptInvite(r.Context(), AcceptInviteRequest{BusinessID: businessID, Email: req.Email, Otp: req.Otp, Name: req.Name})
 	if err != nil {
 		sharedhttp.Error(w, err)
 		return
 	}
+
 	sharedhttp.JSON(w, http.StatusOK, sharedhttp.Envelope{"status": "accepted", "invite": invite, "userId": userID, "role": role})
 }
 
@@ -235,11 +250,13 @@ func (h Handler) AcceptInvitePublic(w http.ResponseWriter, r *http.Request) {
 		sharedhttp.Error(w, errBusinessRequired())
 		return
 	}
+
 	var req AcceptInviteRequest
 	if err := sharedhttp.Decode(r, &req); err != nil {
 		sharedhttp.Error(w, err)
 		return
 	}
+
 	invite, userID, role, err := h.inviteSvc.AcceptInvite(r.Context(), req)
 	if err != nil {
 		sharedhttp.Error(w, err)
@@ -252,6 +269,7 @@ func (h Handler) AcceptInvitePublic(w http.ResponseWriter, r *http.Request) {
 		// Tokens will be obtained via normal /auth/sign-in/email-otp using same OTP if we also created auth_otps (see InviteByEmail).
 		// For direct login, front-end can call /auth/sign-in/email-otp with same email/otp after this.
 	}
+
 	sharedhttp.JSON(w, http.StatusOK, sharedhttp.Envelope{"status": "accepted", "invite": invite, "userId": userID, "role": role, "businessId": req.BusinessID})
 }
 

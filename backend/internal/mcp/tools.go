@@ -165,7 +165,7 @@ func DefaultTools(services Services) []Tool {
 			getInvoice(services.Invoices),
 			idSchema("invoice_id")),
 
-			readTool(
+		readTool(
 			ProfileBusinessOwner,
 			"search_business_knowledge",
 			"Use for BizSawa business-owner help, workflow guidance, and policy questions. Initial implementation returns a stable empty result until the knowledge index is configured.",
@@ -828,23 +828,30 @@ func compareRevenue(svc SalesService) ToolHandler {
 		if svc == nil {
 			return nil, nil, fmt.Errorf("sales service unavailable")
 		}
+
 		var in compareArgs
+
 		_ = json.Unmarshal(args, &in)
+
 		tf := strings.ToLower(strings.TrimSpace(in.Timeframe))
 		if tf == "" {
 			tf = "month"
 		}
+
 		cmp := strings.ToLower(strings.TrimSpace(in.Compare))
 		if cmp == "" {
 			cmp = "prev_period"
 		}
+
 		var curFrom, curTo, prevFrom, prevTo time.Time
+
 		var err error
 		if in.From != "" || in.To != "" {
 			curFrom, curTo, err = parsePeriod(args, ctx.Now)
 			if err != nil {
 				return nil, nil, err
 			}
+
 			d := curTo.Sub(curFrom)
 			prevTo = curFrom
 			prevFrom = curFrom.Add(-d)
@@ -864,6 +871,7 @@ func compareRevenue(svc SalesService) ToolHandler {
 				curTo = ctx.Now
 				curFrom = curTo.AddDate(0, -1, 0)
 			}
+
 			if cmp == "prev_year" {
 				prevTo = curTo.AddDate(-1, 0, 0)
 				prevFrom = curFrom.AddDate(-1, 0, 0)
@@ -873,22 +881,28 @@ func compareRevenue(svc SalesService) ToolHandler {
 				prevFrom = curFrom.Add(-d)
 			}
 		}
+
 		cur, err := svc.GetSalesSummary(context.Background(), ctx.Session.BusinessID, curFrom, curTo)
 		if err != nil {
 			return nil, nil, err
 		}
+
 		prev, err := svc.GetSalesSummary(context.Background(), ctx.Session.BusinessID, prevFrom, prevTo)
 		if err != nil {
 			return nil, nil, err
 		}
+
 		curTotal := cur.Total
 		prevTotal := prev.Total
 		deltaAbs := curTotal.Sub(prevTotal)
+
 		var deltaPct *float64
+
 		if !prevTotal.IsZero() {
 			pct, _ := deltaAbs.Div(prevTotal).Mul(decimal.NewFromInt(100)).Float64()
 			deltaPct = &pct
 		}
+
 		return map[string]any{
 			"timeframe": tf,
 			"compare":   cmp,
@@ -905,23 +919,31 @@ func detectAnomalies(salesSvc SalesService, expSvc ExpensesService) ToolHandler 
 			Timeframe   string `json:"timeframe"`
 			Sensitivity string `json:"sensitivity"`
 		}
+
 		_ = json.Unmarshal(args, &in)
+
 		tf := strings.ToLower(strings.TrimSpace(in.Timeframe))
 		if tf == "" {
 			tf = "month"
 		}
+
 		sens := strings.ToLower(strings.TrimSpace(in.Sensitivity))
 		if sens == "" {
 			sens = "medium"
 		}
+
 		threshold := 0.5
-		if sens == "low" {
+		switch sens {
+		case "low":
 			threshold = 0.8
-		} else if sens == "high" {
+		case "high":
 			threshold = 0.3
 		}
+
 		now := ctx.Now
+
 		var curFrom, curTo, prevFrom, prevTo time.Time
+
 		switch tf {
 		case "week":
 			curTo = now
@@ -934,6 +956,7 @@ func detectAnomalies(salesSvc SalesService, expSvc ExpensesService) ToolHandler 
 			curTo = now
 			curFrom = curTo.AddDate(0, -1, 0)
 		}
+
 		d := curTo.Sub(curFrom)
 		prevTo = curFrom
 		prevFrom = curFrom.Add(-d)
@@ -944,20 +967,25 @@ func detectAnomalies(salesSvc SalesService, expSvc ExpensesService) ToolHandler 
 			curCats, _ := expSvc.SummaryByCategory(context.Background(), ctx.Session.BusinessID, curFrom, curTo)
 			prevCats, _ := expSvc.SummaryByCategory(context.Background(), ctx.Session.BusinessID, prevFrom, prevTo)
 			prevMap := map[string]decimal.Decimal{}
+
 			for _, c := range prevCats {
 				prevMap[strings.ToLower(c.Category)] = c.Amount
 			}
+
 			curSet := map[string]bool{}
 			for _, c := range curCats {
 				curSet[strings.ToLower(c.Category)] = true
+
 				prevAmt, ok := prevMap[strings.ToLower(c.Category)]
 				if !ok {
 					anomalies = append(anomalies, map[string]any{"type": "new_expense_category", "category": c.Category, "current_amount": c.Amount.String(), "severity": "medium", "reason": "New category not in previous period"})
 					continue
 				}
+
 				if prevAmt.IsZero() {
 					continue
 				}
+
 				delta, _ := c.Amount.Sub(prevAmt).Div(prevAmt).Float64()
 				if delta >= threshold {
 					sev := map[string]string{"low": "low", "medium": "high", "high": "high"}[sens]
@@ -966,28 +994,34 @@ func detectAnomalies(salesSvc SalesService, expSvc ExpensesService) ToolHandler 
 					anomalies = append(anomalies, map[string]any{"type": "expense_drop", "category": c.Category, "previous_amount": prevAmt.String(), "current_amount": c.Amount.String(), "delta_percent": delta * 100, "severity": "low"})
 				}
 			}
+
 			for _, c := range prevCats {
 				if !curSet[strings.ToLower(c.Category)] {
 					anomalies = append(anomalies, map[string]any{"type": "missing_expense_category", "category": c.Category, "previous_amount": c.Amount.String(), "current_amount": "0", "severity": "low", "reason": "Category present last period but missing now"})
 				}
 			}
 		}
+
 		if salesSvc != nil {
 			cur, errCur := salesSvc.GetSalesSummary(context.Background(), ctx.Session.BusinessID, curFrom, curTo)
 			prev, errPrev := salesSvc.GetSalesSummary(context.Background(), ctx.Session.BusinessID, prevFrom, prevTo)
+
 			if errCur == nil && errPrev == nil && !prev.Total.IsZero() {
 				delta, _ := cur.Total.Sub(prev.Total).Div(prev.Total).Float64()
 				if delta <= -threshold {
 					anomalies = append(anomalies, map[string]any{"type": "revenue_drop", "previous_total": prev.Total.String(), "current_total": cur.Total.String(), "delta_percent": delta * 100, "severity": "high", "reason": "Revenue dropped significantly vs previous period"})
 				}
 			}
+
 			if errCur == nil && errPrev == nil && cur.Count == 0 && prev.Count > 0 {
 				anomalies = append(anomalies, map[string]any{"type": "no_sales", "previous_count": prev.Count, "current_count": 0, "severity": "high", "reason": "No sales in current period but had sales before"})
 			}
 		}
+
 		if len(anomalies) > 20 {
 			anomalies = anomalies[:20]
 		}
+
 		return map[string]any{"timeframe": tf, "sensitivity": sens, "anomalies": anomalies, "count": len(anomalies)}, map[string]any{"result_count": len(anomalies), "truncated": len(anomalies) == 20}, nil
 	}
 }
@@ -997,25 +1031,32 @@ func listPendingInvoices(svc InvoicesService) ToolHandler {
 		if svc == nil {
 			return nil, nil, fmt.Errorf("invoices service unavailable")
 		}
+
 		var in struct {
 			Status    string `json:"status"`
 			DueBefore string `json:"due_before"`
 			Limit     int    `json:"limit"`
 			Offset    int    `json:"offset"`
 		}
+
 		_ = json.Unmarshal(args, &in)
 		limit := clampLimit(in.Limit)
+
 		offset := in.Offset
 		if offset < 0 {
 			offset = 0
 		}
+
 		statusFilter := strings.ToLower(strings.TrimSpace(in.Status))
+
 		var dueBefore *time.Time
+
 		if in.DueBefore != "" {
 			t, err := time.Parse(time.RFC3339, in.DueBefore)
 			if err != nil {
 				return nil, nil, fmt.Errorf("due_before must be RFC3339")
 			}
+
 			dueBefore = &t
 		}
 		// Fetch up to 50 and filter in memory (bounded)
@@ -1023,23 +1064,29 @@ func listPendingInvoices(svc InvoicesService) ToolHandler {
 		if err != nil {
 			return nil, nil, err
 		}
+
 		pendingStatuses := map[string]bool{"sent": true, "partial": true, "overdue": true, "draft": true}
 		if statusFilter != "" {
 			pendingStatuses = map[string]bool{statusFilter: true}
 		}
+
 		filtered := []invoices.Invoice{}
+
 		for _, r := range rows {
 			if !pendingStatuses[strings.ToLower(string(r.Status))] {
 				continue
 			}
+
 			if dueBefore != nil && r.DueAt != nil && r.DueAt.After(*dueBefore) {
 				continue
 			}
+
 			filtered = append(filtered, r)
 			if len(filtered) >= limit {
 				break
 			}
 		}
+
 		return invoiceListPayload(filtered), map[string]any{"result_count": len(filtered), "truncated": len(filtered) == limit, "next_offset": offset + len(filtered)}, nil
 	}
 }
@@ -1049,6 +1096,7 @@ func listPendingPayments() ToolHandler {
 		// Payments service not yet wired to MCP; return empty with guidance
 		// When wired, this will query payment_commands WHERE status in ('pending','processing')
 		limit, _, _ := parsePage(args)
+
 		return map[string]any{
 			"results": []any{},
 			"note":    "Payment commands pending list not yet wired — use list_pending_invoices for receivables; payments will be added when PaymentsService is injected into MCP registry.",
@@ -1062,14 +1110,18 @@ func getUpcomingTaxDeadlines() ToolHandler {
 		var in struct {
 			MonthsAhead int `json:"months_ahead"`
 		}
+
 		_ = json.Unmarshal(args, &in)
+
 		months := in.MonthsAhead
 		if months <= 0 {
 			months = 3
 		}
+
 		if months > 12 {
 			months = 12
 		}
+
 		now := ctx.Now
 		deadlines := []map[string]any{}
 		// Kenya VAT 16% monthly 20th, PAYE 9th, Turnover 1% monthly 20th (for MSMEs <5M)
@@ -1082,6 +1134,7 @@ func getUpcomingTaxDeadlines() ToolHandler {
 				// next month's 20th if already passed
 				vatDue = time.Date(year, month+1, 20, 23, 59, 59, 0, time.UTC)
 			}
+
 			deadlines = append(deadlines, map[string]any{
 				"type":        "VAT",
 				"description": "Kenya VAT 16% monthly filing and payment (KRA iTax)",
@@ -1089,6 +1142,7 @@ func getUpcomingTaxDeadlines() ToolHandler {
 				"period":      fmt.Sprintf("%04d-%02d", year, month),
 				"authority":   "KRA",
 			})
+
 			if i == 0 {
 				// PAYE for payroll month
 				payeDue := time.Date(year, month, 9, 23, 59, 59, 0, time.UTC)

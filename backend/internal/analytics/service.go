@@ -36,6 +36,7 @@ func (s *Service) Compute(ctx context.Context, businessID uuid.UUID, tf Timefram
 	if err != nil {
 		return nil, err
 	}
+
 	revenue = fillRevenueSeries(revenue, tf, now)
 
 	var totalRev decimal.Decimal
@@ -51,6 +52,7 @@ func (s *Service) Compute(ctx context.Context, businessID uuid.UUID, tf Timefram
 	if err != nil {
 		return nil, err
 	}
+
 	profit = fillProfitSeries(profit, tf, now)
 
 	var totalProfit decimal.Decimal
@@ -96,6 +98,7 @@ func (s *Service) Compute(ctx context.Context, businessID uuid.UUID, tf Timefram
 	if err != nil {
 		return nil, err
 	}
+
 	cashFlow = fillCashFlowSeries(cashFlow, tf, now)
 
 	velocity, err := s.repo.SalesVelocity(ctx, businessID, tf, now)
@@ -155,117 +158,147 @@ func isStale(snap *Snapshot, now time.Time) bool {
 	if snap == nil {
 		return true
 	}
+
 	return now.Sub(snap.GeneratedAt) > ttlFor(snap.Timeframe)
 }
 
 // fill helpers ensure every expected bucket appears, injecting zeros for missing days/hours.
 func fillRevenueSeries(rows []RevenueDataPoint, tf Timeframe, now time.Time) []RevenueDataPoint {
 	w := resolveWindow(tf, now)
+
 	m := map[string]RevenueDataPoint{}
 	for _, r := range rows {
 		// normalize bucket key to RFC3339 truncation as stored
 		m[r.Date] = r
 	}
+
 	buckets := expectedBuckets(w, tf, now)
 	out := make([]RevenueDataPoint, 0, len(buckets))
+
 	for _, b := range buckets {
 		if v, ok := m[b]; ok {
 			out = append(out, v)
 		} else {
 			// try truncated match (DB returns timestamp with tz, buckets are canonical)
 			found := false
+
 			for k, v := range m {
 				if sameBucket(k, b, tf) {
 					out = append(out, RevenueDataPoint{Date: b, Revenue: v.Revenue, Transactions: v.Transactions})
 					found = true
+
 					break
 				}
 			}
+
 			if !found {
 				out = append(out, RevenueDataPoint{Date: b, Revenue: decimal.Zero, Transactions: 0})
 			}
 		}
 	}
+
 	return out
 }
 
 func fillProfitSeries(rows []ProfitDataPoint, tf Timeframe, now time.Time) []ProfitDataPoint {
 	w := resolveWindow(tf, now)
+
 	m := map[string]ProfitDataPoint{}
 	for _, r := range rows {
 		m[r.Date] = r
 	}
+
 	buckets := expectedBuckets(w, tf, now)
 	out := make([]ProfitDataPoint, 0, len(buckets))
+
 	for _, b := range buckets {
 		if v, ok := m[b]; ok {
 			out = append(out, ProfitDataPoint{Date: b, Revenue: v.Revenue, Expense: v.Expense, Profit: v.Profit, Margin: v.Margin})
 			continue
 		}
+
 		found := false
+
 		for k, v := range m {
 			if sameBucket(k, b, tf) {
 				out = append(out, ProfitDataPoint{Date: b, Revenue: v.Revenue, Expense: v.Expense, Profit: v.Profit, Margin: v.Margin})
 				found = true
+
 				break
 			}
 		}
+
 		if !found {
 			out = append(out, ProfitDataPoint{Date: b, Revenue: decimal.Zero, Expense: decimal.Zero, Profit: decimal.Zero, Margin: 0})
 		}
 	}
+
 	return out
 }
 
 func fillCashFlowSeries(rows []CashFlowDataPoint, tf Timeframe, now time.Time) []CashFlowDataPoint {
 	w := resolveWindow(tf, now)
+
 	m := map[string]CashFlowDataPoint{}
 	for _, r := range rows {
 		m[r.Date] = r
 	}
+
 	buckets := expectedBuckets(w, tf, now)
 	out := make([]CashFlowDataPoint, 0, len(buckets))
+
 	for _, b := range buckets {
 		if v, ok := m[b]; ok {
 			out = append(out, CashFlowDataPoint{Date: b, Inflow: v.Inflow, Outflow: v.Outflow, NetFlow: v.NetFlow})
 			continue
 		}
+
 		found := false
+
 		for k, v := range m {
 			if sameBucket(k, b, tf) {
 				out = append(out, CashFlowDataPoint{Date: b, Inflow: v.Inflow, Outflow: v.Outflow, NetFlow: v.NetFlow})
 				found = true
+
 				break
 			}
 		}
+
 		if !found {
 			out = append(out, CashFlowDataPoint{Date: b, Inflow: decimal.Zero, Outflow: decimal.Zero, NetFlow: decimal.Zero})
 		}
 	}
+
 	return out
 }
 
 func sameBucket(a, b string, tf Timeframe) bool {
 	pa, err1 := time.Parse(time.RFC3339, a)
 	pb, err2 := time.Parse(time.RFC3339, b)
+
 	if err1 != nil || err2 != nil {
 		// fallback string prefix
 		if len(a) >= 10 && len(b) >= 10 {
 			return a[:10] == b[:10]
 		}
+
 		return a == b
 	}
+
 	if tf == TimeframeDay {
 		return pa.Truncate(time.Hour).Equal(pb.Truncate(time.Hour))
 	}
+
 	if tf == TimeframeYear {
 		return pa.Year() == pb.Year() && pa.Month() == pb.Month()
 	}
+
 	return pa.Year() == pb.Year() && pa.Month() == pb.Month() && pa.Day() == pb.Day()
 }
 
 func expectedBuckets(w window, tf Timeframe, now time.Time) []string {
 	var out []string
+
 	switch tf {
 	case TimeframeDay:
 		// 24 hourly buckets ending now
@@ -296,17 +329,18 @@ func expectedBuckets(w window, tf Timeframe, now time.Time) []string {
 	default:
 		_ = w
 	}
+
 	return out
 }
 
 // AIInsights is the structured JSON rendered by mobile AI Insights cards.
 // Frontend expects {summary, trends:[{title,description,sentiment}], recommendations:[{action,reason,priority}]}.
 type AIInsights struct {
-	Summary         string           `json:"summary"`
-	Trends          []AITrend         `json:"trends"`
+	Summary         string             `json:"summary"`
+	Trends          []AITrend          `json:"trends"`
 	Recommendations []AIRecommendation `json:"recommendations"`
-	GeneratedAt     time.Time        `json:"generated_at"`
-	Timeframe       Timeframe        `json:"timeframe"`
+	GeneratedAt     time.Time          `json:"generated_at"`
+	Timeframe       Timeframe          `json:"timeframe"`
 }
 
 type AITrend struct {
@@ -327,6 +361,7 @@ func (s *Service) GetAIInsights(ctx context.Context, businessID uuid.UUID, tf Ti
 	if !tf.Valid() {
 		tf = TimeframeMonth
 	}
+
 	snap, err := s.Get(ctx, businessID, tf)
 	if err != nil {
 		return nil, err
@@ -343,6 +378,7 @@ func (s *Service) GetAIInsights(ctx context.Context, businessID uuid.UUID, tf Ti
 			recs = append(recs, AIRecommendation{Action: "Record your first sale", Reason: "Sales drive all insights — add a product and create a sale", Priority: "High"})
 		} else {
 			trends = append(trends, AITrend{Title: "Revenue tracked", Description: "KES " + total.String() + " across " + itoa(snap.Revenue.Transactions) + " transactions in this " + string(tf), Sentiment: "positive"})
+
 			if snap.Revenue.Transactions < 5 {
 				recs = append(recs, AIRecommendation{Action: "Increase sales frequency", Reason: "Only " + itoa(snap.Revenue.Transactions) + " transactions — more data improves accuracy", Priority: "Medium"})
 			}
@@ -365,14 +401,17 @@ func (s *Service) GetAIInsights(ctx context.Context, businessID uuid.UUID, tf Ti
 		if len(top.Name) > 0 {
 			trends = append(trends, AITrend{Title: "Top category: " + top.Name, Description: "Leading revenue driver this " + string(tf), Sentiment: "neutral"})
 		}
+
 		_ = pct
 		hasUncat := false
+
 		for _, c := range snap.Categories {
 			if c.Name == "Uncategorized" {
 				hasUncat = true
 				break
 			}
 		}
+
 		if hasUncat {
 			recs = append(recs, AIRecommendation{Action: "Categorize products", Reason: "Uncategorized revenue hides which products drive sales", Priority: "Medium"})
 		}
@@ -385,6 +424,7 @@ func (s *Service) GetAIInsights(ctx context.Context, businessID uuid.UUID, tf Ti
 	if snap.Expenses != nil && len(snap.Expenses) > 0 {
 		// Find largest expense category
 		var maxCat string
+
 		var maxAmt decimal.Decimal
 		for _, e := range snap.Expenses {
 			if e.Amount.GreaterThan(maxAmt) {
@@ -392,37 +432,45 @@ func (s *Service) GetAIInsights(ctx context.Context, businessID uuid.UUID, tf Ti
 				maxCat = e.Category
 			}
 		}
+
 		if maxCat != "" {
 			trends = append(trends, AITrend{Title: "Largest expense: " + maxCat, Description: "KES " + maxAmt.String() + " in this period", Sentiment: "negative"})
 			recs = append(recs, AIRecommendation{Action: "Audit " + maxCat + " spend", Reason: "Biggest outflow — check if it can be trimmed", Priority: "Medium"})
 		}
 	}
+
 	if len(trends) == 0 {
 		trends = append(trends, AITrend{Title: "Steady", Description: "No strong trends in this window — try a longer timeframe (month/year).", Sentiment: "neutral"})
 	}
+
 	if len(recs) == 0 {
 		recs = append(recs, AIRecommendation{Action: "Review weekly", Reason: "Check back after more sales — insights improve with data", Priority: "Low"})
 	}
+
 	if len(trends) > 4 {
 		trends = trends[:4]
 	}
+
 	if len(recs) > 3 {
 		recs = recs[:3]
 	}
+
 	summary := "In this " + string(tf) + ", revenue KES " + snap.Revenue.TotalRevenue.String() + " with margin " + formatFloat(snap.Profit.AvgMargin) + "%. " + recs[0].Action + "."
 	if len(snap.Categories) > 1 {
 		summary = "Revenue KES " + snap.Revenue.TotalRevenue.String() + " across " + itoa(len(snap.Categories)) + " categories. Top: " + snap.Categories[0].Name + ". " + recs[0].Action + "."
 	}
+
 	return &AIInsights{Summary: summary, Trends: trends, Recommendations: recs, GeneratedAt: snap.GeneratedAt, Timeframe: tf}, nil
 }
 
-func itoa(n int) string { return fmt.Sprintf("%d", n) }
+func itoa(n int) string            { return fmt.Sprintf("%d", n) }
 func formatFloat(f float64) string { return fmt.Sprintf("%.1f", f) }
 
 func (s *Service) TaxSummary(ctx context.Context, businessID uuid.UUID, tf Timeframe) (*TaxSummary, error) {
 	if !tf.Valid() {
 		tf = TimeframeMonth
 	}
+
 	return s.repo.TaxSummary(ctx, businessID, tf, time.Now().UTC())
 }
 
@@ -445,6 +493,7 @@ func (s *Service) Get(ctx context.Context, businessID uuid.UUID, tf Timeframe) (
 		if err2 == nil {
 			return fresh, nil
 		}
+
 		s.logger.WarnContext(ctx, "[ANALYTICS]-stale recompute failed, serving stale snapshot", "err", err2, "businessID", businessID.String(), "timeframe", string(tf))
 	}
 

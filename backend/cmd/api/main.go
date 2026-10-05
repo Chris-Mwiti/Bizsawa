@@ -40,9 +40,9 @@ import (
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/config"
 	sharedcrypto "github.com/Codecx-Org/FinAI/backend/internal/shared/crypto"
 	shareddb "github.com/Codecx-Org/FinAI/backend/internal/shared/db"
+	"github.com/Codecx-Org/FinAI/backend/internal/shared/email"
 	"github.com/Codecx-Org/FinAI/backend/internal/sync"
 	"github.com/Codecx-Org/FinAI/backend/internal/taxes"
-	"github.com/Codecx-Org/FinAI/backend/internal/shared/email"
 	"github.com/Codecx-Org/FinAI/backend/internal/tenancy"
 	"github.com/Codecx-Org/FinAI/backend/internal/users"
 	"github.com/Codecx-Org/FinAI/backend/internal/waha"
@@ -74,21 +74,27 @@ func main() {
 	}
 	// Bootstrap context for OTel setup before signal handling
 	bootstrapCtx := context.Background()
+
 	otelProvider, err := observability.Setup(bootstrapCtx, otelCfg)
 	if err != nil {
 		slog.Error("observability setup failed, continuing without telemetry", "err", err)
 	}
+
 	if _, err := observability.InitMetrics(); err != nil {
 		slog.Error("metrics init failed", "err", err)
 	}
+
 	logger := observability.NewLogger(otelCfg.ServiceName)
+
 	if otelProvider != nil {
 		defer func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
+
 			_ = otelProvider.Shutdown(ctx)
 		}()
 	}
+
 	logger.Info("observability initialized", "enabled", otelCfg.Enabled, "endpoint", otelCfg.Endpoint, "prometheus", otelCfg.PrometheusEnabled, "service", otelCfg.ServiceName)
 
 	gormDB, err := shareddb.Open(cfg.Database)
@@ -134,10 +140,12 @@ func main() {
 			logger.Error("river migrator initialization failed", "err", err)
 			os.Exit(1)
 		}
+
 		if _, err := migrator.Migrate(ctx, rivermigrate.DirectionUp, nil); err != nil {
 			logger.Error("river migrate up failed", "err", err)
 			os.Exit(1)
 		}
+
 		logger.Info("river migrations applied")
 	}
 
@@ -154,17 +162,21 @@ func main() {
 	usersModule := users.New(gormDB)
 	emailSender := email.NewSender(cfg.Email)
 	usersModule.InitInvites(emailSender)
+
 	authModule := auth.New(gormDB, auth.Config{SigningKey: cfg.JWT.SigningKey, Issuer: cfg.JWT.Issuer, AccessTTL: 90 * time.Minute, RefreshTTL: 30 * 24 * time.Hour}, auth.WithMembershipResolver(usersModule), auth.WithSubscriptionProvisioner(tenancyModule), auth.WithGoogleConfig(cfg.Google), auth.WithEmailSender(emailSender))
 	businessModule := business.New(gormDB, tenancyModule, usersModule, cryptoManager)
 	// Isolate subscription payments: inject mpesa STK provider into tenancy (separate from business payments)
 	mpesaClient := payments.NewMpesaClient(cfg.Mpesa, logger)
+
 	tenancyModule.Service().SetSTKProvider(tenancy.NewMpesaAdapter(func(ctx context.Context, phone string, amt decimal.Decimal, ref string) (string, json.RawMessage, error) {
 		res, err := mpesaClient.STKPush(ctx, payments.STKPushRequest{Phone: phone, Amount: amt, AccountReference: ref})
 		if err != nil {
 			return "", nil, err
 		}
+
 		return res.RequestID, res.Raw, nil
 	}))
+
 	productsModule := products.New(gormDB)
 	customersModule := customers.New(gormDB)
 	taxesModule := taxes.New(gormDB)

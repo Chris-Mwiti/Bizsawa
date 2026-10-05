@@ -14,11 +14,12 @@ const (
 )
 
 // Tracer returns a tracer for the given workload area.
-// name examples: "http.server", "mcp.server", "mcp.tool", "db", "cache"
+// name examples: "http.server", "mcp.server", "mcp.tool", "db", "cache".
 func Tracer(name string) trace.Tracer {
 	if name == "" {
 		name = InstrumentationName
 	}
+
 	return otel.Tracer(name)
 }
 
@@ -33,8 +34,10 @@ func RecordError(span trace.Span, err error, extraAttrs ...attribute.KeyValue) {
 	if err == nil || span == nil {
 		return
 	}
+
 	span.RecordError(err)
 	span.SetStatus(codes.Error, err.Error())
+
 	if len(extraAttrs) > 0 {
 		span.SetAttributes(extraAttrs...)
 	}
@@ -49,5 +52,6 @@ func EndWithStatus(span trace.Span, err error) {
 	} else {
 		span.SetStatus(codes.Ok, "")
 	}
+
 	span.End()
 }

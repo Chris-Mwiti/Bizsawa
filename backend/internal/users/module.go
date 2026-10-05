@@ -13,10 +13,10 @@ import (
 )
 
 type Module struct {
-	repo          *Repository
-	svc           *Service
-	inviteSvc     *InviteService
-	db            *gorm.DB
+	repo      *Repository
+	svc       *Service
+	inviteSvc *InviteService
+	db        *gorm.DB
 }
 
 func New(db *gorm.DB) *Module {
@@ -33,6 +33,7 @@ func (m *Module) InitInvites(emailSender email.Sender) {
 			slog.ErrorContext(ctx, "failed to resolve business name for invite", "business", businessID, "err", err)
 			return ""
 		}
+
 		return name
 	})
 }

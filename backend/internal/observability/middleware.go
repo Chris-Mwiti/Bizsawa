@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/felixge/httpsnoop"
+	"github.com/go-chi/chi/v5"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -45,9 +45,11 @@ func HTTPMiddleware(serviceName string) func(http.Handler) http.Handler {
 				semconv.HTTPRoute(route),
 				attribute.String("service.name", serviceName),
 			}
+
 			if ua := r.UserAgent(); ua != "" {
 				attrs = append(attrs, semconv.UserAgentOriginal(ua))
 			}
+
 			if host := r.Host; host != "" {
 				attrs = append(attrs, semconv.ServerAddress(host))
 			}
@@ -60,6 +62,7 @@ func HTTPMiddleware(serviceName string) func(http.Handler) http.Handler {
 				trace.WithSpanKind(trace.SpanKindServer),
 				trace.WithAttributes(attrs...),
 			)
+
 			defer span.End()
 
 			// inject context so downstream handlers see span
@@ -74,6 +77,7 @@ func HTTPMiddleware(serviceName string) func(http.Handler) http.Handler {
 			start := time.Now()
 			m := httpsnoop.CaptureMetrics(next, w, r)
 			durationMs := float64(time.Since(start).Microseconds()) / 1000.0
+
 			if m.Code == 0 {
 				m.Code = http.StatusOK
 			}
@@ -92,6 +96,7 @@ func HTTPMiddleware(serviceName string) func(http.Handler) http.Handler {
 				attribute.Float64("http.server.duration_ms", durationMs),
 				semconv.HTTPRoute(finalRoute),
 			)
+
 			if m.Code >= 500 {
 				span.SetStatus(codes.Error, fmt.Sprintf("http %d", m.Code))
 			} else if m.Code >= 400 {
@@ -123,8 +128,10 @@ func MetricsHandler() http.HandlerFunc {
 			promHandler.ServeHTTP(w, r)
 			return
 		}
+
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusOK)
+
 		_, _ = w.Write([]byte("# metrics: prometheus exporter not enabled (set OTEL_PROMETHEUS_ENABLED=true)\n"))
 	}
 }

@@ -41,9 +41,11 @@ func wireToolCall(id, name, args string) WireToolCall {
 	if id == "" {
 		id = fmt.Sprintf("call_%d", time.Now().UnixNano())
 	}
+
 	w := WireToolCall{ID: id, Type: "function"}
 	w.Function.Name = name
 	w.Function.Arguments = args
+
 	return w
 }
 
@@ -99,6 +101,7 @@ func NewService(registry *mcp.Registry) *Service {
 	// unknown (404), or erroring (5xx). Comma-separated, e.g.
 	// LLM_FALLBACK_MODELS="meta-llama/llama-3.3-70b-instruct:free,google/gemini-2.0-flash-exp:free"
 	var fallbacks []string
+
 	for _, f := range strings.Split(os.Getenv("LLM_FALLBACK_MODELS"), ",") {
 		if f = strings.TrimSpace(f); f != "" {
 			fallbacks = append(fallbacks, f)
@@ -126,13 +129,16 @@ func NewService(registry *mcp.Registry) *Service {
 func candidateModels(primary string, fallbacks []string) []string {
 	models := []string{primary}
 	seen := map[string]bool{primary: true}
+
 	for _, f := range fallbacks {
 		f = strings.TrimSpace(f)
 		if f != "" && !seen[f] {
 			seen[f] = true
+
 			models = append(models, f)
 		}
 	}
+
 	return models
 }
 
@@ -142,7 +148,9 @@ func candidateModels(primary string, fallbacks []string) []string {
 // raw body and the model that answered.
 func (s *Service) postCompletion(ctx context.Context, body map[string]any) ([]byte, string, error) {
 	models := candidateModels(s.model, s.fallbacks)
+
 	var lastErr error
+
 	for i, model := range models {
 		body["model"] = model
 		b, _ := json.Marshal(body)
@@ -157,24 +165,36 @@ func (s *Service) postCompletion(ctx context.Context, body map[string]any) ([]by
 		req.Header.Set("X-Title", "BizSawa")
 
 		resp, err := s.httpClient.Do(req)
+
 		cancel()
+
 		if err != nil {
 			lastErr = fmt.Errorf("model %s: %w", model, err)
+
 			slog.WarnContext(ctx, "chat LLM request failed, trying fallback", "model", model, "err", truncate(err.Error(), 150))
+
 			continue
 		}
+
 		raw, _ := io.ReadAll(resp.Body)
+
 		resp.Body.Close()
+
 		if len(bytes.TrimSpace(raw)) == 0 {
 			// Flaky free providers sometimes answer 200 with an empty body —
 			// fail over instead of crashing the JSON parse downstream.
 			lastErr = fmt.Errorf("model %s: empty response body", model)
+
 			slog.WarnContext(ctx, "chat LLM empty body, trying fallback", "model", model, "status", resp.StatusCode)
+
 			continue
 		}
+
 		if resp.StatusCode == 429 || resp.StatusCode == 404 || resp.StatusCode >= 500 {
 			lastErr = fmt.Errorf("model %s: llm %d: %s", model, resp.StatusCode, truncate(string(raw), 300))
+
 			slog.WarnContext(ctx, "chat LLM transient error, trying fallback", "model", model, "status", resp.StatusCode)
+
 			if i < len(models)-1 {
 				select {
 				case <-ctx.Done():
@@ -182,16 +202,21 @@ func (s *Service) postCompletion(ctx context.Context, body map[string]any) ([]by
 				case <-time.After(1500 * time.Millisecond):
 				}
 			}
+
 			continue
 		}
+
 		if resp.StatusCode >= 300 {
 			return nil, "", fmt.Errorf("model %s: llm %d: %s", model, resp.StatusCode, truncate(string(raw), 400))
 		}
+
 		return raw, model, nil
 	}
+
 	if lastErr == nil {
 		lastErr = fmt.Errorf("no LLM models configured")
 	}
+
 	return nil, "", lastErr
 }
 
@@ -268,12 +293,12 @@ func (s *Service) Chat(ctx context.Context, session mcp.Session, req ChatRequest
 					resultStr = string(b)
 				}
 
-			toolCallsLog = append(toolCallsLog, mentioned)
-			messages = appendToolTurns(messages,
-				[]string{mentioned}, []string{string(args)},
-				[]string{resultStr}, nil)
+				toolCallsLog = append(toolCallsLog, mentioned)
+				messages = appendToolTurns(messages,
+					[]string{mentioned}, []string{string(args)},
+					[]string{resultStr}, nil)
 
-			continue
+				continue
 			}
 			// Also if query clearly needs data but LLM gave generic answer without tool, force heuristic tools
 			if len(toolCallsLog) == 0 && needsTool(msg) {
@@ -341,20 +366,24 @@ func appendToolTurns(messages []ChatMessage, calls, args, results, ids []string)
 		if i < len(args) {
 			arg = args[i]
 		}
+
 		res := ""
 		if i < len(results) {
 			res = results[i]
 		}
+
 		id := ""
 		if i < len(ids) {
 			id = ids[i]
 		}
+
 		wire := wireToolCall(id, name, arg)
 		messages = append(messages,
 			ChatMessage{Role: "assistant", Content: "", ToolCalls: []WireToolCall{wire}},
 			ChatMessage{Role: "tool", Content: fmt.Sprintf("Tool %s result: %s", name, truncate(res, 6000)), ToolCallID: wire.ID},
 		)
 	}
+
 	return messages
 }
 
@@ -373,6 +402,7 @@ func (s *Service) heuristicChat(ctx context.Context, session mcp.Session, msg st
 	if isGreeting(lower) {
 		greeting := langMsg(lang, "greeting")
 		hist := append(append([]ChatMessage{}, messages[1:]...), ChatMessage{Role: "assistant", Content: greeting})
+
 		return ChatResponse{Response: greeting, History: hist, Success: true, BusinessID: session.BusinessID.String()}, nil
 	}
 
@@ -450,10 +480,12 @@ func (s *Service) heuristicChat(ctx context.Context, session mcp.Session, msg st
 	// which printed the first data sentence twice (headline + body).
 	headline := langMsg(lang, "intro")
 	body := strings.Join(parts, "\n\n")
+
 	caveat := ""
 	if len(called) > 0 {
 		caveat = langMsg(lang, "caveat")
 	}
+
 	answer := fmt.Sprintf("%s\n\n%s\n\n%s", headline, body, caveat)
 	if strings.TrimSpace(caveat) == "" {
 		answer = fmt.Sprintf("%s\n\n%s\n\n%s", headline, body, langMsg(lang, "outro"))
@@ -472,6 +504,7 @@ func isGreeting(lower string) bool {
 			return true
 		}
 	}
+
 	return containsAny(lower, "good morning", "good afternoon", "good evening", "how are you", "habari yako", "hujambo")
 }
 
@@ -499,6 +532,7 @@ func langMsg(lang, key string) string {
 		if v, ok := sw[key]; ok {
 			return v
 		}
+
 		return en[key]
 	}
 
@@ -509,6 +543,7 @@ func formatHeuristicError(name string, err error, lang string) string {
 	if lang == "sw" {
 		return fmt.Sprintf("Kwa %s, data haikupatikana: %v. Jaribu tena baadae.", name, err)
 	}
+
 	return fmt.Sprintf("For %s, I couldn't fetch data: %v. Try again shortly.", name, err)
 }
 
@@ -523,37 +558,47 @@ func formatHeuristicData(name string, data any, lang string) string {
 		count := toInt(m["count"])
 		total := toStr(m["total"])
 		subtotal := toStr(m["subtotal"])
+
 		currency := toStr(m["currency"])
 		if currency == "" {
 			currency = "KES"
 		}
+
 		if count == 0 {
 			if lang == "sw" {
 				return fmt.Sprintf("Mauzo: Hakuna mauzo katika kipindi hiki. Jumla ni %s 0.", currency)
 			}
+
 			return fmt.Sprintf("Sales: No sales in this period. Total is %s 0.", currency)
 		}
+
 		if lang == "sw" {
 			return fmt.Sprintf("Mauzo: Miamala %d yenye jumla ya %s %s (bila ushuru %s %s). Hii ndiyo chanzo kikuu cha kipato chako kwa kipindi hiki.", count, currency, total, currency, subtotal)
 		}
+
 		return fmt.Sprintf("Sales: %d transactions totaling about %s %s (subtotal %s %s before tax). This is your revenue for the selected period, rounded for quick reading.", count, currency, total, currency, subtotal)
 	case "list_sales_by_product":
 		results, _ := m["results"].([]any)
 		if len(results) == 0 {
 			return langMsg(lang, "knowledge_empty")
 		}
+
 		lines := []string{}
+
 		for i, r := range results {
 			if i >= 3 {
 				break
 			}
+
 			if rm, ok := r.(map[string]any); ok {
 				lines = append(lines, fmt.Sprintf("%v — %s %v (%v sales)", rm["key"], toStr(rm["currency"]), toStr(rm["total"]), toInt(rm["count"])))
 			}
 		}
+
 		if lang == "sw" {
 			return "Bidhaa zinazoongoza: " + strings.Join(lines, "; ")
 		}
+
 		return "Top products: " + strings.Join(lines, "; ")
 	case "summarize_expenses_by_category":
 		results, _ := m["results"].([]any)
@@ -561,24 +606,32 @@ func formatHeuristicData(name string, data any, lang string) string {
 			if lang == "sw" {
 				return "Gharama: Hakuna gharama zilizorekodiwa katika kipindi hiki."
 			}
+
 			return "Expenses: No expenses recorded in this period."
 		}
+
 		lines := []string{}
+
 		var top string
+
 		for i, r := range results {
 			if rm, ok := r.(map[string]any); ok {
 				if i == 0 {
 					top = fmt.Sprintf("%v (%s %v)", rm["category"], toStr(rm["currency"]), toStr(rm["amount"]))
 				}
+
 				lines = append(lines, fmt.Sprintf("%v: %s %v", rm["category"], toStr(rm["currency"]), toStr(rm["amount"])))
+
 				if i >= 2 {
 					break
 				}
 			}
 		}
+
 		if lang == "sw" {
 			return fmt.Sprintf("Gharama kwa kategoria: %s. Kubwa zaidi ni %s.", strings.Join(lines, ", "), top)
 		}
+
 		return fmt.Sprintf("Expenses by category: %s. Largest is %s.", strings.Join(lines, ", "), top)
 	case "list_low_stock_items":
 		results, _ := m["results"].([]any)
@@ -586,17 +639,21 @@ func formatHeuristicData(name string, data any, lang string) string {
 			if lang == "sw" {
 				return "Akiba: Hakuna bidhaa iliyo chini ya kiwango cha tahadhari. Hali ni nzuri."
 			}
+
 			return "Stock: No items are below the low-stock threshold. You're well stocked."
 		}
+
 		if lang == "sw" {
 			return fmt.Sprintf("Akiba ya chini: Bidhaa %d ziko chini ya kiwango. Jaza mapema ili usikose mauzo.", len(results))
 		}
+
 		return fmt.Sprintf("Low stock: %d items are below threshold. Consider restocking soon to avoid missed sales.", len(results))
 	case "get_inventory_valuation":
 		results, _ := m["results"].([]any)
 		if lang == "sw" {
 			return fmt.Sprintf("Thamani ya akiba: Bidhaa %d zimehesabiwa. Hii inakusaidia kujua mtaji uliopo stokini.", len(results))
 		}
+
 		return fmt.Sprintf("Inventory: %d products counted. This reflects the quantity currently on hand.", len(results))
 	case "search_customers":
 		results, _ := m["results"].([]any)
@@ -604,20 +661,26 @@ func formatHeuristicData(name string, data any, lang string) string {
 			if lang == "sw" {
 				return "Wateja: Hakuna mteja aliyepatikana na utafutaji huu."
 			}
+
 			return "Customers: No matches for that search. Try a different name or phone fragment."
 		}
+
 		names := []string{}
+
 		for i, r := range results {
 			if i >= 3 {
 				break
 			}
+
 			if rm, ok := r.(map[string]any); ok {
 				names = append(names, toStr(rm["name"]))
 			}
 		}
+
 		if lang == "sw" {
 			return "Wateja waliopatikana: " + strings.Join(names, ", ")
 		}
+
 		return "Found customers: " + strings.Join(names, ", ")
 	case "list_invoices":
 		results, _ := m["results"].([]any)
@@ -625,11 +688,14 @@ func formatHeuristicData(name string, data any, lang string) string {
 			if lang == "sw" {
 				return "Ankara: Hakuna ankara katika kipindi hiki."
 			}
+
 			return "Invoices: No invoices in this period."
 		}
+
 		if lang == "sw" {
 			return fmt.Sprintf("Ankara: %d zimepatikana. Angalia ankara zinazodaiwa kwa ufuatiliaji.", len(results))
 		}
+
 		return fmt.Sprintf("Invoices: Found %d invoices. Check overdue ones for follow-up.", len(results))
 	default:
 		// Fallback: short, no JSON dump
@@ -641,6 +707,7 @@ func toStr(v any) string {
 	if v == nil {
 		return ""
 	}
+
 	return fmt.Sprintf("%v", v)
 }
 
@@ -654,7 +721,9 @@ func toInt(v any) int {
 		return int(x)
 	case string:
 		var i int
+
 		fmt.Sscanf(x, "%d", &i)
+
 		return i
 	default:
 		return 0
@@ -787,17 +856,19 @@ func (s *Service) callLLMSynthesis(ctx context.Context, messages []ChatMessage) 
 
 	var oaMsgs []oaMsg
 	for _, m := range messages {
-		oaMsgs = append(oaMsgs, oaMsg{Role: m.Role, Content: m.Content, ToolCallID: m.ToolCallID, ToolCalls: m.ToolCalls})
+		oaMsgs = append(oaMsgs, oaMsg(m))
 	}
 
 	body := map[string]any{
 		"messages":    oaMsgs,
 		"temperature": 0.2,
 	}
+
 	raw, usedModel, err := s.postCompletion(ctx, body)
 	if err != nil {
 		return "", err
 	}
+
 	slog.InfoContext(ctx, "chat LLM synthesis answered", "model", usedModel)
 
 	var parsed struct {
@@ -908,7 +979,7 @@ func (s *Service) callLLM(ctx context.Context, messages []ChatMessage, tools []m
 	var oaMsgs []oaMsg
 	for _, m := range messages {
 		// tool role maps to "tool" for OpenAI, but some providers expect "tool"
-		oaMsgs = append(oaMsgs, oaMsg{Role: m.Role, Content: m.Content, ToolCallID: m.ToolCallID, ToolCalls: m.ToolCalls})
+		oaMsgs = append(oaMsgs, oaMsg(m))
 	}
 
 	body := map[string]any{
@@ -927,6 +998,7 @@ func (s *Service) callLLM(ctx context.Context, messages []ChatMessage, tools []m
 	if err != nil {
 		return nil, err
 	}
+
 	slog.InfoContext(ctx, "chat LLM answered", "model", usedModel)
 
 	var parsed struct {
