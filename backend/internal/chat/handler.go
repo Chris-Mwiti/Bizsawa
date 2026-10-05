@@ -2,6 +2,7 @@ package chat
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -72,11 +73,22 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 		req.Language = "en"
 	}
 
+	preview := req.Message
+	if len(preview) > 80 {
+		preview = preview[:80] + "…"
+	}
+	slog.InfoContext(r.Context(), "chat request",
+		"business", bid.String(), "lang", req.Language,
+		"msgLen", len(req.Message), "msg", preview)
+
 	resp, err := h.svc.Chat(r.Context(), session, ChatRequest(req))
 	if err != nil {
+		slog.WarnContext(r.Context(), "chat failed", "business", bid.String(), "err", err.Error())
 		sharedhttp.Error(w, err)
 		return
 	}
 
+	slog.InfoContext(r.Context(), "chat answered",
+		"business", bid.String(), "replyLen", len(resp.Response))
 	sharedhttp.JSON(w, http.StatusOK, resp)
 }

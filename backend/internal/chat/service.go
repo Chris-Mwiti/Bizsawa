@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
@@ -17,6 +18,33 @@ import (
 type ChatMessage struct {
 	Role    string `json:"role"` // user | assistant | system | tool
 	Content string `json:"content"`
+	// ToolCallID links a tool result to the assistant turn that requested it.
+	// Providers (OpenAI/OpenRouter) reject tool messages without it (400), so
+	// every tool result appended in the agentic loop must carry the id.
+	ToolCallID string `json:"tool_call_id,omitempty"`
+	// ToolCalls echoes structured calls on the assistant turn, required by
+	// strict providers alongside the tool result messages.
+	ToolCalls []WireToolCall `json:"tool_calls,omitempty"`
+}
+
+// WireToolCall mirrors OpenAI's {id, type:function, function:{name,arguments}}.
+type WireToolCall struct {
+	ID       string `json:"id"`
+	Type     string `json:"type"`
+	Function struct {
+		Name      string `json:"name"`
+		Arguments string `json:"arguments"`
+	} `json:"function"`
+}
+
+func wireToolCall(id, name, args string) WireToolCall {
+	if id == "" {
+		id = fmt.Sprintf("call_%d", time.Now().UnixNano())
+	}
+	w := WireToolCall{ID: id, Type: "function"}
+	w.Function.Name = name
+	w.Function.Arguments = args
+	return w
 }
 
 type ChatRequest struct {
@@ -38,6 +66,7 @@ type Service struct {
 	openAIKey  string
 	openAIBase string
 	model      string
+	fallbacks  []string
 	httpClient *http.Client
 }
 
@@ -66,13 +95,104 @@ func NewService(registry *mcp.Registry) *Service {
 		}
 	}
 
+	// Extra models to try when the primary is throttled (free-tier 429),
+	// unknown (404), or erroring (5xx). Comma-separated, e.g.
+	// LLM_FALLBACK_MODELS="meta-llama/llama-3.3-70b-instruct:free,google/gemini-2.0-flash-exp:free"
+	var fallbacks []string
+	for _, f := range strings.Split(os.Getenv("LLM_FALLBACK_MODELS"), ",") {
+		if f = strings.TrimSpace(f); f != "" {
+			fallbacks = append(fallbacks, f)
+		}
+	}
+
+	if key == "" {
+		slog.Info("chat LLM not configured — heuristic fallback only (set OPENAI_API_KEY or OPENROUTER_API_KEY for smart replies)", "model", model, "base", base)
+	} else {
+		slog.Info("chat LLM configured", "model", model, "fallbacks", fallbacks, "base", base)
+	}
+
 	return &Service{
 		registry:   registry,
 		openAIKey:  key,
 		openAIBase: strings.TrimRight(base, "/"),
 		model:      model,
+		fallbacks:  fallbacks,
 		httpClient: &http.Client{Timeout: 45 * time.Second},
 	}
+}
+
+// candidateModels returns primary + configured fallbacks (LLM_FALLBACK_MODELS,
+// comma-separated) for transient-failure failover.
+func candidateModels(primary string, fallbacks []string) []string {
+	models := []string{primary}
+	seen := map[string]bool{primary: true}
+	for _, f := range fallbacks {
+		f = strings.TrimSpace(f)
+		if f != "" && !seen[f] {
+			seen[f] = true
+			models = append(models, f)
+		}
+	}
+	return models
+}
+
+// postCompletion POSTs a chat-completions body, failing over across models on
+// transient errors (429 free-tier throttle, 404 unknown model, 5xx, network).
+// 400/401/403 fail fast: those are auth/shape bugs, not capacity. Returns the
+// raw body and the model that answered.
+func (s *Service) postCompletion(ctx context.Context, body map[string]any) ([]byte, string, error) {
+	models := candidateModels(s.model, s.fallbacks)
+	var lastErr error
+	for i, model := range models {
+		body["model"] = model
+		b, _ := json.Marshal(body)
+		// Per-attempt deadline: free-tier providers can stall for the full
+		// client timeout. 20s × attempts keeps total under the mobile chat
+		// timeout (90s) with room for the heuristic fallback.
+		attemptCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		req, _ := http.NewRequestWithContext(attemptCtx, "POST", s.openAIBase+"/chat/completions", bytes.NewReader(b))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+s.openAIKey)
+		req.Header.Set("HTTP-Referer", "https://api.bizsawa.chrismwiti.me")
+		req.Header.Set("X-Title", "BizSawa")
+
+		resp, err := s.httpClient.Do(req)
+		cancel()
+		if err != nil {
+			lastErr = fmt.Errorf("model %s: %w", model, err)
+			slog.WarnContext(ctx, "chat LLM request failed, trying fallback", "model", model, "err", truncate(err.Error(), 150))
+			continue
+		}
+		raw, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if len(bytes.TrimSpace(raw)) == 0 {
+			// Flaky free providers sometimes answer 200 with an empty body —
+			// fail over instead of crashing the JSON parse downstream.
+			lastErr = fmt.Errorf("model %s: empty response body", model)
+			slog.WarnContext(ctx, "chat LLM empty body, trying fallback", "model", model, "status", resp.StatusCode)
+			continue
+		}
+		if resp.StatusCode == 429 || resp.StatusCode == 404 || resp.StatusCode >= 500 {
+			lastErr = fmt.Errorf("model %s: llm %d: %s", model, resp.StatusCode, truncate(string(raw), 300))
+			slog.WarnContext(ctx, "chat LLM transient error, trying fallback", "model", model, "status", resp.StatusCode)
+			if i < len(models)-1 {
+				select {
+				case <-ctx.Done():
+					return nil, "", ctx.Err()
+				case <-time.After(1500 * time.Millisecond):
+				}
+			}
+			continue
+		}
+		if resp.StatusCode >= 300 {
+			return nil, "", fmt.Errorf("model %s: llm %d: %s", model, resp.StatusCode, truncate(string(raw), 400))
+		}
+		return raw, model, nil
+	}
+	if lastErr == nil {
+		lastErr = fmt.Errorf("no LLM models configured")
+	}
+	return nil, "", lastErr
 }
 
 // Chat orchestrates single-agent tool-using loop (Architecture.md:46) with MCP registry.
@@ -104,9 +224,7 @@ func (s *Service) Chat(ctx context.Context, session mcp.Session, req ChatRequest
 	if needsTool(msg) {
 		hr := s.execHeuristicTools(ctx, session, msg)
 		if len(hr.called) > 0 {
-			for i, name := range hr.called {
-				messages = append(messages, ChatMessage{Role: "tool", Content: fmt.Sprintf("Tool %s result: %s", name, truncate(hr.results[i], 5000))})
-			}
+			messages = appendToolTurns(messages, hr.called, hr.args, hr.results, nil)
 			// Try LLM synthesis with tool results (no tools needed, just generation)
 			if synth, err := s.callLLMSynthesis(ctx, messages); err == nil && strings.TrimSpace(synth) != "" {
 				// ensure we don't just echo tool mention without data
@@ -127,6 +245,10 @@ func (s *Service) Chat(ctx context.Context, session mcp.Session, req ChatRequest
 	for i := 0; i < maxIters; i++ {
 		resp, err := s.callLLM(ctx, messages, descriptors)
 		if err != nil {
+			// A dead/expired key surfaces here (e.g. OpenRouter 401) — log it
+			// loudly; otherwise the silent heuristic fallback looks like the
+			// service "returns hardcoded templates" with no backend trace.
+			slog.WarnContext(ctx, "chat LLM call failed — heuristic fallback", "err", truncate(err.Error(), 200), "model", s.model)
 			return s.heuristicChat(ctx, session, msg, messages, descriptors, lang)
 		}
 
@@ -146,18 +268,18 @@ func (s *Service) Chat(ctx context.Context, session mcp.Session, req ChatRequest
 					resultStr = string(b)
 				}
 
-				toolCallsLog = append(toolCallsLog, mentioned)
-				messages = append(messages, ChatMessage{Role: "assistant", Content: resp.Content}, ChatMessage{Role: "tool", Content: fmt.Sprintf("Tool %s result: %s", mentioned, truncate(resultStr, 6000))})
+			toolCallsLog = append(toolCallsLog, mentioned)
+			messages = appendToolTurns(messages,
+				[]string{mentioned}, []string{string(args)},
+				[]string{resultStr}, nil)
 
-				continue
+			continue
 			}
 			// Also if query clearly needs data but LLM gave generic answer without tool, force heuristic tools
 			if len(toolCallsLog) == 0 && needsTool(msg) {
 				hr := s.execHeuristicTools(ctx, session, msg)
 				if len(hr.called) > 0 {
-					for i, name := range hr.called {
-						messages = append(messages, ChatMessage{Role: "tool", Content: fmt.Sprintf("Tool %s result: %s", name, truncate(hr.results[i], 5000))})
-					}
+					messages = appendToolTurns(messages, hr.called, hr.args, hr.results, nil)
 					// one more LLM synthesis attempt
 					if synth, err := s.callLLMSynthesis(ctx, messages); err == nil && synth != "" && !isToolMentionOnly(synth) {
 						history = append(history, ChatMessage{Role: "user", Content: msg}, ChatMessage{Role: "assistant", Content: synth})
@@ -192,7 +314,9 @@ func (s *Service) Chat(ctx context.Context, session mcp.Session, req ChatRequest
 			resultStr = string(b)
 		}
 
-		messages = append(messages, ChatMessage{Role: "assistant", Content: resp.Content}, ChatMessage{Role: "tool", Content: fmt.Sprintf("Tool %s result: %s", name, truncate(resultStr, 6000))})
+		messages = appendToolTurns(messages,
+			[]string{name}, []string{string(args)},
+			[]string{resultStr}, []string{resp.ToolCall.ID})
 	}
 
 	return ChatResponse{Response: s.fallbackAnswer(session, msg, lang, toolCallsLog), History: history, Success: true, BusinessID: session.BusinessID.String()}, nil
@@ -206,6 +330,34 @@ func truncate(s string, max int) string {
 	return s[:max] + "...[truncated]"
 }
 
+// appendToolTurns appends one assistant echo (with structured tool_calls) plus
+// one tool result per call — the shape strict OpenAI-compatible providers
+// require. Every tool message carries a non-empty tool_call_id; without it
+// providers reject the request (400) and the whole turn silently degrades to
+// the heuristic template.
+func appendToolTurns(messages []ChatMessage, calls, args, results, ids []string) []ChatMessage {
+	for i, name := range calls {
+		arg := ""
+		if i < len(args) {
+			arg = args[i]
+		}
+		res := ""
+		if i < len(results) {
+			res = results[i]
+		}
+		id := ""
+		if i < len(ids) {
+			id = ids[i]
+		}
+		wire := wireToolCall(id, name, arg)
+		messages = append(messages,
+			ChatMessage{Role: "assistant", Content: "", ToolCalls: []WireToolCall{wire}},
+			ChatMessage{Role: "tool", Content: fmt.Sprintf("Tool %s result: %s", name, truncate(res, 6000)), ToolCallID: wire.ID},
+		)
+	}
+	return messages
+}
+
 // heuristicChat maintains UX without API key, still exercises MCP tool filtering and monitoring (Monitoring_MCP.md).
 // Now renders plain-language, layered answer (headline → driving data → next step) per systemPrompt guidelines,
 // never dumps raw JSON to the end user.
@@ -215,6 +367,14 @@ func (s *Service) heuristicChat(ctx context.Context, session mcp.Session, msg st
 	var called []string
 
 	var parts []string
+
+	// Greetings ("hello", "habari", …) match no tool — answer directly instead
+	// of falling through to the knowledge-base template.
+	if isGreeting(lower) {
+		greeting := langMsg(lang, "greeting")
+		hist := append(append([]ChatMessage{}, messages[1:]...), ChatMessage{Role: "assistant", Content: greeting})
+		return ChatResponse{Response: greeting, History: hist, Success: true, BusinessID: session.BusinessID.String()}, nil
+	}
 
 	call := func(name string, args json.RawMessage) {
 		env, err := s.registry.Call(session, name, args)
@@ -285,8 +445,10 @@ func (s *Service) heuristicChat(ctx context.Context, session mcp.Session, msg st
 		}
 	}
 
-	// Layered structure per systemPromptEN: headline → driving data → next step + caveat
-	headline := buildHeuristicHeadline(lower, parts, lang)
+	// Layered structure per systemPromptEN: headline → driving data → next step + caveat.
+	// Headline is always the intro line — the old code derived it from parts[0],
+	// which printed the first data sentence twice (headline + body).
+	headline := langMsg(lang, "intro")
 	body := strings.Join(parts, "\n\n")
 	caveat := ""
 	if len(called) > 0 {
@@ -302,8 +464,20 @@ func (s *Service) heuristicChat(ctx context.Context, session mcp.Session, msg st
 	return ChatResponse{Response: answer, History: append(append([]ChatMessage{}, messages[1:]...), ChatMessage{Role: "assistant", Content: answer}), Success: true, BusinessID: session.BusinessID.String()}, nil
 }
 
+func isGreeting(lower string) bool {
+	// Space-padded so short words don't match substrings ("hi" vs "this").
+	padded := " " + lower + " "
+	for _, w := range []string{"hello", "hi", "hey", "habari", "mambo", "sasa", "hujambo", "niaje", "yo", "sup"} {
+		if strings.Contains(padded, " "+w+" ") || strings.Contains(padded, " "+w+"!") || strings.Contains(padded, " "+w+",") {
+			return true
+		}
+	}
+	return containsAny(lower, "good morning", "good afternoon", "good evening", "how are you", "habari yako", "hujambo")
+}
+
 func langMsg(lang, key string) string {
 	en := map[string]string{
+		"greeting":        "Hello! I'm your BizSawa business coach. I can look into your sales, stock, expenses, customers, and invoices — try 'Show top products last week' or 'Which invoices are overdue?'",
 		"intro":           "Here is what I found from your business data (via MCP tools):",
 		"outro":           "Need a deeper dive? Ask e.g. 'Show top products last week' or 'Which customers owe invoices?'",
 		"no_tool":         "I can help with sales, stock, expenses, customers, invoices. Available tools: %s",
@@ -312,6 +486,7 @@ func langMsg(lang, key string) string {
 		"caveat":          "Note: This summary is based on the data returned right now. If the period is short, treat it as a snapshot, not a trend — confirm any tax decision with KRA/your accountant.",
 	}
 	sw := map[string]string{
+		"greeting":        "Habari! Mimi ni kocha wako wa biashara wa BizSawa. Naweza kuchambua mauzo, akiba, gharama, wateja na ankara zako — jaribu 'Onyesha bidhaa zinazouza sana wiki iliyopita'.",
 		"intro":           "Hapa ni muhtasari kutoka data ya biashara yako (kupitia zana za MCP):",
 		"outro":           "Unahitaji uchambuzi zaidi? Uliza 'Onyesha bidhaa zinazouza sana wiki iliyopita'",
 		"no_tool":         "Naweza kusaidia na mauzo, akiba, gharama, wateja, ankara. Zana: %s",
@@ -328,19 +503,6 @@ func langMsg(lang, key string) string {
 	}
 
 	return en[key]
-}
-
-func buildHeuristicHeadline(lower string, parts []string, lang string) string {
-	// Derive headline from first data part, plain language, rounded KES
-	if len(parts) == 0 {
-		return langMsg(lang, "intro")
-	}
-	first := parts[0]
-	// first is already plain sentence; use as headline prefix
-	if lang == "sw" {
-		return "Muhtasari: " + first
-	}
-	return first
 }
 
 func formatHeuristicError(name string, err error, lang string) string {
@@ -553,6 +715,7 @@ func inferArgs(toolName, msg string) json.RawMessage {
 
 type heuristicResult struct {
 	called  []string
+	args    []string
 	results []string
 }
 
@@ -561,11 +724,14 @@ func (s *Service) execHeuristicTools(ctx context.Context, session mcp.Session, m
 
 	var called []string
 
+	var argStrs []string
+
 	var results []string
 
-	call := func(name string, args json.RawMessage) {
-		env, err := s.registry.Call(session, name, args)
+	call := func(name string, raw json.RawMessage) {
+		env, err := s.registry.Call(session, name, raw)
 		called = append(called, name)
+		argStrs = append(argStrs, string(raw))
 
 		if err != nil {
 			b, _ := json.Marshal(map[string]any{"error": err.Error()})
@@ -607,42 +773,32 @@ func (s *Service) execHeuristicTools(ctx context.Context, session mcp.Session, m
 		// no heuristic match
 	}
 
-	return heuristicResult{called: called, results: results}
+	return heuristicResult{called: called, args: argStrs, results: results}
 }
 
 func (s *Service) callLLMSynthesis(ctx context.Context, messages []ChatMessage) (string, error) {
 	// Synthesis without tools — just generate natural language from tool results already in messages
 	type oaMsg struct {
-		Role    string `json:"role"`
-		Content string `json:"content"`
+		Role       string         `json:"role"`
+		Content    string         `json:"content"`
+		ToolCallID string         `json:"tool_call_id,omitempty"`
+		ToolCalls  []WireToolCall `json:"tool_calls,omitempty"`
 	}
 
 	var oaMsgs []oaMsg
 	for _, m := range messages {
-		oaMsgs = append(oaMsgs, oaMsg(m))
+		oaMsgs = append(oaMsgs, oaMsg{Role: m.Role, Content: m.Content, ToolCallID: m.ToolCallID, ToolCalls: m.ToolCalls})
 	}
 
 	body := map[string]any{
-		"model":       s.model,
 		"messages":    oaMsgs,
 		"temperature": 0.2,
 	}
-	b, _ := json.Marshal(body)
-	req, _ := http.NewRequestWithContext(ctx, "POST", s.openAIBase+"/chat/completions", bytes.NewReader(b))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+s.openAIKey)
-
-	resp, err := s.httpClient.Do(req)
+	raw, usedModel, err := s.postCompletion(ctx, body)
 	if err != nil {
 		return "", err
 	}
-
-	defer resp.Body.Close()
-
-	raw, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode >= 300 {
-		return "", fmt.Errorf("llm %d: %s", resp.StatusCode, truncate(string(raw), 400))
-	}
+	slog.InfoContext(ctx, "chat LLM synthesis answered", "model", usedModel)
 
 	var parsed struct {
 		Choices []struct {
@@ -707,6 +863,7 @@ func extractQuery(msg string) string {
 
 // OpenAI/ OpenRouter compatible chat completions with tools.
 type llmToolCall struct {
+	ID        string          `json:"id"`
 	Name      string          `json:"name"`
 	Arguments json.RawMessage `json:"arguments"`
 }
@@ -742,19 +899,19 @@ func (s *Service) callLLM(ctx context.Context, messages []ChatMessage, tools []m
 
 	// Build OpenAI messages
 	type oaMsg struct {
-		Role       string `json:"role"`
-		Content    string `json:"content"`
-		ToolCallID string `json:"tool_call_id,omitempty"`
+		Role       string         `json:"role"`
+		Content    string         `json:"content"`
+		ToolCallID string         `json:"tool_call_id,omitempty"`
+		ToolCalls  []WireToolCall `json:"tool_calls,omitempty"`
 	}
 
 	var oaMsgs []oaMsg
 	for _, m := range messages {
 		// tool role maps to "tool" for OpenAI, but some providers expect "tool"
-		oaMsgs = append(oaMsgs, oaMsg{Role: m.Role, Content: m.Content})
+		oaMsgs = append(oaMsgs, oaMsg{Role: m.Role, Content: m.Content, ToolCallID: m.ToolCallID, ToolCalls: m.ToolCalls})
 	}
 
 	body := map[string]any{
-		"model":       s.model,
 		"messages":    oaMsgs,
 		"tools":       toolDefs,
 		"tool_choice": "auto",
@@ -766,22 +923,11 @@ func (s *Service) callLLM(ctx context.Context, messages []ChatMessage, tools []m
 		delete(body, "tool_choice")
 	}
 
-	b, _ := json.Marshal(body)
-	req, _ := http.NewRequestWithContext(ctx, "POST", s.openAIBase+"/chat/completions", bytes.NewReader(b))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+s.openAIKey)
-
-	resp, err := s.httpClient.Do(req)
+	raw, usedModel, err := s.postCompletion(ctx, body)
 	if err != nil {
 		return nil, err
 	}
-
-	defer resp.Body.Close()
-
-	raw, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("llm %d: %s", resp.StatusCode, truncate(string(raw), 400))
-	}
+	slog.InfoContext(ctx, "chat LLM answered", "model", usedModel)
 
 	var parsed struct {
 		Choices []struct {
@@ -809,7 +955,7 @@ func (s *Service) callLLM(ctx context.Context, messages []ChatMessage, tools []m
 	choice := parsed.Choices[0].Message
 	if len(choice.ToolCalls) > 0 {
 		tc := choice.ToolCalls[0]
-		return &llmResponse{Content: choice.Content, ToolCall: &llmToolCall{Name: tc.Function.Name, Arguments: json.RawMessage(tc.Function.Arguments)}}, nil
+		return &llmResponse{Content: choice.Content, ToolCall: &llmToolCall{ID: tc.ID, Name: tc.Function.Name, Arguments: json.RawMessage(tc.Function.Arguments)}}, nil
 	}
 
 	return &llmResponse{Content: choice.Content}, nil
