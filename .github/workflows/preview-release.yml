@@ -1,0 +1,123 @@
+# Preview release — build, upload to Drive, update website
+#
+# Manual pipeline (v1, pre-Play-Store): builds a preview APK on EAS,
+# uploads it to the shared Google Drive folder, then rewrites
+# web/src/download.json so the site's Download section serves it.
+#
+# Required secrets (repo Settings → Secrets → Actions):
+#   EXPO_TOKEN        – Expo access token (EAS builds + updates)
+#   GDRIVE_SA_JSON    – service-account JSON key; the Drive folder must be
+#                       shared with this account's email (Editor), and the
+#                       folder itself set to "Anyone with the link: Viewer"
+#                       so APKs inherit public link access.
+#   GDRIVE_FOLDER_ID  – the Drive folder ID for preview APKs.
+#
+# Run: Actions → "Preview release" → Run workflow → enter version (e.g. 1.1.0).
+
+name: Preview release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (e.g. 1.1.0)"
+        required: true
+        default: "1.0.0"
+      notes:
+        description: "Release notes (one line)"
+        required: false
+        default: "Stable preview build."
+
+jobs:
+  preview-release:
+    name: build + upload + publish manifest
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check secrets
+        run: |
+          missing=""
+          [ -z "${{ secrets.EXPO_TOKEN }}" ] && missing="$missing EXPO_TOKEN"
+          [ -z "${{ secrets.GDRIVE_SA_JSON }}" ] && missing="$missing GDRIVE_SA_JSON"
+          [ -z "${{ secrets.GDRIVE_FOLDER_ID }}" ] && missing="$missing GDRIVE_FOLDER_ID"
+          if [ -n "$missing" ]; then echo "Missing secrets:$missing — see workflow header docs"; exit 1; fi
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.10
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Bump app version
+        run: bun -e "
+          const fs = require('fs');
+          const p = 'app.json';
+          const j = JSON.parse(fs.readFileSync(p, 'utf8'));
+          j.expo.version = '${{ inputs.version }}';
+          fs.writeFileSync(p, JSON.stringify(j, null, 2) + '\n');
+          console.log('version ->', j.expo.version);
+        "
+
+      - name: EAS preview build (apk, waits for artifact)
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: eas build --platform android --profile preview --non-interactive --wait --output ./bizsawa-preview.apk
+
+      - name: Upload to Drive
+        id: drive
+        env:
+          RCLONE_CONFIG_GDRIVE_TYPE: drive
+          RCLONE_CONFIG_GDRIVE_SERVICE_ACCOUNT_FILE: /tmp/sa.json
+          RCLONE_CONFIG_GDRIVE_ROOT_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+        run: |
+          echo '${{ secrets.GDRIVE_SA_JSON }}' > /tmp/sa.json
+          if ! command -v rclone >/dev/null; then
+            sudo apt-get update -qq && sudo apt-get install -y -qq rclone || curl -s https://rclone.org/install.sh | sudo bash
+          fi
+          APK="bizsawa-preview-v${{ inputs.version }}.apk"
+          cp ./bizsawa-preview.apk "./$APK"
+          rclone copy "./$APK" gdrive: -v
+          FILE_ID=$(rclone lsf gdrive: --files-only --format i --include "$APK" | head -1)
+          echo "file_id=$FILE_ID" >> "$GITHUB_OUTPUT"
+          rm -f /tmp/sa.json
+
+      - name: Update website manifest
+        env:
+          FILE_ID: ${{ steps.drive.outputs.file_id }}
+        run: |
+          SIZE_MB=$(python3 -c "import os; print(f'{os.path.getsize(\"bizsawa-preview.apk\")/1048576:.1f}')")
+          TODAY=$(date +%F)
+          bun -e "
+            const fs = require('fs');
+            const p = '../web/src/download.json';
+            const m = JSON.parse(fs.readFileSync(p, 'utf8'));
+            m.version = '${{ inputs.version }}';
+            m.buildNumber = (m.buildNumber || 0) + 1;
+            m.releasedAt = '$TODAY';
+            m.apkUrl = 'https://drive.google.com/uc?export=download&id=$FILE_ID';
+            m.sizeMb = parseFloat('$SIZE_MB');
+            m.notes = '${{ inputs.notes }}';
+            m.status = 'live';
+            fs.writeFileSync(p, JSON.stringify(m, null, 2) + '\n');
+            console.log(JSON.stringify(m, null, 2));
+          "
+
+      - name: Commit version + manifest
+        run: |
+          git config user.name "bizsawa-release-bot"
+          git config user.email "release@bizsawa.local"
+          git add app.json ../web/src/download.json
+          git commit -m "release: preview v${{ inputs.version }} (apk + manifest)" || echo "nothing to commit"
+          git push
