@@ -118,9 +118,11 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     const unsub = NetInfo.addEventListener((s) =>
       setState(s.isConnected ? 'online' : 'offline'),
     )
-    // initial counts + poll every 15s while mounted
+    // initial counts + poll while mounted. 60s: counts drive a badge, and each
+    // poll is JSI SQLite work on the JS thread — 15s polling kept the thread
+    // busy enough to freeze typing on slower devices.
     refreshCounts()
-    const id = setInterval(refreshCounts, 15000)
+    const id = setInterval(refreshCounts, 60000)
     // expose manual debug trigger globally for console: globalThis.__bizSyncDebug = ...
     try { (globalThis as any).__bizSyncDebug = debugSyncState; (globalThis as any).__bizPushPending = pushPendingOnly } catch {}
     return () => {

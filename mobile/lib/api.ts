@@ -46,8 +46,9 @@ export function getApiUrl(): string {
     console.warn(
       `[api] Expo dev host is "${expoHost}" (Metro reached over adb reverse), so the API would be ` +
         `resolved against this device's own loopback and every request will fail with "Network Error". ` +
-        `Set EXPO_PUBLIC_API_URL to the host's LAN IP (e.g. http://192.168.x.x:${DEFAULT_API_PORT}/api/v1) ` +
-        `in .env.development, or run: adb reverse tcp:${DEFAULT_API_PORT} tcp:${DEFAULT_API_PORT}`,
+        `Run "bun run android:lan" (resolves the host LAN IP + sets adb reverse automatically), ` +
+        `or set EXPO_PUBLIC_API_URL to the host's LAN IP (./scripts/resolve-lan-ip.sh) in .env.development, ` +
+        `or run: adb reverse tcp:${DEFAULT_API_PORT} tcp:${DEFAULT_API_PORT}`,
     )
   }
 

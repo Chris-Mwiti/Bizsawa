@@ -6,11 +6,13 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  Keyboard,
 } from 'react-native'
 import { Mail, RefreshCw } from 'lucide-react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useAuth } from '../../contexts/AuthContext'
 import { api } from '../../lib/api'
+import { withTimeout } from '../../lib/async'
 import { AuthShell, SwitchLink } from '../../components/auth/AuthShell'
 
 export default function VerifyOtpScreen() {
@@ -24,9 +26,22 @@ export default function VerifyOtpScreen() {
   const [isVerifying, setIsVerifying] = useState(false)
   const [cooldown, setCooldown] = useState(0)
   const [error, setError] = useState('')
+  // Inline confirmation for the auto-send (no modal Alert — see handleSend).
+  const [otpSent, setOtpSent] = useState(false)
 
   const otpRef = useRef<TextInput>(null)
   const hasAutoSentRef = useRef(false)
+  // Refs (not state) so rapid double-taps can't start a second request before
+  // the re-render disables the button. A second sign-in with a single-use OTP
+  // fails with "expired" and its error Alert used to land on top of the home
+  // screen after the first request had already navigated away.
+  const sendingRef = useRef(false)
+  const verifyingRef = useRef(false)
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
 
   useEffect(() => {
     if (cooldown <= 0) return
@@ -42,18 +57,22 @@ export default function VerifyOtpScreen() {
       hasAutoSentRef.current = true
       // Defer to next tick to allow UI to mount
       setTimeout(() => {
-        handleSend()
+        handleSend(true)
       }, 400)
     }
   }, [params.email])
 
   const validateEmail = (v: string) => /\S+@\S+\.\S+/.test(v)
 
-  const handleSend = async () => {
+  const handleSend = async (isAuto = false) => {
     if (!email.trim() || !validateEmail(email.trim())) {
       setError('Enter a valid email address')
       return
     }
+    // Guard: the screen auto-sends on mount, so a manual tap during that
+    // flight would issue a SECOND code and invalidate the first email.
+    if (sendingRef.current) return
+    sendingRef.current = true
     setError('')
     setIsSending(true)
     try {
@@ -77,13 +96,21 @@ export default function VerifyOtpScreen() {
       }
       await sendVerificationOtp(email.trim().toLowerCase(), 'sign-in')
       setCooldown(60)
-      Alert.alert('Code sent', `We sent a 6-digit code to ${email.trim()}. It expires in 5 minutes.`)
+      // Auto-send confirms inline: a modal Alert arriving seconds later (slow
+      // Resend/cold backend) while the user is typing steals all touch and
+      // reads exactly like a freeze. Manual sends keep the modal (expected).
+      if (isAuto) {
+        setOtpSent(true)
+      } else {
+        Alert.alert('Code sent', `We sent a 6-digit code to ${email.trim()}. It expires in 5 minutes.`)
+      }
       setTimeout(() => otpRef.current?.focus(), 300)
     } catch (e: any) {
       setError(e.message || 'Failed to send code')
       Alert.alert('Failed to send', e.message || 'Try again')
     } finally {
-      setIsSending(false)
+      sendingRef.current = false
+      if (mountedRef.current) setIsSending(false)
     }
   }
 
@@ -97,18 +124,39 @@ export default function VerifyOtpScreen() {
       setError('Enter the 6-digit code')
       return
     }
+    // Double-tap guard — see sendingRef comment above.
+    if (verifyingRef.current) return
+    verifyingRef.current = true
+    // Dismiss the keyboard + blur BEFORE the request: on Android a focused
+    // input keeps the window in adjustResize mode and the spinner frame can
+    // stall behind the keyboard, which reads as a freeze.
+    Keyboard.dismiss()
+    otpRef.current?.blur()
     setError('')
     setIsVerifying(true)
     try {
-      await signInWithOtp(email.trim().toLowerCase(), code)
-      // Business-aware redirect: new OTP users have no business yet → business-setup
+      // Bound the sign-in leg: axios alone allows 30s of silent spinner.
+      await withTimeout(
+        signInWithOtp(email.trim().toLowerCase(), code),
+        25000,
+        'Sign-in',
+      )
+      // Business-aware redirect, but NEVER hang the spinner on it: the probe
+      // is best-effort (8s) and defaults to business-setup, which itself
+      // handles users that turn out to already have a business.
+      let hasBusiness = false
       try {
-        const res = await api.get<{ businesses: any[] }>('/businesses')
-        const hasBusiness = Array.isArray(res.data.businesses) && res.data.businesses.length > 0
-        if (hasBusiness) {
-          router.replace('/(tabs)')
-        } else {
-          // Ensure pending prefill for business-setup
+        const res = await withTimeout(
+          api.get<{ businesses: any[] }>('/businesses'),
+          8000,
+          'Loading businesses',
+        )
+        hasBusiness = Array.isArray(res.data.businesses) && res.data.businesses.length > 0
+      } catch {
+        hasBusiness = false
+      }
+      if (!hasBusiness) {
+        try {
           const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default
           const existing = await AsyncStorage.getItem('bizsawa_pending_business_prefill')
           if (!existing) {
@@ -117,17 +165,23 @@ export default function VerifyOtpScreen() {
               JSON.stringify({ name: '', phone: '', email: email.trim().toLowerCase() }),
             )
           }
-          router.replace('/auth/business-setup')
+        } catch {
+          // Prefill is cosmetic — never block navigation on storage.
         }
-      } catch {
-        router.replace('/auth/business-setup')
       }
+      // Object-form href: NavigationGate passes auth flows straight through
+      // instead of holding them on the tabs prefetch (which fires
+      // analytics/products queries that 403/retry for business-less users).
+      router.replace({ pathname: hasBusiness ? '/(tabs)' : '/auth/business-setup' } as any)
     } catch (e: any) {
       const msg = e.message || 'Invalid or expired code'
-      setError(msg)
-      Alert.alert('Verification failed', msg)
+      if (mountedRef.current) setError(msg)
+      // Inline error only — no Alert: with the double-tap race closed the
+      // request that fails is always the visible one, and a modal Alert
+      // shown after a successful navigation used to strand users.
     } finally {
-      setIsVerifying(false)
+      verifyingRef.current = false
+      if (mountedRef.current) setIsVerifying(false)
     }
   }
 
@@ -163,7 +217,7 @@ export default function VerifyOtpScreen() {
         </View>
 
         <TouchableOpacity
-          onPress={handleSend}
+          onPress={() => handleSend(false)}
           disabled={isSending || cooldown > 0}
           className={`rounded-full py-4 items-center flex-row justify-center gap-2 ${cooldown > 0 ? 'bg-paper border border-hairline' : 'bg-accent shadow-clinical-sm'}`}
           style={{ opacity: isSending ? 0.6 : 1 }}
@@ -174,9 +228,14 @@ export default function VerifyOtpScreen() {
             <RefreshCw size={16} color={cooldown > 0 ? '#0E1F1C' : 'white'} />
           )}
           <Text className={`font-geist-bold font-bold ${cooldown > 0 ? 'text-ink' : 'text-white'}`}>
-            {cooldown > 0 ? `Resend in ${cooldown}s` : 'Send OTP'}
+            {cooldown > 0 ? `Resend in ${cooldown}s` : otpSent ? 'Resend code' : 'Send OTP'}
           </Text>
         </TouchableOpacity>
+        {otpSent && cooldown === 0 ? (
+          <Text className="font-sans text-xs text-pos text-center">
+            Code sent — check spam if missing. Expires in 5 minutes.
+          </Text>
+        ) : null}
 
         <View className="h-[1px] bg-hairline my-2" />
 
@@ -195,6 +254,15 @@ export default function VerifyOtpScreen() {
             }}
             keyboardType="number-pad"
             autoCorrect={false}
+            // NOTE: no `maxLength` / `autoComplete="one-time-code"` /
+            // `textContentType` here on purpose. Length is enforced in JS
+            // (slice(0, 6) in onChangeText). The native LengthFilter engages
+            // for the first time exactly at the 6th character and the Android
+            // autofill/SMS-retriever hooks arm on the same boundary — both are
+            // suspects in the recurring freeze-after-final-digit hang, and the
+            // JS slice already gives identical UX without them.
+            returnKeyType="done"
+            onSubmitEditing={handleVerify}
           />
           <Text className="font-sans text-xs text-ink-muted mt-2 text-center">
             Check spam folder if you don&apos;t see it. Code expires in 5 minutes.
@@ -202,16 +270,24 @@ export default function VerifyOtpScreen() {
           {error ? <Text className="font-sans text-neg text-sm mt-2 text-center">{error}</Text> : null}
         </View>
 
+        {/* Deliberately NOT length-gated: the button stays pressable and shape-
+            stable at every code length, and handleVerify's regex guard rejects
+            short codes with an inline error. A previous build toggled
+            `disabled` + styles on otp.length and wedged the JS thread on this
+            device the moment the 6th digit committed (Fabric pressability /
+            LengthFilter / autofill boundary) — do not reintroduce
+            length-driven native-state toggles here without re-testing that
+            device path. */}
         <TouchableOpacity
           onPress={handleVerify}
-          disabled={isVerifying || otp.length !== 6}
-          className={`rounded-full py-4 items-center mt-2 ${otp.length === 6 ? 'bg-accent shadow-clinical-sm' : 'bg-paper border border-hairline'}`}
+          disabled={isVerifying}
+          className="rounded-full py-4 items-center mt-2 bg-accent shadow-clinical-sm"
           style={{ opacity: isVerifying ? 0.7 : 1 }}
         >
           {isVerifying ? (
             <ActivityIndicator color="white" />
           ) : (
-            <Text className={`font-geist-bold font-bold ${otp.length === 6 ? 'text-white' : 'text-ink-subtle'}`}>Verify & Sign In</Text>
+            <Text className="font-geist-bold font-bold text-white">Verify & Sign In</Text>
           )}
         </TouchableOpacity>
       </View>

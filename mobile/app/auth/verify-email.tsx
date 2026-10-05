@@ -25,6 +25,15 @@ export default function VerifyEmailScreen() {
   const [error, setError] = useState('')
 
   const otpRef = useRef<TextInput>(null)
+  // Single-use codes: a double-tapped Verify fires two requests and the
+  // loser's error Alert lands on the wrong screen. Ref guard closes it.
+  const verifyingRef = useRef(false)
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
 
   useEffect(() => {
     if (cooldown <= 0) return
@@ -64,6 +73,8 @@ export default function VerifyEmailScreen() {
       setError('Enter the 6-digit code')
       return
     }
+    if (verifyingRef.current) return
+    verifyingRef.current = true
     setError('')
     setIsVerifying(true)
     try {
@@ -78,10 +89,11 @@ export default function VerifyEmailScreen() {
       ])
     } catch (e: any) {
       const msg = e.message || 'Invalid or expired code'
-      setError(msg)
+      if (mountedRef.current) setError(msg)
       Alert.alert('Failed', msg)
     } finally {
-      setIsVerifying(false)
+      verifyingRef.current = false
+      if (mountedRef.current) setIsVerifying(false)
     }
   }
 
@@ -142,6 +154,9 @@ export default function VerifyEmailScreen() {
               if (error) setError('')
             }}
             keyboardType="number-pad"
+            // No native maxLength/autofill — see verify-otp note (freeze bisect).
+            returnKeyType="done"
+            onSubmitEditing={handleVerify}
           />
           {error ? <Text className="font-sans text-neg text-sm mt-2 text-center">{error}</Text> : null}
         </View>

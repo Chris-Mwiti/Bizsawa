@@ -1,11 +1,39 @@
 import { synchronize } from '@nozbe/watermelondb/sync'
 import NetInfo from '@react-native-community/netinfo'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { database } from '../db/database'
-import { api } from '../lib/api'
+import { api, AUTH_STORAGE_KEYS } from '../lib/api'
 import { extractRejectedIds } from './pushResult'
 import { randomUUID } from 'expo-crypto'
 import { Q } from '@nozbe/watermelondb'
 import * as RawRecord from '@nozbe/watermelondb/RawRecord'
+
+/**
+ * The sync engine does full-table JSI scans that run synchronously on the JS
+ * thread: while a scan runs, input, timers and buttons are all frozen. Before
+ * this gate, those scans ran even on the auth screens (OTP, login) where there
+ * is no usable session — the sync 401s but only AFTER the expensive local
+ * scans already blocked the UI. That is the recurring "app freezes while I
+ * type the code" hang: the user is unauthenticated, the sync does zero useful
+ * work, and the thread is wedged by scans + NetInfo reconnect storms.
+ */
+let cachedHasSession: boolean | null = null
+export async function hasStoredSession(): Promise<boolean> {
+  // Deliberately uncached: AsyncStorage.multiGet costs ~1ms while a stale
+  // `false` cached on the OTP screen would skip sync forever after login.
+  try {
+    const [access, legacy, refresh] = await AsyncStorage.multiGet([
+      AUTH_STORAGE_KEYS.accessToken,
+      AUTH_STORAGE_KEYS.legacyToken,
+      AUTH_STORAGE_KEYS.refreshToken,
+    ])
+    const ok = Boolean(access?.[1] || legacy?.[1] || refresh?.[1])
+    cachedHasSession = ok
+    return ok
+  } catch {
+    return cachedHasSession ?? false
+  }
+}
 
 // Defensive patch: Watermelon's _setRaw throws "Cannot read property 'type' of undefined"
 // when a column not in schema is set (e.g. stale _changed="customers" or server sends unknown column).
@@ -229,6 +257,7 @@ export async function getPendingChangesCount(): Promise<number> {
 }
 
 export async function getPendingChangesDebug(): Promise<{ total: number; perTable: Record<string, { created: number; updated: number; deleted: number }> }> {
+  const started = Date.now()
   const perTable: Record<string, { created: number; updated: number; deleted: number }> = {}
   let total = 0
   for (const table of PENDING_TABLES) {
@@ -236,12 +265,18 @@ export async function getPendingChangesDebug(): Promise<{ total: number; perTabl
       const col: any = (database as any).get(table)
       let createdCount = 0, updatedCount = 0, deletedCount = 0
       try {
-        const rows: any[] = await col.query().fetch()
-        for (const r of rows) {
-          const s = r._raw?._status
-          if (s === 'created') createdCount++
-          else if (s === 'updated') updatedCount++
-          else if (s === 'deleted') deletedCount++
+        // Count-based: Q.where on _status + fetchCount() never materializes
+        // rows. The old code fetched EVERY row of all 14 tables and looped in
+        // JS — on a large local DB that blocks input/timers for seconds.
+        const [created, updated] = await Promise.all([
+          col.query(Q.where('_status', 'created')).fetchCount().catch(() => -1),
+          col.query(Q.where('_status', 'updated')).fetchCount().catch(() => -1),
+        ])
+        if (created >= 0 && updated >= 0) {
+          createdCount = created
+          updatedCount = updated
+        } else {
+          throw new Error('count query unsupported')
         }
         // also count adapter deleted records (Watermelon deleted queue) — matches fetchLocalChanges
         try {
@@ -249,12 +284,19 @@ export async function getPendingChangesDebug(): Promise<{ total: number; perTabl
           deletedCount = Math.max(deletedCount, deletedIds.length)
         } catch {}
       } catch (e) {
-        // Fallback: try Q.where which uses proper columnName handling for _status
+        // Fallback: full fetch (small tables only in practice — try/catch keeps it bounded)
         try {
-          const created = await col.query(Q.where('_status', 'created')).fetch()
-          createdCount = created.length
-          const updated = await col.query(Q.where('_status', 'updated')).fetch()
-          updatedCount = updated.length
+          const rows: any[] = await col.query().fetch()
+          for (const r of rows) {
+            const s = r._raw?._status
+            if (s === 'created') createdCount++
+            else if (s === 'updated') updatedCount++
+            else if (s === 'deleted') deletedCount++
+          }
+          try {
+            const deletedIds: string[] = await (database as any).adapter.getDeletedRecords(table)
+            deletedCount = Math.max(deletedCount, deletedIds.length)
+          } catch {}
         } catch {}
       }
       perTable[table] = { created: createdCount, updated: updatedCount, deleted: deletedCount }
@@ -265,6 +307,10 @@ export async function getPendingChangesDebug(): Promise<{ total: number; perTabl
     } catch (e) {
       perTable[table] = { created: 0, updated: 0, deleted: 0 }
     }
+  }
+  const elapsed = Date.now() - started
+  if (elapsed > 1500) {
+    console.warn(`[Sync] getPendingChangesDebug took ${elapsed}ms — JS thread was frozen this long (tables=${PENDING_TABLES.length})`)
   }
   return { total, perTable }
 }
@@ -368,9 +414,16 @@ function summarizeChanges(ch: any): Record<string, { created: number; updated: n
 }
 
 // WatermelonDB synchronize() wired to Brief §5 endpoints — single source of truth while offline is local SQLite
-export async function syncNow() {
+export async function syncNow(options?: { force?: boolean }) {
   if (_isSyncing) {
     console.log('[Sync] syncNow skipped — already syncing')
+    return
+  }
+  // No session (auth screens, logged out) → skip before any local scan.
+  // The pre-pull scans below run on the JS thread; without a session the
+  // server round-trip 401s anyway, so this is pure UI freeze for zero benefit.
+  if (!options?.force && !(await hasStoredSession())) {
+    console.log('[Sync] syncNow skipped — no stored session (auth screen?)')
     return
   }
   _isSyncing = true
@@ -381,6 +434,8 @@ export async function syncNow() {
   // Previous clean only touched IDs in pull — pending creates that never pulled (e.g. offline product deletes) stayed polluted.
   try {
     for (const tbl of PENDING_TABLES) {
+      // Yield between tables so input/timers/buttons get a slice even on big DBs.
+      await new Promise<void>((resolve) => setTimeout(resolve, 0))
       try {
         const col: any = (database as any).collections?.get?.(tbl) || (database as any).get?.(tbl)
         if (!col) continue
@@ -720,9 +775,16 @@ export async function syncNow() {
 // NetInfo + interval triggers per Brief §3.4 (reconnect + periodic 5-10min + manual pull-to-refresh)
 // Plus initial hydration: if already online at startup, populate local DB immediately so offline works after
 let intervalId: ReturnType<typeof setInterval> | null = null
+// On flaky Wi-Fi NetInfo fires connect/disconnect flaps in bursts; each one
+// used to launch a full syncNow (full-table JSI scans → frozen UI). Minimum
+// gap between automatic reconnect syncs so a flap storm can't wedge the app.
+const MIN_RECONNECT_SYNC_GAP_MS = 60 * 1000
+let lastReconnectSyncAt = 0
 
 export function startSyncEngine() {
-  // Initial hydration on startup if already online — populates local storage for offline resume
+  // Initial hydration on startup if already online — populates local storage for offline resume.
+  // Skipped without a session (auth screens): syncNow self-skips, so check
+  // first to avoid even the NetInfo round-trip cost on cold start.
   NetInfo.fetch().then((s) => {
     if (s.isConnected) {
       syncNow().catch((e: any) =>
@@ -731,9 +793,12 @@ export function startSyncEngine() {
     }
   })
 
-  // On reconnect — immediate sync
+  // On reconnect — immediate sync, debounced against flap storms.
   const unsub = NetInfo.addEventListener((state) => {
     if (state.isConnected) {
+      const now = Date.now()
+      if (now - lastReconnectSyncAt < MIN_RECONNECT_SYNC_GAP_MS) return
+      lastReconnectSyncAt = now
       syncNow().catch((e: any) =>
         console.warn('[Sync] reconnect sync failed', e?.message, e?.stack || String(e)),
       )

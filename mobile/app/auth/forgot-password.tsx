@@ -30,6 +30,14 @@ export default function ForgotPasswordScreen() {
   const [sent, setSent] = useState(false)
 
   const otpRef = useRef<TextInput>(null)
+  // Same single-use-code double-tap guard as the other OTP screens.
+  const resettingRef = useRef(false)
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
 
   useEffect(() => {
     if (cooldown <= 0) return
@@ -78,6 +86,8 @@ export default function ForgotPasswordScreen() {
       setError('Passwords do not match')
       return
     }
+    if (resettingRef.current) return
+    resettingRef.current = true
     setError('')
     setIsResetting(true)
     try {
@@ -87,10 +97,11 @@ export default function ForgotPasswordScreen() {
       ])
     } catch (e: any) {
       const msg = e.message || 'Invalid or expired code'
-      setError(msg)
+      if (mountedRef.current) setError(msg)
       Alert.alert('Reset failed', msg)
     } finally {
-      setIsResetting(false)
+      resettingRef.current = false
+      if (mountedRef.current) setIsResetting(false)
     }
   }
 
@@ -152,6 +163,7 @@ export default function ForgotPasswordScreen() {
                   if (error) setError('')
                 }}
                 keyboardType="number-pad"
+                // No native maxLength/autofill — see verify-otp note (freeze bisect).
               />
             </View>
 
