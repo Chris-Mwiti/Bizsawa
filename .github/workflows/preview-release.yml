@@ -61,14 +61,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Bump app version
-        run: bun -e "
-          const fs = require('fs');
-          const p = 'app.json';
-          const j = JSON.parse(fs.readFileSync(p, 'utf8'));
-          j.expo.version = '${{ inputs.version }}';
-          fs.writeFileSync(p, JSON.stringify(j, null, 2) + '\n');
-          console.log('version ->', j.expo.version);
-        "
+        run: bun scripts/bump-version.js "${{ inputs.version }}"
 
       - name: EAS preview build (apk, waits for artifact)
         env:
@@ -99,20 +92,9 @@ jobs:
         run: |
           SIZE_MB=$(python3 -c "import os; print(f'{os.path.getsize(\"bizsawa-preview.apk\")/1048576:.1f}')")
           TODAY=$(date +%F)
-          bun -e "
-            const fs = require('fs');
-            const p = '../web/src/download.json';
-            const m = JSON.parse(fs.readFileSync(p, 'utf8'));
-            m.version = '${{ inputs.version }}';
-            m.buildNumber = (m.buildNumber || 0) + 1;
-            m.releasedAt = '$TODAY';
-            m.apkUrl = 'https://drive.google.com/uc?export=download&id=$FILE_ID';
-            m.sizeMb = parseFloat('$SIZE_MB');
-            m.notes = '${{ inputs.notes }}';
-            m.status = 'live';
-            fs.writeFileSync(p, JSON.stringify(m, null, 2) + '\n');
-            console.log(JSON.stringify(m, null, 2));
-          "
+          bun scripts/update-manifest.js "${{ inputs.version }}" \
+            "https://drive.google.com/uc?export=download&id=$FILE_ID" \
+            "$SIZE_MB" "$TODAY" "${{ inputs.notes }}"
 
       - name: Commit version + manifest
         run: |
