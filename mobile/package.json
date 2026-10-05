@@ -37,7 +37,7 @@
     "@tanstack/react-query": "^5.90.21",
     "axios": "^1.13.6",
     "bcryptjs": "^3.0.3",
-    "expo": "~54.0.37",
+    "expo": "~57.0.24",
     "expo-build-properties": "~1.0.10",
     "expo-constants": "~18.0.14",
     "expo-crypto": "~15.0.9",
