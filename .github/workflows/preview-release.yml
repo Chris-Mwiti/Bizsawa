@@ -41,11 +41,17 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Check secrets
+        # Secrets arrive via env (never interpolated into the script text:
+        # the JSON key's own quotes would break shell quoting otherwise).
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          GDRIVE_SA_JSON: ${{ secrets.GDRIVE_SA_JSON }}
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
         run: |
           missing=""
-          [ -z "${{ secrets.EXPO_TOKEN }}" ] && missing="$missing EXPO_TOKEN"
-          [ -z "${{ secrets.GDRIVE_SA_JSON }}" ] && missing="$missing GDRIVE_SA_JSON"
-          [ -z "${{ secrets.GDRIVE_FOLDER_ID }}" ] && missing="$missing GDRIVE_FOLDER_ID"
+          [ -z "$EXPO_TOKEN" ] && missing="$missing EXPO_TOKEN"
+          [ -z "$GDRIVE_SA_JSON" ] && missing="$missing GDRIVE_SA_JSON"
+          [ -z "$GDRIVE_FOLDER_ID" ] && missing="$missing GDRIVE_FOLDER_ID"
           if [ -n "$missing" ]; then echo "Missing secrets:$missing — see workflow header docs"; exit 1; fi
 
       - uses: oven-sh/setup-bun@v2
@@ -74,8 +80,9 @@ jobs:
           RCLONE_CONFIG_GDRIVE_TYPE: drive
           RCLONE_CONFIG_GDRIVE_SERVICE_ACCOUNT_FILE: /tmp/sa.json
           RCLONE_CONFIG_GDRIVE_ROOT_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+          GDRIVE_SA_JSON: ${{ secrets.GDRIVE_SA_JSON }}
         run: |
-          echo '${{ secrets.GDRIVE_SA_JSON }}' > /tmp/sa.json
+          printf '%s' "$GDRIVE_SA_JSON" > /tmp/sa.json
           if ! command -v rclone >/dev/null; then
             sudo apt-get update -qq && sudo apt-get install -y -qq rclone || curl -s https://rclone.org/install.sh | sudo bash
           fi
