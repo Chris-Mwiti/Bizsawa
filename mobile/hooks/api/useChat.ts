@@ -22,7 +22,11 @@ export interface ChatResponse {
 export const useChat = () => {
   return useMutation({
     mutationFn: async (data: ChatRequest) => {
-      const response = await api.post<ChatResponse>('/chatbot/chat', data)
+      // Free-tier LLM + tool loop can take a minute across model failovers;
+      // the global 30s api timeout would abort healthy-but-slow replies.
+      const response = await api.post<ChatResponse>('/chatbot/chat', data, {
+        timeout: 90000,
+      })
       return response.data
     },
   })
