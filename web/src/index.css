@@ -1,0 +1,116 @@
+@import "@fontsource/playfair-display/500.css";
+@import "@fontsource/playfair-display/600.css";
+@import "@fontsource/geist/400.css";
+@import "@fontsource/geist/500.css";
+@import "@fontsource/geist/600.css";
+@import "@fontsource/geist/700.css";
+@import "tailwindcss";
+
+/*
+ * BizSawa web theme — tokens mirror mobile/lib/theme/palette.js
+ * ("Ink & Ledger"): paper canvas, ink text ramp, one teal accent.
+ * Display serif (Playfair) is used ONLY for the classy editorial
+ * headlines, per the RANTY reference; UI text stays Geist.
+ */
+@theme {
+  --color-paper: #f4f9f7;
+  --color-surface: #ffffff;
+  --color-sunken: #e1ebe8;
+  --color-hairline: #dce7e4;
+  --color-ink: #0e1f1c;
+  --color-ink-strong: #2c403b;
+  --color-ink-muted: #4f625e;
+  --color-ink-subtle: #64746f;
+  --color-accent: #006b5f;
+  --color-accent-hover: #005247;
+  --color-accent-active: #003b33;
+  --color-accent-soft: #e4f0ed;
+  --color-pos: #1f6f4a;
+  --color-pos-soft: #e3f0e8;
+  --color-neg: #a32c21;
+  --color-warn: #8a5a0b;
+
+  --font-sans: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Playfair Display", Georgia, "Times New Roman", serif;
+
+  --shadow-clinical: 0 12px 40px rgb(14 31 28 / 0.1);
+  --shadow-clinical-sm: 0 4px 20px rgb(14 31 28 / 0.07);
+
+  --animate-marquee: marquee 32s linear infinite;
+  --animate-shine: shine 3.2s linear infinite;
+  --animate-pulse-dot: pulse-dot 2.2s ease-in-out infinite;
+  --animate-float: float 7s ease-in-out infinite;
+
+  @keyframes marquee {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
+  }
+  @keyframes shine {
+    from {
+      background-position: 200% center;
+    }
+    to {
+      background-position: -200% center;
+    }
+  }
+  @keyframes pulse-dot {
+    0%,
+    100% {
+      transform: scale(1);
+      opacity: 0.9;
+    }
+    50% {
+      transform: scale(1.6);
+      opacity: 0.45;
+    }
+  }
+  @keyframes float {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-10px);
+    }
+  }
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .glass-nav {
+    background: var(--color-paper);
+    backdrop-filter: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

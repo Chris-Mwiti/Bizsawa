@@ -238,8 +238,22 @@ export function TourProvider({ children }: { children: ReactNode }) {
       const seen = await AsyncStorage.getItem(TOUR_SEEN_KEY)
       if (enabled !== null) setIsEnabled(enabled === '1')
       if (seen === '1') setHasSeenTour(true)
-      // Constant for testing: show whenever enabled (default true) — user toggles off in profile when familiar
-      const shouldShow = enabled === null || enabled === '1'
+      // Auto-show only for first-run LOGGED-IN users: previously this ignored
+      // `seen` (nagged every launch) and fired a full-screen modal over the
+      // auth screens 1.2s after start. Manual startTour/resetTour unaffected.
+      let hasSession = false
+      try {
+        const { AUTH_STORAGE_KEYS } = await import('../lib/api')
+        const [[, access], [, refresh]] = await AsyncStorage.multiGet([
+          AUTH_STORAGE_KEYS.accessToken,
+          AUTH_STORAGE_KEYS.refreshToken,
+        ])
+        hasSession = Boolean(access || refresh)
+      } catch {}
+      const shouldShow =
+        (enabled === null || enabled === '1') &&
+        seen !== '1' &&
+        hasSession
       if (shouldShow) {
         setTimeout(() => setIsActive(true), 1200)
       }

@@ -158,7 +158,10 @@ func Load() Config {
 			DB:       intEnv("REDIS_DB", 0),
 		},
 		CORS: CORSConfig{
-			AllowedOrigins: listEnv("CORS_ALLOWED_ORIGINS", []string{"http://localhost:3000", "https://*.bizsawa.com"}),
+			// LAN wildcards (exp://*, 192.168/10/172 ranges) mean a DHCP lease
+			// change never requires a backend .env edit for Expo web/dev.
+			// go-chi/cors supports one `*` per entry as prefix/suffix match.
+			AllowedOrigins: listEnv("CORS_ALLOWED_ORIGINS", []string{"http://localhost:3000", "https://*.bizsawa.com", "http://192.168.*", "http://10.*", "http://172.*", "exp://*"}),
 		},
 		JWT: JWTConfig{
 			Issuer:     env("JWT_ISSUER", "bizsawa"),

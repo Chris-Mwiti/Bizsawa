@@ -1,0 +1,10 @@
+{
+  "version": "1.0.0",
+  "buildNumber": 1,
+  "releasedAt": "",
+  "apkUrl": "",
+  "sizeMb": null,
+  "minAndroid": "8.0",
+  "notes": "First public preview — sales, stock, invoices and M-Pesa.",
+  "status": "pending"
+}

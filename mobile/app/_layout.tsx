@@ -7,6 +7,7 @@ import Toast from 'react-native-toast-message'
 import { useFonts } from 'expo-font'
 import { TamaguiProvider } from 'tamagui'
 import { fonts } from '../lib/theme/fonts'
+import { useAppUpdates } from '../lib/updates'
 import tamaguiConfig from '../tamagui.config'
 import { AuthProvider } from '../contexts/AuthContext'
 import { BusinessProvider } from '../contexts/BusinessContext'
@@ -35,6 +36,8 @@ export default function RootLayout() {
   // show a frame of system-ui and then reflow every line once Geist swaps in.
   // A failed load must not brick the app: fall through to the system face instead.
   const [fontsLoaded, fontError] = useFonts(fonts)
+  // OTA: prompt for restart when an EAS Update has downloaded (no-op in dev).
+  useAppUpdates()
   if (!fontsLoaded && !fontError) return null
 
   return (

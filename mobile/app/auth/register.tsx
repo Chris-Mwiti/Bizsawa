@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  Keyboard,
 } from 'react-native'
 import {
   Eye,
@@ -21,6 +22,7 @@ import {
 import { useRouter } from 'expo-router'
 import { useAuth } from '../../contexts/AuthContext'
 import { api } from '../../lib/api'
+import { withTimeout } from '../../lib/async'
 import { Tabs } from 'tamagui'
 import {
   AuthShell,
@@ -52,6 +54,14 @@ export default function RegisterScreen() {
   const [otpCooldown, setOtpCooldown] = useState(0)
   const [otpError, setOtpError] = useState('')
   const otpInputRef = useRef<TextInput>(null)
+  // Same double-tap / unmounted guards as verify-otp (single-use OTP codes
+  // make a concurrent second verify fail, and its Alert lands post-nav).
+  const verifyingOtpRef = useRef(false)
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
 
   // Password sign-up state
   const [formData, setFormData] = useState({
@@ -136,39 +146,54 @@ export default function RegisterScreen() {
       setOtpError('Enter the 6-digit code')
       return
     }
+    if (verifyingOtpRef.current) return
+    verifyingOtpRef.current = true
+    Keyboard.dismiss()
+    otpInputRef.current?.blur()
     setOtpError('')
     setIsVerifyingOtp(true)
     try {
-      await signInWithOtp(otpEmail.trim().toLowerCase(), otpCode.trim(), otpName.trim())
+      await withTimeout(
+        signInWithOtp(otpEmail.trim().toLowerCase(), otpCode.trim(), otpName.trim()),
+        25000,
+        'Sign-in',
+      )
 
       // Store pending prefill for business-setup
-      const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default
-      const pending = {
-        name: '',
-        phone: '',
-        email: otpEmail.trim().toLowerCase(),
+      try {
+        const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default
+        const pending = {
+          name: '',
+          phone: '',
+          email: otpEmail.trim().toLowerCase(),
+        }
+        await AsyncStorage.setItem('bizsawa_pending_business_prefill', JSON.stringify(pending))
+      } catch {
+        // Prefill is cosmetic — never block navigation on storage.
       }
-      await AsyncStorage.setItem('bizsawa_pending_business_prefill', JSON.stringify(pending))
 
       // After OTP sign-up, new user has no business -> go to business-setup
-      // Check just in case user already has business (re-login via OTP)
+      // Check just in case user already has business (re-login via OTP).
+      // Bounded probe: never hang the spinner; default to business-setup.
+      // Object-form href bypasses the NavigationGate prefetch hold for tabs.
+      let hasBusiness = false
       try {
-        const res = await api.get<{ businesses: any[] }>('/businesses')
-        const hasBusiness = Array.isArray(res.data.businesses) && res.data.businesses.length > 0
-        if (hasBusiness) {
-          router.replace('/(tabs)')
-        } else {
-          router.replace('/auth/business-setup')
-        }
+        const res = await withTimeout(
+          api.get<{ businesses: any[] }>('/businesses'),
+          8000,
+          'Loading businesses',
+        )
+        hasBusiness = Array.isArray(res.data.businesses) && res.data.businesses.length > 0
       } catch {
-        router.replace('/auth/business-setup')
+        hasBusiness = false
       }
+      router.replace({ pathname: hasBusiness ? '/(tabs)' : '/auth/business-setup' } as any)
     } catch (e: any) {
       const msg = e.message || 'Invalid or expired code'
-      setOtpError(msg)
-      Alert.alert('Verification failed', msg)
+      if (mountedRef.current) setOtpError(msg)
     } finally {
-      setIsVerifyingOtp(false)
+      verifyingOtpRef.current = false
+      if (mountedRef.current) setIsVerifyingOtp(false)
     }
   }
 
@@ -368,6 +393,10 @@ export default function RegisterScreen() {
                           if (otpError) setOtpError('')
                         }}
                         keyboardType="number-pad"
+                        // No native maxLength/autofill — see verify-otp note.
+                        // JS slice(0, 6) enforces length (freeze bisect).
+                        returnKeyType="done"
+                        onSubmitEditing={handleVerifyOtp}
                       />
                       <Text className="font-sans text-xs text-ink-muted mt-2 text-center">Code expires in 5 minutes. Check spam folder if missing.</Text>
                       {otpError ? <Text className="font-sans text-neg text-sm mt-2 text-center">{otpError}</Text> : null}
