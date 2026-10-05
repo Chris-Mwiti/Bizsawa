@@ -31,7 +31,6 @@
     "@nozbe/watermelondb": "^0.28.0",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/netinfo": "11.4.1",
-    "@react-native-firebase/app": "^24.0.0",
     "@react-native-google-signin/google-signin": "^16.1.2",
     "@tamagui/config": "^2.7.7",
     "@tamagui/tabs": "^2.7.7",
