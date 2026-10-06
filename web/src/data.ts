@@ -20,10 +20,6 @@ export const strings: Record<
     offline: string;
     stories: string;
     start: string;
-    explore: string;
-    heroTitleA: string;
-    heroTitleB: string;
-    heroEyebrow: string;
     heroSub: string;
     cardTitleA: string;
     cardTitleB: string;
@@ -39,10 +35,6 @@ export const strings: Record<
     offline: "Offline",
     stories: "Stories",
     start: "START",
-    explore: "Explore Features",
-    heroTitleA: "Effortless",
-    heroTitleB: "Selling",
-    heroEyebrow: "Cutting-edge counter craft.",
     heroSub: "We keep your shop's books.",
     cardTitleA: "Full shop,",
     cardTitleB: "one ledger.",
@@ -57,10 +49,6 @@ export const strings: Record<
     offline: "Nje ya mtandao",
     stories: "Hadithi",
     start: "ANZA",
-    explore: "Chunguza Huduma",
-    heroTitleA: "Mauzo",
-    heroTitleB: "Rahisi",
-    heroEyebrow: "Ufundi wa kisasa wa kaunta.",
     heroSub: "Tunatunza vitabu vya duka lako.",
     cardTitleA: "Duka zima,",
     cardTitleB: "kitabu kimoja.",

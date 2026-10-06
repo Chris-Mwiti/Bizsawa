@@ -9,7 +9,7 @@ import {
   Smartphone,
   Sparkles,
 } from "lucide-react";
-import { features } from "../data";
+import { features, type Lang } from "../data";
 import { BlurFade, Marquee, NumberTicker, PulsingDot, ShimmerButton } from "./magic";
 import { DownloadApp } from "./DownloadApp";
 import type { View } from "./Nav";
@@ -28,18 +28,22 @@ const trades = [
 
 function BentoCard({
   featureId,
+  span = "",
 }: {
   featureId: string;
+  span?: string;
 }) {
   const f = features.find((x) => x.id === featureId)!;
   const Icon = f.icon;
   return (
-    <article className="flex h-full flex-col rounded-[28px] border border-hairline bg-surface p-6 shadow-clinical-sm">
+    <article
+      className={`flex flex-col rounded-[28px] border border-hairline bg-surface p-6 shadow-clinical-sm ${span}`}
+    >
       <span className="flex size-11 items-center justify-center rounded-2xl bg-accent-soft text-accent">
         <Icon size={20} strokeWidth={1.8} />
       </span>
       <h3 className="mt-4 text-lg font-bold text-ink">{f.title}</h3>
-      <p className="mt-1 text-sm font-semibold text-accent">{f.tagline}</p>
+      <p className="mt-1 text-sm font-medium text-accent">{f.tagline}</p>
       <p className="mt-2 max-w-[52ch] text-sm leading-relaxed text-ink-muted">
         {f.description}
       </p>
@@ -54,14 +58,14 @@ function BentoCard({
               className="flex items-center justify-between px-4 py-2.5 text-[13px]"
             >
               <span className="font-medium text-ink-strong">{a}</span>
-              <span className="font-bold tabular-nums text-ink">{b}</span>
+              <span className="font-bold tabular-nums">{b}</span>
             </li>
           ))}
         </ul>
       )}
       {f.visual === "chat" && (
         <div className="mt-4 space-y-2 rounded-2xl bg-ink p-4 text-[13px] leading-relaxed">
-          <p className="ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-md bg-white/10 px-3 py-2 text-white">
+          <p className="ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-md bg-white/12 px-3 py-2 text-white">
             Which customers owe invoices?
           </p>
           <p className="w-fit max-w-[90%] rounded-2xl rounded-bl-md bg-accent px-3 py-2 font-medium text-white">
@@ -86,7 +90,7 @@ function BentoCard({
         <div className="mt-4 space-y-2 rounded-2xl bg-paper p-4">
           {[
             ["Sugar 2kg", "w-3/4", "bg-accent"],
-            ["Milk 500ml", "w-1/3", "bg-warn"],
+            ["Milk 500ml", "w-1/3", "bg-[#c98a0b]"],
             ["Bread", "w-1/6", "bg-neg"],
           ].map(([label, w, c]) => (
             <div key={label} className="flex items-center gap-3 text-xs font-semibold">
@@ -103,13 +107,15 @@ function BentoCard({
 }
 
 export function Landing({
+  lang,
   setView,
 }: {
-  lang: unknown;
+  lang: Lang;
   setView: (v: View) => void;
 }) {
+  void lang;
   return (
-    <main className="bg-paper">
+    <main>
       {/* Trust strip: one marquee for the whole page */}
       <section aria-label="Trades BizSawa serves" className="border-y border-hairline bg-surface">
         <Marquee className="py-4">
@@ -132,7 +138,7 @@ export function Landing({
       <section className="mx-auto max-w-[1400px] px-4 py-16 md:px-8 md:py-24">
         <BlurFade>
           <div className="flex flex-wrap items-end justify-between gap-4">
-            <h2 className="max-w-[16ch] text-4xl font-extrabold leading-tight tracking-tight text-ink md:text-5xl">
+            <h2 className="max-w-[16ch] font-display text-4xl font-medium leading-tight text-ink md:text-5xl">
               Everything the counter needs
             </h2>
             <button
@@ -169,22 +175,22 @@ export function Landing({
       {/* AI coach split */}
       <section className="mx-auto grid max-w-[1400px] items-center gap-10 px-4 pb-16 md:px-8 md:pb-24 lg:grid-cols-2">
         <BlurFade>
-          <div className="rounded-[28px] border border-hairline bg-surface p-6 shadow-glow md:p-8">
-            <p className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-ink-muted">
-              <Sparkles size={14} className="text-accent" /> AI Coach · English na Kiswahili
+          <div className="rounded-[28px] bg-ink p-6 text-white shadow-clinical md:p-8">
+            <p className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-white/60">
+              <Sparkles size={14} /> AI Coach · English na Kiswahili
             </p>
             <div className="mt-5 space-y-3 text-[15px] leading-relaxed">
-              <p className="ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-md bg-sunken px-4 py-3 text-ink-strong">
+              <p className="ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-md bg-white/10 px-4 py-3">
                 Show my top products last week
               </p>
-              <p className="w-fit max-w-[92%] rounded-2xl rounded-bl-md bg-accent px-4 py-3 font-medium text-white">
+              <p className="w-fit max-w-[92%] rounded-2xl rounded-bl-md bg-accent px-4 py-3 font-medium">
                 Sugar 2kg leads with 41 units · KES 9,840. Milk is climbing
                 again — restock before Friday.
               </p>
-              <p className="ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-md bg-sunken px-4 py-3 text-ink-strong">
+              <p className="ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-md bg-white/10 px-4 py-3">
                 Remind everyone who owes me
               </p>
-              <p className="flex w-fit max-w-[92%] items-center gap-2 rounded-2xl rounded-bl-md border border-hairline bg-paper px-4 py-3 font-semibold text-ink">
+              <p className="flex w-fit max-w-[92%] items-center gap-2 rounded-2xl rounded-bl-md bg-surface px-4 py-3 font-semibold text-ink">
                 <MessageCircle size={16} className="text-pos" />
                 3 WhatsApp reminders queued
                 <Check size={16} className="text-pos" />
@@ -193,7 +199,7 @@ export function Landing({
           </div>
         </BlurFade>
         <BlurFade delay={0.1}>
-          <h2 className="text-4xl font-extrabold leading-tight tracking-tight text-ink md:text-5xl">
+          <h2 className="font-display text-4xl font-medium leading-tight text-ink md:text-5xl">
             Ask about your own numbers
           </h2>
           <p className="mt-4 max-w-[52ch] text-base leading-relaxed text-ink-muted">
@@ -222,9 +228,9 @@ export function Landing({
           <div className="grid items-center gap-8 rounded-[28px] bg-sunken p-6 md:p-10 lg:grid-cols-2">
             <div>
               <p className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-ink-muted">
-                <CloudOff size={14} className="text-accent" /> Offline-first
+                <CloudOff size={14} /> Offline-first
               </p>
-              <h2 className="mt-3 text-3xl font-extrabold leading-tight tracking-tight text-ink md:text-4xl">
+              <h2 className="mt-3 font-display text-3xl font-medium leading-tight text-ink md:text-4xl">
                 No bars, no problem
               </h2>
               <p className="mt-3 max-w-[48ch] text-base leading-relaxed text-ink-muted">
@@ -241,11 +247,11 @@ export function Landing({
               ].map((s, i) => (
                 <li key={s.t} className="relative flex gap-4 pb-6 last:pb-0">
                   {i < 2 && (
-                    <span aria-hidden className="absolute left-[13px] top-7 h-full w-px bg-ink/15" />
+                    <span aria-hidden className="absolute left-[13px] top-7 h-full w-px bg-ink/20" />
                   )}
                   <span className="relative mt-1">
                     {s.on ? <PulsingDot /> : (
-                      <span className="block size-3 rounded-full border-2 border-ink/25 bg-surface" aria-hidden />
+                      <span className="block size-3 rounded-full border-2 border-ink/30 bg-surface" aria-hidden />
                     )}
                   </span>
                   <div className="rounded-2xl border border-hairline bg-surface px-4 py-3 shadow-clinical-sm">
@@ -264,7 +270,7 @@ export function Landing({
       {/* Closing CTA */}
       <section className="mx-auto max-w-[1400px] px-4 pb-20 text-center md:px-8 md:pb-28">
         <BlurFade>
-          <h2 className="mx-auto max-w-[20ch] text-4xl font-extrabold leading-tight tracking-tight text-ink md:text-6xl">
+          <h2 className="mx-auto max-w-[20ch] font-display text-4xl font-medium leading-tight text-ink md:text-6xl">
             Open at 7am. Trust the books at night.
           </h2>
           <div className="mt-8 flex justify-center">

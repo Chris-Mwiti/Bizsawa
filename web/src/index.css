@@ -14,9 +14,6 @@
  */
 @theme {
   --color-paper: #f4f9f7;
-  --color-night: #0a1412;
-  --color-night-soft: #101d19;
-  --color-glow: #2e9182;
   --color-surface: #ffffff;
   --color-sunken: #e1ebe8;
   --color-hairline: #dce7e4;
@@ -38,14 +35,11 @@
 
   --shadow-clinical: 0 12px 40px rgb(14 31 28 / 0.1);
   --shadow-clinical-sm: 0 4px 20px rgb(14 31 28 / 0.07);
-  --shadow-glow: 0 0 48px rgb(46 145 130 / 0.35);
-  --shadow-glow-sm: 0 0 24px rgb(46 145 130 / 0.3);
 
   --animate-marquee: marquee 32s linear infinite;
   --animate-shine: shine 3.2s linear infinite;
   --animate-pulse-dot: pulse-dot 2.2s ease-in-out infinite;
   --animate-float: float 7s ease-in-out infinite;
-  --animate-orbit: orbit 26s linear infinite;
 
   @keyframes marquee {
     from {
@@ -81,14 +75,6 @@
     }
     50% {
       transform: translateY(-10px);
-    }
-  }
-  @keyframes orbit {
-    from {
-      transform: rotate(0deg);
-    }
-    to {
-      transform: rotate(360deg);
     }
   }
 }

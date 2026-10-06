@@ -61,13 +61,11 @@ export function ShimmerButton({
       onClick={onClick}
       aria-label={label}
       className={`animate-shine group relative inline-flex cursor-pointer items-center justify-center overflow-hidden rounded-full px-10 py-4 text-sm font-semibold tracking-[0.18em] transition-transform duration-300 ease-out hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] ${
-        dark
-          ? "text-white shadow-glow"
-          : "bg-[#FFFDF7] text-ink shadow-clinical"
+        dark ? "bg-ink text-white" : "bg-[#FFFDF7] text-ink shadow-clinical"
       } ${className}`}
       style={{
         backgroundImage: dark
-          ? "linear-gradient(110deg, #005247 30%, #0a7a6a 50%, #005247 70%)"
+          ? "linear-gradient(110deg, #0e1f1c 40%, #2c403b 50%, #0e1f1c 60%)"
           : "linear-gradient(110deg, #FFFDF7 40%, #e1ebe8 50%, #FFFDF7 60%)",
         backgroundSize: "200% 100%",
       }}
