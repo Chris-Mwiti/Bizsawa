@@ -7,20 +7,20 @@ import (
 )
 
 type User struct {
-	ID                uuid.UUID  `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	Email             string     `gorm:"not null;uniqueIndex" json:"email"`
-	PasswordHash      string     `gorm:"type:text;not null;default:''" json:"-"`
-	IsActive          bool       `gorm:"not null;default:true" json:"isActive"`
-	Name              string     `gorm:"type:text" json:"name"`
-	Image             string     `gorm:"type:text" json:"image"`
-	EmailVerified     bool       `gorm:"not null;default:false" json:"emailVerified"`
-	Provider          string     `gorm:"type:text;not null;default:'credential'" json:"provider"`
-	ProviderAccountID *string    `gorm:"type:text;index" json:"providerAccountId"`
-	CreatedAt         time.Time  `json:"createdAt"`
-	UpdatedAt         time.Time  `json:"updatedAt"`
+	ID                uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	Email             string    `gorm:"not null;uniqueIndex" json:"email"`
+	PasswordHash      string    `gorm:"type:text;not null;default:''" json:"-"`
+	IsActive          bool      `gorm:"not null;default:true" json:"isActive"`
+	Name              string    `gorm:"type:text" json:"name"`
+	Image             string    `gorm:"type:text" json:"image"`
+	EmailVerified     bool      `gorm:"not null;default:false" json:"emailVerified"`
+	Provider          string    `gorm:"type:text;not null;default:'credential'" json:"provider"`
+	ProviderAccountID *string   `gorm:"type:text;index" json:"providerAccountId"`
+	CreatedAt         time.Time `json:"createdAt"`
+	UpdatedAt         time.Time `json:"updatedAt"`
 }
 
-// Account mirrors better-auth account table (linked social providers)
+// Account mirrors better-auth account table (linked social providers).
 type Account struct {
 	ID                uuid.UUID  `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
 	UserID            uuid.UUID  `gorm:"type:uuid;not null;index" json:"userId"`

@@ -456,13 +456,16 @@ func (r *Repository) SalesVelocity(ctx context.Context, businessID uuid.UUID, tf
 // TaxSummary aggregates VAT (16%) for KRA filing.
 func (r *Repository) TaxSummary(ctx context.Context, businessID uuid.UUID, tf Timeframe, now time.Time) (*TaxSummary, error) {
 	w := resolveWindow(tf, now)
+
 	type totRow struct {
 		TotalTax     string `json:"totalTax"`
 		TaxableSales string `json:"taxableSales"`
 		TotalSales   string `json:"totalSales"`
 		Count        int    `json:"count"`
 	}
+
 	var tot totRow
+
 	err := r.db.WithContext(ctx).Raw(
 		`SELECT COALESCE(SUM(tax_amount),0)::text AS total_tax,
 		        COALESCE(SUM(subtotal),0)::text AS taxable_sales,
@@ -471,6 +474,7 @@ func (r *Repository) TaxSummary(ctx context.Context, businessID uuid.UUID, tf Ti
 		 FROM sales WHERE business_id = ? AND sold_at >= ? AND status <> 'void'`,
 		businessID, w.lower,
 	).Scan(&tot).Error
+
 	if err != nil {
 		return nil, err
 	}
@@ -482,7 +486,9 @@ func (r *Repository) TaxSummary(ctx context.Context, businessID uuid.UUID, tf Ti
 		Revenue   string `json:"revenue"`
 		Quantity  string `json:"quantity"`
 	}
+
 	var prodRows []prodRow
+
 	_ = r.db.WithContext(ctx).Raw(
 		`SELECT sl.product_id::text AS product_id,
 		        COALESCE(p.name,'Unknown') AS name,
@@ -499,6 +505,7 @@ func (r *Repository) TaxSummary(ctx context.Context, businessID uuid.UUID, tf Ti
 	).Scan(&prodRows).Error
 
 	byProd := make([]TaxByProduct, 0, len(prodRows))
+
 	for _, pr := range prodRows {
 		rev := decFromString(pr.Revenue)
 		tax := rev.Mul(decimal.NewFromFloat(0.16)).Round(2)
@@ -517,7 +524,9 @@ func (r *Repository) TaxSummary(ctx context.Context, businessID uuid.UUID, tf Ti
 		Revenue  string `json:"revenue"`
 		Count    int    `json:"count"`
 	}
+
 	var catRows []catRow
+
 	_ = r.db.WithContext(ctx).Raw(
 		`SELECT COALESCE(p.category,'Uncategorized') AS category,
 		        COALESCE(SUM(sl.line_total),0)::text AS revenue,
@@ -531,6 +540,7 @@ func (r *Repository) TaxSummary(ctx context.Context, businessID uuid.UUID, tf Ti
 	).Scan(&catRows).Error
 
 	byCat := make([]TaxByCategory, 0, len(catRows))
+
 	for _, cr := range catRows {
 		rev := decFromString(cr.Revenue)
 		tax := rev.Mul(decimal.NewFromFloat(0.16)).Round(2)
@@ -586,6 +596,7 @@ func (r *Repository) UpsertSnapshot(ctx context.Context, s *Snapshot) error {
 			ON CONFLICT (business_id, timeframe) WHERE timeframe IN ('day','week','month','year')
 			DO UPDATE SET payload = EXCLUDED.payload, generated_at = EXCLUDED.generated_at, updated_at = NOW()
 		`, stored.ID, stored.TenantID, stored.BusinessID, stored.Timeframe, stored.Payload, stored.GeneratedAt).Error
+
 		if err == nil {
 			return nil
 		}
@@ -594,6 +605,7 @@ func (r *Repository) UpsertSnapshot(ctx context.Context, s *Snapshot) error {
 			Delete(&StoredSnapshot{}).Error; err != nil {
 			return err
 		}
+
 		return tx.Create(&stored).Error
 	})
 }

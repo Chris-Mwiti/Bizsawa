@@ -33,6 +33,7 @@ func StartToolSpan(ctx context.Context, tool, profile string) (context.Context, 
 		attribute.String("mcp.profile", string(profile)),
 		attribute.String("component", "mcp.tool"),
 	}
+
 	return tracer.Start(ctx, fmt.Sprintf("mcp.tool/%s", tool), trace.WithAttributes(attrs...))
 }
 
@@ -41,9 +42,11 @@ func EndToolSpan(ctx context.Context, span trace.Span, tool, profile string, sta
 	durationMs := float64(time.Since(start).Microseconds()) / 1000.0
 	status := "ok"
 	errType := ""
+
 	if err != nil {
 		status = "error"
 		errType = errorType(err)
+
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		span.SetAttributes(attribute.String("error.type", errType))
@@ -52,6 +55,7 @@ func EndToolSpan(ctx context.Context, span trace.Span, tool, profile string, sta
 		span.SetStatus(codes.Ok, "")
 		slog.InfoContext(ctx, "mcp tool call", "tool", tool, "profile", profile, "duration_ms", durationMs, "trace_id", span.SpanContext().TraceID().String())
 	}
+
 	span.SetAttributes(
 		attribute.Float64("mcp.tool.duration_ms", durationMs),
 		attribute.String("mcp.status", status),
@@ -63,7 +67,7 @@ func EndToolSpan(ctx context.Context, span trace.Span, tool, profile string, sta
 	}
 }
 
-// StartWorkflowSpan is for the HTTP RPC layer: initialize | tools/list | tools/call
+// StartWorkflowSpan is for the HTTP RPC layer: initialize | tools/list | tools/call.
 func StartWorkflowSpan(ctx context.Context, method, profile string) (context.Context, trace.Span) {
 	tracer := Tracer("mcp.workflow")
 	attrs := []attribute.KeyValue{
@@ -71,24 +75,29 @@ func StartWorkflowSpan(ctx context.Context, method, profile string) (context.Con
 		attribute.String("mcp.profile", profile),
 		attribute.String("component", "mcp.workflow"),
 	}
+
 	return tracer.Start(ctx, fmt.Sprintf("mcp.workflow/%s", method), trace.WithAttributes(attrs...))
 }
 
 func EndWorkflowSpan(ctx context.Context, span trace.Span, method, profile string, start time.Time, err error) {
 	durationMs := float64(time.Since(start).Microseconds()) / 1000.0
+
 	status := "ok"
 	if err != nil {
 		status = "error"
+
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 	} else {
 		span.SetStatus(codes.Ok, "")
 	}
+
 	span.SetAttributes(
 		attribute.Float64("mcp.workflow.duration_ms", durationMs),
 		attribute.String("mcp.status", status),
 	)
 	span.End()
+
 	if mm := GetMetrics(); mm != nil {
 		mm.RecordMCPWorkflow(ctx, method, profile, status, durationMs)
 	}
@@ -100,6 +109,7 @@ func errorType(err error) string {
 	}
 	// map known sentinel errors to stable types for metrics cardinality control
 	msg := err.Error()
+
 	switch {
 	case contains(msg, "tool not found"):
 		return "tool_not_found"

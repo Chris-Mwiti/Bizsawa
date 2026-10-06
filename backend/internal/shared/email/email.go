@@ -39,14 +39,17 @@ type ResendSender struct {
 
 func NewResendSender(cfg config.EmailConfig) *ResendSender {
 	client := resend.NewClient(cfg.ResendAPIKey)
+
 	fromEmail := strings.TrimSpace(cfg.FromEmail)
 	if fromEmail == "" {
 		fromEmail = "noreply@bizsawa.com"
 	}
+
 	fromName := strings.TrimSpace(cfg.FromName)
 	if fromName == "" {
 		fromName = "BizSawa"
 	}
+
 	return &ResendSender{client: client, fromEmail: fromEmail, fromName: fromName}
 }
 
@@ -70,7 +73,9 @@ func (r *ResendSender) SendOTPEmail(ctx context.Context, toEmail, otp string, ot
 	if err != nil {
 		return fmt.Errorf("resend send failed: %w", err)
 	}
+
 	slog.InfoContext(ctx, "email sent via Resend", "to", toEmail, "type", otpType, "id", sent.Id)
+
 	return nil
 }
 
@@ -88,11 +93,14 @@ func (r *ResendSender) SendInviteEmail(ctx context.Context, toEmail, businessNam
 			{Name: "role", Value: role},
 		},
 	}
+
 	sent, err := r.client.Emails.SendWithContext(ctx, params)
 	if err != nil {
 		return fmt.Errorf("resend invite send failed: %w", err)
 	}
+
 	slog.InfoContext(ctx, "invite email sent via Resend", "to", toEmail, "business", businessName, "role", role, "id", sent.Id)
+
 	return nil
 }
 
@@ -104,13 +112,17 @@ func NewSender(cfg config.EmailConfig) Sender {
 		if provider == "log" {
 			slog.Info("email provider forced to log mode via EMAIL_PROVIDER")
 		}
+
 		return &NoopSender{}
 	}
+
 	if strings.TrimSpace(cfg.ResendAPIKey) == "" {
 		slog.Warn("RESEND_API_KEY not set — OTP emails will be logged only (set RESEND_API_KEY to enable delivery)")
 		return &NoopSender{}
 	}
+
 	slog.Info("email provider: Resend", "from", cfg.FromEmail)
+
 	return NewResendSender(cfg)
 }
 
@@ -166,11 +178,13 @@ func buildInviteEmail(businessName, role, otp string) (subject, html, text strin
     </table>
   </body>
 </html>`, businessName, roleLabel, businessName, roleLabel, otp, businessName, otp)
+
 	return subject, html, text
 }
 
 func buildOTPEmail(otp, otpType string) (subject, html, text string) {
 	var title, intro string
+
 	switch otpType {
 	case "email-verification":
 		title = "Verify your email"
@@ -182,6 +196,7 @@ func buildOTPEmail(otp, otpType string) (subject, html, text string) {
 		title = "Your sign-in code"
 		intro = "Use the code below to sign in to BizSawa."
 	}
+
 	subject = fmt.Sprintf("%s — %s", title, otp)
 
 	text = fmt.Sprintf("%s\n\nYour verification code is: %s\n\nThis code expires in 5 minutes. Do not share it with anyone.\n\n— BizSawa", intro, otp)

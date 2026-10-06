@@ -148,13 +148,16 @@ func (s *Service) CheckEmailExists(ctx context.Context, email string) (bool, err
 	if email == "" {
 		return false, nil
 	}
+
 	_, err := s.repo.FindByEmail(ctx, email)
 	if err == nil {
 		return true, nil
 	}
+
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return false, nil
 	}
+
 	return false, err
 }
 

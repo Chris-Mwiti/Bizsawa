@@ -1,8 +1,8 @@
 package tenancy
 
 import (
-	"log/slog"
 	"context"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -42,28 +42,34 @@ func (r *Repository) CreateSubscriptionPayment(ctx context.Context, p *Subscript
 
 func (r *Repository) FindSubscriptionPaymentByID(ctx context.Context, id uuid.UUID) (*SubscriptionPayment, error) {
 	var p SubscriptionPayment
+
 	err := r.db.WithContext(ctx).Where("id = ?", id).First(&p).Error
 	if err != nil {
 		return nil, err
 	}
+
 	return &p, nil
 }
 
 func (r *Repository) FindSubscriptionPaymentByCheckout(ctx context.Context, checkout string) (*SubscriptionPayment, error) {
 	var p SubscriptionPayment
+
 	err := r.db.WithContext(ctx).Where("checkout_request_id = ?", checkout).First(&p).Error
 	if err != nil {
 		return nil, err
 	}
+
 	return &p, nil
 }
 
 func (r *Repository) FindSubscriptionPaymentByIdempotency(ctx context.Context, key string) (*SubscriptionPayment, error) {
 	var p SubscriptionPayment
+
 	err := r.db.WithContext(ctx).Where("idempotency_key = ?", key).First(&p).Error
 	if err != nil {
 		return nil, err
 	}
+
 	return &p, nil
 }
 
@@ -74,6 +80,7 @@ func (r *Repository) UpdateSubscriptionPayment(ctx context.Context, p *Subscript
 func (r *Repository) UpsertActiveSubscription(ctx context.Context, userID uuid.UUID, plan PlanCode, endsAt *time.Time) (*Subscription, error) {
 	// Deactivate previous active, create new active
 	var active Subscription
+
 	err := r.db.WithContext(ctx).Where("user_id = ? AND status = 'ACTIVE'", userID).First(&active).Error
 	if err == nil {
 		if err := r.db.WithContext(ctx).Model(&active).Update("status", "INACTIVE").Error; err != nil {
@@ -81,9 +88,11 @@ func (r *Repository) UpsertActiveSubscription(ctx context.Context, userID uuid.U
 			return nil, err
 		}
 	}
+
 	sub := &Subscription{UserID: userID, PlanCode: plan, Status: "ACTIVE", EndsAt: endsAt}
 	if err := r.db.WithContext(ctx).Create(sub).Error; err != nil {
 		return nil, err
 	}
+
 	return sub, nil
 }

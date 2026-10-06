@@ -1,10 +1,10 @@
 {
   "version": "1.0.0",
-  "buildNumber": 1,
-  "releasedAt": "",
-  "apkUrl": "",
-  "sizeMb": null,
+  "buildNumber": 2,
+  "releasedAt": "2026-10-06",
+  "apkUrl": "https://github.com/Chris-Mwiti/Bizsawa/releases/download/preview-v1.0.0/bizsawa-preview-v1.0.0.apk",
+  "sizeMb": 127.3,
   "minAndroid": "8.0",
-  "notes": "First public preview — sales, stock, invoices and M-Pesa.",
-  "status": "pending"
+  "notes": "Stable preview build.",
+  "status": "live"
 }

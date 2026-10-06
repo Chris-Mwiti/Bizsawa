@@ -62,9 +62,11 @@ func TestSplitEndpointPreservesPath(t *testing.T) {
 			if host != tc.wantHostPort {
 				t.Errorf("host = %q, want %q", host, tc.wantHostPort)
 			}
+
 			if path != tc.wantPath {
 				t.Errorf("path = %q, want %q", path, tc.wantPath)
 			}
+
 			if plain != tc.wantPlain {
 				t.Errorf("plainHTTP = %v, want %v", plain, tc.wantPlain)
 			}
@@ -84,6 +86,7 @@ func TestConfigSignalEndpointFallback(t *testing.T) {
 	if got := generic.TracesTarget(); got != "http://otel-collector:4318" {
 		t.Errorf("traces fallback = %q", got)
 	}
+
 	if got := generic.MetricsTarget(); got != "http://otel-collector:4318" {
 		t.Errorf("metrics fallback = %q", got)
 	}
@@ -93,9 +96,11 @@ func TestConfigSignalEndpointFallback(t *testing.T) {
 		TracesEndpoint:  "https://api.honeycomb.io/v1/traces",
 		MetricsEndpoint: "https://api.honeycomb.io/v1/metrics",
 	}
+
 	if got := split.TracesTarget(); got != "https://api.honeycomb.io/v1/traces" {
 		t.Errorf("traces override = %q", got)
 	}
+
 	if got := split.MetricsTarget(); got != "https://api.honeycomb.io/v1/metrics" {
 		t.Errorf("metrics override = %q", got)
 	}

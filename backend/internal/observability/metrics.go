@@ -19,10 +19,10 @@ var (
 // Compliant with OTEL semantic conventions + BizSawa domain extensions for MCP workflows.
 type Metrics struct {
 	// HTTP server
-	httpRequests     metric.Int64Counter
-	httpDuration     metric.Float64Histogram
-	httpErrors       metric.Int64Counter
-	httpActive       metric.Int64UpDownCounter
+	httpRequests metric.Int64Counter
+	httpDuration metric.Float64Histogram
+	httpErrors   metric.Int64Counter
+	httpActive   metric.Int64UpDownCounter
 
 	// MCP workflow / tool layer
 	mcpToolCalls     metric.Int64Counter
@@ -42,37 +42,46 @@ type Metrics struct {
 
 func InitMetrics() (*Metrics, error) {
 	var initErr error
+
 	once.Do(func() {
 		mp := otel.GetMeterProvider()
 		meter := mp.Meter("bizsawa.observability")
 
 		var err error
+
 		m = &Metrics{}
 
 		m.httpRequests, err = meter.Int64Counter("http.server.requests",
 			metric.WithDescription("Total HTTP requests"),
 			metric.WithUnit("{request}"))
+
 		if err != nil {
 			initErr = err
 			return
 		}
+
 		m.httpDuration, err = meter.Float64Histogram("http.server.duration",
 			metric.WithDescription("HTTP request duration"),
 			metric.WithUnit("ms"),
 			metric.WithExplicitBucketBoundaries(5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000))
+
 		if err != nil {
 			initErr = err
 			return
 		}
+
 		m.httpErrors, err = meter.Int64Counter("http.server.errors",
 			metric.WithDescription("HTTP error responses (4xx/5xx)"),
 			metric.WithUnit("{error}"))
+
 		if err != nil {
 			initErr = err
 			return
 		}
+
 		m.httpActive, err = meter.Int64UpDownCounter("http.server.active_requests",
 			metric.WithDescription("Active HTTP requests"))
+
 		if err != nil {
 			initErr = err
 			return
@@ -81,49 +90,62 @@ func InitMetrics() (*Metrics, error) {
 		m.mcpToolCalls, err = meter.Int64Counter("mcp.tool.calls",
 			metric.WithDescription("Total MCP tool invocations"),
 			metric.WithUnit("{call}"))
+
 		if err != nil {
 			initErr = err
 			return
 		}
+
 		m.mcpToolDuration, err = meter.Float64Histogram("mcp.tool.duration",
 			metric.WithDescription("MCP tool execution duration"),
 			metric.WithUnit("ms"),
 			metric.WithExplicitBucketBoundaries(1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000))
+
 		if err != nil {
 			initErr = err
 			return
 		}
+
 		m.mcpToolErrors, err = meter.Int64Counter("mcp.tool.errors",
 			metric.WithDescription("MCP tool errors"),
 			metric.WithUnit("{error}"))
+
 		if err != nil {
 			initErr = err
 			return
 		}
+
 		m.mcpActiveCalls, err = meter.Int64UpDownCounter("mcp.tool.active",
 			metric.WithDescription("Active MCP tool calls"))
+
 		if err != nil {
 			initErr = err
 			return
 		}
+
 		m.workflowCalls, err = meter.Int64Counter("mcp.workflow.calls",
 			metric.WithDescription("MCP workflow RPC calls (tools/list, tools/call, initialize)"),
 			metric.WithUnit("{call}"))
+
 		if err != nil {
 			initErr = err
 			return
 		}
+
 		m.workflowDuration, err = meter.Float64Histogram("mcp.workflow.duration",
 			metric.WithDescription("MCP workflow RPC duration"),
 			metric.WithUnit("ms"),
 			metric.WithExplicitBucketBoundaries(1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000))
+
 		if err != nil {
 			initErr = err
 			return
 		}
+
 		m.workflowErrors, err = meter.Int64Counter("mcp.workflow.errors",
 			metric.WithDescription("MCP workflow RPC errors"),
 			metric.WithUnit("{error}"))
+
 		if err != nil {
 			initErr = err
 			return
@@ -131,29 +153,37 @@ func InitMetrics() (*Metrics, error) {
 
 		m.dbDuration, err = meter.Float64Histogram("db.query.duration",
 			metric.WithDescription("DB query duration"), metric.WithUnit("ms"))
+
 		if err != nil {
 			initErr = err
 			return
 		}
+
 		m.cacheOps, err = meter.Int64Counter("cache.operations",
 			metric.WithDescription("Cache operations"), metric.WithUnit("{op}"))
+
 		if err != nil {
 			initErr = err
 			return
 		}
+
 		m.queueJobs, err = meter.Int64Counter("queue.jobs",
 			metric.WithDescription("Background queue jobs processed"), metric.WithUnit("{job}"))
+
 		if err != nil {
 			initErr = err
 			return
 		}
+
 		m.queueErrors, err = meter.Int64Counter("queue.errors",
 			metric.WithDescription("Background queue job errors"), metric.WithUnit("{error}"))
+
 		if err != nil {
 			initErr = err
 			return
 		}
 	})
+
 	return m, initErr
 }
 
@@ -162,6 +192,7 @@ func GetMetrics() *Metrics {
 	if m == nil {
 		_, _ = InitMetrics()
 	}
+
 	return m
 }
 
@@ -171,6 +202,7 @@ func (mm *Metrics) RecordHTTP(ctx context.Context, method, route string, status 
 	if mm == nil {
 		return
 	}
+
 	attrs := []attribute.KeyValue{
 		attribute.String("http.method", method),
 		attribute.String("http.route", route),
@@ -178,6 +210,7 @@ func (mm *Metrics) RecordHTTP(ctx context.Context, method, route string, status 
 	}
 	mm.httpRequests.Add(ctx, 1, metric.WithAttributes(attrs...))
 	mm.httpDuration.Record(ctx, durationMs, metric.WithAttributes(attrs...))
+
 	if status >= 400 {
 		// extra error class attribute
 		errAttrs := append(attrs, attribute.String("error.type", httpStatusClass(status)))
@@ -189,6 +222,7 @@ func (mm *Metrics) IncActiveHTTP(ctx context.Context, method, route string, delt
 	if mm == nil {
 		return
 	}
+
 	mm.httpActive.Add(ctx, delta, metric.WithAttributes(attribute.String("http.method", method), attribute.String("http.route", route)))
 }
 
@@ -198,6 +232,7 @@ func (mm *Metrics) RecordMCPTool(ctx context.Context, tool, profile, status stri
 	if mm == nil {
 		return
 	}
+
 	attrs := []attribute.KeyValue{
 		attribute.String("mcp.tool.name", tool),
 		attribute.String("mcp.profile", profile),
@@ -205,6 +240,7 @@ func (mm *Metrics) RecordMCPTool(ctx context.Context, tool, profile, status stri
 	}
 	mm.mcpToolCalls.Add(ctx, 1, metric.WithAttributes(attrs...))
 	mm.mcpToolDuration.Record(ctx, durationMs, metric.WithAttributes(attrs...))
+
 	if status == "error" {
 		eAttrs := append(attrs, attribute.String("error.type", errType))
 		mm.mcpToolErrors.Add(ctx, 1, metric.WithAttributes(eAttrs...))
@@ -215,6 +251,7 @@ func (mm *Metrics) IncActiveMCP(ctx context.Context, tool, profile string, delta
 	if mm == nil {
 		return
 	}
+
 	mm.mcpActiveCalls.Add(ctx, delta, metric.WithAttributes(attribute.String("mcp.tool.name", tool), attribute.String("mcp.profile", profile)))
 }
 
@@ -222,6 +259,7 @@ func (mm *Metrics) RecordMCPWorkflow(ctx context.Context, method, profile string
 	if mm == nil {
 		return
 	}
+
 	attrs := []attribute.KeyValue{
 		attribute.String("mcp.workflow.method", method), // initialize | tools/list | tools/call
 		attribute.String("mcp.profile", profile),
@@ -229,6 +267,7 @@ func (mm *Metrics) RecordMCPWorkflow(ctx context.Context, method, profile string
 	}
 	mm.workflowCalls.Add(ctx, 1, metric.WithAttributes(attrs...))
 	mm.workflowDuration.Record(ctx, durationMs, metric.WithAttributes(attrs...))
+
 	if status == "error" {
 		mm.workflowErrors.Add(ctx, 1, metric.WithAttributes(attrs...))
 	}

@@ -20,6 +20,7 @@ func TestRejectRecordsIDForRetry(t *testing.T) {
 	if got := r.Rejected["products"]; len(got) != 1 || got[0] != "rec-1" {
 		t.Fatalf("expected rejected[products] = [rec-1], got %v", got)
 	}
+
 	if got := r.Errors["products"]; len(got) != 1 || got[0] != "invalid uuid rec-1" {
 		t.Fatalf("expected errors[products] to carry the message, got %v", got)
 	}
@@ -34,6 +35,7 @@ func TestRejectWithoutIDSkipsRejectedList(t *testing.T) {
 	if len(r.Errors["products"]) != 1 {
 		t.Fatalf("expected a table-level error, got %v", r.Errors)
 	}
+
 	if _, ok := r.Rejected["products"]; ok {
 		t.Fatalf("expected no rejected entry for an unknown id, got %v", r.Rejected)
 	}
@@ -48,6 +50,7 @@ func TestRejectGroupsByTable(t *testing.T) {
 	if len(r.Rejected["products"]) != 2 {
 		t.Fatalf("expected 2 rejected products, got %v", r.Rejected["products"])
 	}
+
 	if len(r.Rejected["order_lines"]) != 1 {
 		t.Fatalf("expected 1 rejected order_line, got %v", r.Rejected["order_lines"])
 	}
@@ -63,13 +66,16 @@ func TestPushResultJSONExposesRejected(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
+
 	var body struct {
 		Applied  map[string][]string `json:"applied"`
 		Rejected map[string][]string `json:"rejected"`
 	}
+
 	if err := json.Unmarshal(raw, &body); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
+
 	if len(body.Rejected["products"]) != 1 || body.Rejected["products"][0] != "p1" {
 		t.Fatalf("expected rejected.products = [p1], got %v", body.Rejected)
 	}
@@ -85,13 +91,16 @@ func TestPushResultJSONOmitsEmptyRejected(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
+
 	var body map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &body); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
+
 	if _, present := body["rejected"]; present {
 		t.Fatalf("expected rejected to be omitted when empty, got %s", raw)
 	}
+
 	if _, present := body["errors"]; present {
 		t.Fatalf("expected errors to be omitted when empty, got %s", raw)
 	}

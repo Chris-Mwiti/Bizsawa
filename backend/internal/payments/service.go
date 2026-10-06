@@ -643,13 +643,16 @@ func (s *Service) Cancel(ctx context.Context, businessID, id uuid.UUID) (*Paymen
 	if err != nil {
 		return nil, err
 	}
+
 	if cmd.Status == StatusSucceeded || cmd.Status == StatusFailed {
 		return cmd, nil
 	}
+
 	raw := []byte(`{"code":"user_cancelled","message":"cancelled from app"}`)
 	if err := s.MarkFailed(ctx, *cmd, "user_cancelled", mpesaFailureMessage("user_cancelled", ""), raw); err != nil {
 		return nil, err
 	}
+
 	return s.repo.Find(ctx, businessID, id)
 }
 
@@ -662,26 +665,33 @@ func (s *Service) CheckSTK(ctx context.Context, businessID, id uuid.UUID) (Provi
 	if err != nil {
 		return ProviderResult{}, err
 	}
+
 	if cmd.Status == StatusSucceeded || cmd.Status == StatusFailed {
 		return ProviderResult{RequestID: cmd.ProviderRequestID, Receipt: cmd.ProviderReceipt, Status: cmd.Status}, nil
 	}
+
 	querier, ok := s.provider.(interface {
 		STKQuery(ctx context.Context, checkoutRequestID string) (ProviderResult, error)
 	})
+
 	if !ok {
 		return ProviderResult{}, apperrors.ErrInternal.WithMessage("mpesa provider not configured")
 	}
+
 	if cmd.ProviderRequestID == "" {
 		return ProviderResult{}, apperrors.ErrUnprocessable.WithMessage("payment has no provider request id yet")
 	}
+
 	result, err := querier.STKQuery(ctx, cmd.ProviderRequestID)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "[PAYMENTS/MPESA]-stk query failed", "paymentID", cmd.ID.String(), "err", err.Error())
 		return ProviderResult{}, err
 	}
+
 	if result.Status == StatusFailed {
 		_ = s.MarkFailed(ctx, *cmd, "stk_query", mpesaFailureMessage("", ""), result.Raw)
 	}
+
 	return result, nil
 }
 

@@ -82,6 +82,7 @@ func (w *paymentWorker) findCustomerByPhone(ctx context.Context, businessID uuid
 	normalized := phone
 	// Try exact match first, then LIKE for variations (e.g., 2547... vs 07...)
 	var idStr string
+
 	err := db.WithContext(ctx).Raw(`SELECT id::text FROM customers WHERE business_id = ? AND phone = ? AND deleted_at IS NULL LIMIT 1`, businessID, normalized).Scan(&idStr).Error
 	if err == nil && idStr != "" {
 		if parsed, err := uuid.Parse(idStr); err == nil {
@@ -90,13 +91,16 @@ func (w *paymentWorker) findCustomerByPhone(ctx context.Context, businessID uuid
 	}
 	// Try digits-only contains match
 	digits := ""
+
 	for _, ch := range phone {
 		if ch >= '0' && ch <= '9' {
 			digits += string(ch)
 		}
 	}
+
 	if len(digits) >= 9 {
 		suffix := digits[len(digits)-9:] // last 9 digits match Kenya numbers
+
 		err = db.WithContext(ctx).Raw(`SELECT id::text FROM customers WHERE business_id = ? AND regexp_replace(phone, '[^0-9]', '', 'g') LIKE '%' || ? AND deleted_at IS NULL LIMIT 1`, businessID, suffix).Scan(&idStr).Error
 		if err == nil && idStr != "" {
 			if parsed, err := uuid.Parse(idStr); err == nil {
@@ -104,6 +108,7 @@ func (w *paymentWorker) findCustomerByPhone(ctx context.Context, businessID uuid
 			}
 		}
 	}
+
 	return uuid.Nil, fmt.Errorf("customer not found for phone %s", phone)
 }
 
@@ -208,6 +213,7 @@ func (w *paymentWorker) Work(ctx context.Context, job *river.Job[PaymentEventArg
 					w.logger.InfoContext(ctx, "[PAYMENTS_WORKER]-settled via phone lookup FIFO", "customerID", customerID.String(), "allocations", len(result.Allocations))
 					return nil
 				}
+
 				w.logger.WarnContext(ctx, "[PAYMENTS_WORKER]-phone customer settlement failed", "phone", phone, "err", err.Error())
 			} else {
 				w.logger.WarnContext(ctx, "[PAYMENTS_WORKER]-customer not found for phone", "phone", phone, "err", fmt.Sprintf("%v", err))

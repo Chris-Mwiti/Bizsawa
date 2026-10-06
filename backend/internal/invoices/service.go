@@ -209,6 +209,7 @@ func (s *Service) Send(ctx context.Context, businessID, invoiceID uuid.UUID, cha
 
 		return nil
 	})
+
 	if err != nil {
 		return nil, err
 	}
@@ -269,6 +270,7 @@ func (s *Service) RecordPayment(ctx context.Context, businessID, orderID uuid.UU
 				"amount":    inv.AmountPaid.String(),
 				"paymentId": req.PaymentID,
 			})
+
 			if err != nil {
 				return err
 			}
@@ -369,6 +371,7 @@ func (s *Service) SettleCustomerPayment(ctx context.Context, businessID, custome
 
 		return nil
 	})
+
 	if err != nil {
 		return nil, err
 	}
@@ -414,6 +417,7 @@ func (s *Service) Cancel(ctx context.Context, businessID, invoiceID uuid.UUID) (
 
 		return err
 	})
+
 	if err != nil {
 		s.logger.ErrorContext(ctx, "[INVOICES]-error while cancelling order", "businessID", businessID.String(), "err", err)
 		return nil, err
@@ -444,6 +448,7 @@ func (s *Service) MarkOverdue(ctx context.Context, businessID uuid.UUID, now tim
 
 		return nil
 	})
+
 	if err != nil {
 		s.logger.ErrorContext(ctx, "[INVOICES]-error while marking overdue order", "err", err)
 		return nil, err
@@ -466,6 +471,7 @@ func (s *Service) PDF(ctx context.Context, businessID, invoiceID uuid.UUID) ([]b
 		Address string `gorm:"column:address"`
 		TaxPIN  string `gorm:"column:tax_pin"`
 	}
+
 	if err := s.repo.db.WithContext(ctx).Table("businesses").Select("name, phone, email, address, tax_pin").Where("id = ?", businessID).First(&business).Error; err != nil {
 		slog.ErrorContext(ctx, "database operation failed", "err", err)
 	}
@@ -486,31 +492,41 @@ func deterministicPDF(inv *Invoice, business struct {
 	sort.Slice(lines, func(i, j int) bool { return lines[i].ID.String() < lines[j].ID.String() })
 	// Minimal compliant PDF with business shop as source title
 	b.WriteString("%PDF-1.4\n% BizSawa Invoice\n")
+
 	shopTitle := business.Name
 	if shopTitle == "" {
 		shopTitle = "Business Shop"
 	}
+
 	b.WriteString(fmt.Sprintf("%% Title: %s — Invoice %s\n", shopTitle, inv.InvoiceNumber))
 	b.WriteString(fmt.Sprintf("From: %s\n", shopTitle))
+
 	if business.Address != "" {
 		b.WriteString(fmt.Sprintf("Address: %s\n", business.Address))
 	}
+
 	if business.Phone != "" {
 		b.WriteString(fmt.Sprintf("Phone: %s\n", business.Phone))
 	}
+
 	if business.Email != "" {
 		b.WriteString(fmt.Sprintf("Email: %s\n", business.Email))
 	}
+
 	if business.TaxPIN != "" {
 		b.WriteString(fmt.Sprintf("KRA PIN: %s\n", business.TaxPIN))
 	}
+
 	if inv.CustomerName != "" {
 		b.WriteString(fmt.Sprintf("Bill To: %s", inv.CustomerName))
+
 		if inv.CustomerPhone != "" {
 			b.WriteString(fmt.Sprintf(" (%s)", inv.CustomerPhone))
 		}
+
 		b.WriteString("\n")
 	}
+
 	b.WriteString(
 		fmt.Sprintf("Invoice: %s\nStatus: %s\nSubtotal: %s\nTax: %s\nTotal: %s\nPaid: %s\nDue: %s\n",
 			inv.InvoiceNumber,
@@ -528,6 +544,7 @@ func deterministicPDF(inv *Invoice, business struct {
 		if name == "" {
 			name = line.Description
 		}
+
 		b.WriteString(
 			fmt.Sprintf("Line: %s | %s | %s | %s\n",
 				name,

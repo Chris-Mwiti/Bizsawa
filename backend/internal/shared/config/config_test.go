@@ -15,6 +15,7 @@ func TestParseOTLPHeaders(t *testing.T) {
 		if len(got) != 2 {
 			t.Fatalf("len = %d, want 2: %#v", len(got), got)
 		}
+
 		if got["x-honeycomb-dataset"] != "bizsawa-api" {
 			t.Errorf("dataset = %q", got["x-honeycomb-dataset"])
 		}
@@ -55,6 +56,7 @@ func TestObservabilitySignalTargetFallback(t *testing.T) {
 	if got := generic.TracesTarget(); got != "http://otel-collector:4318" {
 		t.Errorf("traces fallback = %q", got)
 	}
+
 	if got := generic.MetricsTarget(); got != "http://otel-collector:4318" {
 		t.Errorf("metrics fallback = %q", got)
 	}
@@ -64,9 +66,11 @@ func TestObservabilitySignalTargetFallback(t *testing.T) {
 		TracesEndpoint:  "https://api.honeycomb.io/v1/traces",
 		MetricsEndpoint: "https://api.honeycomb.io/v1/metrics",
 	}
+
 	if got := override.TracesTarget(); got != "https://api.honeycomb.io/v1/traces" {
 		t.Errorf("traces override = %q", got)
 	}
+
 	if got := override.MetricsTarget(); got != "https://api.honeycomb.io/v1/metrics" {
 		t.Errorf("metrics override = %q", got)
 	}

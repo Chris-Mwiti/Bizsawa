@@ -10,9 +10,9 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	sharedhttp "github.com/Codecx-Org/FinAI/backend/internal/shared/http"
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/config"
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/email"
+	sharedhttp "github.com/Codecx-Org/FinAI/backend/internal/shared/http"
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/middleware"
 )
 
@@ -55,10 +55,12 @@ func New(db *gorm.DB, cfg Config, opts ...Option) *Module {
 
 	repo := NewRepository(db)
 	tokens := NewTokenService(cfg)
+
 	svc := NewService(repo, tokens, options.memberships, options.subscriptions)
 	if options.googleCfg != nil {
 		svc.WithGoogleConfig(*options.googleCfg)
 	}
+
 	if options.emailSender != nil {
 		svc.WithEmailSender(options.emailSender)
 	}

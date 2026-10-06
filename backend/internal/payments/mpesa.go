@@ -315,9 +315,11 @@ func providerResult(resp mpesaAPIResponse) ProviderResult {
 	if code != "" && code != "0" {
 		desc := firstNonEmpty(resp.ResponseDescription, resp.ResultDesc, "M-Pesa request was rejected")
 		raw := resp.Raw
+
 		if len(raw) == 0 {
 			raw = []byte(`{"code":"` + code + `","message":"` + desc + `"}`)
 		}
+
 		return ProviderResult{RequestID: requestID, Receipt: receipt, Raw: raw, Status: StatusFailed}
 	}
 
@@ -346,11 +348,13 @@ func mpesaFailureMessage(code, fallback string) string {
 		if fallback != "" {
 			return fallback
 		}
+
 		return "M-Pesa request failed. No money was charged — please retry."
 	default:
 		if fallback != "" {
 			return fallback
 		}
+
 		return "M-Pesa payment failed. No money was charged — you can retry."
 	}
 }
