@@ -10,7 +10,7 @@ export default function App() {
   const [lang, setLang] = useState<Lang>("en");
 
   return (
-    <div id="top" className="min-h-[100dvh] bg-paper font-sans text-ink">
+    <div id="top" className="min-h-[100dvh] bg-night font-sans text-paper">
       <Nav lang={lang} setLang={setLang} setView={setView} />
       {view === "landing" ? (
         <>

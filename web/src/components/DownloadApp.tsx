@@ -14,7 +14,7 @@ export function DownloadApp() {
   return (
     <section id="download" aria-label="Download the preview app" className="mx-auto max-w-[1400px] px-4 pb-16 md:px-8 md:pb-24">
       <BlurFade>
-        <div className="grid items-center gap-8 rounded-[28px] bg-ink p-6 text-white shadow-clinical md:p-10 lg:grid-cols-2">
+        <div className="grid items-center gap-8 rounded-[28px] border border-glow/25 bg-gradient-to-br from-accent/15 via-night-soft to-night p-6 text-white shadow-glow md:p-10 lg:grid-cols-2">
           <div>
             <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/55">
               Preview build · Android
