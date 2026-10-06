@@ -1,7 +1,7 @@
 # Preview distribution pipeline (v1 — pre-Play-Store)
 
 How a stable build reaches users' phones today: EAS builds the APK,
-GitHub Actions uploads it to Google Drive, the website serves it from
+GitHub Actions attaches it to a GitHub Release, the website serves it from
 `web/src/download.json`, and EAS Update keeps it fresh over the air.
 Play Store (`eas submit`, AAB) is the v2 path at the bottom.
 
@@ -10,8 +10,8 @@ Play Store (`eas submit`, AAB) is the v2 path at the bottom.
 ```
 bump version (workflow input)
   → eas build --profile preview (APK, channel=preview, autoIncrement)
-  → rclone → Google Drive folder (public-link folder, SA uploads)
-  → rewrite web/src/download.json (version, uc?id= link, size MB)
+  → fetch artifact → gh release create preview-vX.Y.Z (APK attached)
+  → rewrite web/src/download.json (version, release URL, size MB)
   → commit + push → site redeploys → Download section goes live
   → user sideloads once; later JS fixes arrive via `eas update`
 ```
@@ -23,15 +23,14 @@ never a dead link.
 
 ## 2. One-time setup (needs you)
 
-1. **Google Drive**: create folder `BizSawa-Previews`, set it to
-   "Anyone with the link: Viewer" (files uploaded into it inherit this).
-2. **Service account**: Google Cloud → service account → JSON key.
-   Share the folder with the account's email as Editor.
-3. **Repo secrets** (`Settings → Secrets → Actions`):
-   - `EXPO_TOKEN` — Expo access token (builds + updates).
-   - `GDRIVE_SA_JSON` — the whole service-account JSON.
-   - `GDRIVE_FOLDER_ID` — from the folder URL (`/folders/<ID>`).
-4. Run: Actions → "Preview release" → version `1.0.0` → notes.
+1. **Repo secret** (`Settings → Secrets → Actions`): `EXPO_TOKEN`
+   (Expo access token for builds + updates). Release uploads use the
+   built-in `GITHUB_TOKEN` — nothing to configure.
+2. Run: Actions → "Preview release" → version `1.0.0` → notes.
+
+Retired: an earlier Drive-based design died on Google's zero-quota rule
+for service accounts (`storageQuotaExceeded` is unfixable by design);
+GitHub Releases replaced it — versioned, direct links, no extra accounts.
 
 ## 3. Releasing
 
@@ -79,5 +78,5 @@ from the workflow output and apply the next lever only if over budget.
   the size problem mostly disappears).
 - `eas submit -p android --profile production` (needs Play Console +
   service-account key; first upload is manual).
-- Keep this preview track: internal testers stay on Drive + `preview`
+- Keep this preview track: internal testers stay on GitHub Releases + `preview`
   channel, the public moves to the store track (`production` channel).
