@@ -106,7 +106,7 @@ jobs:
           fi
           APK="bizsawa-preview-v${{ inputs.version }}.apk"
           cp ./bizsawa-preview.apk "./$APK"
-          rclone copy "./$APK" gdrive: -v || { echo "HINT: Drive returned 404 — the folder is not shared with the service account as Editor, or GDRIVE_FOLDER_ID is wrong. See pipeline doc §2."; exit 1; }
+          rclone copy "./$APK" gdrive: -v || { echo "rclone copy failed — see the ERROR lines above for the Drive reason"; exit 1; }
           FILE_ID=$(rclone lsf gdrive: --files-only --format i --include "$APK" | head -1)
           if [ -z "$FILE_ID" ]; then echo "upload finished but the file is not visible — check folder sharing"; exit 1; fi
           echo "file_id=$FILE_ID" >> "$GITHUB_OUTPUT"
