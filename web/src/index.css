@@ -98,8 +98,8 @@ html {
 }
 
 body {
-  background: var(--color-night);
-  color: var(--color-paper);
+  background: var(--color-paper);
+  color: var(--color-ink);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
