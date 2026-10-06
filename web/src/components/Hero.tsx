@@ -240,32 +240,15 @@ export function Hero({
           </div>
         </motion.div>
 
-        <div className="flex items-center gap-3">
-          <div className="flex -space-x-3">
-            {[
-              { seed: "32", alt: "Duka owner" },
-              { seed: "47", alt: "Salon owner" },
-              { seed: "12", alt: "Pharmacy owner" },
-            ].map((a) => (
-              <img
-                key={a.seed}
-                src={`https://i.pravatar.cc/72?img=${a.seed}`}
-                alt={a.alt}
-                loading="lazy"
-                className="size-11 rounded-full border-2 border-white bg-accent-soft object-cover"
-              />
+        <div className="text-white drop-shadow-[0_1px_6px_rgba(0,0,0,0.5)]">
+          <span className="flex gap-0.5" aria-label="Rated 4.9 out of 5">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Star key={i} size={13} fill="currentColor" strokeWidth={0} className="text-[#c98a0b]" />
             ))}
-          </div>
-          <div className="text-white drop-shadow-[0_1px_6px_rgba(0,0,0,0.5)]">
-            <span className="flex gap-0.5" aria-label="Rated 4.9 out of 5">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Star key={i} size={13} fill="currentColor" strokeWidth={0} className="text-[#c98a0b]" />
-              ))}
-            </span>
-            <p className="mt-1 text-xs font-semibold">
-              Loved from Nairobi to Arusha
-            </p>
-          </div>
+          </span>
+          <p className="mt-1 text-xs font-semibold">
+            Loved from Nairobi to Arusha
+          </p>
         </div>
 
         <p className="text-2xl font-bold leading-tight tracking-tight text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.55)] md:text-right md:text-[28px]">

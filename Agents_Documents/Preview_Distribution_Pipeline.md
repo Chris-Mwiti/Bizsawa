@@ -10,7 +10,9 @@ Play Store (`eas submit`, AAB) is the v2 path at the bottom.
 ```
 bump version (workflow input)
   → eas build --profile preview (APK, channel=preview, autoIncrement)
-  → fetch artifact → gh release create preview-vX.Y.Z (APK attached)
+  → fetch artifact → gh release create preview-vX.Y.Z in the PUBLIC
+    Chris-Mwiti/Bizsawa-releases repo (APK attached; the private code
+    repo would 404 anonymous downloaders by design)
   → rewrite web/src/download.json (version, release URL, size MB)
   → commit + push → site redeploys → Download section goes live
   → user sideloads once; later JS fixes arrive via `eas update`
@@ -23,10 +25,14 @@ never a dead link.
 
 ## 2. One-time setup (needs you)
 
-1. **Repo secret** (`Settings → Secrets → Actions`): `EXPO_TOKEN`
-   (Expo access token for builds + updates). Release uploads use the
-   built-in `GITHUB_TOKEN` — nothing to configure.
-2. Run: Actions → "Preview release" → version `1.0.0` → notes.
+1. **Public releases repo**: create `Chris-Mwiti/Bizsawa-releases`
+   (public, empty is fine) — it holds APKs only, never source.
+2. **Repo secrets** (`Settings → Secrets → Actions` on the private repo):
+   - `EXPO_TOKEN` (Expo access token for builds + updates).
+   - `RELEASES_PAT` — fine-grained PAT with Contents read+write scoped
+     to `Bizsawa-releases` only (Settings → Developer settings →
+     Personal access tokens → Fine-grained).
+3. Run: Actions → "Preview release" → version `1.0.0` → notes.
 
 Retired: an earlier Drive-based design died on Google's zero-quota rule
 for service accounts (`storageQuotaExceeded` is unfixable by design);

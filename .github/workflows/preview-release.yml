@@ -1,16 +1,27 @@
-# Preview release — build, publish to GitHub Releases, update website
+# Preview release — build, publish to a PUBLIC releases repo, update website
 #
 # Manual pipeline (v1, pre-Play-Store): builds a preview APK on EAS,
-# attaches it to a GitHub Release, then rewrites web/src/download.json
-# so the site's Download section serves it.
+# attaches it to a GitHub Release in the public releases repo (release
+# assets on the private code repo would 404 for anonymous downloaders),
+# then rewrites web/src/download.json so the site's Download section
+# serves it.
+#
+# One-time setup (besides secrets below): create the PUBLIC repo named in
+# RELEASES_REPO (empty is fine), then a fine-grained PAT with Contents
+# read+write scoped to that repo only.
 #
 # Required secrets (repo Settings → Secrets → Actions):
-#   EXPO_TOKEN – Expo access token (EAS builds + updates).
-#   (Release upload uses the built-in GITHUB_TOKEN — nothing to configure.)
+#   EXPO_TOKEN   – Expo access token (EAS builds + updates).
+#   RELEASES_PAT – fine-grained PAT for the releases repo (upload only).
+#   (Release upload authenticates with RELEASES_PAT — the built-in
+#   GITHUB_TOKEN cannot reach across repos.)
 #
 # Run: Actions → "Preview release" → Run workflow → enter version (e.g. 1.1.0).
 
 name: Preview release
+
+env:
+  RELEASES_REPO: Chris-Mwiti/Bizsawa-releases
 
 on:
   workflow_dispatch:
@@ -39,8 +50,12 @@ jobs:
       - name: Check secrets
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          RELEASES_PAT: ${{ secrets.RELEASES_PAT }}
         run: |
-          if [ -z "$EXPO_TOKEN" ]; then echo "Missing secrets: EXPO_TOKEN — see workflow header docs"; exit 1; fi
+          missing=""
+          [ -z "$EXPO_TOKEN" ] && missing="$missing EXPO_TOKEN"
+          [ -z "$RELEASES_PAT" ] && missing="$missing RELEASES_PAT"
+          if [ -n "$missing" ]; then echo "Missing secrets:$missing — see workflow header docs"; exit 1; fi
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -73,17 +88,17 @@ jobs:
       - name: Publish GitHub Release with APK
         id: release
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASES_PAT }}
         run: |
           TAG="preview-v${{ inputs.version }}"
           APK="bizsawa-preview-v${{ inputs.version }}.apk"
           cp ./bizsawa-preview.apk "./$APK"
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "./$APK" --clobber
+          if gh release view "$TAG" --repo "$RELEASES_REPO" >/dev/null 2>&1; then
+            gh release upload "$TAG" "./$APK" --repo "$RELEASES_REPO" --clobber
           else
-            gh release create "$TAG" "./$APK" --title "Preview v${{ inputs.version }}" --notes "${{ inputs.notes }}" --prerelease
+            gh release create "$TAG" "./$APK" --repo "$RELEASES_REPO" --title "Preview v${{ inputs.version }}" --notes "${{ inputs.notes }}" --prerelease
           fi
-          echo "apk_url=https://github.com/${{ github.repository }}/releases/download/$TAG/$APK" >> "$GITHUB_OUTPUT"
+          echo "apk_url=https://github.com/$RELEASES_REPO/releases/download/$TAG/$APK" >> "$GITHUB_OUTPUT"
 
       - name: Update website manifest
         env:
