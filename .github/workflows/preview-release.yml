@@ -95,6 +95,9 @@ jobs:
           # a mangled paste (lost quotes, reflowed text) breaks the upload
           # later with a cryptic oauth error.
           python3 -c "import json; d=json.load(open('/tmp/sa.json')); assert d.get('type')=='service_account', 'not a service-account key (type=%r)' % (d.get('type'),); print('service-account JSON OK, project:', d.get('project_id'))"
+          # Folder IDs copy-pasted from the URL often carry whitespace —
+          # Drive answers those with a bare 404, so scrub first.
+          export RCLONE_CONFIG_GDRIVE_ROOT_FOLDER_ID="$(printf '%s' "$RCLONE_CONFIG_GDRIVE_ROOT_FOLDER_ID" | tr -d '[:space:]')"
           if ! command -v rclone >/dev/null; then
             if ! curl -s https://rclone.org/install.sh | sudo bash; then
               sudo apt-get update -qq && sudo apt-get install -y -qq rclone
@@ -102,8 +105,9 @@ jobs:
           fi
           APK="bizsawa-preview-v${{ inputs.version }}.apk"
           cp ./bizsawa-preview.apk "./$APK"
-          rclone copy "./$APK" gdrive: -v
+          rclone copy "./$APK" gdrive: -v || { echo "HINT: Drive returned 404 — the folder is not shared with the service account as Editor, or GDRIVE_FOLDER_ID is wrong. See pipeline doc §2."; exit 1; }
           FILE_ID=$(rclone lsf gdrive: --files-only --format i --include "$APK" | head -1)
+          if [ -z "$FILE_ID" ]; then echo "upload finished but the file is not visible — check folder sharing"; exit 1; fi
           echo "file_id=$FILE_ID" >> "$GITHUB_OUTPUT"
           rm -f /tmp/sa.json
 
