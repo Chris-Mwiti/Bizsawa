@@ -69,10 +69,18 @@ jobs:
       - name: Bump app version
         run: bun scripts/bump-version.js "${{ inputs.version }}"
 
-      - name: EAS preview build (apk, waits for artifact)
+      - name: EAS preview build (apk, waits for completion)
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: eas build --platform android --profile preview --non-interactive --wait --output ./bizsawa-preview.apk
+        run: eas build --platform android --profile preview --non-interactive --wait
+
+      - name: Download build artifact
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          URL=$(eas build:list --platform android --distribution internal --channel preview --status finished --limit 1 --json --non-interactive | python3 -c "import sys,json; d=json.load(sys.stdin); b=d[0] if isinstance(d,list) else d; print(((b.get('artifacts') or {}).get('buildUrl')) or b.get('artifactUrl') or '')")
+          if [ -z "$URL" ]; then echo "no finished preview build found"; exit 1; fi
+          curl -fL -H "Authorization: Bearer $EXPO_TOKEN" -o bizsawa-preview.apk "$URL"
 
       - name: Upload to Drive
         id: drive
