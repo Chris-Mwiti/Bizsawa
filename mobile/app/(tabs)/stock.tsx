@@ -400,19 +400,8 @@ export default function StockTab() {
         }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Inventory actions — prominent CTA + live filters */}
+        {/* Inventory filters */}
         <View className='bg-surface rounded-5xl p-4 border border-hairline shadow-clinical-sm gap-3'>
-          <TouchableOpacity
-            onPress={handleOpenAddModal}
-            accessibilityRole='button'
-            accessibilityLabel='Add inventory item'
-            className='flex-row items-center justify-center gap-2 bg-accent rounded-full py-4 shadow-clinical-sm active:bg-accent-active'
-          >
-            <Plus size={18} color='white' />
-            <Text className='font-geist-bold text-white text-[15px] font-bold'>
-              Add Inventory
-            </Text>
-          </TouchableOpacity>
           <View className='flex-row gap-2'>
             {(
               [
