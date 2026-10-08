@@ -92,6 +92,7 @@ export async function persistAuthResponse(data: AuthResponse): Promise<void> {
     [AUTH_STORAGE_KEYS.userId, data.userId],
   ])
   await AsyncStorage.removeItem(AUTH_STORAGE_KEYS.legacyToken)
+  primeAuthCache({ token: data.accessToken })
   // Also mirror to SecureStore for offline
   try {
     const { persistSecureAuth } = await import('./secureStorage')
@@ -104,6 +105,7 @@ export async function persistAuthResponse(data: AuthResponse): Promise<void> {
 }
 
 export async function clearAuthStorage(): Promise<void> {
+  invalidateAuthCache()
   await AsyncStorage.multiRemove([
     AUTH_STORAGE_KEYS.accessToken,
     AUTH_STORAGE_KEYS.refreshToken,
@@ -122,6 +124,47 @@ export async function clearAuthStorage(): Promise<void> {
 
 
 let refreshPromise: Promise<string | null> | null = null
+
+// In-memory auth header cache. The request interceptor used to perform 3
+// sequential AsyncStorage reads (3 bridge round-trips) on EVERY request —
+// with 3-6 queries per tab that was 9-18 round-trips per navigation. Now the
+// first request reads once via multiGet and every later request is free.
+// Any storage write in this module keeps the cache coherent; business
+// switches call primeAuthCache (see AuthContext.setSelectedBusinessAuth).
+interface CachedAuth {
+  token: string | null
+  businessId: string | null
+}
+let cachedAuth: CachedAuth | null = null
+
+export function primeAuthCache(patch: Partial<CachedAuth>): void {
+  cachedAuth = { token: null, businessId: null, ...cachedAuth, ...patch }
+}
+
+export function invalidateAuthCache(): void {
+  cachedAuth = null
+}
+
+async function readStoredAuth(): Promise<CachedAuth> {
+  if (cachedAuth) return cachedAuth
+  // One bridge round-trip for all three keys (was: 3 sequential getItem).
+  const rows = await AsyncStorage.multiGet([
+    AUTH_STORAGE_KEYS.accessToken,
+    AUTH_STORAGE_KEYS.legacyToken,
+    AUTH_STORAGE_KEYS.businessId,
+  ])
+  const byKey = new Map(rows.map(([k, v]) => [k, v]))
+  const token =
+    byKey.get(AUTH_STORAGE_KEYS.accessToken) ||
+    byKey.get(AUTH_STORAGE_KEYS.legacyToken) ||
+    null
+  const rawBiz = byKey.get(AUTH_STORAGE_KEYS.businessId)
+  cachedAuth = {
+    token,
+    businessId: rawBiz?.trim() ? (rawBiz as string).trim() : null,
+  }
+  return cachedAuth
+}
 
 async function refreshAccessToken(): Promise<string | null> {
   if (!refreshPromise) {
@@ -145,11 +188,7 @@ async function refreshAccessToken(): Promise<string | null> {
 
 api.interceptors.request.use(
   async (config) => {
-    const token =
-      (await AsyncStorage.getItem(AUTH_STORAGE_KEYS.accessToken)) ||
-      (await AsyncStorage.getItem(AUTH_STORAGE_KEYS.legacyToken))
-    const rawBiz = await AsyncStorage.getItem(AUTH_STORAGE_KEYS.businessId)
-    const businessId = rawBiz?.trim() ? rawBiz.trim() : null
+    const { token, businessId } = await readStoredAuth()
 
     config.headers = config.headers || {}
     if (token) config.headers.Authorization = `Bearer ${token}`
@@ -180,18 +219,23 @@ api.interceptors.request.use(
       }
     }
 
-    console.debug(
-      'API Request:',
-      config.method?.toUpperCase(),
-      config.url,
-      config.baseURL,
-      'biz:',
-      businessId ? `${businessId.slice(0, 8)}…` : 'none',
-      'headers:',
-      businessId ? { 'X-Business-ID': `${businessId.slice(0, 8)}…` } : {},
-      'params:',
-      config.params,
-    )
+    // Verbose per-request logging crosses the native bridge on every call —
+    // dev only. (The missing-business warning below stays: it fires rarely
+    // and signals a real tenant-scoping bug.)
+    if (__DEV__) {
+      console.debug(
+        'API Request:',
+        config.method?.toUpperCase(),
+        config.url,
+        config.baseURL,
+        'biz:',
+        businessId ? `${businessId.slice(0, 8)}…` : 'none',
+        'headers:',
+        businessId ? { 'X-Business-ID': `${businessId.slice(0, 8)}…` } : {},
+        'params:',
+        config.params,
+      )
+    }
     return config
   },
   (error) => Promise.reject(error),
@@ -230,16 +274,18 @@ export function standardizeApiError(error: any): string {
 
 api.interceptors.response.use(
   (response) => {
-    console.log('API Response:', response.status, response.config.url)
+    if (__DEV__) console.log('API Response:', response.status, response.config.url)
     return response
   },
   async (error: ApiError & { config?: any }) => {
     error.friendlyMessage = standardizeApiError(error)
-    console.error(`[API ERROR] ${error.config?.url}:`, {
-      status: error.response?.status,
-      message: error.message,
-      data: error.response?.data,
-    })
+    if (__DEV__) {
+      console.error(`[API ERROR] ${error.config?.url}:`, {
+        status: error.response?.status,
+        message: error.message,
+        data: error.response?.data,
+      })
+    }
 
     const originalRequest = error.config
     if (
