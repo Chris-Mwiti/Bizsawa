@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Codecx-Org/FinAI/backend/internal/mcp"
+	apperrors "github.com/Codecx-Org/FinAI/backend/internal/shared/errors"
 )
 
 type ChatMessage struct {
@@ -225,7 +226,7 @@ func (s *Service) postCompletion(ctx context.Context, body map[string]any) ([]by
 func (s *Service) Chat(ctx context.Context, session mcp.Session, req ChatRequest) (ChatResponse, error) {
 	msg := strings.TrimSpace(req.Message)
 	if msg == "" {
-		return ChatResponse{}, fmt.Errorf("message is required")
+		return ChatResponse{}, apperrors.ErrBadRequest.WithMessage("message must be non-empty")
 	}
 
 	lang := req.Language
