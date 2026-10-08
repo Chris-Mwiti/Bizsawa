@@ -6,6 +6,7 @@ import React, {
   useCallback,
   useRef,
 } from 'react'
+import { InteractionManager } from 'react-native'
 import NetInfo from '@react-native-community/netinfo'
 import { useRouter, usePathname } from 'expo-router'
 import {
@@ -121,11 +122,16 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     // initial counts + poll while mounted. 60s: counts drive a badge, and each
     // poll is JSI SQLite work on the JS thread — 15s polling kept the thread
     // busy enough to freeze typing on slower devices.
-    refreshCounts()
+    // The first poll is deferred past interactions (post-paint): a 14-table
+    // scan on the JS thread during startup steals frames from first render.
+    const initialTask = InteractionManager.runAfterInteractions(() => {
+      refreshCounts()
+    })
     const id = setInterval(refreshCounts, 60000)
     // expose manual debug trigger globally for console: globalThis.__bizSyncDebug = ...
     try { (globalThis as any).__bizSyncDebug = debugSyncState; (globalThis as any).__bizPushPending = pushPendingOnly } catch {}
     return () => {
+      initialTask.cancel()
       stop()
       unsub()
       clearInterval(id)

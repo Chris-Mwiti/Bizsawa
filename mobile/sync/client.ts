@@ -1,6 +1,7 @@
 import { synchronize } from '@nozbe/watermelondb/sync'
 import NetInfo from '@react-native-community/netinfo'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { InteractionManager } from 'react-native'
 import { database } from '../db/database'
 import { api, AUTH_STORAGE_KEYS } from '../lib/api'
 import { extractRejectedIds } from './pushResult'
@@ -785,12 +786,18 @@ export function startSyncEngine() {
   // Initial hydration on startup if already online — populates local storage for offline resume.
   // Skipped without a session (auth screens): syncNow self-skips, so check
   // first to avoid even the NetInfo round-trip cost on cold start.
-  NetInfo.fetch().then((s) => {
-    if (s.isConnected) {
-      syncNow().catch((e: any) =>
-        console.warn('[Sync] initial hydration failed', e?.message, e?.stack || String(e)),
-      )
-    }
+  // Deferred past first paint: syncNow opens with full-table JSI scans on
+  // the JS thread plus a WAN pull — running it during startup competes
+  // directly with rendering the first screen. runAfterInteractions fires
+  // once navigation transitions/animations settle (i.e. post-paint).
+  const initialTask = InteractionManager.runAfterInteractions(() => {
+    NetInfo.fetch().then((s) => {
+      if (s.isConnected) {
+        syncNow().catch((e: any) =>
+          console.warn('[Sync] initial hydration failed', e?.message, e?.stack || String(e)),
+        )
+      }
+    })
   })
 
   // On reconnect — immediate sync, debounced against flap storms.
@@ -817,6 +824,7 @@ export function startSyncEngine() {
   )
 
   return () => {
+    initialTask.cancel()
     unsub()
     if (intervalId) clearInterval(intervalId)
   }
