@@ -13,6 +13,11 @@ import NetInfo from '@react-native-community/netinfo'
 import { useAuth } from '../contexts/AuthContext'
 import { api } from '../lib/api'
 
+// Splash visibility budget: brand readable, never hostage. Readiness
+// (auth resolved below) releases the splash; this is only the floor.
+const SPLASH_MIN_MS = 1200
+const SPLASH_FADE_MS = 250
+
 export default function Index() {
   const [isAppReady, setIsAppReady] = useState(false)
   const [showSplash, setShowSplash] = useState(true)
@@ -20,6 +25,11 @@ export default function Index() {
   // Animations
   const fadeAnim = useRef(new Animated.Value(0)).current
   const progressAnim = useRef(new Animated.Value(0)).current
+  // Boot clock: splash hides on actual readiness (auth resolved), with a short
+  // minimum so the brand mark never flashes by. Previously a fixed 4500ms gate
+  // held every cold start hostage regardless of how fast init finished.
+  const bootStartRef = useRef(Date.now())
+  const didHideRef = useRef(false)
 
   // Typewriter
   const fullText = 'powering your business...'
@@ -36,10 +46,11 @@ export default function Index() {
       useNativeDriver: true,
     }).start()
 
-    // 2. Animate the progress bar from 0% to 100%
+    // 2. Animate the progress bar from 0% to 100% across the minimum
+    // visible window (it completes early if readiness takes longer).
     Animated.timing(progressAnim, {
       toValue: 100,
-      duration: 4500, // Increased duration to ensure it doesn't flash by
+      duration: SPLASH_MIN_MS,
       easing: Easing.bezier(0.25, 0.1, 0.25, 1),
       useNativeDriver: false,
     }).start()
@@ -56,33 +67,42 @@ export default function Index() {
     }, 60)
 
     const prepareApp = async () => {
-      const startTime = Date.now()
       try {
         // Pre-fetch fonts, icons, or silent auth here if needed
       } catch (e) {
         console.warn(e)
-      } finally {
-        const elapsedTime = Date.now() - startTime
-        // Wait at least 4500ms before hiding the splash screen
-        const remainingTime = Math.max(0, 4500 - elapsedTime)
-
-        setTimeout(() => {
-          Animated.timing(fadeAnim, {
-            toValue: 0,
-            duration: 400,
-            useNativeDriver: true,
-          }).start(() => {
-            setShowSplash(false)
-            setIsAppReady(true)
-          })
-        }, remainingTime)
       }
+      // Hiding is driven by the routing effect below once auth has resolved
+      // (see didHideRef) — no blind timer here anymore.
     }
 
     prepareApp()
 
     return () => clearInterval(typingInterval)
   }, [])
+
+  const hideSplash = () => {
+    if (didHideRef.current) return
+    didHideRef.current = true
+    // Keep the brand visible just long enough to read, then get out of the way.
+    const remainingTime = Math.max(0, SPLASH_MIN_MS - (Date.now() - bootStartRef.current))
+    setTimeout(() => {
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: SPLASH_FADE_MS,
+        useNativeDriver: true,
+      }).start(() => {
+        setShowSplash(false)
+        setIsAppReady(true)
+      })
+    }, remainingTime)
+  }
+
+  useEffect(() => {
+    // Release the splash as soon as auth has resolved (or failed) — routing
+    // below then proceeds immediately instead of waiting out a fixed timer.
+    if (!isAuthLoading) hideSplash()
+  }, [isAuthLoading])
 
   useEffect(() => {
     if (!isAppReady || isAuthLoading) return
@@ -99,22 +119,27 @@ export default function Index() {
 
         // Online auto-redirect: if token still valid (AuthContext already validated + refreshed), go home
         // Offline: AuthContext deliberately leaves isAuthenticated=false to force manual login for security
-        let isOnline = true
-        try {
-          const net = await NetInfo.fetch()
-          isOnline = net.isConnected ?? true
-        } catch {}
+        // NetInfo + businesses resolve concurrently — both are needed, neither depends on the other.
+        const [net, bizRes] = await Promise.all([
+          NetInfo.fetch().catch(() => ({ isConnected: true as boolean | null })),
+          isAuthenticated
+            ? api.get<{ businesses: any[] }>('/businesses').catch(() => null)
+            : Promise.resolve(null),
+        ])
+        const isOnline = (net as any)?.isConnected ?? true
 
         if (isAuthenticated && isOnline) {
-          // Optional business check — new users without business go to setup, others to tabs
-          try {
-            const res = await api.get<{ businesses: any[] }>('/businesses')
-            const hasBusiness =
-              Array.isArray(res.data.businesses) && res.data.businesses.length > 0
-            router.replace(hasBusiness ? '/(tabs)' : '/auth/business-setup')
-          } catch {
+          // Optional business check — new users without business go to setup, others to tabs.
+          // A failed fetch falls through to tabs (previous behaviour); only a
+          // confirmed-empty list routes to business-setup.
+          if (!bizRes) {
             router.replace('/(tabs)')
+            return
           }
+          const hasBusiness =
+            Array.isArray(bizRes.data.businesses) &&
+            bizRes.data.businesses.length > 0
+          router.replace(hasBusiness ? '/(tabs)' : '/auth/business-setup')
           return
         }
 
