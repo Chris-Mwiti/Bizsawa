@@ -13,6 +13,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/Codecx-Org/FinAI/backend/internal/inventory"
+	shareddb "github.com/Codecx-Org/FinAI/backend/internal/shared/db"
 )
 
 var syncableTables = []string{
@@ -89,12 +90,31 @@ type Service struct{ db *gorm.DB }
 
 func NewService(db *gorm.DB) *Service { return &Service{db: db} }
 
+// Pull caps: full pulls are the mobile cold-start bottleneck (F5).
+// Default 1000 rows/table, max 5000; ordered by updated_at so cursors page
+// deterministically when callers pass the returned timestamp back as ?since=.
+const (
+	DefaultPullLimit = 1000
+	MaxPullLimit     = 5000
+)
+
 // Pull returns delta since cursor (ms timestamp). If since==0, returns full dataset for business.
 func (s *Service) Pull(ctx context.Context, businessID uuid.UUID, since time.Time) (*PullResult, error) {
+	return s.PullWithLimit(ctx, businessID, since, DefaultPullLimit)
+}
+
+// PullWithLimit is Pull with an explicit per-table row cap (clamped).
+func (s *Service) PullWithLimit(ctx context.Context, businessID uuid.UUID, since time.Time, perTable int) (*PullResult, error) {
+	if perTable <= 0 {
+		perTable = DefaultPullLimit
+	}
+	if perTable > MaxPullLimit {
+		perTable = MaxPullLimit
+	}
 	changes := map[string]TableChanges{}
 
 	for _, table := range syncableTables {
-		tc, err := s.pullTable(ctx, businessID, table, since)
+		tc, err := s.pullTable(ctx, businessID, table, since, perTable)
 		if err != nil {
 			// table may not exist in some envs — skip
 			continue
@@ -109,11 +129,11 @@ func (s *Service) Pull(ctx context.Context, businessID uuid.UUID, since time.Tim
 	return &PullResult{Changes: changes, Timestamp: time.Now().UnixMilli()}, nil
 }
 
-func (s *Service) pullTable(ctx context.Context, businessID uuid.UUID, table string, since time.Time) (TableChanges, error) {
+func (s *Service) pullTable(ctx context.Context, businessID uuid.UUID, table string, since time.Time, limit int) (TableChanges, error) {
 	var tc TableChanges
 
 	rows := []map[string]any{}
-	q := fmt.Sprintf(`SELECT * FROM %s WHERE business_id = ? AND updated_at > ? AND deleted_at IS NULL`, table)
+	q := fmt.Sprintf(`SELECT * FROM %s WHERE business_id = ? AND updated_at > ? AND deleted_at IS NULL ORDER BY updated_at ASC LIMIT %d`, table, limit)
 
 	if err := s.db.WithContext(ctx).Raw(q, businessID, since).Scan(&rows).Error; err != nil {
 		// Don't log as ERROR for missing table — syncableTables is now correct, but keep graceful
@@ -193,7 +213,7 @@ func (s *Service) pullTable(ctx context.Context, businessID uuid.UUID, table str
 
 	var deleted []string
 
-	qdel := fmt.Sprintf(`SELECT id::text FROM %s WHERE business_id = ? AND deleted_at IS NOT NULL AND deleted_at > ?`, table)
+	qdel := fmt.Sprintf(`SELECT id::text FROM %s WHERE business_id = ? AND deleted_at IS NOT NULL AND deleted_at > ? ORDER BY deleted_at ASC LIMIT %d`, table, limit)
 	if err := s.db.WithContext(ctx).Raw(qdel, businessID, since).Scan(&deleted).Error; err == nil {
 		tc.Deleted = deleted
 	}
@@ -834,6 +854,9 @@ func (s *Service) updateRecord(tx *gorm.DB, businessID uuid.UUID, table string, 
 }
 
 func (s *Service) ensureInvoiceForOrder(tx *gorm.DB, businessID, orderID uuid.UUID) error {
+	// Serialise invoice numbering per business so offline pushes racing each
+	// other (or racing REST confirms) cannot mint the same INV- number.
+	_ = shareddb.LockBusinessSequence(context.Background(), tx, businessID, shareddb.AdvisoryKeyInvoice)
 	// Idempotent: if invoice already exists for this order, skip
 	var cnt int64
 	if err := tx.Raw(`SELECT COUNT(*) FROM invoices WHERE business_id = ? AND order_id = ? AND deleted_at IS NULL`, businessID, orderID).Scan(&cnt).Error; err != nil {
@@ -872,12 +895,14 @@ func (s *Service) ensureInvoiceForOrder(tx *gorm.DB, businessID, orderID uuid.UU
 	if len(lines) == 0 {
 		return fmt.Errorf("no order lines for order %s", orderID)
 	}
-	// Generate invoice number (INV- + first 8 of business + count)
-	var invCount int64
+	// Generate invoice number (INV- + first 8 of business + MAX suffix).
+	// The advisory lock above serialises this; on a residual 23505 (e.g.
+	// lock bypassed via savepoints) retry once with a fresh number.
+	var maxSuffix int64
 
-	_ = tx.Raw(`SELECT COUNT(*) FROM invoices WHERE business_id = ?`, businessID).Scan(&invCount).Error
+	_ = tx.Raw(`SELECT COALESCE(MAX(CAST(substring(invoice_number from '([0-9]+)$') AS BIGINT)), 0) FROM invoices WHERE business_id = ? AND deleted_at IS NULL`, businessID).Scan(&maxSuffix).Error
 	invoiceID := uuid.New()
-	invoiceNumber := fmt.Sprintf("INV-%s-%06d", businessID.String()[:8], invCount+1)
+	invoiceNumber := fmt.Sprintf("INV-%s-%06d", businessID.String()[:8], maxSuffix+1)
 	now := time.Now().UTC()
 	dueAt := now.AddDate(0, 0, 5)
 
@@ -898,7 +923,26 @@ func (s *Service) ensureInvoiceForOrder(tx *gorm.DB, businessID, orderID uuid.UU
 	// Insert invoice
 	if err := tx.Exec(`INSERT INTO invoices (id, business_id, tenant_id, customer_id, order_id, invoice_number, status, subtotal, tax_amount, total, amount_paid, amount_due, currency, notes, due_at, created_at, updated_at, sync_version) VALUES (?, ?, ?, ?, ?, ?, 'draft', ?::numeric, ?::numeric, ?::numeric, 0, ?::numeric, 'KES', ?, ?, ?, ?, 1)`,
 		invoiceID, businessID, businessID, order.CustomerID, orderID, invoiceNumber, subtotal, tax, total, total, fmt.Sprintf("Invoice for order %s", orderID.String()[:8]), dueAt, now, now).Error; err != nil {
-		return err
+		if shareddb.IsDuplicateKey(err) {
+			// Lost a residual race: re-check idempotency (winner may have
+			// created this order's invoice), else retry with next number.
+			var recnt int64
+			_ = tx.Raw(`SELECT COUNT(*) FROM invoices WHERE business_id = ? AND order_id = ? AND deleted_at IS NULL`, businessID, orderID).Scan(&recnt).Error
+			if recnt > 0 {
+				return nil
+			}
+			var retryMax int64
+			_ = tx.Raw(`SELECT COALESCE(MAX(CAST(substring(invoice_number from '([0-9]+)$') AS BIGINT)), 0) FROM invoices WHERE business_id = ? AND deleted_at IS NULL`, businessID).Scan(&retryMax).Error
+			retryNumber := fmt.Sprintf("INV-%s-%06d", businessID.String()[:8], retryMax+1)
+			retryID := uuid.New()
+			if err2 := tx.Exec(`INSERT INTO invoices (id, business_id, tenant_id, customer_id, order_id, invoice_number, status, subtotal, tax_amount, total, amount_paid, amount_due, currency, notes, due_at, created_at, updated_at, sync_version) VALUES (?, ?, ?, ?, ?, ?, 'draft', ?::numeric, ?::numeric, ?::numeric, 0, ?::numeric, 'KES', ?, ?, ?, ?, 1)`,
+				retryID, businessID, businessID, order.CustomerID, orderID, retryNumber, subtotal, tax, total, total, fmt.Sprintf("Invoice for order %s", orderID.String()[:8]), dueAt, now, now).Error; err2 != nil {
+				return err2
+			}
+			invoiceID = retryID
+		} else {
+			return err
+		}
 	}
 	// Insert invoice lines
 	for _, l := range lines {
@@ -983,6 +1027,7 @@ func (s *Service) ensureInvoiceForOrder(tx *gorm.DB, businessID, orderID uuid.UU
 }
 
 func (s *Service) ensureSaleForOrder(tx *gorm.DB, businessID, orderID uuid.UUID) error {
+	_ = shareddb.LockBusinessSequence(context.Background(), tx, businessID, shareddb.AdvisoryKeySales)
 	var cnt int64
 	if err := tx.Raw(`SELECT COUNT(*) FROM sales WHERE business_id = ? AND order_id = ? AND deleted_at IS NULL`, businessID, orderID).Scan(&cnt).Error; err != nil {
 		return err
@@ -1020,9 +1065,13 @@ func (s *Service) ensureSaleForOrder(tx *gorm.DB, businessID, orderID uuid.UUID)
 	saleID := uuid.New()
 	receipt := fmt.Sprintf("RCPT-%s", saleID.String()[:6])
 	now := time.Now().UTC()
-	// Use order's totals
+	// Use order's totals. sales.order_id is UNIQUE: a residual race loser
+	// gets 23505 on order_id and is idempotent — treat as success.
 	if err := tx.Exec(`INSERT INTO sales (id, business_id, tenant_id, order_id, customer_id, receipt_number, staff_id, payment_method, subtotal, tax_amount, total, status, sold_at, created_at, updated_at, sync_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?::numeric, ?::numeric, ?::numeric, 'completed', ?, ?, ?, 1)`,
 		saleID, businessID, businessID, orderID, order.CustomerID, receipt, businessID, order.PaymentMethod, order.Subtotal, order.TaxAmount, order.Total, now, now, now).Error; err != nil {
+		if shareddb.IsDuplicateKey(err) {
+			return nil
+		}
 		return err
 	}
 

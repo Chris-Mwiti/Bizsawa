@@ -18,7 +18,7 @@ type Handler struct{ svc *Service }
 
 func NewHandler(svc *Service) *Handler { return &Handler{svc: svc} }
 
-// GET /sync/pull?since=<cursor> — cursor is lastPulledAt ms (Watermelon) or RFC3339.
+// GET /sync/pull?since=<cursor>&limit=<per-table cap> — cursor is lastPulledAt ms (Watermelon) or RFC3339.
 func (h *Handler) Pull(w http.ResponseWriter, r *http.Request) {
 	bid, ok := middleware.BusinessIDFromCtx(r.Context())
 	if !ok {
@@ -40,8 +40,31 @@ func (h *Handler) Pull(w http.ResponseWriter, r *http.Request) {
 			since = t
 		}
 	}
+	// Capped per-table rows (F5): full pulls at ~20k rows already take
+	// 1.2–1.8s. Clients page by feeding the returned timestamp back as
+	// ?since=. Clamp to [1, MaxPullLimit].
+	limit := DefaultPullLimit
+	if raw := r.URL.Query().Get("limit"); raw == "" {
+		raw = r.URL.Query().Get("per_table")
+		if raw == "" {
+			raw = r.URL.Query().Get("perTable")
+		}
+		if raw != "" {
+			if n, err := strconv.Atoi(raw); err == nil {
+				limit = n
+			}
+		}
+	} else if n, err := strconv.Atoi(raw); err == nil {
+		limit = n
+	}
+	if limit <= 0 {
+		limit = DefaultPullLimit
+	}
+	if limit > MaxPullLimit {
+		limit = MaxPullLimit
+	}
 	// default epoch
-	res, err := h.svc.Pull(r.Context(), bid, since)
+	res, err := h.svc.PullWithLimit(r.Context(), bid, since, limit)
 	if err != nil {
 		sharedhttp.Error(w, err)
 		return

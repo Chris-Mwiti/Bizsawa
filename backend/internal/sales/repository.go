@@ -52,12 +52,24 @@ func (r *Repository) FindByOrder(ctx context.Context, businessID, orderID uuid.U
 }
 
 func (r *Repository) NextReceipt(ctx context.Context, businessID uuid.UUID) (string, error) {
-	var count int64
-	if err := r.db.WithContext(ctx).Model(&Sale{}).Where("business_id = ?", businessID).Count(&count).Error; err != nil {
+	// Serialise numbering per business. When called inside a tx the lock is
+	// held until commit; when called outside a tx it still guards the
+	// read-max-then-format window on this connection as best effort.
+	// Best effort: not in a tx-capable context here, ignore lock errors on
+	// plain *sql.DB paths — callers inside a tx pass the tx-bound repo.
+	_ = shareddb.LockBusinessSequence(ctx, r.db, businessID, shareddb.AdvisoryKeySales)
+
+	// MAX(suffix) instead of COUNT(*) so deleted/voided rows never cause
+	// number reuse. Suffix is the trailing digits of R-<biz8>-NNNNNN.
+	var maxSuffix int64
+	if err := r.db.WithContext(ctx).Raw(
+		`SELECT COALESCE(MAX(CAST(substring(receipt_number from '([0-9]+)$') AS BIGINT)), 0) FROM sales WHERE business_id = ? AND deleted_at IS NULL`,
+		businessID,
+	).Scan(&maxSuffix).Error; err != nil {
 		return "", err
 	}
 
-	return fmt.Sprintf("R-%s-%06d", businessID.String()[:8], count+1), nil
+	return fmt.Sprintf("R-%s-%06d", businessID.String()[:8], maxSuffix+1), nil
 }
 
 func (r *Repository) Create(ctx context.Context, sale *Sale, lines []SaleLine) error {

@@ -1,0 +1,192 @@
+{
+    "root_group": {
+        "path": "",
+        "id": "d41d8cd98f00b204e9800998ecf8427e",
+        "groups": {},
+        "checks": {
+                "by-product handled": {
+                    "name": "by-product handled",
+                    "path": "::by-product handled",
+                    "id": "104c471488dcbe3729f840f78a3055a5",
+                    "passes": 8919,
+                    "fails": 0
+                },
+                "list sales 2xx": {
+                    "name": "list sales 2xx",
+                    "path": "::list sales 2xx",
+                    "id": "67ec44bc0e4e42d1eaa321bbdb6b55b5",
+                    "passes": 35428,
+                    "fails": 0
+                },
+                "summary handled": {
+                    "path": "::summary handled",
+                    "id": "d78033a0a1ab2e261abb3637ab9b46e3",
+                    "passes": 18017,
+                    "fails": 0,
+                    "name": "summary handled"
+                },
+                "by-payment handled": {
+                    "name": "by-payment handled",
+                    "path": "::by-payment handled",
+                    "id": "56c5331e3c883e7d22fb2507725f368e",
+                    "passes": 8872,
+                    "fails": 0
+                },
+                "create sale handled": {
+                    "id": "bdb8e27492d7e20e2b2752eae9f6dc75",
+                    "passes": 1940,
+                    "fails": 15911,
+                    "name": "create sale handled",
+                    "path": "::create sale handled"
+                },
+                "void handled": {
+                    "path": "::void handled",
+                    "id": "9218e5d83f8e775c6d759004aeed0d29",
+                    "passes": 622,
+                    "fails": 0,
+                    "name": "void handled"
+                }
+            },
+        "name": ""
+    },
+    "metrics": {
+        "error_rate_5xx": {
+            "passes": 15911,
+            "fails": 73918,
+            "thresholds": {
+                "rate<0.05": true
+            },
+            "value": 0.17712542720056998
+        },
+        "vus": {
+            "value": 15,
+            "min": 5,
+            "max": 120
+        },
+        "http_req_duration": {
+            "avg": 122.90060901968123,
+            "min": 3.176805,
+            "med": 78.33524299999999,
+            "max": 1708.10887,
+            "p(90)": 295.1109495000002,
+            "p(95)": 383.0548882000001,
+            "thresholds": {
+                "p(95)<1200": false
+            }
+        },
+        "http_req_tls_handshaking": {
+            "max": 0,
+            "p(90)": 0,
+            "p(95)": 0,
+            "avg": 0,
+            "min": 0,
+            "med": 0
+        },
+        "data_sent": {
+            "count": 58607957,
+            "rate": 308167.18054007366
+        },
+        "writes_2xx": {
+            "count": 2562,
+            "rate": 13.471282006019571
+        },
+        "checks": {
+            "passes": 73798,
+            "fails": 15911,
+            "value": 0.8226376394787591
+        },
+        "http_reqs": {
+            "count": 89830,
+            "rate": 472.336168072107
+        },
+        "iterations": {
+            "count": 89087,
+            "rate": 468.42939112812866
+        },
+        "http_req_duration{module:sales}": {
+            "p(95)": 383.15464279999975,
+            "avg": 122.90784079475823,
+            "min": 3.176805,
+            "med": 78.286437,
+            "max": 1708.10887,
+            "p(90)": 295.17462579999994,
+            "thresholds": {
+                "p(95)<1200": false
+            }
+        },
+        "http_req_blocked": {
+            "max": 31.685853,
+            "p(90)": 0.011461,
+            "p(95)": 0.01312,
+            "avg": 0.012608940910608823,
+            "min": 0.00255,
+            "med": 0.008551
+        },
+        "http_req_failed": {
+            "passes": 15911,
+            "fails": 73919,
+            "value": 0.17712345541578536
+        },
+        "http_req_receiving": {
+            "med": 0.102542,
+            "max": 112.032298,
+            "p(90)": 0.6200410000000015,
+            "p(95)": 1.7494458500000003,
+            "avg": 0.44913763501057435,
+            "min": 0.025591
+        },
+        "iteration_duration": {
+            "min": 3.420261,
+            "med": 79.624902,
+            "max": 1820.765611,
+            "p(90)": 297.0233440000002,
+            "p(95)": 386.7662241999997,
+            "avg": 124.49845570849804
+        },
+        "data_received": {
+            "rate": 3552232.771887904,
+            "count": 675571958
+        },
+        "http_req_waiting": {
+            "med": 77.82086,
+            "max": 1707.575737,
+            "p(90)": 294.4670559,
+            "p(95)": 382.35129775,
+            "avg": 122.39578501352791,
+            "min": 3.00889
+        },
+        "vus_max": {
+            "max": 120,
+            "value": 120,
+            "min": 120
+        },
+        "http_req_duration{expected_response:true}": {
+            "avg": 110.71985054218833,
+            "min": 3.176805,
+            "med": 64.987549,
+            "max": 1708.10887,
+            "p(90)": 271.0024056,
+            "p(95)": 356.44336809999913
+        },
+        "http_req_connecting": {
+            "med": 0,
+            "max": 10.691068,
+            "p(90)": 0,
+            "p(95)": 0,
+            "avg": 0.001078746632528109,
+            "min": 0
+        },
+        "http_req_sending": {
+            "avg": 0.055686371145496266,
+            "min": 0.010811,
+            "med": 0.031441,
+            "max": 30.178202,
+            "p(90)": 0.05983200000000006,
+            "p(95)": 0.08318750000000004
+        }
+    },
+    "setup_data": {
+        "businessId": "ff92bbeb-d16c-4496-819e-3d13feb53b9d",
+        "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJiaXpzYXdhIiwic3ViIjoiYWU1OTZhMGEtNzkzOS00NjQ0LTlmY2MtNTMxNWFiNWU1NzA4IiwiZXhwIjoxNzkxMzc4NDcwLCJpYXQiOjE3OTEzNzMwNzAsInVpZCI6ImFlNTk2YTBhLTc5MzktNDY0NC05ZmNjLTUzMTVhYjVlNTcwOCIsInRpZCI6IjAwMDAwMDAwLTAwMDAtMDAwMC0wMDAwLTAwMDAwMDAwMDAwMCIsImJpZCI6IjAwMDAwMDAwLTAwMDAtMDAwMC0wMDAwLTAwMDAwMDAwMDAwMCIsInJvbGVzIjpudWxsfQ.tMChJMB5gU6gizEAqCij1zfBDWJZAlf7ePYpEcSWfGc"
+    }
+}

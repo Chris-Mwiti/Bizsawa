@@ -29,12 +29,18 @@ func (r *Repository) WithTx(tx *gorm.DB) *Repository {
 }
 
 func (r *Repository) NextNumber(ctx context.Context, businessID uuid.UUID) (string, error) {
-	var count int64
-	if err := r.db.WithContext(ctx).Model(&Invoice{}).Where("business_id = ?", businessID).Count(&count).Error; err != nil {
+	_ = shareddb.LockBusinessSequence(ctx, r.db, businessID, shareddb.AdvisoryKeyInvoice)
+
+	// MAX(suffix) instead of COUNT(*) so deleted rows never cause reuse.
+	var maxSuffix int64
+	if err := r.db.WithContext(ctx).Raw(
+		`SELECT COALESCE(MAX(CAST(substring(invoice_number from '([0-9]+)$') AS BIGINT)), 0) FROM invoices WHERE business_id = ? AND deleted_at IS NULL`,
+		businessID,
+	).Scan(&maxSuffix).Error; err != nil {
 		return "", err
 	}
 
-	return fmt.Sprintf("INV-%s-%06d", businessID.String()[:8], count+1), nil
+	return fmt.Sprintf("INV-%s-%06d", businessID.String()[:8], maxSuffix+1), nil
 }
 
 func (r *Repository) Create(ctx context.Context, invoice *Invoice, lines []InvoiceLine) error {

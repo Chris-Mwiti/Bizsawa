@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -71,6 +72,10 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 	// normalize language
 	if req.Language != "sw" {
 		req.Language = "en"
+	}
+	if strings.TrimSpace(req.Message) == "" {
+		sharedhttp.Error(w, apperrors.ErrBadRequest.WithMessage("message must be non-empty"))
+		return
 	}
 
 	preview := req.Message

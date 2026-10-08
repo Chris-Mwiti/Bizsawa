@@ -296,7 +296,16 @@ func (s *Service) Confirm(ctx context.Context, businessID, orderID, key uuid.UUI
 
 		invoice, err := s.invoices.WithTx(tx).CreateInvoice(ctx, businessID, buildInvoicePayload(order))
 		if err != nil {
-			s.logger.ErrorContext(ctx, "[ORDERS]-order", "order", order)
+			// F1: propagate numbering contention as 409 so callers retry
+			// instead of seeing a sanitised 500. Keep the detail log at
+			// Debug — the full order JSON at ERROR was log noise.
+			s.logger.DebugContext(ctx, "[ORDERS]-order invoice payload", "orderID", orderID.String(), "businessID", businessID.String())
+			if appErr := apperrors.FromError(err); appErr != nil && appErr.StatusCode == 409 {
+				return err
+			}
+			if shareddb.IsDuplicateKey(err) {
+				return apperrors.ErrConflict.WithMessage("invoice number contention — retry").WithCause(err)
+			}
 			s.logger.ErrorContext(ctx, "[ORDER/INVOICES]-could not create invoice", "businessID", businessID.String(), "orderID", orderID.String(), "err", err.Error())
 
 			return apperrors.ErrInternal.WithMessage("could not create invoice from order")
@@ -420,6 +429,13 @@ func (s *Service) FulfillOrder(ctx context.Context, businessID, orderID, staffID
 			)
 
 			if err != nil {
+				// F1: propagate receipt contention as 409, not a wrapped 500.
+				if appErr := apperrors.FromError(err); appErr != nil && appErr.StatusCode == 409 {
+					return err
+				}
+				if shareddb.IsDuplicateKey(err) {
+					return apperrors.ErrConflict.WithMessage("sale number contention — retry").WithCause(err)
+				}
 				return fmt.Errorf("failed to record sale record: %w", err)
 			}
 		}

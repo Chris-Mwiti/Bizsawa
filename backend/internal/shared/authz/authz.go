@@ -93,6 +93,12 @@ func ResourceAction(r *http.Request) (string, string) {
 		resource = "members"
 	}
 
+	// WAHA routes mount at /waha but policy historically seeds "whatsapp".
+	// Normalise so both names resolve to the same permission bucket.
+	if resource == "waha" {
+		resource = "whatsapp"
+	}
+
 	switch r.Method {
 	case http.MethodGet:
 		return resource, "read"
@@ -122,11 +128,11 @@ func (e *Enforcer) allow(role Role, resource string, actions ...string) {
 }
 
 func (e *Enforcer) seedDefaults() {
-	for _, resource := range []string{"businesses", "members", "products", "customers", "orders", "sales", "inventory", "expenses", "taxes", "invoices", "payments", "reports", "visualizations", "insights", "analytics", "chatbot", "chat", "sync", "ai", "whatsapp"} {
+	for _, resource := range []string{"businesses", "members", "products", "customers", "orders", "sales", "inventory", "expenses", "taxes", "invoices", "payments", "reports", "visualizations", "insights", "analytics", "chatbot", "chat", "sync", "ai", "whatsapp", "waha"} {
 		e.allow(RoleOwner, resource, "read", "write", "delete", "generate", "configure")
 	}
 
-	for _, resource := range []string{"businesses", "members", "products", "customers", "orders", "sales", "inventory", "expenses", "taxes", "invoices", "reports", "visualizations", "insights", "analytics", "chatbot", "chat", "sync", "ai", "whatsapp"} {
+	for _, resource := range []string{"businesses", "members", "products", "customers", "orders", "sales", "inventory", "expenses", "taxes", "invoices", "reports", "visualizations", "insights", "analytics", "chatbot", "chat", "sync", "ai", "whatsapp", "waha"} {
 		e.allow(RoleManager, resource, "read", "write", "generate", "configure")
 	}
 
@@ -141,6 +147,8 @@ func (e *Enforcer) seedDefaults() {
 	e.allow(RoleCashier, "analytics", "read")
 	e.allow(RoleCashier, "chatbot", "read", "write")
 	e.allow(RoleCashier, "chat", "read", "write")
+	e.allow(RoleCashier, "waha", "read", "write")
+	e.allow(RoleCashier, "whatsapp", "read", "write")
 	e.allow(RoleCashier, "sync", "read", "write")
 	e.allow(RoleCashier, "visualizations", "read")
 
