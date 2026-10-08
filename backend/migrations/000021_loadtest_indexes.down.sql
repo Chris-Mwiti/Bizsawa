@@ -1,0 +1,15 @@
+DROP INDEX IF EXISTS idx_products_business_updated;
+DROP INDEX IF EXISTS idx_product_variants_business_updated;
+DROP INDEX IF EXISTS idx_customers_business_updated;
+DROP INDEX IF EXISTS idx_inventory_items_business_updated;
+DROP INDEX IF EXISTS idx_stock_movements_business_updated;
+DROP INDEX IF EXISTS idx_orders_business_updated;
+DROP INDEX IF EXISTS idx_order_lines_business_updated;
+DROP INDEX IF EXISTS idx_sales_business_updated;
+DROP INDEX IF EXISTS idx_sale_lines_business_updated;
+DROP INDEX IF EXISTS idx_expenses_business_updated;
+DROP INDEX IF EXISTS idx_invoices_business_updated;
+DROP INDEX IF EXISTS idx_invoice_lines_business_updated;
+DROP INDEX IF EXISTS idx_payment_commands_business_updated;
+DROP INDEX IF EXISTS idx_tax_rules_business_updated;
+DROP INDEX IF EXISTS idx_invoices_settle;
