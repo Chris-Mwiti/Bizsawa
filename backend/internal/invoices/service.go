@@ -82,78 +82,97 @@ func (s *Service) CreateInvoice(ctx context.Context, businessID uuid.UUID, req C
 	}
 
 	var inv *Invoice
+	var lastErr error
 
-	err := s.repo.db.Transaction(func(tx *gorm.DB) error {
-		number, err := s.repo.NextNumber(ctx, businessID)
-		if err != nil {
-			s.logger.ErrorContext(ctx, "[INVOICES]-error while creating invoice next number", "businessID", businessID.String(), "err", err.Error())
-			return apperrors.ErrInternal.WithMessage("error while creating next number for invoice")
-		}
-
-		subtotal := decimal.Zero
-		lines := make([]InvoiceLine, 0, len(req.Lines))
-
-		for _, line := range req.Lines {
-			if line.Description == "" {
-				return apperrors.ErrUnprocessable.WithMessage("invoice line description is required")
+	for attempt := 0; attempt < 3; attempt++ {
+		inv = nil
+		err := s.repo.db.Transaction(func(tx *gorm.DB) error {
+			// Number inside the tx under advisory lock (tx-bound repo).
+			number, err := s.WithTx(tx).repo.NextNumber(ctx, businessID)
+			if err != nil {
+				s.logger.ErrorContext(ctx, "[INVOICES]-error while creating invoice next number", "businessID", businessID.String(), "err", err.Error())
+				return apperrors.ErrInternal.WithMessage("error while creating next number for invoice")
 			}
 
-			lineTotal := line.Quantity.Mul(line.UnitPrice).Round(2)
-			subtotal = subtotal.Add(lineTotal)
-			lines = append(lines, InvoiceLine{
+			subtotal := decimal.Zero
+			lines := make([]InvoiceLine, 0, len(req.Lines))
+
+			for _, line := range req.Lines {
+				if line.Description == "" {
+					return apperrors.ErrUnprocessable.WithMessage("invoice line description is required")
+				}
+
+				lineTotal := line.Quantity.Mul(line.UnitPrice).Round(2)
+				subtotal = subtotal.Add(lineTotal)
+				lines = append(lines, InvoiceLine{
+					BaseModel: shareddb.BaseModel{
+						TenantID: businessID,
+					},
+					BusinessID:  businessID,
+					ProductID:   line.ProductID,
+					Description: line.Description,
+					Quantity:    line.Quantity,
+					UnitPrice:   line.UnitPrice,
+					LineTotal:   lineTotal,
+				})
+			}
+
+			tax := subtotal.Mul(decimal.NewFromFloat(0.16)).Round(2)
+
+			currency := req.Currency
+			if currency == "" {
+				currency = "KES"
+			}
+
+			invoice := &Invoice{
 				BaseModel: shareddb.BaseModel{
 					TenantID: businessID,
 				},
-				BusinessID:  businessID,
-				ProductID:   line.ProductID,
-				Description: line.Description,
-				Quantity:    line.Quantity,
-				UnitPrice:   line.UnitPrice,
-				LineTotal:   lineTotal,
-			})
+				BusinessID:    businessID,
+				CustomerID:    req.CustomerID,
+				OrderID:       req.OrderID,
+				InvoiceNumber: number,
+				Status:        StatusDraft,
+				Subtotal:      subtotal,
+				TaxAmount:     tax,
+				Total:         subtotal.Add(tax),
+				AmountPaid:    decimal.Zero,
+				AmountDue:     subtotal.Add(tax),
+				Currency:      currency,
+				Notes:         req.Notes,
+				DueAt:         req.DueAt,
+			}
+
+			if err := s.WithTx(tx).repo.Create(ctx, invoice, lines); err != nil {
+				s.logger.ErrorContext(ctx, "[INVOICE]- error while creating invoice", "buinessID", businessID.String(), "orderID", invoice.OrderID, "err", err)
+				return err
+			}
+
+			inv, err = s.WithTx(tx).repo.Find(ctx, businessID, invoice.ID)
+			if err != nil {
+				s.logger.ErrorContext(ctx, "[INVOICE]- error while finding created invoice", "buinessID", businessID.String(), "invoiceID", invoice.ID, "err", err)
+				return err
+			}
+
+			return nil
+		})
+
+		if err == nil {
+			return inv, nil
 		}
-
-		tax := subtotal.Mul(decimal.NewFromFloat(0.16)).Round(2)
-
-		currency := req.Currency
-		if currency == "" {
-			currency = "KES"
+		if shareddb.IsDuplicateKey(err) {
+			lastErr = err
+			continue
 		}
+		return nil, err
+	}
 
-		invoice := &Invoice{
-			BaseModel: shareddb.BaseModel{
-				TenantID: businessID,
-			},
-			BusinessID:    businessID,
-			CustomerID:    req.CustomerID,
-			OrderID:       req.OrderID,
-			InvoiceNumber: number,
-			Status:        StatusDraft,
-			Subtotal:      subtotal,
-			TaxAmount:     tax,
-			Total:         subtotal.Add(tax),
-			AmountPaid:    decimal.Zero,
-			AmountDue:     subtotal.Add(tax),
-			Currency:      currency,
-			Notes:         req.Notes,
-			DueAt:         req.DueAt,
-		}
+	if lastErr != nil {
+		s.logger.ErrorContext(ctx, "[INVOICES]-invoice number contention", "businessID", businessID.String(), "err", lastErr.Error())
+		return nil, apperrors.ErrConflict.WithMessage("invoice number contention — retry").WithCause(lastErr)
+	}
 
-		if err := s.WithTx(tx).repo.Create(ctx, invoice, lines); err != nil {
-			s.logger.ErrorContext(ctx, "[INVOICE]- error while creating invoice", "buinessID", businessID.String(), "orderID", invoice.OrderID, "err", err)
-			return err
-		}
-
-		inv, err = s.WithTx(tx).repo.Find(ctx, businessID, invoice.ID)
-		if err != nil {
-			s.logger.ErrorContext(ctx, "[INVOICE]- error while finding created invoice", "buinessID", businessID.String(), "invoiceID", invoice.ID, "err", err)
-			return err
-		}
-
-		return nil
-	})
-
-	return inv, err
+	return inv, nil
 }
 
 func (s *Service) List(ctx context.Context, businessID uuid.UUID, page pagination.Page) ([]Invoice, error) {
@@ -217,30 +236,26 @@ func (s *Service) Send(ctx context.Context, businessID, invoiceID uuid.UUID, cha
 	return invoice, nil
 }
 
-func (s *Service) RecordPayment(ctx context.Context, businessID, orderID uuid.UUID, req RecordPaymentRequest) error {
-	var invoices []Invoice
+func (s *Service) RecordPayment(ctx context.Context, businessID, invoiceID uuid.UUID, req RecordPaymentRequest) error {
+	if !req.Amount.IsPositive() {
+		return apperrors.ErrUnprocessable.WithMessage("payment amount must be positive")
+	}
+	// Defensive: handler already mints one, but direct service callers
+	// (workers, sync) may omit it. Zero UUID must never reach storage.
+	if req.PaymentID == uuid.Nil {
+		req.PaymentID = uuid.New()
+	}
 
 	err := s.repo.db.Transaction(func(tx *gorm.DB) error {
-		var err error
-
-		invoices, err = s.WithTx(tx).repo.FindByOrderId(ctx, businessID, orderID, pagination.Page{Limit: 10})
+		// NOTE: the route is POST /invoices/{id}/record-payment where {id}
+		// is the invoice id (not order_id). Look the invoice up directly.
+		inv, err := s.WithTx(tx).repo.Find(ctx, businessID, invoiceID)
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return apperrors.ErrNotFound.WithMessage("invoice record not found")
 			}
-
 			return err
 		}
-
-		if !req.Amount.IsPositive() {
-			return apperrors.ErrUnprocessable.WithMessage("payment amount must be positive")
-		}
-
-		if len(invoices) <= 0 {
-			return fmt.Errorf("no invoices found")
-		}
-
-		inv := &invoices[0]
 
 		inv.AmountPaid = inv.AmountPaid.Add(req.Amount).Round(2)
 		inv.AmountDue = inv.Total.Sub(inv.AmountPaid).Round(2)
