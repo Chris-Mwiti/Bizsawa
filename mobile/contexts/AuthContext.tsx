@@ -35,6 +35,7 @@ import type {
   RegisterRequest,
   UUID,
 } from '../lib/api-dtos'
+import { perf } from '../lib/perf'
 
 interface UserData {
   id: UUID
@@ -111,6 +112,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
   }
 
   const checkAuthStatus = async () => {
+    const span = perf.start('startup.auth.check', { phase: 'startup' })
+    let outcome = 'valid'
     try {
       // Storage reads + connectivity probe are independent — fire together.
       // Previously 4 sequential AsyncStorage reads + NetInfo.fetch ran back to
@@ -132,6 +135,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
 
       if (!access || !refresh || !resolvedUserId) {
         setIsAuthenticated(false)
+        outcome = 'no-session'
         return
       }
 
@@ -147,6 +151,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
         setAuthTokens({ access, refresh })
         setUserData(await loadBusinessBackCompat(resolvedUserId))
         setIsAuthenticated(false)
+        outcome = 'offline'
         return
       }
 
@@ -174,6 +179,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
           })
           setUserData(await loadBusinessBackCompat(response.data.userId))
           setIsAuthenticated(true)
+          outcome = 'refreshed'
           return
         } catch {
           // Refresh failed — token revoked/expired, force sign-in
@@ -183,6 +189,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
           setAuthTokens(null)
           setUserData(null)
           setIsAuthenticated(false)
+          outcome = 'refresh-failed'
           return
         }
       }
@@ -195,7 +202,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
     } catch (error) {
       console.error('Error checking auth status:', error)
       setIsAuthenticated(false)
+      outcome = 'error'
     } finally {
+      span.end({ outcome })
       setIsLoading(false)
     }
   }

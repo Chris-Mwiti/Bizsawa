@@ -9,6 +9,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import NetInfo from '@react-native-community/netinfo'
 import { api, AUTH_STORAGE_KEYS } from '../lib/api'
+import { perf } from '../lib/perf'
 import type {
   Business,
   BusinessMember,
@@ -132,6 +133,8 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
 
   const refreshBusinesses = async () => {
     if (!isAuthenticated) return
+    const span = perf.start('startup.business.refresh', { phase: 'startup' })
+    let outcome = 'ok'
     setIsLoading(true)
     try {
       // The list fetch and the stored-selection read are independent.
@@ -157,7 +160,9 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
       if (!hydrated) {
         console.warn('[BusinessContext] refreshBusinesses failed offline and no local business found', (e as any)?.message)
       }
+      outcome = 'offline-fallback'
     } finally {
+      span.end({ outcome })
       setIsLoading(false)
     }
   }
