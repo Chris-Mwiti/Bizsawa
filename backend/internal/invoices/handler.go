@@ -107,6 +107,13 @@ func (h Handler) RecordPayment(w http.ResponseWriter, r *http.Request) {
 		sharedhttp.Error(w, err)
 		return
 	}
+	// Cash-against-invoice is the counter norm: callers send
+	// {amount, method} with no payment_commands row. Accept a missing
+	// paymentId by minting one (mirrors SettleCustomer) instead of
+	// persisting the zero UUID.
+	if req.PaymentID == uuid.Nil {
+		req.PaymentID = uuid.New()
+	}
 
 	err := h.svc.RecordPayment(r.Context(), bid, id, req)
 	if err != nil {
