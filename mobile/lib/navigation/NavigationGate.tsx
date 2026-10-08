@@ -11,8 +11,10 @@ import { router } from 'expo-router'
 
 import { extractRouteId, resolveRouteGate, type RouteGate } from './routeGates'
 
-/** Never trap the user on a slow or dead network — navigate anyway. */
-const NAVIGATION_TIMEOUT_MS = 4000
+/** Never trap the user on a slow or dead network — navigate anyway.
+ * 2500ms: with the startup/query fixes the common case resolves in
+ * hundreds of ms; the timeout only bounds the worst case per tap. */
+const NAVIGATION_TIMEOUT_MS = 2500
 /** Once the indicator is actually shown, hold it long enough to read. */
 const MIN_VISIBLE_MS = 350
 /** If the data resolves this fast it is a cache hit — don't flash the indicator. */
