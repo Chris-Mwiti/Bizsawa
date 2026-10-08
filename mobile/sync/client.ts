@@ -3,6 +3,7 @@ import NetInfo from '@react-native-community/netinfo'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { InteractionManager } from 'react-native'
 import { database } from '../db/database'
+import { perf } from '../lib/perf'
 import { api, AUTH_STORAGE_KEYS } from '../lib/api'
 import { extractRejectedIds } from './pushResult'
 import { randomUUID } from 'expo-crypto'
@@ -429,6 +430,7 @@ export async function syncNow(options?: { force?: boolean }) {
   }
   _isSyncing = true
   const syncStart = Date.now()
+  const span = perf.start('sync.full', { phase: 'sync' })
   try {
   await repairCorruptedLocal()
   // Global _changed clean for ALL pending rows (prevents `schema.columns[col].type` crash on push/fetchLocalChanges)
@@ -763,10 +765,12 @@ export async function syncNow(options?: { force?: boolean }) {
     const post = await getPendingChangesDebug()
     console.log(`[Sync] done in ${Date.now()-syncStart}ms post-pending total=`, post.total, post.perTable)
     _lastSyncDebug = { ...(_lastSyncDebug||{}), durationMs: Date.now()-syncStart, postPending: post }
+    span.end({ outcome: 'ok', pending: post.total })
   } catch {}
   } catch (e: any) {
     console.warn('[Sync] syncNow failed', e?.message, e?.stack || String(e), 'response=', e?.response?.data || e)
     _lastSyncDebug = { error: e?.message, stack: e?.stack, response: e?.response?.data, at: Date.now() }
+    span.end({ outcome: 'error' })
     throw e
   } finally {
     _isSyncing = false

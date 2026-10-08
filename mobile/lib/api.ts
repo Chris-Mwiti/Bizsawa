@@ -4,6 +4,16 @@ import { Platform } from 'react-native'
 import Constants from 'expo-constants'
 import * as Device from 'expo-device'
 import type { AuthResponse } from './api-dtos'
+import { perf } from './perf'
+
+/** Config key carrying the in-flight perf span (never sent over the wire). */
+const PERF_SPAN_KEY = '__perfSpan'
+
+function spanNameFor(config: { method?: string; url?: string }): string {
+  // Strip query params: /products?limit=5 and /products share one stat row.
+  const path = (config.url || 'unknown').split('?')[0]
+  return `http.${(config.method || 'GET').toUpperCase()} ${path}`
+}
 
 const DEFAULT_API_PORT = 5504
 
@@ -190,6 +200,12 @@ api.interceptors.request.use(
   async (config) => {
     const { token, businessId } = await readStoredAuth()
 
+    // Tracing: one span per request (method + path, no query) — ends in the
+    // response/error interceptor below with the status attached.
+    ;(config as any)[PERF_SPAN_KEY] = perf.start(spanNameFor(config), {
+      phase: 'http',
+    })
+
     config.headers = config.headers || {}
     if (token) config.headers.Authorization = `Bearer ${token}`
     if (businessId) {
@@ -275,6 +291,9 @@ export function standardizeApiError(error: any): string {
 api.interceptors.response.use(
   (response) => {
     if (__DEV__) console.log('API Response:', response.status, response.config.url)
+    ;(response.config as any)?.[PERF_SPAN_KEY]?.end?.({
+      status: response.status,
+    })
     return response
   },
   async (error: ApiError & { config?: any }) => {
@@ -288,6 +307,12 @@ api.interceptors.response.use(
     }
 
     const originalRequest = error.config
+    // Close this attempt's span here: a 401 refresh replays the request,
+    // which opens a fresh span via the request interceptor above.
+    ;(originalRequest as any)?.[PERF_SPAN_KEY]?.end?.({
+      status: error.response?.status ?? 0,
+      retried401: error.response?.status === 401 && !originalRequest?._retry,
+    })
     if (
       error.response?.status === 401 &&
       originalRequest &&
