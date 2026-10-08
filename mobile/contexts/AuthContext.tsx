@@ -14,6 +14,7 @@ import {
   AUTH_STORAGE_KEYS,
   clearAuthStorage,
   persistAuthResponse,
+  primeAuthCache,
 } from '../lib/api'
 import {
   secureStorage,
@@ -111,19 +112,25 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
 
   const checkAuthStatus = async () => {
     try {
-      // Try SecureStore first (migrated), then AsyncStorage fallback
-      const secure = await getSecureAuth()
-      const access =
-        secure?.access ||
-        (await AsyncStorage.getItem(AUTH_STORAGE_KEYS.accessToken)) ||
-        (await AsyncStorage.getItem(AUTH_STORAGE_KEYS.legacyToken))
-      const refresh =
-        secure?.refresh ||
-        (await AsyncStorage.getItem(AUTH_STORAGE_KEYS.refreshToken))
-      const storedUserId =
-        secure?.userId || (await AsyncStorage.getItem(AUTH_STORAGE_KEYS.userId))
+      // Storage reads + connectivity probe are independent — fire together.
+      // Previously 4 sequential AsyncStorage reads + NetInfo.fetch ran back to
+      // back on every cold start; now they overlap in one round.
+      const netProbe = NetInfo.fetch().catch(
+        () => ({ isConnected: true as boolean | null }),
+      )
+      const [secure, storedAccess, legacyAccess, storedRefresh, storedUserId] =
+        await Promise.all([
+          getSecureAuth(),
+          AsyncStorage.getItem(AUTH_STORAGE_KEYS.accessToken),
+          AsyncStorage.getItem(AUTH_STORAGE_KEYS.legacyToken),
+          AsyncStorage.getItem(AUTH_STORAGE_KEYS.refreshToken),
+          AsyncStorage.getItem(AUTH_STORAGE_KEYS.userId),
+        ])
+      const access = secure?.access || storedAccess || legacyAccess
+      const refresh = secure?.refresh || storedRefresh
+      const resolvedUserId = secure?.userId || storedUserId
 
-      if (!access || !refresh || !storedUserId) {
+      if (!access || !refresh || !resolvedUserId) {
         setIsAuthenticated(false)
         return
       }
@@ -131,15 +138,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
       // Online detection — offline we deliberately do NOT auto-authenticate
       // (security: cold start while offline must force manual password/biometric).
       // Tokens remain stored so LoginScreen can still do offline credential check.
-      let isConnected: boolean | null = true
-      try {
-        const net = await NetInfo.fetch()
-        isConnected = net.isConnected
-      } catch {}
+      // The probe started alongside the storage reads above, so this await
+      // usually resolves immediately.
+      const net = await netProbe
+      const isConnected = net?.isConnected ?? true
       if (isConnected === false) {
-        setUserId(storedUserId)
+        setUserId(resolvedUserId)
         setAuthTokens({ access, refresh })
-        setUserData(await loadBusinessBackCompat(storedUserId))
+        setUserData(await loadBusinessBackCompat(resolvedUserId))
         setIsAuthenticated(false)
         return
       }
@@ -182,9 +188,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
       }
 
       // Token still valid — mark authenticated
-      setUserId(storedUserId)
+      setUserId(resolvedUserId)
       setAuthTokens({ access, refresh })
-      setUserData(await loadBusinessBackCompat(storedUserId))
+      setUserData(await loadBusinessBackCompat(resolvedUserId))
       setIsAuthenticated(true)
     } catch (error) {
       console.error('Error checking auth status:', error)
@@ -229,12 +235,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
       (await secureStorage.getSecure(secureStorage.SECURE_KEYS.businessId)) ||
       (await AsyncStorage.getItem(AUTH_STORAGE_KEYS.businessId))
     setUserId(cred.userId)
-    if (secure)
+    if (secure) {
       setAuthTokens({ access: secure.access, refresh: secure.refresh })
+      primeAuthCache({ token: secure.access })
+    }
     setUserData({ id: cred.userId })
     setIsAuthenticated(true)
     if (businessId) {
       await AsyncStorage.setItem(AUTH_STORAGE_KEYS.businessId, businessId)
+      primeAuthCache({ businessId })
       await secureStorage.setSecure(
         secureStorage.SECURE_KEYS.businessId,
         businessId,
@@ -258,12 +267,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
       (await secureStorage.getSecure(secureStorage.SECURE_KEYS.businessId)) ||
       (await AsyncStorage.getItem(AUTH_STORAGE_KEYS.businessId))
     setUserId(cred.userId)
-    if (secure)
+    if (secure) {
       setAuthTokens({ access: secure.access, refresh: secure.refresh })
+      primeAuthCache({ token: secure.access })
+    }
     setUserData({ id: cred.userId })
     setIsAuthenticated(true)
     if (businessId) {
       await AsyncStorage.setItem(AUTH_STORAGE_KEYS.businessId, businessId)
+      primeAuthCache({ businessId })
       await secureStorage.setSecure(
         secureStorage.SECURE_KEYS.businessId,
         businessId,
@@ -383,6 +395,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
       [AUTH_STORAGE_KEYS.business, JSON.stringify(business)],
       [AUTH_STORAGE_KEYS.userData, JSON.stringify(business)],
     ])
+    // Keep the interceptor cache coherent — otherwise requests keep sending
+    // the previous business until the next cold start.
+    primeAuthCache({ businessId: business.id })
     if (role) await AsyncStorage.setItem(AUTH_STORAGE_KEYS.role, role)
     setUserData((prev) => ({
       id: prev?.id || userId || business.ownerId,
