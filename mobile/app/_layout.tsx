@@ -1,5 +1,5 @@
 import '../polyfills'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { View, StatusBar, Platform } from 'react-native'
 import { Stack } from 'expo-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -15,10 +15,14 @@ import { SyncProvider } from '../sync/SyncProvider'
 import { TourProvider } from '../contexts/TourContext'
 import { OfflineBanner } from '../components/OfflineBanner'
 import { NavigationGateProvider } from '../lib/navigation/NavigationGate'
+import { initPerf, perf } from '../lib/perf'
 import {
   RouteLoadingBar,
   RouteLoadingChip,
 } from '../components/RouteLoadingBar'
+
+initPerf()
+perf.mark('app.import')
 
 export default function RootLayout() {
   const [queryClient] = useState(
@@ -56,6 +60,12 @@ export default function RootLayout() {
   // OTA: prompt for restart when an EAS Update has downloaded (no-op in dev).
   useAppUpdates()
   const fontsReady = fontsLoaded || !!fontError
+
+  // Tracing: font download is on the critical path (visual tree is gated on
+  // it), so record when it clears.
+  useEffect(() => {
+    if (fontsReady) perf.mark('startup.fonts.ready')
+  }, [fontsReady])
 
   return (
     <TamaguiProvider config={tamaguiConfig} defaultTheme='light'>

@@ -12,6 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import NetInfo from '@react-native-community/netinfo'
 import { useAuth } from '../contexts/AuthContext'
 import { api } from '../lib/api'
+import { perf } from '../lib/perf'
 
 // Splash visibility budget: brand readable, never hostage. Readiness
 // (auth resolved below) releases the splash; this is only the floor.
@@ -30,6 +31,9 @@ export default function Index() {
   // held every cold start hostage regardless of how fast init finished.
   const bootStartRef = useRef(Date.now())
   const didHideRef = useRef(false)
+  // Cold-start span: mount → first routed screen. Ends exactly once, on the
+  // first navigation out of the splash, with the destination as an attr.
+  const bootSpanRef = useRef<ReturnType<typeof perf.start> | null>(null)
 
   // Typewriter
   const fullText = 'powering your business...'
@@ -39,6 +43,9 @@ export default function Index() {
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth()
 
   useEffect(() => {
+    if (bootSpanRef.current === null) {
+      bootSpanRef.current = perf.start('startup.cold', { phase: 'startup' })
+    }
     // 1. Fade in the UI seamlessly
     Animated.timing(fadeAnim, {
       toValue: 1,
@@ -84,6 +91,7 @@ export default function Index() {
   const hideSplash = () => {
     if (didHideRef.current) return
     didHideRef.current = true
+    perf.mark('splash.hidden')
     // Keep the brand visible just long enough to read, then get out of the way.
     const remainingTime = Math.max(0, SPLASH_MIN_MS - (Date.now() - bootStartRef.current))
     setTimeout(() => {
@@ -107,13 +115,20 @@ export default function Index() {
   useEffect(() => {
     if (!isAppReady || isAuthLoading) return
 
+    // First navigation out of the splash ends the cold-start span.
+    const go = (href: '/(tabs)' | '/auth/business-setup' | '/auth/login' | '/onboarding') => {
+      bootSpanRef.current?.end({ route: href })
+      bootSpanRef.current = null
+      router.replace(href)
+    }
+
     const route = async () => {
       try {
         const hasOnboarded = await AsyncStorage.getItem('HAS_FINISHED_ONBOARDING')
 
         // First launch: show marketing onboarding regardless of auth
         if (!hasOnboarded) {
-          router.replace('/onboarding')
+          go('/onboarding')
           return
         }
 
@@ -133,20 +148,20 @@ export default function Index() {
           // A failed fetch falls through to tabs (previous behaviour); only a
           // confirmed-empty list routes to business-setup.
           if (!bizRes) {
-            router.replace('/(tabs)')
+            go('/(tabs)')
             return
           }
           const hasBusiness =
             Array.isArray(bizRes.data.businesses) &&
             bizRes.data.businesses.length > 0
-          router.replace(hasBusiness ? '/(tabs)' : '/auth/business-setup')
+          go(hasBusiness ? '/(tabs)' : '/auth/business-setup')
           return
         }
 
         // Not authenticated, or offline cold start (security policy), or token expired/refresh failed
-        router.replace('/auth/login')
+        go('/auth/login')
       } catch {
-        router.replace('/auth/login')
+        go('/auth/login')
       }
     }
 
