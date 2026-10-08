@@ -27,6 +27,20 @@ export default function RootLayout() {
         defaultOptions: {
           queries: {
             staleTime: 60 * 1000,
+            // Cold-start / foreground refire control. Defaults were retry:3 +
+            // refetchOnWindowFocus:true: every remount or app-state focus
+            // re-fired every query, and a single flaky request cost 3 WAN
+            // round-trips with backoff. Now: 4xx never retries (validation /
+            // auth errors are final), server/network errors get one retry.
+            // refetchOnMount/Reconnect keep working — they only fire for stale
+            // data, and reconnect refetch is what keeps the offline-first UX.
+            gcTime: 10 * 60 * 1000,
+            refetchOnWindowFocus: false,
+            retry: (failureCount, error: any) => {
+              const status = error?.response?.status
+              if (status && status >= 400 && status < 500) return false
+              return failureCount < 1
+            },
           },
         },
       }),
@@ -35,16 +49,20 @@ export default function RootLayout() {
   // Hold the first frame until the real faces are registered. Rendering early would
   // show a frame of system-ui and then reflow every line once Geist swaps in.
   // A failed load must not brick the app: fall through to the system face instead.
+  // Auth + business providers mount BEFORE the font gate: checkAuthStatus and
+  // hydration are headless (no UI), so they overlap the font download instead
+  // of waiting behind it. Everything visual stays behind the gate below.
   const [fontsLoaded, fontError] = useFonts(fonts)
   // OTA: prompt for restart when an EAS Update has downloaded (no-op in dev).
   useAppUpdates()
-  if (!fontsLoaded && !fontError) return null
+  const fontsReady = fontsLoaded || !!fontError
 
   return (
     <TamaguiProvider config={tamaguiConfig} defaultTheme='light'>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <BusinessProvider>
+            {!fontsReady ? null : (
             <SyncProvider>
               <TourProvider>
                 <NavigationGateProvider>
@@ -131,6 +149,7 @@ export default function RootLayout() {
                 </NavigationGateProvider>
               </TourProvider>
             </SyncProvider>
+            )}
           </BusinessProvider>
         </AuthProvider>
       </QueryClientProvider>
