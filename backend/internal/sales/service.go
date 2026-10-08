@@ -14,6 +14,7 @@ import (
 
 	"github.com/Codecx-Org/FinAI/backend/internal/inventory"
 	shareddb "github.com/Codecx-Org/FinAI/backend/internal/shared/db"
+	apperrors "github.com/Codecx-Org/FinAI/backend/internal/shared/errors"
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/middleware"
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/pagination"
 	"github.com/Codecx-Org/FinAI/backend/internal/taxes"
@@ -96,89 +97,98 @@ func (s *Service) create(ctx context.Context, businessID, staffID uuid.UUID, ord
 		paymentMethod = "cash"
 	}
 
-	receipt, err := s.repo.NextReceipt(ctx, businessID)
-	if err != nil {
-		return nil, err
-	}
+	// Retry on 23505 duplicate receipt_number: number is generated inside the
+	// tx under pg_advisory_xact_lock, but REST+sync writers and nested
+	// savepoints can still collide on burst. Regenerate and retry; callers
+	// get 409, never a raw 500/SQLSTATE body.
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		var saleID uuid.UUID
+		err := s.repo.db.Transaction(func(tx *gorm.DB) error {
+			txSvc := s.WithTx(tx)
+			// Lock + MAX(suffix)+1 inside the tx via the tx-bound repo.
+			receipt, err := txSvc.repo.NextReceipt(ctx, businessID)
+			if err != nil {
+				return err
+			}
 
-	subtotal := decimal.Zero
-	lines := make([]SaleLine, 0, len(inputs))
-
-	for _, in := range inputs {
-		total := in.Quantity.Mul(in.UnitPrice).Round(2)
-		subtotal = subtotal.Add(total)
-		lines = append(lines, SaleLine{
-			BaseModel: shareddb.BaseModel{
-				TenantID: businessID,
-			},
-			BusinessID:       businessID,
-			ProductID:        in.ProductID,
-			ProductVariantID: in.ProductVariantID,
-			Quantity:         in.Quantity,
-			UnitPrice:        in.UnitPrice,
-			LineTotal:        total,
+			subtotal := decimal.Zero
+			lines := make([]SaleLine, 0, len(inputs))
+			for _, in := range inputs {
+				total := in.Quantity.Mul(in.UnitPrice).Round(2)
+				subtotal = subtotal.Add(total)
+				lines = append(lines, SaleLine{
+					BaseModel:        shareddb.BaseModel{TenantID: businessID},
+					BusinessID:       businessID,
+					ProductID:        in.ProductID,
+					ProductVariantID: in.ProductVariantID,
+					Quantity:         in.Quantity,
+					UnitPrice:        in.UnitPrice,
+					LineTotal:        total,
+				})
+			}
+			tax := subtotal.Mul(decimal.NewFromFloat(0.16)).Round(2)
+			sale := &Sale{
+				BaseModel:      shareddb.BaseModel{TenantID: businessID},
+				BusinessID:     businessID,
+				OrderID:        orderID,
+				CustomerID:     customerID,
+				ReceiptNumber:  receipt,
+				StaffID:        staffID,
+				PaymentMethod:  paymentMethod,
+				Subtotal:       subtotal,
+				TaxAmount:      tax,
+				Total:          subtotal.Add(tax),
+				Status:         "completed",
+				IdempotencyKey: key,
+				SoldAt:         time.Now().UTC(),
+			}
+			if err := txSvc.repo.Create(ctx, sale, lines); err != nil {
+				s.logger.ErrorContext(ctx, "[SALES]-could not create sale", "businessID", businessID.String(), "err", err.Error())
+				return err
+			}
+			if s.taxes != nil {
+				if err := s.taxes.WithTx(tx).RecordSaleTax(ctx, businessID, sale.ID, subtotal); err != nil {
+					return err
+				}
+			}
+			// Standalone (walk-in) sales deduct inventory here. Order-linked
+			// sales are deducted at order confirm instead. DeductForSale is
+			// ledger-guarded (reference "sale").
+			if orderID == nil && s.inventory != nil {
+				deductLines := make([]inventory.DecrementLine, 0, len(lines))
+				for _, l := range lines {
+					deductLines = append(deductLines, inventory.DecrementLine{ProductID: l.ProductID, Quantity: l.Quantity})
+				}
+				if err := s.inventory.WithTx(tx).DeductForSale(ctx, businessID, sale.ID, deductLines); err != nil {
+					return err
+				}
+			}
+			sqlTx, ok := tx.Statement.ConnPool.(*sql.Tx)
+			if !ok {
+				return fmt.Errorf("sqlTx not available for sales event")
+			}
+			if err := txSvc.emit(ctx, sqlTx, businessID, sale.ID, SaleCreated, map[string]any{"total": sale.Total.String()}); err != nil {
+				return err
+			}
+			saleID = sale.ID
+			return nil
 		})
-	}
-
-	tax := subtotal.Mul(decimal.NewFromFloat(0.16)).Round(2)
-	sale := &Sale{
-		BaseModel: shareddb.BaseModel{
-			TenantID: businessID,
-		},
-		BusinessID:     businessID,
-		OrderID:        orderID,
-		CustomerID:     customerID,
-		ReceiptNumber:  receipt,
-		StaffID:        staffID,
-		PaymentMethod:  paymentMethod,
-		Subtotal:       subtotal,
-		TaxAmount:      tax,
-		Total:          subtotal.Add(tax),
-		Status:         "completed",
-		IdempotencyKey: key,
-		SoldAt:         time.Now().UTC(),
-	}
-
-	if err := s.repo.db.Transaction(func(tx *gorm.DB) error {
-		txSvc := s.WithTx(tx)
-		if err := txSvc.repo.Create(ctx, sale, lines); err != nil {
-			s.logger.ErrorContext(ctx, "[SALES]-could not create sale", "businessID", businessID.String(), "err", err.Error())
-			return err
-		}
-		if s.taxes != nil {
-			if err := s.taxes.WithTx(tx).RecordSaleTax(ctx, businessID, sale.ID, subtotal); err != nil {
-				return err
+		if err == nil {
+			s.logger.InfoContext(ctx, "[SALES]-sale created", "saleID", saleID.String(), "businessID", businessID.String())
+			if err := s.repo.DB().WithContext(ctx).Exec(`DELETE FROM analytics_snapshots WHERE business_id = ?`, businessID).Error; err != nil {
+				slog.ErrorContext(ctx, "database operation failed", "err", err)
 			}
+			return s.repo.Find(ctx, businessID, saleID)
 		}
-		// Standalone (walk-in) sales deduct inventory here. Order-linked sales are
-		// deducted at the order confirm step instead, so fulfilling an order does not
-		// double-remove stock. DeductForSale is ledger-guarded (reference "sale").
-		if orderID == nil && s.inventory != nil {
-			deductLines := make([]inventory.DecrementLine, 0, len(lines))
-			for _, l := range lines {
-				deductLines = append(deductLines, inventory.DecrementLine{ProductID: l.ProductID, Quantity: l.Quantity})
-			}
-			if err := s.inventory.WithTx(tx).DeductForSale(ctx, businessID, sale.ID, deductLines); err != nil {
-				return err
-			}
+		if shareddb.IsDuplicateKey(err) {
+			lastErr = err
+			continue
 		}
-		sqlTx, ok := tx.Statement.ConnPool.(*sql.Tx)
-		if !ok {
-			return fmt.Errorf("sqlTx not available for sales event")
-		}
-		return txSvc.emit(ctx, sqlTx, businessID, sale.ID, SaleCreated, map[string]any{"total": sale.Total.String()})
-	}); err != nil {
 		return nil, err
 	}
-
-	s.logger.InfoContext(ctx, "[SALES]-sale created", "saleID", sale.ID.String(), "businessID", businessID.String())
-
-	// Invalidate analytics snapshots so next insights fetch recomputes with fresh sale.
-	if err := s.repo.DB().WithContext(ctx).Exec(`DELETE FROM analytics_snapshots WHERE business_id = ?`, businessID).Error; err != nil {
-		slog.ErrorContext(ctx, "database operation failed", "err", err)
-	}
-
-	return s.repo.Find(ctx, businessID, sale.ID)
+	s.logger.ErrorContext(ctx, "[SALES]-receipt number contention", "businessID", businessID.String(), "err", lastErr.Error())
+	return nil, apperrors.ErrConflict.WithMessage("sale number contention — retry").WithCause(lastErr)
 }
 
 func (s *Service) List(ctx context.Context, businessID uuid.UUID, page pagination.Page) ([]Sale, error) {
