@@ -49,6 +49,7 @@ func FromError(err error) *AppError {
 }
 
 var (
+	ErrBadRequest           = &AppError{Code: "BAD_REQUEST", StatusCode: http.StatusBadRequest}
 	ErrInternal             = &AppError{Code: "INTERNAL", StatusCode: http.StatusInternalServerError}
 	ErrNotFound             = &AppError{Code: "NOT_FOUND", StatusCode: http.StatusNotFound}
 	ErrUnauthorized         = &AppError{Code: "UNAUTHORIZED", StatusCode: http.StatusUnauthorized}
