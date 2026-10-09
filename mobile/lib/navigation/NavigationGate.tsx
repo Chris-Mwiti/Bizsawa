@@ -10,9 +10,13 @@ import React, {
 import { router } from 'expo-router'
 
 import { extractRouteId, resolveRouteGate, type RouteGate } from './routeGates'
+import { perf } from '../perf'
+import type { PerfSpanHandle } from '../perf'
 
-/** Never trap the user on a slow or dead network — navigate anyway. */
-const NAVIGATION_TIMEOUT_MS = 4000
+/** Never trap the user on a slow or dead network — navigate anyway.
+ * 2500ms: with the startup/query fixes the common case resolves in
+ * hundreds of ms; the timeout only bounds the worst case per tap. */
+const NAVIGATION_TIMEOUT_MS = 2500
 /** Once the indicator is actually shown, hold it long enough to read. */
 const MIN_VISIBLE_MS = 350
 /** If the data resolves this fast it is a cache hit — don't flash the indicator. */
@@ -30,6 +34,8 @@ interface PendingNav {
   token: number
   /** Guards the ready signal against double delivery. */
   readySignalled: boolean
+  /** Tracing span for the held navigation (tap → screen committed). */
+  span: PerfSpanHandle
 }
 
 interface NavigationGateValue {
@@ -113,11 +119,12 @@ export function NavigationGateProvider({
   useEffect(() => clearTimers, [clearTimers])
 
   const commit = useCallback(
-    (nav: PendingNav) => {
+    (nav: PendingNav, outcome: 'ready' | 'instant' | 'timeout') => {
       clearTimers()
       pendingRef.current = null
       setPending(null)
       setIsLoading(false)
+      nav.span.end({ outcome, route: nav.gate.label })
       nav.run()
     },
     [clearTimers],
@@ -136,6 +143,8 @@ export function NavigationGateProvider({
         return
       }
       clearTimers()
+      // A superseded intent still held a span — close it so stats stay exact.
+      pendingRef.current?.span.end({ outcome: 'superseded' })
       const nav: PendingNav = {
         href,
         kind,
@@ -144,6 +153,7 @@ export function NavigationGateProvider({
         run,
         token: ++tokenRef.current,
         readySignalled: false,
+        span: perf.start(`nav:${gate.label}`, { phase: 'nav', href }),
       }
       startedAtRef.current = Date.now()
       pendingRef.current = nav
@@ -151,7 +161,7 @@ export function NavigationGateProvider({
       setIsLoading(false)
       timersRef.current.push(
         setTimeout(() => {
-          if (pendingRef.current?.token === nav.token) commit(nav)
+          if (pendingRef.current?.token === nav.token) commit(nav, 'timeout')
         }, NAVIGATION_TIMEOUT_MS),
       )
     },
@@ -168,12 +178,12 @@ export function NavigationGateProvider({
       setIsLoading(true)
       timersRef.current.push(
         setTimeout(() => {
-          if (pendingRef.current?.token === nav.token) commit(nav)
+          if (pendingRef.current?.token === nav.token) commit(nav, 'ready')
         }, Math.max(0, MIN_VISIBLE_MS - elapsed)),
       )
     } else {
       // Cache hit — navigate immediately, no indicator flash.
-      commit(nav)
+      commit(nav, 'instant')
     }
   }, [commit])
 

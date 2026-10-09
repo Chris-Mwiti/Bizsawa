@@ -16,8 +16,9 @@ export default function (data) {
         : {}; // empty => validation path only
       const r = post(data, '/waha/send', body, 'waha', 'outbox_events', 'waha-send');
       check(r, { 'waha send handled': (x) => x.status !== 0 && x.status < 500 });
-      // KNOWN APP ISSUE (RBAC): route resource resolves to "waha" but the policy
-      // seeds "whatsapp", so even OWNER gets 403 here. Accepted pending backend fix.
+      // FIXED (was: route resolved "waha", policy seeded "whatsapp" -> OWNER 403).
+      // waha is now normalised to whatsapp + seeded; gated sends return 422
+      // validation. 403 stays accepted in case of future RBAC regressions.
       if (!WRITE_WAHA) check(r, { 'waha rejects w/o 5xx (400/422/403)': (x) => x.status === 400 || x.status === 422 || x.status === 403 });
     }],
     [2, () => {
@@ -31,7 +32,8 @@ export default function (data) {
       check(r, { 'chatbot handled': (x) => x.status !== 0 && x.status < 500 });
     }],
     [!WRITE_LLM ? 2 : 0, () => {
-      // KNOWN APP ISSUE: empty payload 500s instead of 400 — surfaced, not asserted.
+      // FIXED (was: empty payload 500d instead of 400). Empty message now
+      // returns 400; assertion holds the line against regressions.
       const r = post(data, '/chatbot/chat', {}, 'chat', 'outbox_events', 'chatbot-validation');
       check(r, { 'chatbot validation w/o 5xx (wanted)': (x) => x.status !== 0 && x.status < 500 });
     }],

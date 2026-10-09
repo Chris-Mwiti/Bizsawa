@@ -1,5 +1,5 @@
 import '../polyfills'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { View, StatusBar, Platform } from 'react-native'
 import { Stack } from 'expo-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -15,10 +15,14 @@ import { SyncProvider } from '../sync/SyncProvider'
 import { TourProvider } from '../contexts/TourContext'
 import { OfflineBanner } from '../components/OfflineBanner'
 import { NavigationGateProvider } from '../lib/navigation/NavigationGate'
+import { initPerf, perf } from '../lib/perf'
 import {
   RouteLoadingBar,
   RouteLoadingChip,
 } from '../components/RouteLoadingBar'
+
+initPerf()
+perf.mark('app.import')
 
 export default function RootLayout() {
   const [queryClient] = useState(
@@ -27,6 +31,20 @@ export default function RootLayout() {
         defaultOptions: {
           queries: {
             staleTime: 60 * 1000,
+            // Cold-start / foreground refire control. Defaults were retry:3 +
+            // refetchOnWindowFocus:true: every remount or app-state focus
+            // re-fired every query, and a single flaky request cost 3 WAN
+            // round-trips with backoff. Now: 4xx never retries (validation /
+            // auth errors are final), server/network errors get one retry.
+            // refetchOnMount/Reconnect keep working — they only fire for stale
+            // data, and reconnect refetch is what keeps the offline-first UX.
+            gcTime: 10 * 60 * 1000,
+            refetchOnWindowFocus: false,
+            retry: (failureCount, error: any) => {
+              const status = error?.response?.status
+              if (status && status >= 400 && status < 500) return false
+              return failureCount < 1
+            },
           },
         },
       }),
@@ -35,16 +53,26 @@ export default function RootLayout() {
   // Hold the first frame until the real faces are registered. Rendering early would
   // show a frame of system-ui and then reflow every line once Geist swaps in.
   // A failed load must not brick the app: fall through to the system face instead.
+  // Auth + business providers mount BEFORE the font gate: checkAuthStatus and
+  // hydration are headless (no UI), so they overlap the font download instead
+  // of waiting behind it. Everything visual stays behind the gate below.
   const [fontsLoaded, fontError] = useFonts(fonts)
   // OTA: prompt for restart when an EAS Update has downloaded (no-op in dev).
   useAppUpdates()
-  if (!fontsLoaded && !fontError) return null
+  const fontsReady = fontsLoaded || !!fontError
+
+  // Tracing: font download is on the critical path (visual tree is gated on
+  // it), so record when it clears.
+  useEffect(() => {
+    if (fontsReady) perf.mark('startup.fonts.ready')
+  }, [fontsReady])
 
   return (
     <TamaguiProvider config={tamaguiConfig} defaultTheme='light'>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <BusinessProvider>
+            {!fontsReady ? null : (
             <SyncProvider>
               <TourProvider>
                 <NavigationGateProvider>
@@ -131,6 +159,7 @@ export default function RootLayout() {
                 </NavigationGateProvider>
               </TourProvider>
             </SyncProvider>
+            )}
           </BusinessProvider>
         </AuthProvider>
       </QueryClientProvider>

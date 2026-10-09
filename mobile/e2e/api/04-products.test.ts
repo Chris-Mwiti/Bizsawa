@@ -18,9 +18,9 @@ describe('04 Product + variants + inventory', () => {
     const productId = prod.data.data?.id || prod.data.id
     expect(productId).toBeTruthy()
 
-    // inventory adjust
+    // inventory adjust (backend route is /inventory/adjustments)
     if (productId) {
-      const adj = await client.post('/inventory/adjust', { productId, quantityDelta: 10 })
+      const adj = await client.post('/inventory/adjustments', { productId, quantityDelta: 10 })
       expect([200, 201]).toContain(adj.status)
       const low = await client.get('/inventory/low-stock')
       expect([200]).toContain(low.status)

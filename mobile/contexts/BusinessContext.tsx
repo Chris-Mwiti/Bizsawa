@@ -9,6 +9,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import NetInfo from '@react-native-community/netinfo'
 import { api, AUTH_STORAGE_KEYS } from '../lib/api'
+import { perf } from '../lib/perf'
 import type {
   Business,
   BusinessMember,
@@ -73,8 +74,18 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
   }
 
   const selectBusiness = async (business: Business) => {
-    const role = await resolveRole(business.id)
-    await setSelectedBusinessAuth(business, role)
+    // Persisting the selection and resolving the role are independent — the
+    // role is re-persisted once known. Previously resolveRole (a WAN round
+    // trip) blocked the persist + state update serially on every cold start.
+    const [, role] = await Promise.all([
+      setSelectedBusinessAuth(business),
+      resolveRole(business.id),
+    ])
+    if (role) {
+      try {
+        await AsyncStorage.setItem(AUTH_STORAGE_KEYS.role, role)
+      } catch {}
+    }
     setActiveBusiness(business)
     setActiveRole(role)
   }
@@ -122,15 +133,18 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
 
   const refreshBusinesses = async () => {
     if (!isAuthenticated) return
+    const span = perf.start('startup.business.refresh', { phase: 'startup' })
+    let outcome = 'ok'
     setIsLoading(true)
     try {
-      const response = await api.get<{ businesses: Business[] }>('/businesses')
+      // The list fetch and the stored-selection read are independent.
+      const [response, savedBusinessId] = await Promise.all([
+        api.get<{ businesses: Business[] }>('/businesses'),
+        AsyncStorage.getItem(AUTH_STORAGE_KEYS.businessId),
+      ])
       const items = response.data.businesses || []
       setBusinesses(items)
 
-      const savedBusinessId = await AsyncStorage.getItem(
-        AUTH_STORAGE_KEYS.businessId,
-      )
       const selected =
         items.find((business) => business.id === savedBusinessId) ||
         items[0] ||
@@ -146,7 +160,9 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
       if (!hydrated) {
         console.warn('[BusinessContext] refreshBusinesses failed offline and no local business found', (e as any)?.message)
       }
+      outcome = 'offline-fallback'
     } finally {
+      span.end({ outcome })
       setIsLoading(false)
     }
   }

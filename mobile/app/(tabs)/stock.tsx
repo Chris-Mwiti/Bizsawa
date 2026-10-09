@@ -400,40 +400,6 @@ export default function StockTab() {
         }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Inventory filters */}
-        <View className='bg-surface rounded-5xl p-4 border border-hairline shadow-clinical-sm gap-3'>
-          <View className='flex-row gap-2'>
-            {(
-              [
-                { key: 'all', label: `All Items • ${combinedInventory.length}` },
-                { key: 'low', label: `Low Stock • ${lowStockItems.length}` },
-              ] as const
-            ).map((f) => {
-              const active = filter === f.key
-              return (
-                <Pressable
-                  key={f.key}
-                  onPress={() => setFilter(f.key)}
-                  accessibilityRole='button'
-                  accessibilityState={{ selected: active }}
-                  className={`flex-1 py-3 rounded-full border items-center ${
-                    active
-                      ? 'bg-accent border-accent'
-                      : 'bg-paper border-hairline'
-                  }`}
-                >
-                  <Text
-                    className={`text-xs font-bold ${active ? 'text-on-accent' : 'text-ink-muted'}`}
-                    numberOfLines={1}
-                  >
-                    {f.label}
-                  </Text>
-                </Pressable>
-              )
-            })}
-          </View>
-        </View>
-
         {/* Metrics */}
         <View className='flex-row gap-3'>
           {[

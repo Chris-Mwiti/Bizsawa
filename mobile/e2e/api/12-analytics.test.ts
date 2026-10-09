@@ -12,11 +12,13 @@ describe('12 Analytics zero-fill', () => {
     const prod = await client.post('/products', { name: `AnaProd ${Date.now()}`, price: '20.00', variants: [{ name: 'unit', price: '20.00' }] })
     const productId = prod.data.data?.id || prod.data.id
     if (productId) {
-      await client.post('/inventory/adjust', { productId, quantityDelta: 10 })
-      const order = await client.post('/orders', { lines: [{ productId, quantity: 1, price: '20.00' }] })
+      await client.post('/inventory/adjustments', { productId, quantityDelta: 10 })
+      // order create + confirm require UUID-shaped X-Idempotency-Key
+      const idem = () => ({ 'X-Idempotency-Key': crypto.randomUUID() })
+      const order = await client.post('/orders', { lines: [{ productId, quantity: 1, price: '20.00' }] }, idem())
       const orderId = order.data.data?.id || order.data.id
       if (orderId) {
-        await client.post(`/orders/${orderId}/confirm`)
+        await client.post(`/orders/${orderId}/confirm`, {}, idem())
         await client.post('/sales', { orderId })
       }
     }
@@ -25,10 +27,15 @@ describe('12 Analytics zero-fill', () => {
     const data = week.data.data || week.data
     // sage expects revenue.data.length==7 with zeros gap-filled
     const revenue = data.revenue?.data || data.revenue || data.data || []
+    const isNumeric = (v: any) =>
+      typeof v === 'number' || (typeof v === 'string' && v.trim() !== '' && !isNaN(Number(v)))
     if (Array.isArray(revenue)) {
       expect(revenue.length).toBeGreaterThanOrEqual(7)
-      // at least one entry should be numeric
-      if (revenue.length > 0) expect(typeof revenue[0].revenue === 'number' || typeof revenue[0].value === 'number' || typeof revenue[0] === 'number').toBe(true)
+      // at least one entry should be numeric (backend serializes decimals as strings)
+      if (revenue.length > 0) {
+        const first = revenue[0]
+        expect(isNumeric(first?.revenue ?? first?.value ?? first)).toBe(true)
+      }
     }
   })
 })
