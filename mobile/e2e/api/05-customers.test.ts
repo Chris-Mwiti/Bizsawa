@@ -12,6 +12,8 @@ describe('05 Customer CRM', () => {
     expect([200, 201]).toContain(c.status)
     const list = await client.get('/customers')
     expect([200]).toContain(list.status)
-    expect(Array.isArray(list.data.data || list.data)).toBe(true)
+    // backend returns {customers: [...]} envelope; accept legacy shapes too
+    const rows = list.data.customers || list.data.data || list.data
+    expect(Array.isArray(rows)).toBe(true)
   })
 })

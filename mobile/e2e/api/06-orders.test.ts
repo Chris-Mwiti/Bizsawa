@@ -13,17 +13,19 @@ describe('06 Order → Sale → Inventory decrement', () => {
     const prod = await client.post('/products', { name: `OrderProd ${Date.now()}`, price: '50.00', variants: [{ name: 'unit', price: '50.00' }] })
     const productId = prod.data.data?.id || prod.data.id
     if (!productId) return
-    await client.post('/inventory/adjust', { productId, quantityDelta: 20 })
+    await client.post('/inventory/adjustments', { productId, quantityDelta: 20 })
 
     const cust = await client.post('/customers', { name: 'Order Cust', phone: '254733000000' })
     const customerId = cust.data.data?.id || cust.data.id
 
-    const order = await client.post('/orders', { customerId, lines: [{ productId, quantity: 2, price: '50.00' }] })
+    // order create + confirm require UUID-shaped X-Idempotency-Key (backend 403/409 otherwise)
+    const idem = () => ({ 'X-Idempotency-Key': crypto.randomUUID() })
+    const order = await client.post('/orders', { customerId, lines: [{ productId, quantity: 2, price: '50.00' }] }, idem())
     expect([200, 201]).toContain(order.status)
     const orderId = order.data.data?.id || order.data.id
     if (!orderId) return
 
-    const confirm = await client.post(`/orders/${orderId}/confirm`)
+    const confirm = await client.post(`/orders/${orderId}/confirm`, {}, idem())
     expect([200, 201, 204]).toContain(confirm.status)
 
     const sale = await client.post('/sales', { orderId })
