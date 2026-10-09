@@ -42,6 +42,16 @@ func (m *Module) RegisterRoutes(r chi.Router) {
 	r.Get("/{id}", h.Get)
 	r.Post("/mpesa/c2b/register", h.RegisterC2BURLs)
 	r.Post("/mpesa/transaction-status", h.QueryTransactionStatus)
+	// Device-reported capture ingest (Track 1): batch upsert + filtered list.
+	r.Post("/ingest", h.Ingest)
+	r.Get("/captured", h.ListCaptured)
+}
+
+// RegisterDeviceRoutes mounts the top-level POST /devices endpoint
+// (device registration is a tenant-level action, not a payment command).
+func (m *Module) RegisterDeviceRoutes(r chi.Router) {
+	h := Handler{svc: m.svc}
+	r.Post("/", h.RegisterDevice)
 }
 
 func (m *Module) RegisterPublicRoutes(r chi.Router) {

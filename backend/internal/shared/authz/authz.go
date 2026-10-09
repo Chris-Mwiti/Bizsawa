@@ -128,11 +128,11 @@ func (e *Enforcer) allow(role Role, resource string, actions ...string) {
 }
 
 func (e *Enforcer) seedDefaults() {
-	for _, resource := range []string{"businesses", "members", "products", "customers", "orders", "sales", "inventory", "expenses", "taxes", "invoices", "payments", "reports", "visualizations", "insights", "analytics", "chatbot", "chat", "sync", "ai", "whatsapp", "waha"} {
+	for _, resource := range []string{"businesses", "members", "products", "customers", "orders", "sales", "inventory", "expenses", "taxes", "invoices", "payments", "devices", "reports", "visualizations", "insights", "analytics", "chatbot", "chat", "sync", "ai", "whatsapp", "waha"} {
 		e.allow(RoleOwner, resource, "read", "write", "delete", "generate", "configure")
 	}
 
-	for _, resource := range []string{"businesses", "members", "products", "customers", "orders", "sales", "inventory", "expenses", "taxes", "invoices", "reports", "visualizations", "insights", "analytics", "chatbot", "chat", "sync", "ai", "whatsapp", "waha"} {
+	for _, resource := range []string{"businesses", "members", "products", "customers", "orders", "sales", "inventory", "expenses", "taxes", "invoices", "payments", "devices", "reports", "visualizations", "insights", "analytics", "chatbot", "chat", "sync", "ai", "whatsapp", "waha"} {
 		e.allow(RoleManager, resource, "read", "write", "generate", "configure")
 	}
 
@@ -143,6 +143,8 @@ func (e *Enforcer) seedDefaults() {
 	e.allow(RoleCashier, "inventory", "read")
 	e.allow(RoleCashier, "expenses", "read", "write")
 	e.allow(RoleCashier, "invoices", "read")
+	e.allow(RoleCashier, "payments", "read", "write")
+	e.allow(RoleCashier, "devices", "read", "write")
 	e.allow(RoleCashier, "insights", "read")
 	e.allow(RoleCashier, "analytics", "read")
 	e.allow(RoleCashier, "chatbot", "read", "write")
