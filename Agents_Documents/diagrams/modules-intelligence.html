@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Intelligence modules — chat · mcp · analytics · waha</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:   #F4F9F7;
+      --color-ink:     #122b26;
+      --color-muted:   #47615b;
+      --color-soft:    #5b7670;
+      --color-accent:  #006b5f;
+      --color-link:    #04574d;
+      --font-sans:     'Geist', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', 'Noto Serif', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace;
+    }
+    body { font-family: var(--font-sans); background: var(--color-paper); color: var(--color-ink);
+      min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 3rem 2rem; }
+    .frame { max-width: 1200px; width: 100%; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+    .eyebrow { font-family: var(--font-mono); font-size: 0.66rem; font-weight: 500;
+      letter-spacing: 0.18em; text-transform: uppercase; color: var(--color-muted); margin-bottom: 0.5rem; }
+    h1 { font-family: var(--font-serif); font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400; letter-spacing: -0.02em; line-height: 1.15; color: var(--color-ink); margin-bottom: 1.5rem; }
+    svg { width: 100%; min-width: 960px; display: block; }
+    @media print { .diagram-container { overflow-x: visible; } svg { min-width: 0; } }
+    .ref { font-family: var(--font-mono); font-size: 0.8rem; color: var(--color-muted); margin-top: 1rem; }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Architecture · Intelligence</p>
+    <h1>Agent loop, insights and notifications</h1>
+    <div class="diagram-container">
+      <svg viewBox="0 0 960 600" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="mod-intel-title mod-intel-desc">
+        <title id="mod-intel-title">Intelligence modules and agent loop</title>
+        <desc id="mod-intel-desc">The chat agent calls tools through the MCP registry with LLM fallback, analytics serves cached snapshots, WAHA sends notifications.</desc>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#47615b"/></marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#006b5f"/></marker>
+          <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#04574d"/></marker>
+        </defs>
+        <rect width="100%" height="100%" fill="#F4F9F7"/>
+
+        <rect x="16" y="64" width="928" height="200" rx="8" fill="rgba(18,43,38,0.02)" stroke="rgba(18,43,38,0.10)" stroke-width="0.8"/>
+        <rect x="28" y="68" width="108" height="12" rx="2" fill="#F4F9F7"/>
+        <text x="82" y="77" fill="#5b7670" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">INTELLIGENCE</text>
+
+        <!-- arrows -->
+        <line x1="236" y1="166" x2="252" y2="166" stroke="#006b5f" stroke-width="1.2" marker-end="url(#arrow-accent)"/>
+        <path d="M 868,52 V 88 H 120 V 96" fill="none" stroke="#47615b" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+        <rect x="452" y="72" width="88" height="14" fill="#F4F9F7"/>
+        <text x="496" y="82" fill="#47615b" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">COMPLETIONS</text>
+        <line x1="598" y1="236" x2="598" y2="360" stroke="#47615b" stroke-width="1" marker-end="url(#arrow)"/>
+        <rect x="606" y="290" width="68" height="14" fill="#F4F9F7"/>
+        <text x="640" y="300" fill="#47615b" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">SNAPSHOTS</text>
+
+        <!-- LLM -->
+        <rect x="792" y="16" width="152" height="36" rx="6" fill="rgba(18,43,38,0.03)" stroke="rgba(18,43,38,0.30)" stroke-width="1"/>
+        <text x="868" y="31" fill="#122b26" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">LLM</text>
+        <text x="868" y="44" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">gated · fallback</text>
+
+        <!-- chat focal -->
+        <rect x="16" y="96" width="220" height="140" rx="6" fill="rgba(0,107,95,0.08)" stroke="#006b5f" stroke-width="1.2"/>
+        <rect x="24" y="102" width="38" height="12" rx="2" fill="none" stroke="#006b5f" stroke-width="0.8"/>
+        <text x="43" y="111" fill="#006b5f" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">CHAT</text>
+        <text x="126" y="140" fill="#006b5f" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Chat agent</text>
+        <text x="126" y="160" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">tool loop · synthesis</text>
+        <text x="126" y="178" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">heuristic fallback</text>
+        <text x="126" y="196" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">400 on empty</text>
+        <!-- mcp -->
+        <rect x="252" y="96" width="220" height="140" rx="6" fill="#ffffff" stroke="#122b26" stroke-width="1"/>
+        <rect x="260" y="102" width="32" height="12" rx="2" fill="none" stroke="#47615b" stroke-width="0.8"/>
+        <text x="276" y="111" fill="#47615b" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">MCP</text>
+        <text x="362" y="140" fill="#122b26" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Tool registry</text>
+        <text x="362" y="160" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">profile-scoped tools</text>
+        <text x="362" y="178" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">authz-checked calls</text>
+        <text x="362" y="196" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">JSON-RPC server</text>
+        <!-- analytics -->
+        <rect x="488" y="96" width="220" height="140" rx="6" fill="#ffffff" stroke="#122b26" stroke-width="1"/>
+        <rect x="496" y="102" width="62" height="12" rx="2" fill="none" stroke="#47615b" stroke-width="0.8"/>
+        <text x="527" y="111" fill="#47615b" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">ANALYTICS</text>
+        <text x="598" y="140" fill="#122b26" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Analytics</text>
+        <text x="598" y="160" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">series · cohorts · LTV</text>
+        <text x="598" y="178" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">snapshot cache · KRA</text>
+        <text x="598" y="196" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">AI insights · workers</text>
+        <!-- waha -->
+        <rect x="724" y="96" width="220" height="140" rx="6" fill="#ffffff" stroke="#122b26" stroke-width="1"/>
+        <rect x="732" y="102" width="38" height="12" rx="2" fill="none" stroke="#47615b" stroke-width="0.8"/>
+        <text x="751" y="111" fill="#47615b" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">WAHA</text>
+        <text x="834" y="140" fill="#122b26" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">WhatsApp</text>
+        <text x="834" y="160" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">send · notify</text>
+        <text x="834" y="178" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">templates · media</text>
+        <text x="834" y="196" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">via WAHA gateway</text>
+
+        <!-- store bar -->
+        <rect x="16" y="360" width="928" height="96" rx="6" fill="rgba(18,43,38,0.05)" stroke="#47615b" stroke-width="1"/>
+        <rect x="28" y="366" width="22" height="12" rx="2" fill="none" stroke="#47615b" stroke-width="0.8"/>
+        <text x="39" y="375" fill="#47615b" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">DB</text>
+        <text x="480" y="402" fill="#122b26" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Postgres — snapshots</text>
+        <text x="480" y="420" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">analytics_snapshots · reads domain tables, writes none</text>
+
+        <!-- legend -->
+        <line x1="16" y1="540" x2="944" y2="540" stroke="rgba(18,43,38,0.12)" stroke-width="0.8"/>
+        <rect x="16" y="552" width="14" height="14" rx="3" fill="rgba(0,107,95,0.08)" stroke="#006b5f" stroke-width="1.2"/>
+        <text x="36" y="563" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace">agent loop — focal</text>
+        <line x1="216" y1="559" x2="246" y2="559" stroke="#006b5f" stroke-width="1.2" marker-end="url(#arrow-accent)"/>
+        <text x="252" y="563" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace">tool calls</text>
+        <line x1="352" y1="559" x2="382" y2="559" stroke="#47615b" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+        <text x="388" y="563" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace">gated / async</text>
+      </svg>
+    </div>
+    <p class="ref">Full function catalog: Agents_Documents/backend-modules/intelligence.md</p>
+  </div>
+</body>
+</html>
