@@ -46,3 +46,8 @@ yarn-error.*
 NOTES*
 
 GoogleService-Info.plist
+
+# sms-capture standalone test project outputs
+modules/sms-capture/android/.gradle/
+modules/sms-capture/android/**/build/
+modules/sms-capture/**/local.properties
