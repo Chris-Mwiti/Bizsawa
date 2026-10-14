@@ -4,22 +4,10 @@
 
 import { SMS_CONSENT_VERSION, SMS_PARSER_VERSION, type SmsIngestItem, type SmsParseOutcome } from './types'
 import { parseMpesaSms } from './parser'
-import { isMpesaSender } from './sender'
 import { hashPayerPhone } from './payerHash'
-import { enqueueSmsItem, flushSmsQueue, getSmsQueueCount, newClientEventId } from './queue'
+import { isMpesaSender } from './sender'
 import { hasSmsConsent } from './consent'
-
-async function parseNative(body: string): Promise<SmsParseOutcome | null> {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const mod = require('../../modules/sms-capture')
-    const fn = mod?.parseMpesaSms ?? mod?.default?.parseMpesaSms
-    if (typeof fn !== 'function') return null
-    return (await fn(body)) as SmsParseOutcome
-  } catch {
-    return null
-  }
-}
+import { enqueueSmsItem, flushSmsQueue, getSmsQueueCount, newClientEventId } from './queue'
 
 export interface HandleSmsArgs {
   body: string
@@ -35,10 +23,14 @@ export async function handleIncomingSms(args: HandleSmsArgs): Promise<
   if (args.requireConsent !== false && !(await hasSmsConsent())) {
     return { stored: false, reason: 'consent_required' }
   }
-  const outcome = (await parseNative(args.body)) ?? parseMpesaSms(args.body)
+  // Parsing is TS-side (single rule set, mirrors the Kotlin parser v2).
+  // The native module only delivers raw message text via the Consent API.
+  const outcome: SmsParseOutcome = parseMpesaSms(args.body)
   if (outcome.kind === 'reversal') return { stored: false, reason: 'reversal_ignored' }
   if (outcome.kind === 'rejected') return { stored: false, reason: outcome.reason }
-  const payerHash = await hashPayerPhone(outcome.rawPayerPhone)
+  // Name-only messages (genuine Pochi without a phone) carry no payer_hash;
+  // the backend accepts captures with an absent payer_hash.
+  const payerHash = outcome.rawPayerPhone === null ? undefined : await hashPayerPhone(outcome.rawPayerPhone)
   const item: SmsIngestItem = {
     client_event_id: newClientEventId(),
     mpesa_receipt: outcome.payment.receiptCode,
@@ -47,7 +39,7 @@ export async function handleIncomingSms(args: HandleSmsArgs): Promise<
     occurred_at: new Date(outcome.payment.occurredAtMillis).toISOString(),
     channel_type: outcome.payment.channelType,
     source: 'sms_device',
-    payer_hash: payerHash,
+    ...(payerHash !== undefined ? { payer_hash: payerHash } : {}),
     parser_version: SMS_PARSER_VERSION,
     consent_version: SMS_CONSENT_VERSION,
   }
