@@ -28,6 +28,7 @@ import {
   AlertTriangle,
   RefreshCw,
   ShieldAlert,
+  MessageSquare,
   Crown,
   Mail,
   UserPlus,
@@ -532,6 +533,27 @@ export default function ProfileTab() {
             {(pendingCount>0 || conflictCount>0) && <Text className='font-sans text-xs text-gray-500 text-center'>Tap Sync now to push {pendingCount} pending, or View conflicts when push returns version mismatch.</Text>}
           </CardContent>
         </Card>
+
+        {__DEV__ && (
+          <Card className='border border-dashed border-gray-300'>
+            <CardHeader className='flex-row items-center gap-2'>
+              <MessageSquare size={16} color='#111827' />
+              <CardTitle>Developer: SMS capture</CardTitle>
+            </CardHeader>
+            <CardContent className='pt-0 gap-3'>
+              <Text className='font-sans text-xs leading-4 text-gray-600'>
+                Dev builds only. Paste a real M-PESA message and run it through parse → queue → ingest.
+              </Text>
+              <TouchableOpacity
+                onPress={() => router.push('/sms-test' as any)}
+                className='flex-row items-center justify-center gap-2 py-4 rounded-2xl bg-gray-900'
+              >
+                <MessageSquare size={16} color='white' />
+                <Text className='font-geist-bold text-sm font-bold text-white'>Open SMS capture test</Text>
+              </TouchableOpacity>
+            </CardContent>
+          </Card>
+        )}
 
         <Card className='border border-amber-200 bg-amber-50/40'>
           <CardHeader className='flex-row items-center gap-2'>
