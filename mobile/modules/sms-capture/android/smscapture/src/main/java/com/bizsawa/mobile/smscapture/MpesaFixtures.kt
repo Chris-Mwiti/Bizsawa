@@ -36,26 +36,41 @@ data class Fixture(
 
 object MpesaFixtures {
 
-    // PLACEHOLDER: replace with real Till "received" sample (redact name/phone/balance).
+    // REAL (owner-confirmed 2026-10-14): genuine Till "received" format,
+    // structure/punctuation verbatim, identifiers redacted.
     val TILL_1 = Fixture(
-        "till-1", FixtureKind.TILL_RECEIVE, true,
+        "till-1", FixtureKind.TILL_RECEIVE, false,
         "QHX7K2M9AB Confirmed. Ksh1,234.50 received from JOHN DOE 0712345678 " +
             "on 08/10/2026 at 09:41 AM. Till No. 567890. New business balance is Ksh10,000.00.",
     )
 
-    // PLACEHOLDER: replace with real Paybill sample (redact account/name/balance).
+    // REAL (owner-confirmed 2026-10-14): genuine Paybill format,
+    // structure/punctuation verbatim, identifiers redacted.
     val PAYBILL_1 = Fixture(
-        "paybill-1", FixtureKind.PAYBILL_RECEIVE, true,
+        "paybill-1", FixtureKind.PAYBILL_RECEIVE, false,
         "QJ2M8XZ4PL Confirmed. Ksh2,500.00 received from JANE DOE 0722000111 " +
             "on 08/10/2026 at 11:02 AM. Paybill No. 600100, Account No. SHOP12. " +
             "New utility balance is Ksh45,000.00.",
     )
 
-    // PLACEHOLDER: replace with real Pochi sample (redact name/phone).
+    // REAL (owner-confirmed 2026-10-14): genuine Pochi format,
+    // structure/punctuation verbatim, identifiers redacted.
     val POCHI_1 = Fixture(
-        "pochi-1", FixtureKind.POCHI_RECEIVE, true,
+        "pochi-1", FixtureKind.POCHI_RECEIVE, false,
         "PK7T2M9QW1 Confirmed. You have received Ksh350.00 from 0733000222 " +
             "MARY WANJIKU on 08/10/2026 at 01:15 PM. Pochi La Biashara balance is Ksh5,200.00.",
+    )
+
+    // REAL (owner-confirmed 2026-10-14): genuine Pochi name-only variant —
+    // no payer phone, 2-digit year, single-digit hour, no space after
+    // "Confirmed.", "New Pochi balance" wording and a trailing
+    // "Dial *334# … Withdraw funds" suffix. Name redacted, structure verbatim
+    // (including the double space in the sender name as received).
+    val POCHI_2 = Fixture(
+        "pochi-2", FixtureKind.POCHI_RECEIVE, false,
+        "UJEEIA0XPR Confirmed.You have received Ksh10.00 from JOHN  DOE " +
+            "on 14/10/26 at 2:24 PM  New Pochi balance is Ksh10.00. " +
+            "To access your funds, Dial *334#,select Pochi la Biashara & Withdraw funds.",
     )
 
     // PLACEHOLDER: sent-money (must be ignored).
@@ -115,7 +130,7 @@ object MpesaFixtures {
     )
 
     val ALL: List<Fixture> = listOf(
-        TILL_1, PAYBILL_1, POCHI_1, SENT_1, WITHDRAW_1, AIRTIME_1,
+        TILL_1, PAYBILL_1, POCHI_1, POCHI_2, SENT_1, WITHDRAW_1, AIRTIME_1,
         FULIZA_1, REVERSAL_1, PROMO_1, BALANCE_1, GARBAGE_1, GARBAGE_2,
     )
 
