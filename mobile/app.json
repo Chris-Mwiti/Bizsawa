@@ -73,6 +73,7 @@
       ],
       "expo-sqlite",
       "expo-secure-store",
+      "bizsawa-sms-capture/app.plugin.js",
       "expo-font"
     ],
     "extra": {
