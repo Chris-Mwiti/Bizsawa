@@ -4,7 +4,7 @@
 // Raw SMS text, payer names and balances are never stored — by construction
 // there is no field for them.
 
-export const SMS_PARSER_VERSION = '1'
+export const SMS_PARSER_VERSION = '2'
 export const SMS_CONSENT_VERSION = '1'
 
 export type SmsChannel = 'till' | 'paybill' | 'pochi' | 'unknown'
@@ -15,7 +15,7 @@ export type SmsRejectReason =
   | 'no_amount'
   | 'bad_amount'
   | 'no_datetime'
-  | 'no_payer_phone'
+  | 'no_payer_phone' // legacy (v1): v2+ parses name-only Pochi, never emits this
   | 'sent_money'
   | 'withdrawal'
   | 'airtime'
@@ -32,7 +32,7 @@ export interface ParsedSmsPayment {
 }
 
 export type SmsParseOutcome =
-  | { kind: 'ok'; payment: ParsedSmsPayment; rawPayerPhone: string }
+  | { kind: 'ok'; payment: ParsedSmsPayment; rawPayerPhone: string | null }
   | { kind: 'rejected'; reason: SmsRejectReason }
   | { kind: 'reversal' }
 
