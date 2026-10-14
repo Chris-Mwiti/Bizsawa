@@ -1,0 +1,15 @@
+{
+  "name": "bizsawa-sms-capture",
+  "version": "1.0.0",
+  "description": "M-PESA SMS User Consent listener (Android-only, no READ_SMS permission)",
+  "main": "index.ts",
+  "types": "index.ts",
+  "scripts": {},
+  "expo": {},
+  "peerDependencies": {
+    "expo": "*",
+    "expo-modules-core": "*",
+    "react": "*",
+    "react-native": "*"
+  }
+}
