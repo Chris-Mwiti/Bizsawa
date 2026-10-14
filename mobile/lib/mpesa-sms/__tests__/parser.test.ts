@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { parseMpesaSms } from '../parser'
 
-describe('mpesa-sms parser (TS mirror of Kotlin MpesaParser v1)', () => {
+describe('mpesa-sms parser (TS mirror of Kotlin MpesaParser v2)', () => {
   it('parses a Till receive', () => {
     const res = parseMpesaSms(
       'QHX7K2M9AB Confirmed. Ksh1,234.50 received from JOHN DOE 0712345678 on 08/10/2026 at 09:41 AM. Till No. 567890.',
@@ -32,6 +32,18 @@ describe('mpesa-sms parser (TS mirror of Kotlin MpesaParser v1)', () => {
     if (res.kind !== 'ok') return
     expect(res.payment.amountMinor).toBe(35000)
     expect(res.payment.channelType).toBe('pochi')
+  })
+
+  it('parses a name-only Pochi receive (no payer phone)', () => {
+    const res = parseMpesaSms(
+      'UJEEIA0XPR Confirmed.You have received Ksh10.00 from JOHN  DOE on 14/10/26 at 2:24 PM  New Pochi balance is Ksh10.00. To access your funds, Dial *334#,select Pochi la Biashara & Withdraw funds.',
+    )
+    expect(res.kind).toBe('ok')
+    if (res.kind !== 'ok') return
+    expect(res.payment.receiptCode).toBe('UJEEIA0XPR')
+    expect(res.payment.amountMinor).toBe(1000)
+    expect(res.payment.channelType).toBe('pochi')
+    expect(res.rawPayerPhone).toBeNull()
   })
 
   it('rejects sent-money, airtime, fuliza and reversals', () => {
