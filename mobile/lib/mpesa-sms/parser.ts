@@ -1,7 +1,10 @@
-// TypeScript mirror of the Android Kotlin MpesaParser (VERSION 1).
+// TypeScript mirror of the Android Kotlin MpesaParser (VERSION 2).
 // Pure function, no native dependencies — used on iOS, in tests, and as a
 // fallback when the native sms-capture module is unavailable.
 // Rule changes must bump SMS_PARSER_VERSION and land in both implementations.
+// v2: payer phone is optional — genuine Pochi la Biashara traffic can be
+// name-only ("received Ksh10.00 from LINUS KIBET on …", no digits), so a
+// missing phone yields rawPayerPhone: null instead of no_payer_phone.
 
 import { SMS_PARSER_VERSION, type SmsParseOutcome, type SmsChannel } from './types'
 
@@ -109,8 +112,7 @@ export function parseMpesaSms(body: string): SmsParseOutcome {
   else if (TILL_HINT.test(text)) channelType = 'till'
   else if (PAYBILL_HINT.test(text)) channelType = 'paybill'
 
-  const phoneRaw = PHONE.exec(text)?.[0]
-  if (!phoneRaw) return { kind: 'rejected', reason: 'no_payer_phone' }
+  const phoneRaw = PHONE.exec(text)?.[0] ?? null
 
   return {
     kind: 'ok',
@@ -121,6 +123,6 @@ export function parseMpesaSms(body: string): SmsParseOutcome {
       occurredAtMillis,
       channelType,
     },
-    rawPayerPhone: normalizePhone(phoneRaw),
+    rawPayerPhone: phoneRaw === null ? null : normalizePhone(phoneRaw),
   }
 }
