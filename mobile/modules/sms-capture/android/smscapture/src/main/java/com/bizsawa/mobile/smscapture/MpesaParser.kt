@@ -11,10 +11,11 @@ import java.util.TimeZone
  * exactly as it runs on device.
  *
  * PRIVACY: the parser extracts receipt, amount, timestamp, channel and the
- * payer phone (for hashing only). Payer name, balance, transaction cost and
- * the raw text are NEVER part of any output object — by construction there
- * is nowhere to put them. [ParseResult.Ok.rawPayerPhone] exists only as a
- * local value the receiver passes straight to [PayerHasher] and drops.
+ * payer phone (for hashing only) when present. Payer name, balance,
+ * transaction cost and the raw text are NEVER part of any output object — by
+ * construction there is nowhere to put them. [ParseResult.Ok.rawPayerPhone]
+ * is null for name-only messages (genuine Pochi traffic can omit the phone)
+ * and otherwise goes straight to [PayerHasher] and is dropped.
  *
  * PLACEHOLDER PATTERNS: until the product owner supplies anonymised real
  * samples, the regexes below are best-guess scaffolding. They are fenced by
@@ -29,7 +30,7 @@ import java.util.TimeZone
 object MpesaParser {
 
     /** Bump on ANY rule change. Every stored record carries this version. */
-    const val VERSION = "1"
+    const val VERSION = "2"
 
     private val NAIROBI: TimeZone = TimeZone.getTimeZone("Africa/Nairobi")
 
@@ -94,8 +95,10 @@ object MpesaParser {
         }
 
         // Pochi check last: "pochi" rarely collides, till/paybill win on overlap.
+        // Payer phone is optional: genuine Pochi traffic can be name-only
+        // ("from LINUS KIBET on …" with no digits) — null phone parses fine
+        // and the backend stores the capture without a payer_hash.
         val phoneRaw = PHONE.find(text)?.groups?.get("phone")?.value
-            ?: return ParseResult.Rejected("no_payer_phone")
 
         return ParseResult.Ok(
             payment = CapturedPayment(
@@ -105,7 +108,7 @@ object MpesaParser {
                 occurredAtMillis = occurredAt,
                 channelType = channel,
             ),
-            rawPayerPhone = normalizePhone(phoneRaw),
+            rawPayerPhone = phoneRaw?.let { normalizePhone(it) },
         )
     }
 
@@ -178,8 +181,9 @@ data class CapturedPayment(
 )
 
 sealed interface ParseResult {
-    /** Payment parsed. rawPayerPhone goes straight to PayerHasher, then dropped. */
-    data class Ok(val payment: CapturedPayment, val rawPayerPhone: String) : ParseResult
+    /** Payment parsed. rawPayerPhone is null for name-only messages, else
+     *  goes straight to PayerHasher, then dropped. */
+    data class Ok(val payment: CapturedPayment, val rawPayerPhone: String?) : ParseResult
     /** Not a receivable payment (sent/withdrawal/airtime/fuliza/promo/unknown). */
     data class Rejected(val reason: String) : ParseResult
     /** Reversal detected — distinct type, never a payment. Matching engine: future work. */
