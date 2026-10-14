@@ -42,6 +42,16 @@ class MpesaParserTest {
         assertEquals(ChannelType.POCHI, p.channelType)
     }
 
+    @Test fun pochiNameOnlyParsesWithoutPhone() {
+        val res = MpesaParser.parse(MpesaFixtures.POCHI_2.text)
+        assertTrue("expected Ok for pochi-2, got $res", res is ParseResult.Ok)
+        val ok = res as ParseResult.Ok
+        assertEquals("UJEEIA0XPR", ok.payment.receiptCode)
+        assertEquals(1000L, ok.payment.amountMinor)
+        assertEquals(ChannelType.POCHI, ok.payment.channelType)
+        assertNull(ok.rawPayerPhone)
+    }
+
     @Test fun timestampIsNairobiEpochMillis() {
         val p = ok(MpesaFixtures.TILL_1)
         val cal = Calendar.getInstance(TimeZone.getTimeZone("Africa/Nairobi"))
