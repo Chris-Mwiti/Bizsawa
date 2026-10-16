@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BizSawa — System &amp; Deployment Overview</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:   #F4F9F7;
+      --color-ink:     #122b26;
+      --color-muted:   #47615b;
+      --color-soft:    #5b7670;
+      --color-accent:  #006b5f;
+      --color-link:    #04574d;
+      --font-sans:     'Geist', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', 'Noto Serif', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace;
+    }
+    body { font-family: var(--font-sans); background: var(--color-paper); color: var(--color-ink);
+      min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 3rem 2rem; }
+    .frame { max-width: 1200px; width: 100%; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+    .eyebrow { font-family: var(--font-mono); font-size: 0.66rem; font-weight: 500;
+      letter-spacing: 0.18em; text-transform: uppercase; color: var(--color-muted); margin-bottom: 0.5rem; }
+    h1 { font-family: var(--font-serif); font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400; letter-spacing: -0.02em; line-height: 1.15; color: var(--color-ink); margin-bottom: 1.5rem; }
+    svg { width: 100%; min-width: 960px; display: block; }
+    @media print { .diagram-container { overflow-x: visible; } svg { min-width: 0; } }
+    .callout { font-family: var(--font-serif); font-style: italic; font-size: 0.9rem; color: var(--color-muted); margin-top: 1rem; }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Architecture · System + Deployment</p>
+    <h1>BizSawa at a glance</h1>
+    <div class="diagram-container">
+      <svg viewBox="0 0 960 600" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="bizsawa-system-title bizsawa-system-desc">
+        <title id="bizsawa-system-title">BizSawa system and deployment overview</title>
+        <desc id="bizsawa-system-desc">Staff phones run the offline-first Expo app against a Go API on Render, backed by Postgres and Redis, with Daraja and Resend as external providers.</desc>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#47615b"/></marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#006b5f"/></marker>
+          <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#04574d"/></marker>
+        </defs>
+
+        <rect width="100%" height="100%" fill="#F4F9F7"/>
+
+        <!-- zones -->
+        <rect x="16" y="80" width="196" height="340" rx="8" fill="rgba(18,43,38,0.02)" stroke="rgba(18,43,38,0.10)" stroke-width="0.8"/>
+        <rect x="28" y="84" width="96" height="12" rx="2" fill="#F4F9F7"/>
+        <text x="76" y="93" fill="#5b7670" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">STAFF DEVICE</text>
+        <rect x="228" y="80" width="172" height="340" rx="8" fill="rgba(18,43,38,0.02)" stroke="rgba(18,43,38,0.10)" stroke-width="0.8"/>
+        <rect x="240" y="84" width="52" height="12" rx="2" fill="#F4F9F7"/>
+        <text x="266" y="93" fill="#5b7670" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">EDGE</text>
+        <rect x="416" y="80" width="352" height="340" rx="8" fill="rgba(18,43,38,0.02)" stroke="rgba(18,43,38,0.10)" stroke-width="0.8"/>
+        <rect x="428" y="84" width="140" height="12" rx="2" fill="#F4F9F7"/>
+        <text x="498" y="93" fill="#5b7670" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">RENDER · PRODUCTION</text>
+
+        <!-- arrows (before nodes) -->
+        <path d="M 88,52 V 136" fill="none" stroke="#47615b" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+        <rect x="96" y="84" width="68" height="14" fill="#F4F9F7"/>
+        <text x="130" y="94" fill="#47615b" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">APK BUILD</text>
+        <line x1="196" y1="172" x2="244" y2="172" stroke="#04574d" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <rect x="200" y="156" width="28" height="14" fill="#F4F9F7"/>
+        <text x="214" y="166" fill="#04574d" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">DNS</text>
+        <line x1="384" y1="168" x2="440" y2="168" stroke="#04574d" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <rect x="388" y="152" width="44" height="14" fill="#F4F9F7"/>
+        <text x="410" y="162" fill="#04574d" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">HTTPS</text>
+        <line x1="500" y1="204" x2="500" y2="224" stroke="#47615b" stroke-width="1" marker-end="url(#arrow)"/>
+        <rect x="508" y="208" width="24" height="14" fill="#F4F9F7"/>
+        <text x="520" y="218" fill="#47615b" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">SQL</text>
+        <path d="M 624,188 H 688 Q 696,188 696,196 V 224" fill="none" stroke="#47615b" stroke-width="1" marker-end="url(#arrow)"/>
+        <rect x="704" y="202" width="40" height="14" fill="#F4F9F7"/>
+        <text x="724" y="212" fill="#47615b" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">CACHE</text>
+        <line x1="624" y1="156" x2="792" y2="156" stroke="#04574d" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <rect x="684" y="142" width="56" height="14" fill="#F4F9F7"/>
+        <text x="712" y="152" fill="#04574d" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">C2B · STK</text>
+        <path d="M 624,172 H 762 Q 770,172 770,180 V 238 Q 770,246 778,246 H 792" fill="none" stroke="#04574d" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <rect x="704" y="204" width="60" height="14" fill="#F4F9F7"/>
+        <text x="762" y="214" fill="#04574d" font-size="8" font-family="'Geist Mono', monospace" text-anchor="end" letter-spacing="0.06em">OTP MAIL</text>
+
+        <!-- EAS -->
+        <rect x="16" y="16" width="148" height="36" rx="6" fill="rgba(18,43,38,0.03)" stroke="rgba(18,43,38,0.30)" stroke-width="1"/>
+        <text x="90" y="31" fill="#122b26" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">EAS Build</text>
+        <text x="90" y="44" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">internal · sideload</text>
+
+        <!-- device nodes -->
+        <rect x="32" y="136" width="164" height="72" rx="6" fill="#ffffff" stroke="#122b26" stroke-width="1"/>
+        <rect x="40" y="142" width="30" height="12" rx="2" fill="none" stroke="#47615b" stroke-width="0.8"/>
+        <text x="55" y="151" fill="#47615b" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">APP</text>
+        <text x="114" y="176" fill="#122b26" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Mobile APK</text>
+        <text x="114" y="192" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">Expo 54 · offline-first</text>
+        <rect x="32" y="224" width="164" height="64" rx="6" fill="rgba(18,43,38,0.02)" stroke="rgba(18,43,38,0.20)" stroke-width="1" stroke-dasharray="4,3"/>
+        <rect x="40" y="230" width="36" height="12" rx="2" fill="none" stroke="#47615b" stroke-width="0.8"/>
+        <text x="58" y="239" fill="#47615b" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">SOON</text>
+        <text x="114" y="264" fill="#122b26" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">SMS capture</text>
+        <text x="114" y="280" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">on-device · Phase 2</text>
+
+        <!-- edge node -->
+        <rect x="244" y="136" width="140" height="72" rx="6" fill="#ffffff" stroke="#122b26" stroke-width="1"/>
+        <rect x="252" y="142" width="28" height="12" rx="2" fill="none" stroke="#47615b" stroke-width="0.8"/>
+        <text x="266" y="151" fill="#47615b" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">DNS</text>
+        <text x="314" y="176" fill="#122b26" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Cloudflare</text>
+        <text x="314" y="192" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">DNS · TLS</text>
+
+        <!-- prod nodes -->
+        <rect x="440" y="128" width="184" height="76" rx="6" fill="rgba(0,107,95,0.08)" stroke="#006b5f" stroke-width="1.2"/>
+        <rect x="448" y="134" width="26" height="12" rx="2" fill="none" stroke="#006b5f" stroke-width="0.8"/>
+        <text x="461" y="143" fill="#006b5f" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">API</text>
+        <text x="532" y="170" fill="#006b5f" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Backend API</text>
+        <text x="532" y="188" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">:5504 · Go + Chi</text>
+        <rect x="440" y="224" width="184" height="68" rx="6" fill="rgba(18,43,38,0.05)" stroke="#47615b" stroke-width="1"/>
+        <rect x="448" y="230" width="22" height="12" rx="2" fill="none" stroke="#47615b" stroke-width="0.8"/>
+        <text x="459" y="239" fill="#47615b" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">DB</text>
+        <text x="532" y="264" fill="#122b26" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Postgres 16</text>
+        <text x="532" y="280" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">River jobs in-DB</text>
+        <rect x="640" y="224" width="112" height="68" rx="6" fill="rgba(18,43,38,0.05)" stroke="#47615b" stroke-width="1"/>
+        <rect x="648" y="230" width="38" height="12" rx="2" fill="none" stroke="#47615b" stroke-width="0.8"/>
+        <text x="667" y="239" fill="#47615b" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">CACHE</text>
+        <text x="696" y="264" fill="#122b26" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Redis 7</text>
+        <text x="696" y="280" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">sessions</text>
+
+        <!-- external -->
+        <rect x="792" y="128" width="152" height="68" rx="6" fill="rgba(18,43,38,0.03)" stroke="rgba(18,43,38,0.30)" stroke-width="1"/>
+        <rect x="800" y="134" width="26" height="12" rx="2" fill="none" stroke="#47615b" stroke-width="0.8"/>
+        <text x="813" y="143" fill="#47615b" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">EXT</text>
+        <text x="868" y="166" fill="#122b26" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Safaricom Daraja</text>
+        <text x="868" y="182" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">C2B · STK push</text>
+        <rect x="792" y="212" width="152" height="68" rx="6" fill="rgba(18,43,38,0.03)" stroke="rgba(18,43,38,0.30)" stroke-width="1"/>
+        <rect x="800" y="218" width="26" height="12" rx="2" fill="none" stroke="#47615b" stroke-width="0.8"/>
+        <text x="813" y="227" fill="#47615b" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">EXT</text>
+        <text x="868" y="250" fill="#122b26" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Resend</text>
+        <text x="868" y="266" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">OTP mail</text>
+
+        <!-- legend -->
+        <line x1="16" y1="540" x2="944" y2="540" stroke="rgba(18,43,38,0.12)" stroke-width="0.8"/>
+        <rect x="16" y="552" width="14" height="14" rx="3" fill="rgba(0,107,95,0.08)" stroke="#006b5f" stroke-width="1.2"/>
+        <text x="36" y="563" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace">focal service</text>
+        <line x1="148" y1="559" x2="180" y2="559" stroke="#04574d" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <text x="184" y="563" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace">https / api</text>
+        <line x1="284" y1="559" x2="316" y2="559" stroke="#47615b" stroke-width="1" marker-end="url(#arrow)"/>
+        <text x="320" y="563" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace">internal</text>
+        <line x1="468" y1="559" x2="500" y2="559" stroke="#47615b" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+        <text x="504" y="563" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace">build / async</text>
+        <rect x="556" y="552" width="14" height="14" rx="3" fill="none" stroke="rgba(18,43,38,0.30)" stroke-width="1" stroke-dasharray="4,3"/>
+        <text x="576" y="563" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace">planned</text>
+      </svg>
+    </div>
+    <p class="callout">Prod runs the merged main build — verified live: waha 422 · chat 400.</p>
+  </div>
+</body>
+</html>

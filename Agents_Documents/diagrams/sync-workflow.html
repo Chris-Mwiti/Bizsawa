@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sync workflow — device to backend in detail</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:   #F4F9F7;
+      --color-ink:     #122b26;
+      --color-muted:   #47615b;
+      --color-soft:    #5b7670;
+      --color-accent:  #006b5f;
+      --color-link:    #04574d;
+      --font-sans:     'Geist', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', 'Noto Serif', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace;
+    }
+    body { font-family: var(--font-sans); background: var(--color-paper); color: var(--color-ink);
+      min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 3rem 2rem; }
+    .frame { max-width: 1200px; width: 100%; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+    .eyebrow { font-family: var(--font-mono); font-size: 0.66rem; font-weight: 500;
+      letter-spacing: 0.18em; text-transform: uppercase; color: var(--color-muted); margin-bottom: 0.5rem; }
+    h1 { font-family: var(--font-serif); font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400; letter-spacing: -0.02em; line-height: 1.15; color: var(--color-ink); margin-bottom: 1.5rem; }
+    svg { width: 100%; min-width: 960px; display: block; }
+    @media print { .diagram-container { overflow-x: visible; } svg { min-width: 0; } }
+    .ref { font-family: var(--font-mono); font-size: 0.8rem; color: var(--color-muted); margin-top: 1rem; }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Swimlane · Sync mechanism</p>
+    <h1>One sync run, end to end</h1>
+    <div class="diagram-container">
+      <svg viewBox="0 0 960 600" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="sync-flow-title sync-flow-desc">
+        <title id="sync-flow-title">Sync workflow across device api and data</title>
+        <desc id="sync-flow-desc">A sync run flows from device preflight through pull and push to verification, crossing device, api and data lanes.</desc>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#47615b"/></marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#006b5f"/></marker>
+          <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#04574d"/></marker>
+        </defs>
+        <rect width="100%" height="100%" fill="#F4F9F7"/>
+
+        <!-- lanes -->
+        <rect x="96" y="96" width="848" height="120" rx="8" fill="rgba(18,43,38,0.02)" stroke="rgba(18,43,38,0.10)" stroke-width="0.8"/>
+        <text x="24" y="160" fill="#5b7670" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">DEVICE</text>
+        <rect x="96" y="232" width="848" height="120" rx="8" fill="rgba(18,43,38,0.02)" stroke="rgba(18,43,38,0.10)" stroke-width="0.8"/>
+        <text x="24" y="296" fill="#5b7670" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">API</text>
+        <rect x="96" y="368" width="848" height="120" rx="8" fill="rgba(18,43,38,0.02)" stroke="rgba(18,43,38,0.10)" stroke-width="0.8"/>
+        <text x="24" y="432" fill="#5b7670" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">DATA</text>
+
+        <!-- arrows -->
+        <path d="M 180,200 H 188 Q 196,200 196,208 V 300 Q 196,308 204,308 H 210" fill="none" stroke="#04574d" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <line x1="295" y1="344" x2="295" y2="408" stroke="#47615b" stroke-width="1" marker-end="url(#arrow)"/>
+        <rect x="303" y="368" width="40" height="14" fill="#F4F9F7"/>
+        <text x="323" y="378" fill="#47615b" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">SCAN</text>
+        <path d="M 380,444 H 466 Q 474,444 474,436 V 216 Q 474,208 474,208 V 208" fill="none" stroke="#47615b" stroke-width="1" marker-end="url(#arrow)"/>
+        <rect x="482" y="320" width="52" height="14" fill="#F4F9F7"/>
+        <text x="508" y="330" fill="#47615b" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">DELTAS</text>
+        <line x1="550" y1="172" x2="570" y2="172" stroke="#47615b" stroke-width="1" marker-end="url(#arrow)"/>
+        <path d="M 645,208 V 272" fill="none" stroke="#006b5f" stroke-width="1.2" marker-end="url(#arrow-accent)"/>
+        <rect x="653" y="216" width="72" height="14" fill="#F4F9F7"/>
+        <text x="689" y="226" fill="#006b5f" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">BATCH ≤50</text>
+        <line x1="645" y1="344" x2="645" y2="408" stroke="#47615b" stroke-width="1" marker-end="url(#arrow)"/>
+        <rect x="653" y="368" width="44" height="14" fill="#F4F9F7"/>
+        <text x="675" y="378" fill="#47615b" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">APPLY</text>
+        <path d="M 720,444 H 817 Q 825,444 825,436 V 216 Q 825,208 825,208 V 208" fill="none" stroke="#47615b" stroke-width="1" marker-end="url(#arrow)"/>
+        <rect x="833" y="320" width="52" height="14" fill="#F4F9F7"/>
+        <text x="859" y="330" fill="#47615b" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">RESULT</text>
+
+        <!-- device steps -->
+        <rect x="40" y="136" width="140" height="72" rx="6" fill="#ffffff" stroke="#122b26" stroke-width="1"/>
+        <text x="110" y="164" fill="#122b26" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Preflight</text>
+        <text x="110" y="182" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">repair · clean</text>
+        <text x="110" y="196" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">pending debug</text>
+        <rect x="400" y="136" width="150" height="72" rx="6" fill="#ffffff" stroke="#122b26" stroke-width="1"/>
+        <text x="475" y="164" fill="#122b26" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Apply pull</text>
+        <text x="475" y="182" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">watermelon write</text>
+        <text x="475" y="196" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">FK-safe · tombstones</text>
+        <rect x="570" y="136" width="150" height="72" rx="6" fill="#ffffff" stroke="#122b26" stroke-width="1"/>
+        <text x="645" y="164" fill="#122b26" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Send push</text>
+        <text x="645" y="182" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">creates · updates</text>
+        <text x="645" y="196" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">deletes · client ids</text>
+        <rect x="750" y="136" width="150" height="72" rx="6" fill="#ffffff" stroke="#122b26" stroke-width="1"/>
+        <text x="825" y="164" fill="#122b26" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Verify</text>
+        <text x="825" y="182" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">counts · refresh</text>
+        <text x="825" y="196" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">analytics call</text>
+        <!-- api steps -->
+        <rect x="210" y="272" width="170" height="72" rx="6" fill="#ffffff" stroke="#122b26" stroke-width="1"/>
+        <text x="295" y="300" fill="#122b26" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Serve pull</text>
+        <text x="295" y="318" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">since + limit</text>
+        <text x="295" y="332" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">caps · tombstones</text>
+        <rect x="570" y="272" width="150" height="72" rx="6" fill="#ffffff" stroke="#122b26" stroke-width="1"/>
+        <text x="645" y="300" fill="#122b26" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Apply push</text>
+        <text x="645" y="318" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">FK order · versions</text>
+        <text x="645" y="332" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">invoice · sale fx</text>
+        <!-- data steps -->
+        <rect x="210" y="408" width="170" height="72" rx="6" fill="rgba(18,43,38,0.05)" stroke="#47615b" stroke-width="1"/>
+        <text x="295" y="436" fill="#122b26" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Delta select</text>
+        <text x="295" y="454" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">(business, updated)</text>
+        <text x="295" y="468" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">indexed scan</text>
+        <rect x="570" y="408" width="150" height="72" rx="6" fill="rgba(18,43,38,0.05)" stroke="#47615b" stroke-width="1"/>
+        <text x="645" y="436" fill="#122b26" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Upsert</text>
+        <text x="645" y="454" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">rows · conflicts</text>
+        <text x="645" y="468" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">outbox events</text>
+
+        <!-- legend -->
+        <line x1="16" y1="540" x2="944" y2="540" stroke="rgba(18,43,38,0.12)" stroke-width="0.8"/>
+        <line x1="16" y1="559" x2="46" y2="559" stroke="#006b5f" stroke-width="1.2" marker-end="url(#arrow-accent)"/>
+        <text x="52" y="563" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace">push batch — coupling hotspot</text>
+        <line x1="300" y1="559" x2="330" y2="559" stroke="#04574d" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <text x="336" y="563" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace">client request</text>
+        <line x1="478" y1="559" x2="508" y2="559" stroke="#47615b" stroke-width="1" marker-end="url(#arrow)"/>
+        <text x="514" y="563" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace">apply / resolve</text>
+      </svg>
+    </div>
+    <p class="ref">Push runs in FK order with per-record version checks — mismatches become conflicts, never overwrites. Detail: backend-modules/sync.md</p>
+  </div>
+</body>
+</html>
