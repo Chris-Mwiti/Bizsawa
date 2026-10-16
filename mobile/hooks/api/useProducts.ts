@@ -209,6 +209,20 @@ export const useProducts = () => {
             })
           }
         }
+        // Opening stock in the SAME write: the product row and its inventory
+        // row land atomically, so observers fire once with complete data and
+        // the list never flashes 0 quantity after an add.
+        if (data.stockQuantity !== undefined || data.minStockLevel != null) {
+          const icol: any = (database as any).get('inventory_items')
+          await icol.create((rec: any) => {
+            rec._raw.id = randomUUID()
+            rec.businessId = bid
+            rec.productId = id
+            rec.quantity = toDecimalString(data.stockQuantity ?? 0)
+            rec.lowStockThreshold = toDecimalString(data.minStockLevel ?? 0)
+            rec.syncVersion = 1
+          })
+        }
       })
       import('../../sync/client').then((m) => m.syncNow().catch(() => {}))
       return mapProduct({
@@ -245,7 +259,7 @@ export const useProducts = () => {
           if ((data as any).barcode !== undefined) r.barcode = (data as any).barcode?.trim() || null
           if ((data as any).imageUrl !== undefined) r.imageUrl = (data as any).imageUrl?.trim() || null
           if ((data as any).taxRuleId !== undefined) r.taxRuleId = (data as any).taxRuleId || null
-          r.syncVersion = (r.syncVersion || 1) + 1
+          // NOTE: never bump syncVersion here — see useCustomers.ts.
         })
         // Replace variants: delete existing, create new (offline-first)
         if (data.variants !== undefined) {

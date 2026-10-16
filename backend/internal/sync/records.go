@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -10,6 +11,8 @@ import (
 	"gorm.io/gorm"
 )
 
+// insertRecord sanitises a client-created row (offline placeholders, types,
+// FKs) and inserts it with sync_version=1.
 func (s *Service) insertRecord(tx *gorm.DB, businessID uuid.UUID, userID uuid.UUID, table string, rec map[string]any) error {
 	clean := map[string]any{}
 
@@ -22,6 +25,37 @@ func (s *Service) insertRecord(tx *gorm.DB, businessID uuid.UUID, userID uuid.UU
 	}
 
 	rec = clean
+	s.sanitizeUUIDPlaceholders(businessID, userID, rec)
+
+	if _, ok := rec["business_id"]; !ok {
+		rec["business_id"] = businessID.String()
+	}
+
+	if _, ok := rec["tenant_id"]; !ok {
+		rec["tenant_id"] = businessID.String()
+	}
+	if err := s.ensureSaleStaff(tx, businessID, userID, table, rec); err != nil {
+		return err
+	}
+	s.ensureOrderDefaults(table, rec)
+	s.ensurePaymentCommandDefaults(table, rec)
+
+	rec["sync_version"] = 1
+	s.normalizeRecordTypes(rec)
+
+	// FK guard: avoid SQLSTATE 23503. If a required FK parent is missing in this tx,
+	// return a controlled error (surfaced in PushResult.Errors) instead of letting
+	// Postgres emit ERROR ... violates foreign key constraint.
+	if err := s.validateFKs(tx, businessID, table, rec); err != nil {
+		return err
+	}
+
+	return tx.Table(table).Create(rec).Error
+}
+
+// sanitizeUUIDPlaceholders replaces offline sentinel UUIDs ("local", "", "null")
+// with context IDs or drops them (nullable FKs → NULL, handled by validateFKs).
+func (s *Service) sanitizeUUIDPlaceholders(businessID, userID uuid.UUID, rec map[string]any) {
 	// Sanitize UUID columns — frontend historically sent "local" or "" for business_id/staff_id when offline before auth
 	for k, v := range rec {
 		if isUUIDColumn(k) && !isValidUUID(v) {
@@ -53,24 +87,35 @@ func (s *Service) insertRecord(tx *gorm.DB, businessID uuid.UUID, userID uuid.UU
 			}
 		}
 	}
+}
 
-	if _, ok := rec["business_id"]; !ok {
-		rec["business_id"] = businessID.String()
+// ensureSaleStaff guarantees sales.staff_id references auth_users(id).
+// Never falls back to businessID (businesses.id is not in auth_users and
+// always trips sales_staff_id_fkey / SQLSTATE 23503).
+func (s *Service) ensureSaleStaff(tx *gorm.DB, businessID, userID uuid.UUID, table string, rec map[string]any) error {
+	if table != "sales" {
+		return nil
 	}
-
-	if _, ok := rec["tenant_id"]; !ok {
-		rec["tenant_id"] = businessID.String()
-	}
-	// Ensure required staff_id for sales — fallback to authenticated user
-	if table == "sales" {
-		if _, ok := rec["staff_id"]; !ok {
-			if userID != uuid.Nil {
-				rec["staff_id"] = userID.String()
-			} else {
-				rec["staff_id"] = businessID.String()
-			}
+	if raw, ok := rec["staff_id"]; ok {
+		if sStr, ok := raw.(string); !ok || !s.staffExists(tx, sStr) {
+			// Client sent a bogus/unknown staff (e.g. offline placeholder
+			// that survived sanitising, or a staff row deleted server-side)
+			// — replace with a valid actor instead of FK-violating.
+			delete(rec, "staff_id")
 		}
 	}
+	if _, ok := rec["staff_id"]; !ok {
+		staffID, err := s.resolveSaleStaffID(tx, businessID, userID)
+		if err != nil {
+			return err
+		}
+		rec["staff_id"] = staffID.String()
+	}
+	return nil
+}
+
+// ensureOrderDefaults backfills NOT NULL order columns (schema drift: mobile sends NULLs).
+func (s *Service) ensureOrderDefaults(table string, rec map[string]any) {
 	// Ensure required NOT NULL columns for orders (schema drift: mobile sends NULL for payment_status)
 	if table == "orders" {
 		if v, ok := rec["status"]; !ok || v == nil || strings.TrimSpace(fmt.Sprint(v)) == "" || strings.EqualFold(fmt.Sprint(v), "null") {
@@ -91,43 +136,50 @@ func (s *Service) insertRecord(tx *gorm.DB, businessID uuid.UUID, userID uuid.UU
 			}
 		}
 	}
+}
+
+// ensurePaymentCommandDefaults backfills NOT NULL payment_commands columns for offline rows.
+func (s *Service) ensurePaymentCommandDefaults(table string, rec map[string]any) {
+	if table != "payment_commands" {
+		return
+	}
 	// Ensure idempotency_key for payment_commands (NOT NULL in DB)
-	if table == "payment_commands" {
-		if _, ok := rec["idempotency_key"]; !ok {
-			// use record id as idempotency key if provided, else generate
-			if idStr, ok := rec["id"].(string); ok && idStr != "" {
-				rec["idempotency_key"] = idStr
-			} else {
-				rec["idempotency_key"] = uuid.New().String()
-			}
-		}
-
-		if v, ok := rec["idempotency_key"].(string); !ok || strings.TrimSpace(v) == "" {
-			if idStr, ok := rec["id"].(string); ok && idStr != "" {
-				rec["idempotency_key"] = idStr
-			} else {
-				rec["idempotency_key"] = uuid.New().String()
-			}
-		}
-		// defaults for offline payment_commands
-		if _, ok := rec["status"]; !ok {
-			rec["status"] = "pending"
-		}
-
-		if _, ok := rec["provider"]; !ok {
-			rec["provider"] = "mpesa"
-		}
-
-		if _, ok := rec["type"]; !ok {
-			rec["type"] = "stk_push"
-		}
-
-		if _, ok := rec["currency"]; !ok {
-			rec["currency"] = "KES"
+	if _, ok := rec["idempotency_key"]; !ok {
+		// use record id as idempotency key if provided, else generate
+		if idStr, ok := rec["id"].(string); ok && idStr != "" {
+			rec["idempotency_key"] = idStr
+		} else {
+			rec["idempotency_key"] = uuid.New().String()
 		}
 	}
 
-	rec["sync_version"] = 1
+	if v, ok := rec["idempotency_key"].(string); !ok || strings.TrimSpace(v) == "" {
+		if idStr, ok := rec["id"].(string); ok && idStr != "" {
+			rec["idempotency_key"] = idStr
+		} else {
+			rec["idempotency_key"] = uuid.New().String()
+		}
+	}
+	// defaults for offline payment_commands
+	if _, ok := rec["status"]; !ok {
+		rec["status"] = "pending"
+	}
+
+	if _, ok := rec["provider"]; !ok {
+		rec["provider"] = "mpesa"
+	}
+
+	if _, ok := rec["type"]; !ok {
+		rec["type"] = "stk_push"
+	}
+
+	if _, ok := rec["currency"]; !ok {
+		rec["currency"] = "KES"
+	}
+}
+
+// normalizeRecordTypes coerces timestamps/numerics to driver-safe values.
+func (s *Service) normalizeRecordTypes(rec map[string]any) {
 	for k, v := range rec {
 		if isTimestampColumn(k) {
 			if t := asTime(v); t != nil {
@@ -147,92 +199,109 @@ func (s *Service) insertRecord(tx *gorm.DB, businessID uuid.UUID, userID uuid.UU
 			}
 		}
 	}
-
-	// FK guard: avoid SQLSTATE 23503. If a required FK parent is missing in this tx,
-	// return a controlled error (surfaced in PushResult.Errors) instead of letting
-	// Postgres emit ERROR ... violates foreign key constraint.
-	if err := s.validateFKs(tx, businessID, table, rec); err != nil {
-		return err
-	}
-
-	return tx.Table(table).Create(rec).Error
 }
 
-// insertPushedMovement records a client-pushed stock_movements row and applies its
-// quantity_delta to inventory_items — the mirror of ApplyLedger for the offline path.
-//
-// Reference-less rows (manual adjustments) always apply; their PK guarantees re-push
-// idempotency. Reference-bound rows (sales/orders) dedupe against the same rules the
-// server-side ledger uses, so a mirrored movement can never double-apply an adjustment
-// the REST API already made:
-//   - negative (out): apply only if this reference+product has not deducted yet; if the
-//     deduction already exists elsewhere, report as applied without re-applying.
-//   - positive (in): apply only if a deduction exists AND no restore has been applied;
-//     a phantom restore with no prior deduction is recorded without changing quantity.
-func (s *Service) insertPushedMovement(tx *gorm.DB, businessID uuid.UUID, rec map[string]any) error {
-	productStr := strings.TrimSpace(fmt.Sprint(rec["product_id"]))
+func (s *Service) updateRecord(tx *gorm.DB, businessID uuid.UUID, table string, rec map[string]any) error {
+	id, _ := rec["id"].(string)
+	update := map[string]any{}
 
-	productID, err := uuid.Parse(productStr)
-	if err != nil {
-		// no product → record-only row, nothing to apply
-		return s.insertRecord(tx, businessID, uuid.Nil, "stock_movements", rec)
-	}
+	for k, v := range rec {
+		if k == "id" || k == "sync_version" || k == "syncVersion" || (len(k) > 0 && k[0] == '_') {
+			continue
+		}
+		// Explicitly drop stray keys that don't map to DB columns (e.g. legacy `type`, `customerPhone`, `undefined`)
+		if v == nil {
+			continue
+		}
 
-	deltaStr := strings.TrimSpace(fmt.Sprint(rec["quantity_delta"]))
-	delta, err := decimal.NewFromString(deltaStr)
-
-	if err != nil {
-		return fmt.Errorf("invalid quantity_delta %q", deltaStr)
-	}
-
-	refType := strings.TrimSpace(fmt.Sprint(rec["reference_type"]))
-	refIDStr := strings.TrimSpace(fmt.Sprint(rec["reference_id"]))
-
-	var refID uuid.UUID
-
-	if refIDStr != "" && refIDStr != "<nil>" {
-		refID, _ = uuid.Parse(refIDStr)
-	}
-
-	hasRef := refType != "" && refIDStr != "" && refIDStr != "<nil>" && refID != uuid.Nil
-
-	if hasRef {
-		var applied int64
-		if delta.Sign() < 0 {
-			tx.Raw(`SELECT COUNT(*) FROM stock_movements WHERE business_id = ? AND reference_type = ? AND reference_id = ? AND product_id = ? AND quantity_delta < 0`,
-				businessID, refType, refID, productID).Scan(&applied)
-
-			if applied > 0 {
-				// already deducted by a prior ledger entry (e.g. REST confirm applied it)
-				return nil
-			}
-		} else {
-			tx.Raw(`SELECT COUNT(*) FROM stock_movements WHERE business_id = ? AND reference_type = ? AND reference_id = ? AND product_id = ? AND quantity_delta > 0`,
-				businessID, refType, refID, productID).Scan(&applied)
-
-			if applied > 0 {
-				// restore already applied — treat as no-op
-				return nil
+		if s, ok := v.(string); ok {
+			trim := strings.TrimSpace(s)
+			if trim == "" && k != "notes" && k != "description" && k != "address" {
+				// allow empty for nullable text but skip "undefined" sentinel
 			}
 
-			var deducted int64
-
-			tx.Raw(`SELECT COUNT(*) FROM stock_movements WHERE business_id = ? AND reference_type = ? AND reference_id = ? AND product_id = ? AND quantity_delta < 0`,
-				businessID, refType, refID, productID).Scan(&deducted)
-
-			if deducted == 0 {
-				// phantom restore (never deducted server-side) — record, do not change qty
-				return s.insertRecord(tx, businessID, uuid.Nil, "stock_movements", rec)
+			if strings.EqualFold(trim, "undefined") || strings.EqualFold(trim, "null") {
+				continue
 			}
 		}
+
+		if allowed, ok := allowedUpdateColumns[table]; ok {
+			if !allowed[k] {
+				continue
+			}
+		}
+
+		if isTimestampColumn(k) {
+			if t := asTime(v); t != nil {
+				update[k] = *t
+			} else if v != nil {
+				update[k] = v
+			}
+
+			continue
+		}
+
+		if isNumericColumn(k) {
+			if sanitized, ok := sanitizeNumeric(v); ok {
+				update[k] = sanitized
+			} else {
+				continue // skip NaN/local — don't overwrite good server value with 0
+			}
+
+			continue
+		}
+
+		// sales.staff_id FKs to auth_users — never write a bogus UUID or the
+		// update trips sales_staff_id_fkey (SQLSTATE 23503). Skip instead.
+		if table == "sales" && k == "staff_id" {
+			sStr, ok := v.(string)
+			if !ok || !s.staffExists(tx, sStr) {
+				continue
+			}
+		}
+
+		update[k] = v
 	}
 
-	if err := s.insertRecord(tx, businessID, uuid.Nil, "stock_movements", rec); err != nil {
-		return err
-	}
+	update["sync_version"] = gorm.Expr("sync_version + 1")
+	update["updated_at"] = time.Now()
 
-	return tx.Exec(`UPDATE inventory_items SET quantity = quantity + ?::numeric, updated_at = NOW() WHERE business_id = ? AND product_id = ? AND deleted_at IS NULL`,
-		delta.String(), businessID, productID).Error
+	return tx.Table(table).Where("id = ? AND business_id = ?", id, businessID).Updates(update).Error
+}
+
+func (s *Service) staffExists(tx *gorm.DB, idStr string) bool {
+	pid, err := uuid.Parse(idStr)
+	if err != nil {
+		return false
+	}
+	var n int64
+	if err := tx.Raw(`SELECT COUNT(*) FROM auth_users WHERE id = ?`, pid).Scan(&n).Error; err != nil {
+		return false
+	}
+	return n > 0
+}
+
+// resolveSaleStaffID picks a valid sales.staff_id (FK → auth_users.id):
+// preferred actor (sync caller) → business owner → any active member.
+// Returns an error instead of an FK-violating UUID so the push surfaces a
+// controlled rejection rather than Postgres ERROR 23503.
+func (s *Service) resolveSaleStaffID(tx *gorm.DB, businessID, userID uuid.UUID) (uuid.UUID, error) {
+	if userID != uuid.Nil && s.staffExists(tx, userID.String()) {
+		return userID, nil
+	}
+	var ownerID uuid.UUID
+	if err := tx.Raw(`SELECT owner_id FROM businesses WHERE id = ?`, businessID).Scan(&ownerID).Error; err == nil && ownerID != uuid.Nil {
+		if s.staffExists(tx, ownerID.String()) {
+			return ownerID, nil
+		}
+	}
+	var memberID uuid.UUID
+	if err := tx.Raw(`SELECT user_id FROM business_members WHERE business_id = ? AND is_active = true AND deleted_at IS NULL ORDER BY created_at ASC LIMIT 1`, businessID).Scan(&memberID).Error; err == nil && memberID != uuid.Nil {
+		if s.staffExists(tx, memberID.String()) {
+			return memberID, nil
+		}
+	}
+	return uuid.Nil, fmt.Errorf("FK violation: sales.staff_id has no valid auth_users reference for business %s — sync with an authenticated staff user first (SQLSTATE 23503)", businessID)
 }
 
 func (s *Service) validateFKs(tx *gorm.DB, businessID uuid.UUID, table string, rec map[string]any) error {
@@ -302,64 +371,95 @@ func (s *Service) validateFKs(tx *gorm.DB, businessID uuid.UUID, table string, r
 		}
 	}
 
+	// sales.staff_id / expenses.created_by reference global auth_users(id),
+	// not a business-scoped table — guard here so a stale client UUID becomes
+	// a controlled rejection instead of Postgres ERROR 23503.
+	if table == "sales" {
+		if raw, ok := rec["staff_id"]; ok && raw != nil {
+			if idStr, ok := raw.(string); ok && idStr != "" {
+				if !s.staffExists(tx, idStr) {
+					return fmt.Errorf("FK violation: staff_id=%s references auth_users not found for sales — sync with an authenticated staff user first (SQLSTATE 23503)", idStr)
+				}
+			}
+		}
+	}
+
 	return nil
 }
 
-func (s *Service) updateRecord(tx *gorm.DB, businessID uuid.UUID, table string, rec map[string]any) error {
-	id, _ := rec["id"].(string)
-	update := map[string]any{}
+// insertPushedMovement records a client-pushed stock_movements row and applies its
+// quantity_delta to inventory_items — the mirror of ApplyLedger for the offline path.
+//
+// Reference-less rows (manual adjustments) always apply; their PK guarantees re-push
+// idempotency. Reference-bound rows (sales/orders) dedupe against the same rules the
+// server-side ledger uses, so a mirrored movement can never double-apply an adjustment
+// the REST API already made:
+//   - negative (out): apply only if this reference+product has not deducted yet; if the
+//     deduction already exists elsewhere, report as applied without re-applying.
+//   - positive (in): apply only if a deduction exists AND no restore has been applied;
+//     a phantom restore with no prior deduction is recorded without changing quantity.
+func (s *Service) insertPushedMovement(ctx context.Context, tx *gorm.DB, businessID uuid.UUID, rec map[string]any) error {
+	productStr := strings.TrimSpace(fmt.Sprint(rec["product_id"]))
 
-	for k, v := range rec {
-		if k == "id" || k == "sync_version" || k == "syncVersion" || (len(k) > 0 && k[0] == '_') {
-			continue
-		}
-		// Explicitly drop stray keys that don't map to DB columns (e.g. legacy `type`, `customerPhone`, `undefined`)
-		if v == nil {
-			continue
-		}
-
-		if s, ok := v.(string); ok {
-			trim := strings.TrimSpace(s)
-			if trim == "" && k != "notes" && k != "description" && k != "address" {
-				// allow empty for nullable text but skip "undefined" sentinel
-			}
-
-			if strings.EqualFold(trim, "undefined") || strings.EqualFold(trim, "null") {
-				continue
-			}
-		}
-
-		if allowed, ok := allowedUpdateColumns[table]; ok {
-			if !allowed[k] {
-				continue
-			}
-		}
-
-		if isTimestampColumn(k) {
-			if t := asTime(v); t != nil {
-				update[k] = *t
-			} else if v != nil {
-				update[k] = v
-			}
-
-			continue
-		}
-
-		if isNumericColumn(k) {
-			if sanitized, ok := sanitizeNumeric(v); ok {
-				update[k] = sanitized
-			} else {
-				continue // skip NaN/local — don't overwrite good server value with 0
-			}
-
-			continue
-		}
-
-		update[k] = v
+	productID, err := uuid.Parse(productStr)
+	if err != nil {
+		// no product → record-only row, nothing to apply
+		return s.insertRecord(tx, businessID, uuid.Nil, "stock_movements", rec)
 	}
 
-	update["sync_version"] = gorm.Expr("sync_version + 1")
-	update["updated_at"] = time.Now()
+	deltaStr := strings.TrimSpace(fmt.Sprint(rec["quantity_delta"]))
+	delta, err := decimal.NewFromString(deltaStr)
 
-	return tx.Table(table).Where("id = ? AND business_id = ?", id, businessID).Updates(update).Error
+	if err != nil {
+		return fmt.Errorf("invalid quantity_delta %q", deltaStr)
+	}
+
+	refType := strings.TrimSpace(fmt.Sprint(rec["reference_type"]))
+	refIDStr := strings.TrimSpace(fmt.Sprint(rec["reference_id"]))
+
+	var refID uuid.UUID
+
+	if refIDStr != "" && refIDStr != "<nil>" {
+		refID, _ = uuid.Parse(refIDStr)
+	}
+
+	hasRef := refType != "" && refIDStr != "" && refIDStr != "<nil>" && refID != uuid.Nil
+
+	if hasRef {
+		var applied int64
+		if delta.Sign() < 0 {
+			tx.Raw(`SELECT COUNT(*) FROM stock_movements WHERE business_id = ? AND reference_type = ? AND reference_id = ? AND product_id = ? AND quantity_delta < 0`,
+				businessID, refType, refID, productID).Scan(&applied)
+
+			if applied > 0 {
+				// already deducted by a prior ledger entry (e.g. REST confirm applied it)
+				return nil
+			}
+		} else {
+			tx.Raw(`SELECT COUNT(*) FROM stock_movements WHERE business_id = ? AND reference_type = ? AND reference_id = ? AND product_id = ? AND quantity_delta > 0`,
+				businessID, refType, refID, productID).Scan(&applied)
+
+			if applied > 0 {
+				// restore already applied — treat as no-op
+				return nil
+			}
+
+			var deducted int64
+
+			tx.Raw(`SELECT COUNT(*) FROM stock_movements WHERE business_id = ? AND reference_type = ? AND reference_id = ? AND product_id = ? AND quantity_delta < 0`,
+				businessID, refType, refID, productID).Scan(&deducted)
+
+			if deducted == 0 {
+				// phantom restore (never deducted server-side) — record, do not change qty
+				return s.insertRecord(tx, businessID, uuid.Nil, "stock_movements", rec)
+			}
+		}
+	}
+
+	if err := s.insertRecord(tx, businessID, uuid.Nil, "stock_movements", rec); err != nil {
+		return err
+	}
+
+	return tx.Exec(`UPDATE inventory_items SET quantity = quantity + ?::numeric, updated_at = NOW() WHERE business_id = ? AND product_id = ? AND deleted_at IS NULL`,
+		delta.String(), businessID, productID).Error
 }

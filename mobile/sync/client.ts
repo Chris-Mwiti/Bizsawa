@@ -6,6 +6,7 @@ import { database } from '../db/database'
 import { perf } from '../lib/perf'
 import { api, AUTH_STORAGE_KEYS } from '../lib/api'
 import { extractRejectedIds } from './pushResult'
+import { getDeviceId } from '../lib/deviceId'
 import { randomUUID } from 'expo-crypto'
 import { Q } from '@nozbe/watermelondb'
 import * as RawRecord from '@nozbe/watermelondb/RawRecord'
@@ -655,9 +656,12 @@ export async function syncNow(options?: { force?: boolean }) {
       }
       // Per-batch idempotency key §2 (Do Not Substitute)
       const idempotencyKey = randomUUID()
+      // Stable install identity: lets the server apply same-device edits as
+      // last-write-wins instead of raising conflicts the user must resolve.
+      const deviceId = await getDeviceId().catch(() => '')
       const res: any = await api.post(
         `/sync/push`,
-        { changes, lastPulledAt },
+        { changes, lastPulledAt, device_id: deviceId || undefined },
         { headers: { 'X-Idempotency-Key': idempotencyKey } },
       )
       // Log push result applied/errors/conflicts for verification
@@ -665,6 +669,12 @@ export async function syncNow(options?: { force?: boolean }) {
       const applied = pushData?.applied || pushData?.data?.applied
       const errors = pushData?.errors || pushData?.data?.errors
       const rejectedIds = extractRejectedIds(res)
+      // Silent same-device last-write-wins applies: visible here (and in
+      // lww_applications server-side) so overwrites never pass unnoticed.
+      const lww = pushData?.lww_applied || pushData?.data?.lww_applied
+      if (lww && Object.keys(lww).length) {
+        console.log('[Sync] push applied via same-device last-write-wins', lww)
+      }
       console.log('[Sync] push result status=', res.status, 'applied=', applied, 'errors=', errors, 'rejected=', rejectedIds, 'idempotencyKey=', idempotencyKey)
       if (errors && Object.keys(errors).length) {
         console.warn('[Sync] push errors — rejected records stay pending for retry', errors)
@@ -694,6 +704,8 @@ export async function syncNow(options?: { force?: boolean }) {
                 rec.serverPayload = typeof c.server_payload === 'string' ? c.server_payload : JSON.stringify(c.server_payload || c.serverPayload || {})
                 rec.clientVersion = c.client_version ?? c.clientVersion ?? 0
                 rec.serverVersion = c.server_version ?? c.serverVersion ?? 0
+                rec.clientDeviceId = c.client_device_id ?? c.clientDeviceId ?? null
+                rec.serverDeviceId = c.server_device_id ?? c.serverDeviceId ?? null
                 rec.resolution = null
               })
             }

@@ -14,9 +14,10 @@ import (
 )
 
 // derive.go: server-side documents derived from an offline order transition.
-// confirm (draft->confirmed) creates the invoice; fulfill (->fulfilled)
-// creates the sale. Both are idempotent so re-pushes and REST races are safe.
-func (s *Service) ensureInvoiceForOrder(tx *gorm.DB, businessID, orderID uuid.UUID) error {
+// confirm (draft→confirmed) → ensureInvoiceForOrder; fulfill (→fulfilled) →
+// ensureSaleForOrder. Both are idempotent so re-pushes and REST races are safe.
+
+func (s *Service) ensureInvoiceForOrder(ctx context.Context, tx *gorm.DB, businessID, orderID uuid.UUID) error {
 	// Serialise invoice numbering per business so offline pushes racing each
 	// other (or racing REST confirms) cannot mint the same INV- number.
 	_ = shareddb.LockBusinessSequence(context.Background(), tx, businessID, shareddb.AdvisoryKeyInvoice)
@@ -141,7 +142,7 @@ func (s *Service) ensureInvoiceForOrder(tx *gorm.DB, businessID, orderID uuid.UU
 			dl = append(dl, inventory.DecrementLine{ProductID: *l.ProductID, Quantity: q})
 		}
 
-		if err := inventory.ApplyLedger(tx, businessID, "order", orderID, dl, -1, "out", "order confirmed"); err != nil {
+		if err := inventory.ApplyLedger(ctx, tx, businessID, "order", orderID, dl, -1, "out", "order confirmed"); err != nil {
 			return err
 		}
 	}
@@ -189,7 +190,7 @@ func (s *Service) ensureInvoiceForOrder(tx *gorm.DB, businessID, orderID uuid.UU
 	return nil
 }
 
-func (s *Service) ensureSaleForOrder(tx *gorm.DB, businessID, orderID uuid.UUID) error {
+func (s *Service) ensureSaleForOrder(ctx context.Context, tx *gorm.DB, businessID, orderID, userID uuid.UUID) error {
 	_ = shareddb.LockBusinessSequence(context.Background(), tx, businessID, shareddb.AdvisoryKeySales)
 	var cnt int64
 	if err := tx.Raw(`SELECT COUNT(*) FROM sales WHERE business_id = ? AND order_id = ? AND deleted_at IS NULL`, businessID, orderID).Scan(&cnt).Error; err != nil {
@@ -228,10 +229,16 @@ func (s *Service) ensureSaleForOrder(tx *gorm.DB, businessID, orderID uuid.UUID)
 	saleID := uuid.New()
 	receipt := fmt.Sprintf("RCPT-%s", saleID.String()[:6])
 	now := time.Now().UTC()
+	// staff_id FKs to auth_users(id) — never use businessID here (it is a
+	// businesses.id and always trips sales_staff_id_fkey / SQLSTATE 23503).
+	staffID, err := s.resolveSaleStaffID(tx, businessID, userID)
+	if err != nil {
+		return err
+	}
 	// Use order's totals. sales.order_id is UNIQUE: a residual race loser
 	// gets 23505 on order_id and is idempotent — treat as success.
 	if err := tx.Exec(`INSERT INTO sales (id, business_id, tenant_id, order_id, customer_id, receipt_number, staff_id, payment_method, subtotal, tax_amount, total, status, sold_at, created_at, updated_at, sync_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?::numeric, ?::numeric, ?::numeric, 'completed', ?, ?, ?, 1)`,
-		saleID, businessID, businessID, orderID, order.CustomerID, receipt, businessID, order.PaymentMethod, order.Subtotal, order.TaxAmount, order.Total, now, now, now).Error; err != nil {
+		saleID, businessID, businessID, orderID, order.CustomerID, receipt, staffID, order.PaymentMethod, order.Subtotal, order.TaxAmount, order.Total, now, now, now).Error; err != nil {
 		if shareddb.IsDuplicateKey(err) {
 			return nil
 		}

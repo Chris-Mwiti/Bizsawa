@@ -9,6 +9,8 @@ export default class Conflict extends Model {
   @field('server_payload') serverPayload!: string
   @field('client_version') clientVersion!: number
   @field('server_version') serverVersion!: number
+  @field('client_device_id') clientDeviceId?: string
+  @field('server_device_id') serverDeviceId?: string
   @field('resolution') resolution?: string
   @readonly @date('created_at') createdAt!: Date
   @readonly @date('updated_at') updatedAt!: Date

@@ -27,6 +27,7 @@ import {
 } from 'lucide-react-native'
 import { useRouter } from 'expo-router'
 import { api } from '../lib/api'
+import { getDeviceId } from '../lib/deviceId'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { useSync } from '../sync/SyncProvider'
 import {
@@ -79,6 +80,23 @@ function humanizeField(f: string) {
   }
   return map[f] ?? f.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
+
+// ── Device attribution ─────────────────────────────────────────────────────
+// Conflicts carry the device that pushed (client) and the device that wrote
+// last (server). Same-device edits never reach this screen — the server
+// applies them as last-write-wins — so a row here always involves at least
+// one other device, made explicit below.
+function shortDevice(id: string | null | undefined): string | null {
+  if (!id) return null
+  const s = String(id)
+  return s.length > 8 ? `${s.slice(0, 8)}…` : s
+}
+
+function deviceLabel(id: string | null | undefined, myDeviceId: string | null): string {
+  if (id && myDeviceId && String(id) === String(myDeviceId)) return 'this device'
+  const short = shortDevice(id)
+  return short ? `device ${short}` : 'another device'
+}
 function isInternalField(f: string) {
   return ['id', 'business_id', 'tenant_id', 'sync_version', 'created_at', 'updated_at', 'deleted_at', 'businessId', 'tenantId', 'syncVersion'].includes(f)
 }
@@ -103,8 +121,7 @@ function parsePayload(p: any): Record<string, any> {
   }
   return p as Record<string, any>
 }
-function getDisplayName(table: string, payload: Record<string, any>): string {
-  const p = payload
+function getDisplayName(table: string, payload: Record<string, any>): string {  const p = payload
   if (p.name) return String(p.name)
   if (p.category) return String(p.category)
   if (p.invoice_number) return String(p.invoice_number)
@@ -141,14 +158,17 @@ export default function SyncConflictsScreen() {
   const [loading, setLoading] = useState(true)
   const [resolvingId, setResolvingId] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [myDeviceId, setMyDeviceId] = useState<string | null>(null)
 
   const fetch = useCallback(async () => {
     setLoading(true)
     try {
-      const [serverRes, localRows] = await Promise.all([
+      const [serverRes, localRows, deviceId] = await Promise.all([
         api.get('/sync/conflicts').then((r) => r.data).catch(() => ({ conflicts: [] })),
         getLocalConflicts().catch(() => []),
+        getDeviceId().catch(() => null),
       ])
+      setMyDeviceId(deviceId)
       const serverList: any[] = serverRes.conflicts || serverRes.data?.conflicts || []
       // Merge: server wins for same id, but include local-only (e.g. offline conflict not yet pushed)
       const map = new Map<string, any>()
@@ -181,8 +201,10 @@ export default function SyncConflictsScreen() {
     const id = String(c.id)
     setResolvingId(id)
     try {
-      // 1. Tell server (ForceApply if kept_client)
-      await api.post(`/sync/conflicts/${id}/resolve`, { resolution })
+      // 1. Tell server (ForceApply if kept_client), attributing this device
+      // so it becomes the writer of record for future same-device edits.
+      const deviceId = await getDeviceId().catch(() => null)
+      await api.post(`/sync/conflicts/${id}/resolve`, { resolution, device_id: deviceId ?? undefined })
       // 2. Apply locally in background (technical bit) — clears banner instantly
       const normalized = {
         id,
@@ -306,6 +328,11 @@ export default function SyncConflictsScreen() {
             const displayName = getDisplayName(table, { ...server, ...client })
             const isResolving = resolvingId === String(c.id)
             const isExpanded = expandedId === String(c.id)
+            const clientDev = c.client_device_id ?? c.clientDeviceId ?? c.ClientDeviceID
+            const serverDev = c.server_device_id ?? c.serverDeviceId ?? c.ServerDeviceID
+            const clientHeader = deviceLabel(clientDev, myDeviceId) === 'this device' ? 'Your version' : deviceLabel(clientDev, myDeviceId)
+            const serverHeader = deviceLabel(serverDev, myDeviceId) === 'this device' ? 'Your version' : deviceLabel(serverDev, myDeviceId)
+            const clientIsMine = clientHeader === 'Your version'
 
             return (
               <Card key={String(c.id)} className="border border-amber-200 overflow-hidden">
@@ -324,6 +351,9 @@ export default function SyncConflictsScreen() {
                       <Text className="font-sans text-xs text-gray-500" numberOfLines={1}>
                         {displayName} • {String(c.record_id || c.recordId || '').slice(0, 6).toUpperCase()} • v{c.client_version ?? '?'} vs v{c.server_version ?? '?'}
                       </Text>
+                      <Text className="font-sans text-xs text-gray-500" numberOfLines={1}>
+                        Pushed by {deviceLabel(clientDev, myDeviceId)} • Server holds {deviceLabel(serverDev, myDeviceId)}
+                      </Text>
                     </View>
                   </View>
                 </CardHeader>
@@ -339,13 +369,13 @@ export default function SyncConflictsScreen() {
                         <Text className="font-geist-semibold text-xs font-semibold text-gray-500">{d.label}</Text>
                         <View className="flex-row gap-2 mt-1.5">
                           <View className="flex-1 p-2.5 rounded-xl bg-accent border border-accent">
-                            <Text className="font-geist-bold text-xs font-bold tracking-widest text-gray-500 uppercase">Your version</Text>
+                            <Text className="font-geist-bold text-xs font-bold tracking-widest text-gray-500 uppercase">{clientHeader}</Text>
                             <Text className="font-geist-medium text-sm font-medium text-white mt-1" numberOfLines={2}>
                               {d.client}
                             </Text>
                           </View>
                           <View className="flex-1 p-2.5 rounded-xl bg-sky-50 border border-sky-100">
-                            <Text className="font-geist-bold text-xs font-bold tracking-widest text-sky-700 uppercase">Server</Text>
+                            <Text className="font-geist-bold text-xs font-bold tracking-widest text-sky-700 uppercase">{serverHeader}</Text>
                             <Text className="font-geist-medium text-sm font-medium text-sky-900 mt-1" numberOfLines={2}>
                               {d.server}
                             </Text>
@@ -365,13 +395,13 @@ export default function SyncConflictsScreen() {
                       {isResolving ? (
                         <ActivityIndicator color="white" size="small" />
                       ) : (
-                        <>
-                          <Check size={16} color="white" />
-                          <View>
-                            <Text className="font-geist-bold text-white font-bold text-sm text-center">Keep my version</Text>
-                            <Text className="font-sans text-white/70 text-xs text-center">Your edits win</Text>
-                          </View>
-                        </>
+                          <>
+                            <Check size={16} color="white" />
+                            <View>
+                              <Text className="font-geist-bold text-white font-bold text-sm text-center">{clientIsMine ? 'Keep my version' : `Keep ${clientHeader}`}</Text>
+                              <Text className="font-sans text-white/70 text-xs text-center">{clientIsMine ? 'Your edits win' : 'Their edits win'}</Text>
+                            </View>
+                          </>
                       )}
                     </TouchableOpacity>
                     <TouchableOpacity

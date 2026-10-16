@@ -54,9 +54,15 @@ func (r *Repository) Create(ctx context.Context, invoice *Invoice, lines []Invoi
 		}
 
 		if len(lines) > 0 {
-			return tx.Create(&lines).Error
+			if err := tx.Create(&lines).Error; err != nil {
+				return err
+			}
 		}
 
+		shareddb.TouchCreated(tx, ctx, invoice.BusinessID, "invoices", invoice.ID)
+		for i := range lines {
+			shareddb.TouchCreated(tx, ctx, invoice.BusinessID, "invoice_lines", lines[i].ID)
+		}
 		return nil
 	})
 }
@@ -228,7 +234,11 @@ func (r *Repository) FindByOrderId(ctx context.Context, businessID, orderID uuid
 }
 
 func (r *Repository) Update(ctx context.Context, invoice *Invoice) error {
-	return r.db.WithContext(ctx).Save(invoice).Error
+	if err := r.db.WithContext(ctx).Save(invoice).Error; err != nil {
+		return err
+	}
+	shareddb.TouchUpdated(r.db, ctx, invoice.BusinessID, "invoices", invoice.ID)
+	return nil
 }
 
 func (r *Repository) FindUnpaidByCustomer(ctx context.Context, businessID, customerID uuid.UUID) ([]Invoice, error) {
@@ -256,6 +266,9 @@ func (r *Repository) MarkOverdue(ctx context.Context, businessID uuid.UUID, now 
 		if err := r.db.WithContext(ctx).Model(&Invoice{}).Where("id = ?", invoice.ID).Update("status", StatusOverdue).Error; err != nil {
 			return nil, err
 		}
+		// Worker-driven change: bump the version (no device to attribute)
+		// so stale offline copies conflict instead of overwriting silently.
+		shareddb.TouchUpdated(r.db, ctx, businessID, "invoices", invoice.ID)
 	}
 
 	return invoices, nil
@@ -271,5 +284,6 @@ func (r *Repository) Delete(ctx context.Context, businessID, invoiceID uuid.UUID
 		return apperrors.ErrNotFound.WithMessage("invoice not found")
 	}
 
+	shareddb.ForgetRecord(r.db, businessID, "invoices", invoiceID)
 	return nil
 }
