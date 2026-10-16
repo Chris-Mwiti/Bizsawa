@@ -149,6 +149,14 @@ export default function RootLayout() {
                       title: 'Sync Conflicts',
                     }}
                   />
+                  <Stack.Screen
+                    name='sms-test'
+                    options={{
+                      presentation: 'card',
+                      headerShown: true,
+                      title: 'SMS Capture Test',
+                    }}
+                  />
                 </Stack>
                   </View>
                   <Toast />
