@@ -1,0 +1,35 @@
+plugins {
+    id 'com.android.library' version '8.11.0'
+    id 'org.jetbrains.kotlin.android' version '2.1.20'
+}
+
+android {
+    namespace 'com.bizsawa.mobile.smscapture'
+    compileSdk 35
+
+    defaultConfig {
+        minSdk 24
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
+    // JVM unit tests run on the JDK (not the device); keep them hermetic —
+    // no Robolectric, no device APIs. AndroidKeystoreKeyProvider is excluded
+    // from unit-test coverage by construction (needs a device; Phase 2
+    // manual test covers it).
+    testOptions {
+        unitTests {
+            includeAndroidResources = false
+        }
+    }
+}
+
+dependencies {
+    testImplementation 'junit:junit:4.13.2'
+}

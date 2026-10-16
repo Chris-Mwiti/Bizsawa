@@ -1,0 +1,21 @@
+// Standalone build for the sms-capture Phase-1 JVM tests (parser/hasher).
+// The module itself is autolinked into the app via ../expo-module.config.json
+// (added in Phase 2); this project exists only so `./gradlew testDebugUnitTest`
+// runs without building the whole app.
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+rootProject.name = "sms-capture"
+include(":smscapture")
+project(":smscapture").projectDir = new File(settingsDir, "smscapture")
