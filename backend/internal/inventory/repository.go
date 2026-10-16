@@ -47,7 +47,13 @@ func (r *Repository) Adjust(ctx context.Context, item *InventoryItem, movement *
 			return err
 		}
 
-		return tx.Create(movement).Error
+		if err := tx.Create(movement).Error; err != nil {
+			return err
+		}
+
+		shareddb.TouchUpdated(tx, ctx, item.BusinessID, "inventory_items", existing.ID)
+		shareddb.TouchCreated(tx, ctx, item.BusinessID, "stock_movements", movement.ID)
+		return nil
 	})
 }
 

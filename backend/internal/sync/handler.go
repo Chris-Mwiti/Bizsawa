@@ -139,7 +139,8 @@ func (h *Handler) ResolveConflict(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		Resolution string `json:"resolution"`
+		Resolution string  `json:"resolution"`
+		DeviceID   *string `json:"device_id"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -173,7 +174,11 @@ func (h *Handler) ResolveConflict(w http.ResponseWriter, r *http.Request) {
 
 		_ = json.Unmarshal(c.ClientPayload, &payload)
 
-		if err := h.svc.ForceApplyClientPayload(r.Context(), bid, c.Table, c.RecordID, payload); err != nil {
+		deviceID := ""
+		if body.DeviceID != nil {
+			deviceID = *body.DeviceID
+		}
+		if err := h.svc.ForceApplyClientPayloadWithDevice(r.Context(), bid, c.Table, c.RecordID, payload, deviceID); err != nil {
 			sharedhttp.Error(w, err)
 			return
 		}

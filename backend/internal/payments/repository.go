@@ -45,7 +45,11 @@ func (r *Repository) FindByIdempotency(ctx context.Context, businessID uuid.UUID
 }
 
 func (r *Repository) Create(ctx context.Context, cmd *PaymentCommand) error {
-	return r.db.WithContext(ctx).Create(cmd).Error
+	if err := r.db.WithContext(ctx).Create(cmd).Error; err != nil {
+		return err
+	}
+	shareddb.TouchCreated(r.db, ctx, cmd.BusinessID, "payment_commands", cmd.ID)
+	return nil
 }
 
 func (r *Repository) FindByProviderRequestID(ctx context.Context, requestID string) (*PaymentCommand, error) {

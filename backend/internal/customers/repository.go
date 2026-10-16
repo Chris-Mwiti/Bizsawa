@@ -26,7 +26,11 @@ func (r *Repository) WithTx(tx *gorm.DB) *Repository {
 }
 
 func (r *Repository) Create(ctx context.Context, customer *Customer) error {
-	return r.db.WithContext(ctx).Create(customer).Error
+	if err := r.db.WithContext(ctx).Create(customer).Error; err != nil {
+		return err
+	}
+	shareddb.TouchCreated(r.db, ctx, customer.BusinessID, "customers", customer.ID)
+	return nil
 }
 
 func (r *Repository) List(ctx context.Context, businessID uuid.UUID, page pagination.Page) ([]Customer, error) {
@@ -49,7 +53,11 @@ func (r *Repository) Find(ctx context.Context, businessID, customerID uuid.UUID)
 }
 
 func (r *Repository) Update(ctx context.Context, customer *Customer) error {
-	return r.db.WithContext(ctx).Save(customer).Error
+	if err := r.db.WithContext(ctx).Save(customer).Error; err != nil {
+		return err
+	}
+	shareddb.TouchUpdated(r.db, ctx, customer.BusinessID, "customers", customer.ID)
+	return nil
 }
 
 func (r *Repository) Delete(ctx context.Context, businessID, customerID uuid.UUID) error {
@@ -62,6 +70,7 @@ func (r *Repository) Delete(ctx context.Context, businessID, customerID uuid.UUI
 		return apperrors.ErrNotFound.WithMessage("customer not found")
 	}
 
+	shareddb.ForgetRecord(r.db, businessID, "customers", customerID)
 	return nil
 }
 

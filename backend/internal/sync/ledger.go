@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"context"
 	"database/sql"
 	"strings"
 
@@ -13,6 +14,7 @@ import (
 
 // ledger.go: stock effects of sync writes. All mutations go through
 // inventory.ApplyLedger so re-pushes and REST/sync races stay idempotent.
+
 type ledgerLineRow struct {
 	ProductID *uuid.UUID `gorm:"column:product_id"`
 	Quantity  string     `gorm:"column:quantity"`
@@ -57,30 +59,30 @@ func toLedgerLines(rows []ledgerLineRow) []inventory.DecrementLine {
 
 // restoreInventoryForOrder puts stock back for a cancelled/voided order. Only fires
 // for an order that actually deducted (reference "order" had a negative movement).
-func (s *Service) restoreInventoryForOrder(tx *gorm.DB, businessID, orderID uuid.UUID) error {
+func (s *Service) restoreInventoryForOrder(ctx context.Context, tx *gorm.DB, businessID, orderID uuid.UUID) error {
 	lines, err := s.orderLedgerLines(tx, businessID, orderID)
 	if err != nil || len(lines) == 0 {
 		return err
 	}
 
-	return inventory.ApplyLedger(tx, businessID, "order", orderID, lines, 1, "in", "order cancelled")
+	return inventory.ApplyLedger(ctx, tx, businessID, "order", orderID, lines, 1, "in", "order cancelled")
 }
 
 // restoreInventoryForSale puts stock back for a voided sale. Only fires for a
 // standalone sale that deducted (reference "sale" had a negative movement).
-func (s *Service) restoreInventoryForSale(tx *gorm.DB, businessID, saleID uuid.UUID) error {
+func (s *Service) restoreInventoryForSale(ctx context.Context, tx *gorm.DB, businessID, saleID uuid.UUID) error {
 	lines, err := s.saleLedgerLines(tx, businessID, saleID)
 	if err != nil || len(lines) == 0 {
 		return err
 	}
 
-	return inventory.ApplyLedger(tx, businessID, "sale", saleID, lines, 1, "in", "sale voided")
+	return inventory.ApplyLedger(ctx, tx, businessID, "sale", saleID, lines, 1, "in", "sale voided")
 }
 
 // ensureSaleDeducted records the stock-out for a pushed standalone sale exactly once.
 // Order-linked sales are skipped (their stock was removed at order confirm), as are
 // voids/deleted sales which must never deduct.
-func (s *Service) ensureSaleDeducted(tx *gorm.DB, businessID, saleID uuid.UUID) error {
+func (s *Service) ensureSaleDeducted(ctx context.Context, tx *gorm.DB, businessID, saleID uuid.UUID) error {
 	var row struct {
 		OrderID sql.NullString `gorm:"column:order_id"`
 		Status  string         `gorm:"column:status"`
@@ -104,5 +106,5 @@ func (s *Service) ensureSaleDeducted(tx *gorm.DB, businessID, saleID uuid.UUID) 
 		return err
 	}
 
-	return inventory.ApplyLedger(tx, businessID, "sale", saleID, lines, -1, "out", "sale created")
+	return inventory.ApplyLedger(ctx, tx, businessID, "sale", saleID, lines, -1, "out", "sale created")
 }

@@ -27,8 +27,11 @@ func (r *Repository) WithTx(tx *gorm.DB) *Repository {
 }
 
 func (r *Repository) Create(ctx context.Context, product *Product) error {
-	err := r.db.WithContext(ctx).Create(product).Error
-	return translateConflict(err)
+	if err := r.db.WithContext(ctx).Create(product).Error; err != nil {
+		return translateConflict(err)
+	}
+	shareddb.TouchCreated(r.db, ctx, product.BusinessID, "products", product.ID)
+	return nil
 }
 
 func (r *Repository) List(ctx context.Context, businessID uuid.UUID, page pagination.Page) ([]Product, error) {
@@ -59,8 +62,11 @@ func (r *Repository) Find(ctx context.Context, businessID, productID uuid.UUID) 
 }
 
 func (r *Repository) Update(ctx context.Context, product *Product) error {
-	err := r.db.WithContext(ctx).Save(product).Error
-	return translateConflict(err)
+	if err := r.db.WithContext(ctx).Save(product).Error; err != nil {
+		return translateConflict(err)
+	}
+	shareddb.TouchUpdated(r.db, ctx, product.BusinessID, "products", product.ID)
+	return nil
 }
 
 func (r *Repository) ReplaceVariants(ctx context.Context, product *Product, variants []ProductVariant) error {
@@ -72,6 +78,9 @@ func (r *Repository) ReplaceVariants(ctx context.Context, product *Product, vari
 		if len(variants) > 0 {
 			if err := tx.Create(&variants).Error; err != nil {
 				return translateConflict(err)
+			}
+			for i := range variants {
+				shareddb.TouchCreated(tx, ctx, product.BusinessID, "product_variants", variants[i].ID)
 			}
 		}
 
@@ -89,6 +98,7 @@ func (r *Repository) Delete(ctx context.Context, businessID, productID uuid.UUID
 		return apperrors.ErrNotFound.WithMessage("product not found")
 	}
 
+	shareddb.ForgetRecord(r.db, businessID, "products", productID)
 	return nil
 }
 

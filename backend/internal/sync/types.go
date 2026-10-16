@@ -11,7 +11,15 @@ import (
 // Service is the sync boundary: pull deltas for WatermelonDB and apply
 // pushed creates/updates/deletes with version-counter conflict detection.
 // Heavy lifting lives in focused files: pull.go, push.go, records.go,
-// derive.go, ledger.go, resolve.go.
+// derive.go, ledger.go, conflicts.go, writers.go.
+type Service struct{ db *gorm.DB }
+
+func NewService(db *gorm.DB) *Service { return &Service{db: db} }
+
+// syncableTables is the canonical FK-safe push order
+// (products → product_variants → inventory_items → …).
+// Push iterates this order — never the request map — so a child can never
+// be attempted before its parent (SQLSTATE 23503).
 var syncableTables = []string{
 	"products",
 	"product_variants",
@@ -29,6 +37,14 @@ var syncableTables = []string{
 	"tax_rules",
 }
 
+// Pull caps: full pulls are the mobile cold-start bottleneck (F5).
+// Default 1000 rows/table, max 5000; ordered by updated_at so cursors page
+// deterministically when callers pass the returned timestamp back as ?since=.
+const (
+	DefaultPullLimit = 1000
+	MaxPullLimit     = 5000
+)
+
 // PullResult matches WatermelonDB synchronize pullChanges contract + brief's {created,updated,deleted}.
 type PullResult struct {
 	Changes   map[string]TableChanges `json:"changes"`
@@ -45,6 +61,10 @@ type TableChanges struct {
 type PushRequest struct {
 	Changes      map[string]TableChanges `json:"changes"`
 	LastPulledAt *int64                  `json:"lastPulledAt"`
+	// DeviceID is the caller's stable install UUID (mobile/lib/deviceId).
+	// It drives same-device last-write-wins: a version mismatch raised by
+	// the device that wrote last applies instead of raising a conflict.
+	DeviceID *string `json:"device_id"`
 }
 
 type PushResult struct {
@@ -55,6 +75,10 @@ type PushResult struct {
 	// keep those records pending for retry; without it they cannot tell which of the
 	// pushed records actually failed and would mark all of them as synced (data loss).
 	Rejected map[string][]string `json:"rejected,omitempty"`
+	// LWWApplied lists record ids applied via silent same-device
+	// last-write-wins (version mismatch, same writer). Each is also
+	// recorded in lww_applications for forensics.
+	LWWApplied map[string][]string `json:"lww_applied,omitempty"`
 }
 
 // reject records a per-record failure and remembers the record id so the client keeps
@@ -75,21 +99,13 @@ type Conflict struct {
 	ServerPayload json.RawMessage `json:"server_payload" gorm:"type:jsonb"`
 	ClientVersion int             `json:"client_version"`
 	ServerVersion int             `json:"server_version"`
-	CreatedAt     time.Time       `json:"created_at"`
-	ResolvedAt    *time.Time      `json:"resolved_at"`
-	Resolution    *string         `json:"resolution"`
+	// Device attribution for the conflict UI ("this device" vs "another
+	// device"). Nullable: rows predating 000023 and device-less pushes.
+	ClientDeviceID *string    `json:"client_device_id" gorm:"column:client_device_id"`
+	ServerDeviceID *string    `json:"server_device_id" gorm:"column:server_device_id"`
+	CreatedAt      time.Time  `json:"created_at"`
+	ResolvedAt     *time.Time `json:"resolved_at"`
+	Resolution     *string    `json:"resolution"`
 }
 
 func (Conflict) TableName() string { return "conflicts" }
-
-type Service struct{ db *gorm.DB }
-
-func NewService(db *gorm.DB) *Service { return &Service{db: db} }
-
-// Pull caps: full pulls are the mobile cold-start bottleneck (F5).
-// Default 1000 rows/table, max 5000; ordered by updated_at so cursors page
-// deterministically when callers pass the returned timestamp back as ?since=.
-const (
-	DefaultPullLimit = 1000
-	MaxPullLimit     = 5000
-)
