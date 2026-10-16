@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, Alert, Scro
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { useInvites } from '../../hooks/api/useInvites'
+import { Button } from '../../components/ui/Button'
 import { api } from '../../lib/api'
 
 export default function AcceptInviteScreen() {
@@ -69,9 +70,9 @@ export default function AcceptInviteScreen() {
           <TextInput className='bg-white border border-gray-300 rounded-2xl px-4 py-4' placeholder='Leave empty to auto-detect via code' value={businessId} onChangeText={setBusinessId} />
           <Text className='font-sans text-xs text-gray-500 mt-1'>Usually not needed — code is tied to business.</Text>
         </View>
-        <TouchableOpacity onPress={handleAccept} disabled={isLoading} className={`py-4 rounded-2xl items-center ${isLoading ? 'bg-gray-300' : 'bg-accent'}`}>
-          {isLoading ? <ActivityIndicator color='white' /> : <Text className='font-geist-bold text-white font-bold'>Accept invite & join</Text>}
-        </TouchableOpacity>
+        <Button size='md' onPress={handleAccept} loading={isLoading}>
+          Accept invite & join
+        </Button>
         <View className='bg-gray-50 rounded-2xl border border-gray-200 p-3'>
           <Text className='font-geist-bold text-xs font-bold text-gray-900'>No app yet?</Text>
           <Text className='font-sans text-xs leading-4 text-gray-600 mt-1'>Android: https://play.google.com/store/apps/details?id=com.bizsawa.mobile{"\n"}iOS: https://apps.apple.com/app/bizsawa</Text>

@@ -51,6 +51,7 @@ import { TAB_BAR_SCROLL_PADDING } from '../../constants/tabBar'
 import { useSubscription } from '../../hooks/api/useSubscription'
 import { PaywallModal } from '../../components/PaywallModal'
 import { useInvites } from '../../hooks/api/useInvites'
+import { Button } from '../../components/ui/Button'
 
 function metadataLocation(metadata: unknown): string | null {
   if (!metadata || typeof metadata !== 'object') return null
@@ -267,7 +268,7 @@ export default function ProfileTab() {
         )}
 
         <Card className='border border-gray-200'>
-          <CardContent className='p-5 flex-row items-center gap-4'>
+          <CardContent className='p-6 flex-row items-center gap-4'>
             <View className='w-14 h-14 rounded-2xl bg-accent items-center justify-center'>
               <Text className='font-geist-bold text-base font-bold text-white'>
                 {ownerParts.initials}
@@ -722,20 +723,14 @@ export default function ProfileTab() {
                 />
               </View>
             </View>
-            <TouchableOpacity
+            <Button
+              size='md'
               onPress={handleSaveBusiness}
-              disabled={saving}
-              className='bg-accent py-4 rounded-2xl items-center flex-row justify-center gap-2'
+              loading={saving}
             >
-              {saving ? (
-                <ActivityIndicator color='white' />
-              ) : (
-                <>
-                  <Save size={16} color='white' />
-                  <Text className='font-geist-bold text-white font-bold'>Save Business</Text>
-                </>
-              )}
-            </TouchableOpacity>
+              <Save size={16} color='white' />
+              <Text className='font-geist-bold text-white font-bold'>Save Business</Text>
+            </Button>
           </ScrollView>
         </View>
       </Modal>
@@ -840,20 +835,14 @@ export default function ProfileTab() {
                 }
               />
             </View>
-            <TouchableOpacity
+            <Button
+              size='md'
               onPress={handleSaveProfile}
-              disabled={saving}
-              className='bg-accent py-4 rounded-2xl items-center flex-row justify-center gap-2'
+              loading={saving}
             >
-              {saving ? (
-                <ActivityIndicator color='white' />
-              ) : (
-                <>
-                  <Save size={16} color='white' />
-                  <Text className='font-geist-bold text-white font-bold'>Save Profile</Text>
-                </>
-              )}
-            </TouchableOpacity>
+              <Save size={16} color='white' />
+              <Text className='font-geist-bold text-white font-bold'>Save Profile</Text>
+            </Button>
           </ScrollView>
         </View>
       </Modal>
@@ -885,15 +874,16 @@ export default function ProfileTab() {
               </View>
               <Text className='font-sans text-xs text-gray-500 mt-1'>Manager → Cashier only; Owner → any.</Text>
             </View>
-            <TouchableOpacity disabled={isInviting || !inviteEmail.trim()} onPress={async () => {
+            <Button size='md' disabled={!inviteEmail.trim()} loading={isInviting} onPress={async () => {
               try {
                 await inviteByEmail({ email: inviteEmail.trim(), role: inviteRole })
                 Alert.alert('Invite sent', `OTP sent to ${inviteEmail.trim()} as ${inviteRole}. They will get download instructions and can enter the code in Login → Have an invite code?`)
                 setInviteEmail(''); setShowInvite(false)
               } catch (e:any) { Alert.alert('Invite failed', e.friendlyMessage || e.message || 'Failed') }
-            }} className={`py-4 rounded-2xl items-center flex-row justify-center gap-2 ${isInviting || !inviteEmail.trim() ? 'bg-gray-300' : 'bg-accent'}`}>
-              {isInviting ? <ActivityIndicator color='white' /> : <><Mail size={16} color='white' /><Text className='font-geist-bold text-white font-bold'>Send invite</Text></>}
-            </TouchableOpacity>
+            }}>
+              <Mail size={16} color='white' />
+              <Text className='font-geist-bold text-white font-bold'>Send invite</Text>
+            </Button>
             <View className='bg-white rounded-2xl border border-gray-200 p-3'>
               <Text className='font-geist-bold text-xs font-bold text-gray-900'>How it works</Text>
               <Text className='font-sans text-xs leading-4 text-gray-600 mt-1'>1. Email delivers OTP (24h) + Play Store / App Store links.{"\n"}2. If app not installed → download, open, Login → “Have an invite code?” → enter email + OTP.{"\n"}3. If app installed → Login → “Have an invite code?” → enter OTP → instantly joined with role.</Text>

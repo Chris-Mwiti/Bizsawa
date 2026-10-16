@@ -26,6 +26,7 @@ import {
 } from '../../../components/ui/Card'
 import { useAnalytics } from '../../../hooks/api/useAnalytics'
 import { useExpenses } from '../../../hooks/api/useExpenses'
+import { Button } from '../../../components/ui/Button'
 import { TAB_BAR_SCROLL_PADDING } from '../../../constants/tabBar'
 import { toNumber } from '../../../lib/api-dtos'
 import { useLocalSearchParams } from 'expo-router'
@@ -538,17 +539,14 @@ export default function InsightsOverview() {
                 onChangeText={setExpenseAmount}
               />
             </View>
-            <TouchableOpacity
-              className='bg-accent py-4 rounded-2xl items-center mt-2'
+            <Button
+              size='md'
+              className='mt-2'
+              loading={isCreatingExpense}
               onPress={handleExpenseSubmit}
-              disabled={isCreatingExpense}
             >
-              {isCreatingExpense ? (
-                <ActivityIndicator color='white' />
-              ) : (
-                <Text className='font-geist-bold text-white font-bold'>Save</Text>
-              )}
-            </TouchableOpacity>
+              Save
+            </Button>
           </ScrollView>
         </View>
       </Modal>

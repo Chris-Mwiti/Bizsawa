@@ -38,6 +38,7 @@ import { useProducts } from '../../hooks/api/useProducts'
 import { TAB_BAR_SCROLL_PADDING } from '../../constants/tabBar'
 import { toNumber } from '../../lib/api-dtos'
 import { useBusinessContext } from '../../contexts/BusinessContext'
+import { Button } from '../../components/ui/Button'
 import { buildInvoiceHtml, invoiceShareText } from '../../lib/invoicePdf'
 import * as Print from 'expo-print'
 import * as Sharing from 'expo-sharing'
@@ -427,7 +428,7 @@ export default function InvoiceDetail() {
       >
         {/* Hero summary — not crowded, clear amount hierarchy */}
         <Card className='border border-gray-200'>
-          <CardContent className='p-5'>
+          <CardContent className='p-6'>
             <View className='flex-row justify-between items-start gap-4'>
               <View className='flex-1'>
                 <Text className='font-geist-mono-bold text-xs font-bold tracking-widest text-gray-500 uppercase mb-1'>
@@ -712,51 +713,57 @@ export default function InvoiceDetail() {
             <View className='gap-3'>
               <View className='flex-row gap-3'>
                 {!isPaid && !isCancelled && (
-                  <TouchableOpacity
-                    className='flex-1 flex-row items-center justify-center gap-2 bg-emerald-600 px-4 py-4 rounded-2xl active:opacity-90'
+                  <Button
+                    size='md'
+                    className='flex-1'
+                    loading={isSendingWhatsApp}
                     onPress={handleWhatsApp}
-                    disabled={isSendingWhatsApp}
                   >
                     <MessageSquare size={18} color='white' />
                     <Text className='font-geist-bold text-white font-bold text-sm'>
-                      {isSendingWhatsApp ? 'Sharing…' : 'WhatsApp (Server)'}
+                      WhatsApp (Server)
                     </Text>
-                  </TouchableOpacity>
+                  </Button>
                 )}
                 {!isPaid && !isCancelled && (
-                  <TouchableOpacity
-                    className='flex-1 flex-row items-center justify-center gap-2 bg-sky-600 px-4 py-4 rounded-2xl active:opacity-90'
+                  <Button
+                    size='md'
+                    className='flex-1'
+                    loading={isSending}
                     onPress={handleSend}
-                    disabled={isSending}
                   >
                     <Send size={18} color='white' />
                     <Text className='font-geist-bold text-white font-bold text-sm'>
-                      {isSending ? 'Sending…' : 'Email'}
+                      Email
                     </Text>
-                  </TouchableOpacity>
+                  </Button>
                 )}
               </View>
               <View className='flex-row gap-3'>
-                <TouchableOpacity
-                  className='flex-1 flex-row items-center justify-center gap-2 bg-white border border-gray-200 px-4 py-4 rounded-2xl active:bg-gray-50'
+                <Button
+                  variant='secondary'
+                  size='md'
+                  className='flex-1'
+                  loading={isPrinting}
                   onPress={handlePrint}
-                  disabled={isPrinting}
                 >
                   <Printer size={18} color='#111827' />
                   <Text className='font-geist-bold text-gray-900 font-bold text-sm'>
-                    {isPrinting ? 'Printing…' : 'Print'}
+                    Print
                   </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  className='flex-1 flex-row items-center justify-center gap-2 bg-white border border-gray-200 px-4 py-4 rounded-2xl active:bg-gray-50'
+                </Button>
+                <Button
+                  variant='secondary'
+                  size='md'
+                  className='flex-1'
+                  loading={isDownloading}
                   onPress={handleDownloadPDF}
-                  disabled={isDownloading}
                 >
                   <Download size={18} color='#111827' />
                   <Text className='font-geist-bold text-gray-900 font-bold text-sm'>
-                    {isDownloading ? 'Saving…' : 'Download'}
+                    Download
                   </Text>
-                </TouchableOpacity>
+                </Button>
               </View>
               <View className='flex-row gap-3'>
                 <TouchableOpacity
@@ -863,17 +870,14 @@ export default function InvoiceDetail() {
                 onChangeText={setPaymentRef}
               />
             </View>
-            <TouchableOpacity
-              className='mt-2 bg-accent py-4 rounded-2xl items-center active:opacity-90'
+            <Button
+              size='md'
+              className='mt-2'
+              loading={isRecordingPayment || isSettlingCustomer}
               onPress={handleRecordPayment}
-              disabled={isRecordingPayment || isSettlingCustomer}
             >
-              <Text className='font-geist-bold text-white font-bold'>
-                {isRecordingPayment || isSettlingCustomer
-                  ? 'Recording…'
-                  : 'Record Payment'}
-              </Text>
-            </TouchableOpacity>
+              Record Payment
+            </Button>
           </ScrollView>
         </View>
       </Modal>
