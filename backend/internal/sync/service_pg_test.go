@@ -13,7 +13,9 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	gomigrate "github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
@@ -143,5 +145,92 @@ func TestPgPushOtherDeviceConflicts(t *testing.T) {
 	var n int64
 	if err := svc.db.WithContext(ctx).Raw(`SELECT COUNT(*) FROM conflicts WHERE business_id = ? AND record_id = ? AND resolved_at IS NULL`, bid, pid).Scan(&n).Error; err != nil || n != 1 {
 		t.Fatalf("expected 1 unresolved conflict row, got %d (err %v)", n, err)
+	}
+}
+
+// A client sale for an order that already has a (server-derived) sale is
+// rejected with a controlled duplicate error — never raw Postgres 23505 —
+// and the rest of the batch still applies (no "transaction is aborted"
+// poisoning of later records).
+func TestPgPushDuplicateSaleForOrder(t *testing.T) {
+	svc, bid, _ := pgSyncSetup(t)
+	ctx := context.Background()
+
+	orderID := uuid.New()
+	// Parent must exist: validateFKs nulls out dangling order_id instead.
+	if err := svc.db.WithContext(ctx).Exec(
+		`INSERT INTO orders (id, tenant_id, business_id, status, subtotal, tax_amount, total, payment_method, sync_version) VALUES (?, ?, ?, 'fulfilled', 50, 8, 58, 'cash', 1)`,
+		orderID, bid, bid).Error; err != nil {
+		t.Fatalf("seed order: %v", err)
+	}
+	// Server-derived sale already on the books for this order.
+	if err := svc.db.WithContext(ctx).Exec(
+		`INSERT INTO sales (id, tenant_id, business_id, order_id, receipt_number, staff_id, payment_method, subtotal, tax_amount, total, status, sold_at, sync_version) VALUES (?, ?, ?, ?, 'RCPT-SEED', (SELECT owner_id FROM businesses WHERE id = ?), 'cash', 50, 8, 58, 'completed', NOW(), 1)`,
+		uuid.New(), bid, bid, orderID, bid).Error; err != nil {
+		t.Fatalf("seed sale: %v", err)
+	}
+
+	sale := func(id, order string) map[string]any {
+		m := map[string]any{
+			"id": id, "sync_version": 1,
+			"receipt_number": "RCPT-" + id[:6],
+			"payment_method": "cash",
+			"subtotal":       "50",
+			"tax_amount":     "8",
+			"total":          "58",
+			"sold_at":        float64(time.Now().UnixMilli()),
+		}
+		if order != "" {
+			m["order_id"] = order
+		}
+		return m
+	}
+	dupID := uuid.New().String()
+	walkID := uuid.New().String()
+	res, err := svc.Push(context.Background(), bid, PushRequest{
+		Changes: map[string]TableChanges{
+			// Duplicate first: the walk-in after it must still apply,
+			// proving the batch survived.
+			"sales": {Created: []map[string]any{sale(dupID, orderID.String()), sale(walkID, "")}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("push: %v", err)
+	}
+
+	foundDup := false
+	for _, id := range res.Rejected["sales"] {
+		if id == dupID {
+			foundDup = true
+		}
+	}
+	if !foundDup {
+		t.Fatalf("expected duplicate sale %s rejected, got %+v", dupID, res.Rejected["sales"])
+	}
+	foundMsg := false
+	for _, msg := range res.Errors["sales"] {
+		if strings.Contains(msg, "duplicate sale for order") {
+			foundMsg = true
+		}
+		if strings.Contains(msg, "duplicate key value") {
+			t.Fatalf("raw postgres error leaked to client: %v", msg)
+		}
+	}
+	if !foundMsg {
+		t.Fatalf("expected duplicate-sale message, got %v", res.Errors["sales"])
+	}
+
+	applied := false
+	for _, id := range res.Applied["sales"] {
+		if id == walkID {
+			applied = true
+		}
+	}
+	if !applied {
+		t.Fatalf("walk-in sale after the duplicate must still apply (tx poisoned?), applied=%v errors=%v", res.Applied["sales"], res.Errors["sales"])
+	}
+	var n int64
+	if err := svc.db.WithContext(ctx).Raw(`SELECT COUNT(*) FROM sales WHERE business_id = ? AND deleted_at IS NULL`, bid).Scan(&n).Error; err != nil || n != 2 {
+		t.Fatalf("expected 2 sales (seed + walk-in), got %d (err %v)", n, err)
 	}
 }

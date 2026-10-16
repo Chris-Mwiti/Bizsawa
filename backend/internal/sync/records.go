@@ -50,7 +50,36 @@ func (s *Service) insertRecord(tx *gorm.DB, businessID uuid.UUID, userID uuid.UU
 		return err
 	}
 
+	// Uniqueness guard: sales.order_id is UNIQUE. A client that fulfilled an
+	// order offline pushes its own sale row while the server may already have
+	// derived one for the same order — without this pre-check the Create below
+	// dies with 23505 and poisons the whole push transaction ("current
+	// transaction is aborted" for every later record in the batch).
+	if err := s.ensureSaleOrderUnique(tx, businessID, table, rec); err != nil {
+		return err
+	}
+
 	return tx.Table(table).Create(rec).Error
+}
+
+// ensureSaleOrderUnique rejects a second sale for an order that already has
+// one, as a controlled rejection instead of Postgres ERROR 23505.
+func (s *Service) ensureSaleOrderUnique(tx *gorm.DB, businessID uuid.UUID, table string, rec map[string]any) error {
+	if table != "sales" {
+		return nil
+	}
+	orderID, _ := rec["order_id"].(string)
+	if orderID == "" {
+		return nil // walk-in sale, no order linkage — nothing to dedupe against
+	}
+	var n int64
+	if err := tx.Raw(`SELECT COUNT(*) FROM sales WHERE business_id = ? AND order_id = ? AND deleted_at IS NULL`, businessID, orderID).Scan(&n).Error; err != nil {
+		return err
+	}
+	if n > 0 {
+		return fmt.Errorf("duplicate sale for order %s — a sale already exists (sales_order_id_key, SQLSTATE 23505)", orderID)
+	}
+	return nil
 }
 
 // sanitizeUUIDPlaceholders replaces offline sentinel UUIDs ("local", "", "null")
@@ -289,15 +318,17 @@ func (s *Service) resolveSaleStaffID(tx *gorm.DB, businessID, userID uuid.UUID) 
 	if userID != uuid.Nil && s.staffExists(tx, userID.String()) {
 		return userID, nil
 	}
-	var ownerID uuid.UUID
-	if err := tx.Raw(`SELECT owner_id FROM businesses WHERE id = ?`, businessID).Scan(&ownerID).Error; err == nil && ownerID != uuid.Nil {
-		if s.staffExists(tx, ownerID.String()) {
+	// Scan into string then parse: the pgx driver returns UUIDs as string
+	// and Scan directly into uuid.UUID fails (invalid uint8 conversion).
+	var ownerStr string
+	if err := tx.Raw(`SELECT owner_id FROM businesses WHERE id = ?`, businessID).Scan(&ownerStr).Error; err == nil {
+		if ownerID, err := uuid.Parse(ownerStr); err == nil && ownerID != uuid.Nil && s.staffExists(tx, ownerID.String()) {
 			return ownerID, nil
 		}
 	}
-	var memberID uuid.UUID
-	if err := tx.Raw(`SELECT user_id FROM business_members WHERE business_id = ? AND is_active = true AND deleted_at IS NULL ORDER BY created_at ASC LIMIT 1`, businessID).Scan(&memberID).Error; err == nil && memberID != uuid.Nil {
-		if s.staffExists(tx, memberID.String()) {
+	var memberStr string
+	if err := tx.Raw(`SELECT user_id FROM business_members WHERE business_id = ? AND is_active = true AND deleted_at IS NULL ORDER BY created_at ASC LIMIT 1`, businessID).Scan(&memberStr).Error; err == nil {
+		if memberID, err := uuid.Parse(memberStr); err == nil && memberID != uuid.Nil && s.staffExists(tx, memberStr) {
 			return memberID, nil
 		}
 	}

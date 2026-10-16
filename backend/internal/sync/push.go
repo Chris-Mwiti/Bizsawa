@@ -69,7 +69,9 @@ func (s *Service) PushWithUser(ctx context.Context, businessID uuid.UUID, userID
 				continue
 			}
 
+			sp := savepoint(tx, "sales", idStr)
 			if err := s.ensureSaleDeducted(pctx, tx, businessID, sid); err != nil {
+				rollbackTo(tx, sp)
 				result.Errors["sales"] = append(result.Errors["sales"], fmt.Sprintf("ensureSaleDeducted %s: %v", idStr, err))
 			}
 		}
@@ -96,6 +98,26 @@ func (s *Service) PushWithUser(ctx context.Context, businessID uuid.UUID, userID
 	}
 
 	return result, err
+}
+
+// savepoint opens a nested savepoint so a raw DB-level failure rolls back
+// only the current record's writes. Without it, one residual Postgres error
+// (e.g. a 23505 the pre-checks missed) aborts the whole push transaction and
+// every later record fails with "current transaction is aborted".
+// Returns "" when savepoints are unavailable — callers then run unguarded,
+// exactly as before.
+func savepoint(tx *gorm.DB, table, idStr string) string {
+	sp := fmt.Sprintf("sync_%s_%s", table, strings.ReplaceAll(idStr, "-", ""))
+	if err := tx.SavePoint(sp).Error; err != nil {
+		return ""
+	}
+	return sp
+}
+
+func rollbackTo(tx *gorm.DB, sp string) {
+	if sp != "" {
+		_ = tx.RollbackTo(sp).Error
+	}
 }
 
 // pushCreated inserts client-created rows idempotently (re-push = applied).
@@ -128,7 +150,9 @@ func (s *Service) pushCreated(ctx context.Context, tx *gorm.DB, businessID, user
 			// to inventory_items. Guarded by the same reference-based rules as
 			// ApplyLedger so a mirrored movement can never double-apply a change
 			// the server already made (REST confirm/sale) and re-pushes stay no-ops.
+			sp := savepoint(tx, table, idStr)
 			if err := s.insertPushedMovement(ctx, tx, businessID, rec); err != nil {
+				rollbackTo(tx, sp)
 				result.reject(table, idStr, err.Error())
 			} else {
 				result.Applied[table] = append(result.Applied[table], idStr)
@@ -138,7 +162,9 @@ func (s *Service) pushCreated(ctx context.Context, tx *gorm.DB, businessID, user
 			continue
 		}
 
+		sp := savepoint(tx, table, idStr)
 		if err := s.insertRecord(tx, businessID, userID, table, rec); err != nil {
+			rollbackTo(tx, sp)
 			result.reject(table, idStr, err.Error())
 		} else {
 			result.Applied[table] = append(result.Applied[table], idStr)
@@ -187,7 +213,11 @@ func (s *Service) pushUpdated(ctx context.Context, tx *gorm.DB, businessID, user
 				s.setWriter(tx, businessID, table, id, deviceID)
 				result.LWWApplied[table] = append(result.LWWApplied[table], idStr)
 				// Audit the silent overwrite: versions + device, for forensics.
-				_ = tx.Exec(`INSERT INTO lww_applications (business_id, table_name, record_id, device_id, client_version, server_version) VALUES (?, ?, ?, ?, ?, ?)`, businessID, table, id, deviceID, clientVersion, serverVersion).Error
+				// Guarded: a failed audit insert must not poison the batch.
+				spAudit := savepoint(tx, table, idStr)
+				if err := tx.Exec(`INSERT INTO lww_applications (business_id, table_name, record_id, device_id, client_version, server_version) VALUES (?, ?, ?, ?, ?, ?)`, businessID, table, id, deviceID, clientVersion, serverVersion).Error; err != nil {
+					rollbackTo(tx, spAudit)
+				}
 			}
 			continue
 		}
@@ -233,7 +263,9 @@ func (s *Service) recordConflict(tx *gorm.DB, businessID uuid.UUID, deviceID, ta
 	conf := newConflict(businessID, table, id, clientBytes, srvJSON, clientVersion, serverVersion, deviceID, s.recordWriter(tx, businessID, table, id))
 	conf.CreatedAt = time.Now()
 
+	sp := savepoint(tx, table, idStr)
 	if err := tx.Create(&conf).Error; err != nil {
+		rollbackTo(tx, sp)
 		result.Errors[table] = append(result.Errors[table], err.Error())
 	} else {
 		result.Conflicts = append(result.Conflicts, conf)
@@ -253,12 +285,16 @@ func (s *Service) pushDeleted(ctx context.Context, tx *gorm.DB, businessID uuid.
 		case "sales":
 			// Voided sale: flag as void (drops it from analytics summaries) and
 			// put the stock back, all idempotently.
+			sp := savepoint(tx, table, idStr)
 			if err := tx.Exec(`UPDATE sales SET status = 'void', deleted_at = NOW(), updated_at = NOW(), sync_version = sync_version + 1 WHERE id = ? AND business_id = ? AND deleted_at IS NULL`, id, businessID).Error; err != nil {
+				rollbackTo(tx, sp)
 				result.reject(table, idStr, err.Error())
 				continue
 			}
 
+			spRestore := savepoint(tx, table, idStr)
 			if err := s.restoreInventoryForSale(ctx, tx, businessID, id); err != nil {
+				rollbackTo(tx, spRestore)
 				result.Errors[table] = append(result.Errors[table], fmt.Sprintf("restoreInventoryForSale %s: %v", idStr, err))
 			}
 
@@ -266,19 +302,25 @@ func (s *Service) pushDeleted(ctx context.Context, tx *gorm.DB, businessID uuid.
 		case "orders":
 			// Deleted order: soft-delete and return any stock it removed when
 			// confirmed. Draft orders never deducted, so this is a no-op for them.
+			sp := savepoint(tx, table, idStr)
 			if err := tx.Exec(`UPDATE orders SET deleted_at = NOW(), updated_at = NOW(), sync_version = sync_version + 1 WHERE id = ? AND business_id = ? AND deleted_at IS NULL`, id, businessID).Error; err != nil {
+				rollbackTo(tx, sp)
 				result.reject(table, idStr, err.Error())
 				continue
 			}
 
+			spRestore := savepoint(tx, table, idStr)
 			if err := s.restoreInventoryForOrder(ctx, tx, businessID, id); err != nil {
+				rollbackTo(tx, spRestore)
 				result.Errors[table] = append(result.Errors[table], fmt.Sprintf("restoreInventoryForOrder %s: %v", idStr, err))
 			}
 
 			result.Applied[table] = append(result.Applied[table], idStr)
 		default:
 			// soft delete: set deleted_at, increment version if not already deleted
+			sp := savepoint(tx, table, idStr)
 			if err := tx.Exec(fmt.Sprintf(`UPDATE %s SET deleted_at = NOW(), updated_at = NOW(), sync_version = sync_version + 1 WHERE id = ? AND business_id = ? AND deleted_at IS NULL`, table), id, businessID).Error; err != nil {
+				rollbackTo(tx, sp)
 				result.reject(table, idStr, err.Error())
 			} else {
 				result.Applied[table] = append(result.Applied[table], idStr)
@@ -292,7 +334,9 @@ func (s *Service) pushDeleted(ctx context.Context, tx *gorm.DB, businessID uuid.
 // the same-device last-write-wins path so both behave identically.
 // Reports whether the record was applied.
 func (s *Service) applyUpdateWithSideEffects(ctx context.Context, tx *gorm.DB, businessID, userID uuid.UUID, table string, rec map[string]any, idStr string, id uuid.UUID, prevStatus string, result *PushResult) bool {
+	sp := savepoint(tx, table, idStr)
 	if err := s.updateRecord(tx, businessID, table, rec); err != nil {
+		rollbackTo(tx, sp)
 		result.reject(table, idStr, err.Error())
 		return false
 	}
@@ -306,20 +350,26 @@ func (s *Service) applyUpdateWithSideEffects(ctx context.Context, tx *gorm.DB, b
 
 		newStatus = strings.TrimSpace(strings.ToLower(newStatus))
 		if prevStatus == "draft" && newStatus == "confirmed" {
+			spFx := savepoint(tx, table, idStr)
 			if err := s.ensureInvoiceForOrder(ctx, tx, businessID, id); err != nil {
+				rollbackTo(tx, spFx)
 				// do not fail the whole batch — record as error but keep order applied
 				result.Errors[table] = append(result.Errors[table], fmt.Sprintf("ensureInvoiceForOrder %s: %v", idStr, err))
 			}
 		}
 
 		if prevStatus != "fulfilled" && newStatus == "fulfilled" {
+			spFx := savepoint(tx, table, idStr)
 			if err := s.ensureSaleForOrder(ctx, tx, businessID, id, userID); err != nil {
+				rollbackTo(tx, spFx)
 				result.Errors[table] = append(result.Errors[table], fmt.Sprintf("ensureSaleForOrder %s: %v", idStr, err))
 			}
 		}
 		// Offline cancel / refund: put the stock back that confirm removed.
 		if newStatus == "cancelled" || newStatus == "refunded" {
+			spFx := savepoint(tx, table, idStr)
 			if err := s.restoreInventoryForOrder(ctx, tx, businessID, id); err != nil {
+				rollbackTo(tx, spFx)
 				result.Errors[table] = append(result.Errors[table], fmt.Sprintf("restoreInventoryForOrder %s: %v", idStr, err))
 			}
 		}
