@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import com.google.android.gms.auth.api.phone.SmsRetriever
 import com.google.android.gms.common.api.CommonStatusCodes
 import com.google.android.gms.common.api.Status
@@ -35,13 +36,19 @@ class SmsCaptureModule : Module() {
 
         Events("onSmsReceived", "onSmsTimeout")
 
+        // Field diagnostics: the JS test screen renders this so a stale
+        // native build on-device is visible (bump on any native change).
+        Function("getNativeVersion") { NATIVE_VERSION }
+
         AsyncFunction("startUserConsent") { senderAddress: String?, promise: Promise ->
             val context = appContext.reactContext
                 ?: run {
+                    Log.w(TAG, "startUserConsent: no react context")
                     promise.reject("NO_CONTEXT", "SmsCapture: no react context", null)
                     return@AsyncFunction
                 }
             unregister()
+            Log.d(TAG, "startUserConsent sender=${if (senderAddress.isNullOrBlank()) "<any>" else "<filtered>"}")
             try {
                 val client = SmsRetriever.getClient(context)
                 val task = if (senderAddress.isNullOrBlank()) {
@@ -57,15 +64,19 @@ class SmsCaptureModule : Module() {
                 task.addOnSuccessListener {
                     try {
                         register(context)
+                        Log.d(TAG, "consent task accepted; receiver registered")
                         promise.resolve(Unit)
                     } catch (e: Exception) {
+                        Log.w(TAG, "receiver register failed: ${e.message}")
                         promise.reject("REGISTER_FAILED", e.message ?: "SmsCapture: register failed", e)
                     }
                 }
                 task.addOnFailureListener { e ->
+                    Log.w(TAG, "consent task failed: ${e.message}")
                     promise.reject("CONSENT_START_FAILED", e.message ?: "SmsCapture: startSmsUserConsent failed", e)
                 }
             } catch (e: Exception) {
+                Log.w(TAG, "startUserConsent threw: ${e.message}")
                 promise.reject("CONSENT_START_FAILED", e.message ?: "SmsCapture: startSmsUserConsent failed", e)
             }
         }
@@ -86,12 +97,16 @@ class SmsCaptureModule : Module() {
                 val extras: Bundle = intent.extras ?: return
                 @Suppress("DEPRECATION")
                 val status = extras.get(SmsRetriever.EXTRA_STATUS) as? Status ?: return
+                // Privacy: log lengths/codes only — never message content.
+                Log.d(TAG, "onReceive statusCode=${status.statusCode}")
                 when (status.statusCode) {
                     CommonStatusCodes.SUCCESS -> {
                         val message = extras.getString(SmsRetriever.EXTRA_SMS_MESSAGE) ?: return
+                        Log.d(TAG, "SMS received len=${message.length}")
                         sendEvent("onSmsReceived", mapOf("message" to message))
                     }
                     CommonStatusCodes.TIMEOUT -> {
+                        Log.d(TAG, "consent window timeout")
                         sendEvent("onSmsTimeout", emptyMap<String, Any>())
                     }
                 }
@@ -121,5 +136,11 @@ class SmsCaptureModule : Module() {
         } catch (_: Exception) {
             // Already unregistered — harmless.
         }
+    }
+
+    companion object {
+        const val TAG = "SmsCapture"
+        /** Bump on ANY native change; the JS test screen renders it. */
+        const val NATIVE_VERSION = "2"
     }
 }

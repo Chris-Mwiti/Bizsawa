@@ -15,7 +15,7 @@ import { useRouter } from 'expo-router'
 import { parseMpesaSms } from '../lib/mpesa-sms/parser'
 import { isMpesaSender } from '../lib/mpesa-sms/sender'
 import { hashPayerPhone } from '../lib/mpesa-sms/payerHash'
-import { isAutoCaptureSupported, getAutoCaptureAvailability } from '../modules/sms-capture'
+import { isAutoCaptureSupported, getAutoCaptureAvailability, getSmsCaptureNativeVersion } from '../modules/sms-capture'
 import { useSmsAutoCapture } from '../hooks/api/useSmsAutoCapture'
 import { grantSmsConsent, hasSmsConsent, revokeSmsConsent } from '../lib/mpesa-sms/consent'
 import {
@@ -25,6 +25,8 @@ import {
   newClientEventId,
 } from '../lib/mpesa-sms/queue'
 import { SMS_TEMPLATES } from '../lib/mpesa-sms/templates'
+import { formatAutoCaptureDebug } from '../lib/mpesa-sms/autoCaptureDebug'
+import { AUTO_CAPTURE_SENDER } from '../lib/mpesa-sms/autoCapture'
 import { SMS_PARSER_VERSION, SMS_CONSENT_VERSION } from '../lib/mpesa-sms/types'
 
 export default function SmsTestScreen() {
@@ -47,11 +49,15 @@ function SmsTestBody({ onClose }: { onClose: () => void }) {
   const [autoOn, setAutoOn] = useState(false)
   const [consented, setConsented] = useState<boolean | null>(null)
   const auto = useSmsAutoCapture(autoOn && consented === true)
+  // Native build marker — proves which native code is actually installed.
+  const [nativeVersion] = React.useState(() => getSmsCaptureNativeVersion())
 
   const append = (line: string) => setLog((l) => [...l.slice(-49), line])
 
   React.useEffect(() => {
     hasSmsConsent().then(setConsented).catch(() => setConsented(false))
+    append(`native module: ${nativeVersion ?? 'missing'}`)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   React.useEffect(() => {
     if (auto.lastResult) append(`auto-capture: ${JSON.stringify(auto.lastResult)}`)
@@ -59,6 +65,16 @@ function SmsTestBody({ onClose }: { onClose: () => void }) {
   React.useEffect(() => {
     if (auto.error) append(`auto-capture ERROR: ${auto.error}`)
   }, [auto.error])
+  // Status transitions prove the arm lifecycle in the log: 'listening'
+  // means the native consent request resolved; if the log stops here with
+  // no heartbeat and no message, Play Services never delivered (or the GMS
+  // task hung and the promise never settled). The filter label confirms
+  // which JS bundle is running on the device.
+  const filterLabel = AUTO_CAPTURE_SENDER ?? 'any'
+  React.useEffect(() => {
+    append(`auto-capture status: ${auto.status} (filter: ${filterLabel})`)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auto.status])
 
   const run = async () => {
     setBusy(true)
@@ -160,12 +176,18 @@ function SmsTestBody({ onClose }: { onClose: () => void }) {
           return (
           <>
             <Text style={{ color: '#64748b', marginBottom: 8 }}>
-              Status: {auto.status}
+              Status: {auto.status} · native {nativeVersion ?? 'missing'}
               {auto.error ? ` — ${auto.error}` : consented ? '' : ' — grant consent to arm'}
             </Text>
+            <Text style={{ color: '#64748b', marginBottom: 8, fontSize: 12, fontFamily: 'monospace' }}>
+              {formatAutoCaptureDebug(auto.debug)}
+            </Text>
             <Text style={{ color: '#64748b', marginBottom: 8, fontSize: 12 }}>
-              How it works: after Start, each M-PESA SMS triggers an Android one-tap popup — tap Allow
-              or nothing is captured. Listening lasts ~5 min and re-arms itself (watch the log for
+              How it works: tap Start FIRST, then the M-PESA SMS must arrive after that — messages
+              already in the inbox are never delivered. The phone listens for SMS from any sender
+              (non-M-PESA texts are rejected at parse and logged, never stored), so each new SMS
+              triggers an Android one-tap popup — tap Allow or nothing is captured. Listening
+              lasts ~5 min and re-arms itself (watch the log for
               consent_window_expired_rearmed heartbeats); keep the app open until the SMS arrives.
             </Text>
             <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -193,7 +215,11 @@ function SmsTestBody({ onClose }: { onClose: () => void }) {
                     return
                   }
                   setAutoOn((v) => !v)
-                  append(autoOn ? 'auto-capture stopped' : 'auto-capture listening — send a real M-PESA SMS')
+                  append(
+                    autoOn
+                      ? 'auto-capture stopped'
+                      : 'auto-capture arming… (watch for the status line below)',
+                  )
                 }}
                 style={{ backgroundColor: '#0f766e', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 }}
               >

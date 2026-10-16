@@ -68,8 +68,26 @@ export function isAutoCaptureSupported(): boolean {
   return getAutoCaptureAvailability().available
 }
 
-/** Arms the system one-tap consent for the next message from sender. */
-export async function startSmsUserConsent(senderAddress = 'MPESA'): Promise<void> {
+/**
+ * Native build marker for field diagnostics. Returns null when the module
+ * is missing, 'v1 (pre-version API)' for builds predating the version
+ * function, else the NATIVE_VERSION string. The test screen renders this
+ * so a stale native install on-device is immediately visible.
+ */
+export function getSmsCaptureNativeVersion(): string | null {
+  try {
+    const mod = getNativeModule()
+    if (!mod) return null
+    return typeof mod.getNativeVersion === 'function' ? String(mod.getNativeVersion()) : 'v1 (pre-version API)'
+  } catch {
+    return null
+  }
+}
+
+/** Arms the system one-tap consent for the next message. Null senderAddress
+ * matches any sender (see autoCapture.ts: filter stays off so a sender-ID
+ * variant can never silently swallow a payment SMS). */
+export async function startSmsUserConsent(senderAddress: string | null = null): Promise<void> {
   const mod = getNativeModule()
   if (!mod) throw new Error('SMS auto-capture is not available on this device')
   await mod.startUserConsent(senderAddress)
@@ -81,14 +99,17 @@ export async function stopSmsUserConsent(): Promise<void> {
 
 export function addSmsReceivedListener(cb: SmsListener): { remove: () => void } {
   const em = getEmitter()
-  if (!em) return { remove: () => {} }
+  // Never degrade to a no-op: a silent listener means status 'listening'
+  // with zero events ever arriving — the exact undiagnosable failure seen
+  // in the field. Throw so armAutoCapture rejects and the UI shows error.
+  if (!em) throw new Error('SMS event emitter unavailable on this device')
   const sub = em.addListener('onSmsReceived', cb)
   return { remove: () => sub?.remove() }
 }
 
 export function addSmsTimeoutListener(cb: TimeoutListener): { remove: () => void } {
   const em = getEmitter()
-  if (!em) return { remove: () => {} }
+  if (!em) throw new Error('SMS event emitter unavailable on this device')
   const sub = em.addListener('onSmsTimeout', cb)
   return { remove: () => sub?.remove() }
 }

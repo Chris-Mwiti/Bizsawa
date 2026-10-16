@@ -2,6 +2,12 @@ import { useEffect, useState } from 'react'
 import { AppState } from 'react-native'
 import { useQueryClient } from '@tanstack/react-query'
 import { armAutoCapture, AUTO_CAPTURE_SENDER, isAutoCaptureSupported, type AutoCaptureResult } from '../../lib/mpesa-sms/autoCapture'
+import {
+  emptyAutoCaptureDebug,
+  noteArmed,
+  noteAutoCaptureResult,
+  type AutoCaptureDebug,
+} from '../../lib/mpesa-sms/autoCaptureDebug'
 
 export type AutoCaptureStatus = 'unsupported' | 'off' | 'listening' | 'error'
 
@@ -19,6 +25,9 @@ export const useSmsAutoCapture = (enabled: boolean) => {
   // Human-readable arm failure (native consent start, missing consent…).
   // Never blank when status === 'error' — the sms-test screen renders it.
   const [error, setError] = useState<string | null>(null)
+  // Listener-liveness counters — the Consent API fails silently, so the
+  // test screen renders these next to Status for field diagnostics.
+  const [debug, setDebug] = useState<AutoCaptureDebug>(emptyAutoCaptureDebug)
 
   useEffect(() => {
     if (!enabled || !isAutoCaptureSupported()) {
@@ -30,6 +39,7 @@ export const useSmsAutoCapture = (enabled: boolean) => {
     let cancelled = false
     const onResult = (r: AutoCaptureResult) => {
       setLastResult(r)
+      setDebug((d) => noteAutoCaptureResult(d, r, Date.now()))
       if (r.stored) queryClient.invalidateQueries({ queryKey: ['capturedPayments'] })
     }
     const onRearmError = (message: string) => {
@@ -45,6 +55,7 @@ export const useSmsAutoCapture = (enabled: boolean) => {
           if (cancelled) return s()
           stop = s
           setError(null)
+          setDebug((d) => noteArmed(d, Date.now()))
           setStatus('listening')
         })
         .catch((e: unknown) => {
@@ -70,5 +81,5 @@ export const useSmsAutoCapture = (enabled: boolean) => {
     }
   }, [enabled, queryClient])
 
-  return { status, lastResult, error }
+  return { status, lastResult, error, debug }
 }

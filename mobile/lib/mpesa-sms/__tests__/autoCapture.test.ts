@@ -7,16 +7,16 @@ const listeners = vi.hoisted(() => ({
 
 vi.mock('../../../modules/sms-capture', () => ({
   isAutoCaptureSupported: () => true,
-  startSmsUserConsent: vi.fn(async (_sender: string) => {}),
+  startSmsUserConsent: vi.fn(async (_sender: string | null) => {}),
   stopSmsUserConsent: vi.fn(async () => {}),
-  addSmsReceivedListener: (cb: (e: { message: string }) => void) => {
+  addSmsReceivedListener: vi.fn((cb: (e: { message: string }) => void) => {
     listeners.msg.push(cb)
     return { remove: () => {} }
-  },
-  addSmsTimeoutListener: (cb: () => void) => {
+  }),
+  addSmsTimeoutListener: vi.fn((cb: () => void) => {
     listeners.timeout.push(cb)
     return { remove: () => {} }
-  },
+  }),
 }))
 
 vi.mock('../index', () => ({
@@ -30,7 +30,7 @@ vi.mock('../consent', () => ({
 import { armAutoCapture } from '../autoCapture'
 import { handleIncomingSms } from '../index'
 import { hasSmsConsent } from '../consent'
-import { startSmsUserConsent } from '../../../modules/sms-capture'
+import { addSmsReceivedListener, startSmsUserConsent } from '../../../modules/sms-capture'
 
 const POCHI_NOPHONE =
   'UJEEIA0XPR Confirmed.You have received Ksh10.00 from JOHN  DOE on 14/10/26 at 2:24 PM  New Pochi balance is Ksh10.00. To access your funds, Dial *334#,select Pochi la Biashara & Withdraw funds.'
@@ -49,6 +49,10 @@ describe('armAutoCapture', () => {
     })
     const results: unknown[] = []
     await armAutoCapture((r) => results.push(r))
+    // Unfiltered by default: any sender triggers the popup (sender-ID
+    // variants must never silently swallow a payment); the strict parse
+    // filters non-payment texts. The gate sees the fallback verified ID.
+    expect(startSmsUserConsent).toHaveBeenCalledWith(null)
     expect(startSmsUserConsent).toHaveBeenCalledTimes(1)
 
     listeners.msg[0]({ message: POCHI_NOPHONE })
@@ -88,5 +92,12 @@ describe('armAutoCapture', () => {
   it('throws when in-app consent is missing', async () => {
     ;(hasSmsConsent as Mock).mockResolvedValueOnce(false)
     await expect(armAutoCapture(() => {})).rejects.toThrow('SMS capture consent not granted')
+  })
+
+  it('fails loudly when the event emitter is unavailable (never a silent no-op)', async () => {
+    ;(addSmsReceivedListener as Mock).mockImplementationOnce(() => {
+      throw new Error('SMS event emitter unavailable on this device')
+    })
+    await expect(armAutoCapture(() => {})).rejects.toThrow('SMS event emitter unavailable')
   })
 })
