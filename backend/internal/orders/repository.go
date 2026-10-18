@@ -38,7 +38,7 @@ func (r *Repository) WithTx(tx *gorm.DB) *Repository {
 }
 
 func (r *Repository) Create(ctx context.Context, order *Order, lines []OrderLine) error {
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(order).Error; err != nil {
 			return err
 		}
@@ -48,11 +48,18 @@ func (r *Repository) Create(ctx context.Context, order *Order, lines []OrderLine
 		}
 
 		if len(lines) > 0 {
-			return tx.Create(&lines).Error
+			if err := tx.Create(&lines).Error; err != nil {
+				return err
+			}
 		}
 
+		shareddb.TouchCreated(tx, ctx, order.BusinessID, "orders", order.ID)
+		for i := range lines {
+			shareddb.TouchCreated(tx, ctx, order.BusinessID, "order_lines", lines[i].ID)
+		}
 		return nil
 	})
+	return err
 }
 
 func (r *Repository) FindOrderByUpdate(ctx context.Context, businessID, orderID uuid.UUID) (*Order, error) {
@@ -94,7 +101,11 @@ func (r *Repository) List(ctx context.Context, businessID uuid.UUID, page pagina
 }
 
 func (r *Repository) Update(ctx context.Context, order *Order) error {
-	return r.db.WithContext(ctx).Save(order).Error
+	if err := r.db.WithContext(ctx).Save(order).Error; err != nil {
+		return err
+	}
+	shareddb.TouchUpdated(r.db, ctx, order.BusinessID, "orders", order.ID)
+	return nil
 }
 
 func (r *Repository) SetStatus(ctx context.Context, businessID, orderID uuid.UUID, status Status) error {
@@ -107,5 +118,6 @@ func (r *Repository) SetStatus(ctx context.Context, businessID, orderID uuid.UUI
 		return apperrors.ErrNotFound.WithMessage("order not found")
 	}
 
+	shareddb.TouchUpdated(r.db, ctx, businessID, "orders", orderID)
 	return nil
 }

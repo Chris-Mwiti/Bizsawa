@@ -27,6 +27,7 @@ import {
   CardHeader,
   CardTitle,
 } from '../../components/ui/Card'
+import { Button } from '../../components/ui/Button'
 import { useOrders, OrderStatus } from '../../hooks/api/useOrders'
 import { useCustomers } from '../../hooks/api/useCustomers'
 import { useProducts } from '../../hooks/api/useProducts'
@@ -315,7 +316,7 @@ export default function OrderDetail() {
       >
         {/* Hero */}
         <Card className='border border-gray-200'>
-          <CardContent className='p-5'>
+          <CardContent className='p-6'>
             <View className='flex-row justify-between items-start gap-4'>
               <View className='flex-1'>
                 <Text className='font-geist-mono-bold text-xs font-bold tracking-widest text-gray-500 uppercase mb-1'>
@@ -562,15 +563,15 @@ export default function OrderDetail() {
                     </Text>
                   </TouchableOpacity>
                 ) : !isPaymentSucceeded(paymentStatus.data.status) ? (
-                  <TouchableOpacity
-                    className='flex-1 bg-white border border-gray-200 py-3 rounded-2xl items-center'
+                  <Button
+                    variant='secondary'
+                    size='md'
+                    className='flex-1'
+                    loading={isCancelling}
                     onPress={handleCancelPayment}
-                    disabled={isCancelling}
                   >
-                    <Text className='font-geist-bold text-gray-900 font-bold text-sm'>
-                      {isCancelling ? 'Cancelling…' : 'Cancel request'}
-                    </Text>
-                  </TouchableOpacity>
+                    Cancel request
+                  </Button>
                 ) : null}
               </View>
             </CardContent>
@@ -586,28 +587,30 @@ export default function OrderDetail() {
             <View className='gap-3'>
               <View className='flex-row gap-3'>
                 {isDraft && (
-                  <TouchableOpacity
-                    className='flex-1 flex-row items-center justify-center gap-2 bg-accent px-4 py-4 rounded-2xl active:opacity-90'
+                  <Button
+                    size='md'
+                    className='flex-1'
+                    loading={isUpdating}
                     onPress={() => handleUpdateStatus(OrderStatus.confirmed)}
-                    disabled={isUpdating}
                   >
                     <Check size={18} color='white' />
                     <Text className='font-geist-bold text-white font-bold text-sm'>
-                      {isUpdating ? 'Updating…' : 'Confirm Order'}
+                      Confirm Order
                     </Text>
-                  </TouchableOpacity>
+                  </Button>
                 )}
                 {isConfirmed && (
-                  <TouchableOpacity
-                    className='flex-1 flex-row items-center justify-center gap-2 bg-emerald-600 px-4 py-4 rounded-2xl active:opacity-90'
+                  <Button
+                    size='md'
+                    className='flex-1'
+                    loading={isUpdating}
                     onPress={() => handleUpdateStatus(OrderStatus.fulfilled)}
-                    disabled={isUpdating}
                   >
                     <CheckCircle size={18} color='white' />
                     <Text className='font-geist-bold text-white font-bold text-sm'>
-                      {isUpdating ? 'Fulfilling…' : 'Fulfill Order'}
+                      Fulfill Order
                     </Text>
-                  </TouchableOpacity>
+                  </Button>
                 )}
                 {!isFulfilled &&
                   !isCancelled &&
@@ -627,30 +630,34 @@ export default function OrderDetail() {
                   </View>
                 ) : null}
                 {!isFulfilled && !isCancelled ? (
-                  <TouchableOpacity
-                    className='flex-1 flex-row items-center justify-center gap-2 bg-white border border-red-200 px-4 py-4 rounded-2xl active:bg-red-50'
+                  <Button
+                    variant='secondary'
+                    size='md'
+                    className='flex-1 border-red-200'
+                    loading={isUpdating}
                     onPress={() => handleUpdateStatus(OrderStatus.cancelled)}
-                    disabled={isUpdating}
                   >
                     <Trash2 size={18} color='#dc2626' />
                     <Text className='font-geist-bold text-red-600 font-bold text-sm'>
                       Cancel
                     </Text>
-                  </TouchableOpacity>
+                  </Button>
                 ) : null}
               </View>
               <View className='flex-row gap-3'>
                 {!isFulfilled && !isCancelled ? (
-                  <TouchableOpacity
-                    className='flex-1 flex-row items-center justify-center gap-2 bg-white border border-gray-200 px-4 py-4 rounded-2xl active:bg-gray-50'
+                  <Button
+                    variant='secondary'
+                    size='md'
+                    className='flex-1'
+                    loading={isInitiating}
                     onPress={handleMpesa}
-                    disabled={isInitiating}
                   >
                     <Smartphone size={18} color='#111827' />
                     <Text className='font-geist-bold text-gray-900 font-bold text-sm'>
-                      {isInitiating ? 'Sending…' : 'M-Pesa'}
+                      M-Pesa
                     </Text>
-                  </TouchableOpacity>
+                  </Button>
                 ) : (
                   <View className='flex-1 flex-row items-center justify-center gap-2 bg-gray-100 border border-gray-200 px-4 py-4 rounded-2xl opacity-50'>
                     <Smartphone size={18} color='#6b7280' />

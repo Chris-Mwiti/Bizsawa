@@ -201,6 +201,7 @@ func NewRouter(deps Dependencies) http.Handler {
 
 			if deps.Payments != nil {
 				r.Route("/payments", deps.Payments.RegisterRoutes)
+				r.Route("/devices", deps.Payments.RegisterDeviceRoutes)
 			}
 
 			if deps.Analytics != nil {

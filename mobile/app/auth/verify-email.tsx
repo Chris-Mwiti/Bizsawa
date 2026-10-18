@@ -164,7 +164,7 @@ export default function VerifyEmailScreen() {
         <TouchableOpacity
           onPress={handleVerify}
           disabled={isVerifying || otp.length !== 6}
-          className={`rounded-full py-4 items-center ${otp.length === 6 ? 'bg-accent shadow-clinical-sm' : 'bg-paper border border-hairline'}`}
+          className={`rounded-full py-4 items-center ${otp.length === 6 ? 'bg-accent shadow-clinical-sm' : 'bg-paper border border-hairline shadow-none'}`}
           style={{ opacity: isVerifying ? 0.7 : 1 }}
         >
           {isVerifying ? <ActivityIndicator color="white" /> : <Text className={`font-geist-bold font-bold ${otp.length === 6 ? 'text-white' : 'text-ink-subtle'}`}>Verify email</Text>}

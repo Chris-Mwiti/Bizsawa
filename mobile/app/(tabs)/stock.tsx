@@ -52,6 +52,8 @@ export default function StockTab() {
     createProduct,
     updateProduct,
     deleteProduct,
+    isCreating,
+    isUpdating,
     isDeleting,
   } = useProducts()
   const {
@@ -315,24 +317,21 @@ export default function StockTab() {
           setSuccessMsg('Product updated — stock refreshed ✨'); setShowSuccess(true)
         }
       } else {
-        const created = await createProduct({
+        await createProduct({
           name: formState.name.trim(),
           category: formState.category,
           price,
           buyingPrice,
           supplier: formState.supplier.trim(),
           maxStockLevel: max > 0 ? max : null,
+          minStockLevel: min,
+          stockQuantity: stock,
           sku: formState.sku.trim() || undefined,
           barcode: formState.barcode.trim() || undefined,
           variants: variantsPayload,
         } as any)
-        if (created?.id)
-          await adjustStock({
-            productId: created.id,
-            quantityDelta: stock,
-            lowStockThreshold: min,
-            notes: 'Initial stock',
-          })
+        // Opening stock is created atomically inside createProduct — no
+        // follow-up adjustment, so the list shows the quantity immediately.
         if (isOffline) {
           setSuccessMsg('Saved offline — will sync when online 📱'); setShowSuccess(true)
         } else {
@@ -370,7 +369,7 @@ export default function StockTab() {
     <View className='flex-1 bg-paper'>
       {/* Header — soft clinical card with pill Add */}
       <View className='px-4 pt-12 pb-3'>
-        <View className='bg-surface rounded-4xl p-5 border border-hairline shadow-clinical-sm flex-row justify-between items-start gap-3'>
+        <View className='bg-surface rounded-4xl p-6 border border-hairline shadow-clinical-sm flex-row justify-between items-start gap-3'>
           <View className='flex-1'>
             <Text className='font-geist-bold text-xs font-bold tracking-widest text-ink-subtle uppercase'>
               Stock
@@ -621,16 +620,18 @@ export default function StockTab() {
                         Edit
                       </Text>
                     </TouchableOpacity>
-                    <TouchableOpacity
+                    <Button
+                      variant='secondary'
+                      size='sm'
                       onPress={() => handleDeleteItem(item)}
-                      disabled={!!isDeleting}
-                      className='flex-row items-center gap-2 px-3 py-2 rounded-full bg-white border border-red-200'
+                      loading={!!isDeleting}
+                      className='border-red-200'
                     >
                       <Trash2 size={14} color='#dc2626' />
                       <Text className='font-geist-bold text-xs font-bold text-red-600'>
                         Delete
                       </Text>
-                    </TouchableOpacity>
+                    </Button>
                   </View>
                 </CardContent>
               </Card>
@@ -655,6 +656,7 @@ export default function StockTab() {
       <Sheet
         visible={showItemModal}
         onClose={() => setShowItemModal(false)}
+        align='center'
         eyebrow={`Step ${step + 1} of 3 • ${['Basics', 'Pricing', 'Stock & sizes'][step]}${editingItem ? ' • editing' : ''}`}
         title={editingItem ? 'Edit item' : 'Add item'}
         subtitle={
@@ -710,7 +712,7 @@ export default function StockTab() {
             ) : (
               <Button
                 onPress={handleSaveItem}
-                loading={!!isAdjustingStock}
+                loading={!!isCreating || !!isUpdating || !!isAdjustingStock}
                 className='flex-[2]'
               >
                 {editingItem ? 'Update product' : 'Save item'}

@@ -28,7 +28,11 @@ func NewRepository(db *gorm.DB) *Repository { return &Repository{db: db} }
 
 func (r *Repository) DB() *gorm.DB { return r.db }
 func (r *Repository) Create(ctx context.Context, item *Expense) error {
-	return r.db.WithContext(ctx).Create(item).Error
+	if err := r.db.WithContext(ctx).Create(item).Error; err != nil {
+		return err
+	}
+	shareddb.TouchCreated(r.db, ctx, item.BusinessID, "expenses", item.ID)
+	return nil
 }
 
 func (r *Repository) List(ctx context.Context, businessID uuid.UUID, page pagination.Page) ([]Expense, error) {
@@ -60,6 +64,7 @@ func (r *Repository) Delete(ctx context.Context, businessID, id uuid.UUID) error
 		return apperrors.ErrNotFound.WithMessage("expense not found")
 	}
 
+	shareddb.ForgetRecord(r.db, businessID, "expenses", id)
 	return nil
 }
 

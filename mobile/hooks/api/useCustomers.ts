@@ -195,7 +195,10 @@ export const useUpdateCustomer = () => {
             r.tags = JSON.stringify((payload as any).tags || [])
           if ((payload as any).notes !== undefined)
             r.notes = (payload as any).notes || null
-          r.syncVersion = (r.syncVersion || 1) + 1
+          // NOTE: never bump syncVersion here. The client must send the
+          // last-pulled server version so the version protocol can compare
+          // honestly; the server increments on apply. Local +1 guarantees
+          // a permanent mismatch (false conflict on every offline edit).
         })
       })
       import('../../sync/client').then((m) => m.syncNow().catch(() => {}))

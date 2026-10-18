@@ -178,6 +178,7 @@ export function SalesEntryModal(props: {
     <Sheet
       visible={props.visible}
       onClose={props.onClose}
+      align='center'
       eyebrow={itemCount > 0 ? `${itemCount} in cart` : 'New transaction'}
       title={props.title}
       subtitle={
@@ -411,7 +412,7 @@ export function SalesEntryModal(props: {
         </View>
         <View className='bg-white border border-gray-200 rounded-2xl overflow-hidden'>
           {filteredProducts.length === 0 ? (
-            <View className='p-5 items-center'>
+            <View className='p-6 items-center'>
               <Package size={20} color='#9ca3af' />
               <Text className='font-geist-semibold text-sm font-semibold text-gray-500 mt-2'>
                 {props.products.length === 0
