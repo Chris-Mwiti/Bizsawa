@@ -57,7 +57,6 @@ function SmsTestBody({ onClose }: { onClose: () => void }) {
   React.useEffect(() => {
     hasSmsConsent().then(setConsented).catch(() => setConsented(false))
     append(`native module: ${nativeVersion ?? 'missing'}`)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   React.useEffect(() => {
     if (auto.lastResult) append(`auto-capture: ${JSON.stringify(auto.lastResult)}`)
@@ -73,7 +72,6 @@ function SmsTestBody({ onClose }: { onClose: () => void }) {
   const filterLabel = AUTO_CAPTURE_SENDER ?? 'any'
   React.useEffect(() => {
     append(`auto-capture status: ${auto.status} (filter: ${filterLabel})`)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auto.status])
 
   const run = async () => {
