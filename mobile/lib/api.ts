@@ -199,6 +199,12 @@ async function refreshAccessToken(): Promise<string | null> {
 api.interceptors.request.use(
   async (config) => {
     const { token, businessId } = await readStoredAuth()
+    // Stable install identity for sync writer attribution (sync protocol:
+    // same-device edits apply as last-write-wins). Best-effort — absence
+    // just means "unknown writer" server-side.
+    const deviceId = await import('./deviceId')
+      .then((m) => m.getDeviceId())
+      .catch(() => '')
 
     // Tracing: one span per request (method + path, no query) — ends in the
     // response/error interceptor below with the status attached.
@@ -208,6 +214,7 @@ api.interceptors.request.use(
 
     config.headers = config.headers || {}
     if (token) config.headers.Authorization = `Bearer ${token}`
+    if (deviceId) config.headers['X-Device-Id'] = deviceId
     if (businessId) {
       config.headers['X-Business-ID'] = businessId
       // lower-case mirror for proxies that normalize

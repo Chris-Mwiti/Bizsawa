@@ -145,7 +145,7 @@ export const useInventory = () => {
             r.quantity = String(newQty)
             if (input.lowStockThreshold !== undefined)
               r.lowStockThreshold = toDecimalString(input.lowStockThreshold)
-            r.syncVersion = (r.syncVersion || 1) + 1
+            // NOTE: never bump syncVersion here — see useCustomers.ts.
           })
         } else {
           await col.create((rec: any) => {

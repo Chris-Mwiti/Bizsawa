@@ -83,9 +83,15 @@ func (r *Repository) Create(ctx context.Context, sale *Sale, lines []SaleLine) e
 		}
 
 		if len(lines) > 0 {
-			return tx.Create(&lines).Error
+			if err := tx.Create(&lines).Error; err != nil {
+				return err
+			}
 		}
 
+		shareddb.TouchCreated(tx, ctx, sale.BusinessID, "sales", sale.ID)
+		for i := range lines {
+			shareddb.TouchCreated(tx, ctx, sale.BusinessID, "sale_lines", lines[i].ID)
+		}
 		return nil
 	})
 }
@@ -119,6 +125,7 @@ func (r *Repository) Void(ctx context.Context, businessID, saleID uuid.UUID) err
 		return apperrors.ErrNotFound.WithMessage("sale not found")
 	}
 
+	shareddb.TouchUpdated(r.db, ctx, businessID, "sales", saleID)
 	return nil
 }
 

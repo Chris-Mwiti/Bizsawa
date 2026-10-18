@@ -341,8 +341,8 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
         if (newStatus) {
           await rec.update((r: any) => {
             r.status = newStatus
-            // bump sync version for conflict detection (§4)
-            r.syncVersion = (r.syncVersion || 1) + 1
+            // NOTE: never bump syncVersion here — the client must send the
+            // last-pulled server version (see useCustomers.ts).
             // DTO-safe: use model fields (schema v5) — ensures _changed tracks correctly and avoids column.type crash
             if (newStatus === 'confirmed' && !r.confirmedAt) {
               try { r.confirmedAt = Date.now() } catch { try { r._raw.confirmed_at = Date.now() } catch {} }

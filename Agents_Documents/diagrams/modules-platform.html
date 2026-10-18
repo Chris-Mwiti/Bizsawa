@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Platform modules — auth · business · users · tenancy</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:   #F4F9F7;
+      --color-ink:     #122b26;
+      --color-muted:   #47615b;
+      --color-soft:    #5b7670;
+      --color-accent:  #006b5f;
+      --color-link:    #04574d;
+      --font-sans:     'Geist', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', 'Noto Serif', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace;
+    }
+    body { font-family: var(--font-sans); background: var(--color-paper); color: var(--color-ink);
+      min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 3rem 2rem; }
+    .frame { max-width: 1200px; width: 100%; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+    .eyebrow { font-family: var(--font-mono); font-size: 0.66rem; font-weight: 500;
+      letter-spacing: 0.18em; text-transform: uppercase; color: var(--color-muted); margin-bottom: 0.5rem; }
+    h1 { font-family: var(--font-serif); font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400; letter-spacing: -0.02em; line-height: 1.15; color: var(--color-ink); margin-bottom: 1.5rem; }
+    svg { width: 100%; min-width: 960px; display: block; }
+    @media print { .diagram-container { overflow-x: visible; } svg { min-width: 0; } }
+    .ref { font-family: var(--font-mono); font-size: 0.8rem; color: var(--color-muted); margin-top: 1rem; }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Architecture · Platform</p>
+    <h1>Identity, tenancy and plans</h1>
+    <div class="diagram-container">
+      <svg viewBox="0 0 960 600" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="mod-platform-title mod-platform-desc">
+        <title id="mod-platform-title">Platform modules and membership flow</title>
+        <desc id="mod-platform-desc">Auth issues sessions, business creation fans out to owner membership and plan limits, invites arrive by email OTP.</desc>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#47615b"/></marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#006b5f"/></marker>
+          <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#04574d"/></marker>
+        </defs>
+        <rect width="100%" height="100%" fill="#F4F9F7"/>
+
+        <rect x="16" y="64" width="928" height="200" rx="8" fill="rgba(18,43,38,0.02)" stroke="rgba(18,43,38,0.10)" stroke-width="0.8"/>
+        <rect x="28" y="68" width="76" height="12" rx="2" fill="#F4F9F7"/>
+        <text x="66" y="77" fill="#5b7670" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">PLATFORM</text>
+
+        <!-- arrows -->
+        <path d="M 120,236 V 300 H 800 V 236" fill="none" stroke="#006b5f" stroke-width="1.2" marker-end="url(#arrow-accent)"/>
+        <rect x="438" y="292" width="72" height="14" fill="#F4F9F7"/>
+        <text x="474" y="302" fill="#006b5f" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">PROVISION</text>
+        <path d="M 360,236 V 284 H 860 V 236" fill="none" stroke="#47615b" stroke-width="1" marker-end="url(#arrow)"/>
+        <rect x="576" y="276" width="48" height="14" fill="#F4F9F7"/>
+        <text x="600" y="286" fill="#47615b" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">LIMIT</text>
+        <line x1="236" y1="166" x2="252" y2="166" stroke="#47615b" stroke-width="1" marker-end="url(#arrow)"/>
+        <path d="M 640,52 V 96" fill="none" stroke="#47615b" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+        <rect x="648" y="64" width="64" height="14" fill="#F4F9F7"/>
+        <text x="680" y="74" fill="#47615b" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">OTP MAIL</text>
+
+        <!-- resend -->
+        <rect x="564" y="16" width="152" height="36" rx="6" fill="rgba(18,43,38,0.03)" stroke="rgba(18,43,38,0.30)" stroke-width="1"/>
+        <text x="640" y="31" fill="#122b26" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Resend</text>
+        <text x="640" y="44" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">invite + OTP mail</text>
+
+        <!-- auth focal -->
+        <rect x="16" y="96" width="220" height="140" rx="6" fill="rgba(0,107,95,0.08)" stroke="#006b5f" stroke-width="1.2"/>
+        <rect x="24" y="102" width="38" height="12" rx="2" fill="none" stroke="#006b5f" stroke-width="0.8"/>
+        <text x="43" y="111" fill="#006b5f" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">AUTH</text>
+        <text x="126" y="140" fill="#006b5f" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Auth</text>
+        <text x="126" y="160" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">users · JWT · OTP</text>
+        <text x="126" y="178" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">register · login</text>
+        <text x="126" y="196" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">Google SSO · refresh</text>
+        <!-- business -->
+        <rect x="252" y="96" width="220" height="140" rx="6" fill="#ffffff" stroke="#122b26" stroke-width="1"/>
+        <rect x="260" y="102" width="60" height="12" rx="2" fill="none" stroke="#47615b" stroke-width="0.8"/>
+        <text x="290" y="111" fill="#47615b" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">BUSINESS</text>
+        <text x="362" y="140" fill="#122b26" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Business</text>
+        <text x="362" y="160" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">businesses</text>
+        <text x="362" y="178" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">CRUD · owner-only</text>
+        <text x="362" y="196" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">encrypted shortcode</text>
+        <!-- users -->
+        <rect x="488" y="96" width="220" height="140" rx="6" fill="#ffffff" stroke="#122b26" stroke-width="1"/>
+        <rect x="496" y="102" width="44" height="12" rx="2" fill="none" stroke="#47615b" stroke-width="0.8"/>
+        <text x="518" y="111" fill="#47615b" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">USERS</text>
+        <text x="598" y="140" fill="#122b26" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Users</text>
+        <text x="598" y="160" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">members · invites</text>
+        <text x="598" y="178" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">roles · RBAC source</text>
+        <text x="598" y="196" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">profiles</text>
+        <!-- tenancy -->
+        <rect x="724" y="96" width="220" height="140" rx="6" fill="#ffffff" stroke="#122b26" stroke-width="1"/>
+        <rect x="732" y="102" width="56" height="12" rx="2" fill="none" stroke="#47615b" stroke-width="0.8"/>
+        <text x="760" y="111" fill="#47615b" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">TENANCY</text>
+        <text x="834" y="140" fill="#122b26" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Tenancy</text>
+        <text x="834" y="160" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">subscriptions</text>
+        <text x="834" y="178" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">plan limits · STK</text>
+        <text x="834" y="196" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">upgrade callbacks</text>
+
+        <!-- store bar -->
+        <rect x="16" y="360" width="928" height="96" rx="6" fill="rgba(18,43,38,0.05)" stroke="#47615b" stroke-width="1"/>
+        <rect x="28" y="366" width="22" height="12" rx="2" fill="none" stroke="#47615b" stroke-width="0.8"/>
+        <text x="39" y="375" fill="#47615b" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">DB</text>
+        <text x="480" y="402" fill="#122b26" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Postgres — identity tables</text>
+        <text x="480" y="420" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">auth_users · businesses · members · invites · subscriptions</text>
+
+        <!-- legend -->
+        <line x1="16" y1="540" x2="944" y2="540" stroke="rgba(18,43,38,0.12)" stroke-width="0.8"/>
+        <rect x="16" y="552" width="14" height="14" rx="3" fill="rgba(0,107,95,0.08)" stroke="#006b5f" stroke-width="1.2"/>
+        <text x="36" y="563" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace">identity hub — focal</text>
+        <line x1="220" y1="559" x2="250" y2="559" stroke="#006b5f" stroke-width="1.2" marker-end="url(#arrow-accent)"/>
+        <text x="256" y="563" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace">provisions</text>
+        <line x1="364" y1="559" x2="394" y2="559" stroke="#47615b" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+        <text x="400" y="563" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace">email</text>
+      </svg>
+    </div>
+    <p class="ref">Full function catalog: Agents_Documents/backend-modules/platform.md</p>
+  </div>
+</body>
+</html>

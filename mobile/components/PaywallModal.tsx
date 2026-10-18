@@ -4,6 +4,7 @@ import { Modal } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Crown, Smartphone, Check } from 'lucide-react-native'
 import { useSubscription, PlanCode } from '../hooks/api/useSubscription'
+import { Button } from './ui/Button'
 
 const PREMIUM_FEATURES = [
   '5 businesses (free = 1)',
@@ -105,9 +106,9 @@ export function PaywallModal({
               <Text className="font-sans text-xs text-amber-700 mt-1">Payment {paymentId.slice(0,8)} • checkout {paymentQuery.data?.checkoutRequestId?.slice(0,12) || '—'}</Text>
             </View>
           ) : null}
-          <TouchableOpacity onPress={handlePay} disabled={sending} className="bg-accent py-4 rounded-2xl items-center mt-1 disabled:opacity-50">
-            {sending ? <ActivityIndicator color="white" /> : <Text className="font-geist-bold text-white font-bold">Lipa na M-Pesa • STK Push</Text>}
-          </TouchableOpacity>
+          <Button size='md' className='mt-1' loading={sending} onPress={handlePay}>
+            Lipa na M-Pesa • STK Push
+          </Button>
           <Text className="font-sans text-xs text-center text-gray-500">Sandbox: use test phone 254708374149 • prod uses real Paybill</Text>
         </View>
           </ScrollView>

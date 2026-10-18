@@ -1,0 +1,50 @@
+// Expo-module library config (autolinked into the app build, where the
+// Android Gradle Plugin is on the classpath). This same directory also hosts
+// the standalone JVM-test project (settings.gradle); that build has no AGP
+// on the ROOT classpath, so skip silently there instead of failing it.
+def agpOnClasspath = false
+try {
+    Class.forName('com.android.build.gradle.LibraryPlugin')
+    agpOnClasspath = true
+} catch (Throwable ignored) {
+    logger.lifecycle('[bizsawa-sms-capture] AGP not on root classpath — skipping library config (standalone JVM build)')
+}
+
+if (agpOnClasspath) {
+    apply plugin: 'com.android.library'
+    apply plugin: 'kotlin-android'
+
+    group = 'com.bizsawa.mobile.smscapture'
+    version = '1.0.0'
+
+    android {
+        compileSdkVersion 35
+
+        defaultConfig {
+            minSdkVersion 24
+            targetSdkVersion 35
+            versionCode 1
+            versionName '1.0.0'
+        }
+
+        buildTypes {
+            release {
+                minifyEnabled false
+            }
+        }
+
+        compileOptions {
+            sourceCompatibility JavaVersion.VERSION_17
+            targetCompatibility JavaVersion.VERSION_17
+        }
+
+        kotlinOptions {
+            jvmTarget = '17'
+        }
+    }
+
+    dependencies {
+        implementation project(':expo-modules-core')
+        implementation 'com.google.android.gms:play-services-auth-api-phone:18.1.0'
+    }
+}

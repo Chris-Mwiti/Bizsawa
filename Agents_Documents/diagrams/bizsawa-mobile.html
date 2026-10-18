@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BizSawa — Mobile Layer Stack</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:   #F4F9F7;
+      --color-ink:     #122b26;
+      --color-muted:   #47615b;
+      --color-soft:    #5b7670;
+      --color-accent:  #006b5f;
+      --color-link:    #04574d;
+      --font-sans:     'Geist', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', 'Noto Serif', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace;
+    }
+    body { font-family: var(--font-sans); background: var(--color-paper); color: var(--color-ink);
+      min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 3rem 2rem; }
+    .frame { max-width: 1200px; width: 100%; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+    .eyebrow { font-family: var(--font-mono); font-size: 0.66rem; font-weight: 500;
+      letter-spacing: 0.18em; text-transform: uppercase; color: var(--color-muted); margin-bottom: 0.5rem; }
+    h1 { font-family: var(--font-serif); font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400; letter-spacing: -0.02em; line-height: 1.15; color: var(--color-ink); margin-bottom: 1.5rem; }
+    svg { width: 100%; min-width: 960px; display: block; }
+    @media print { .diagram-container { overflow-x: visible; } svg { min-width: 0; } }
+    .callout { font-family: var(--font-serif); font-style: italic; font-size: 0.9rem; color: var(--color-muted); margin-top: 1rem; }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Architecture · Mobile low level</p>
+    <h1>Expo app in five layers</h1>
+    <div class="diagram-container">
+      <svg viewBox="0 0 960 600" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="bizsawa-mobile-title bizsawa-mobile-desc">
+        <title id="bizsawa-mobile-title">BizSawa mobile layer stack</title>
+        <desc id="bizsawa-mobile-desc">Five layers from screens down to native platform, with the sync and store layer as the offline source of truth.</desc>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#47615b"/></marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#006b5f"/></marker>
+          <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#04574d"/></marker>
+        </defs>
+
+        <rect width="100%" height="100%" fill="#F4F9F7"/>
+
+        <!-- direction margin -->
+        <line x1="36" y1="140" x2="36" y2="452" stroke="#47615b" stroke-width="1" marker-end="url(#arrow)"/>
+        <text x="8" y="150" fill="#47615b" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.06em">CALLS ↓</text>
+        <line x1="60" y1="460" x2="60" y2="148" stroke="#47615b" stroke-width="1" marker-end="url(#arrow)"/>
+        <text x="68" y="464" fill="#47615b" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.06em">DATA ↑</text>
+
+        <!-- L5 -->
+        <rect x="96" y="140" width="784" height="64" fill="#F4F9F7" stroke="rgba(18,43,38,0.12)" stroke-width="1"/>
+        <text x="112" y="176" fill="#5b7670" font-size="9" font-family="'Geist Mono', monospace" letter-spacing="0.14em">L5</text>
+        <text x="168" y="178" fill="#122b26" font-size="15" font-weight="600" font-family="'Geist', sans-serif">Screens</text>
+        <text x="864" y="178" fill="#47615b" font-size="10" font-family="'Geist Mono', monospace" text-anchor="end">expo-router tabs · skeletons · gates</text>
+        <!-- L4 -->
+        <rect x="96" y="204" width="784" height="64" fill="#F4F9F7" stroke="rgba(18,43,38,0.12)" stroke-width="1"/>
+        <text x="112" y="240" fill="#5b7670" font-size="9" font-family="'Geist Mono', monospace" letter-spacing="0.14em">L4</text>
+        <text x="168" y="242" fill="#122b26" font-size="15" font-weight="600" font-family="'Geist', sans-serif">State</text>
+        <text x="864" y="242" fill="#47615b" font-size="10" font-family="'Geist Mono', monospace" text-anchor="end">contexts · TanStack Query · nav gates</text>
+        <!-- L3 focal -->
+        <rect x="96" y="268" width="784" height="64" fill="rgba(0,107,95,0.08)" stroke="#006b5f" stroke-width="1.2"/>
+        <text x="112" y="304" fill="#006b5f" font-size="9" font-family="'Geist Mono', monospace" letter-spacing="0.14em">L3</text>
+        <text x="168" y="306" fill="#006b5f" font-size="15" font-weight="600" font-family="'Geist', sans-serif">Sync &amp; store</text>
+        <text x="864" y="306" fill="#47615b" font-size="10" font-family="'Geist Mono', monospace" text-anchor="end">sync engine · WatermelonDB · SecureStore</text>
+        <!-- L2 -->
+        <rect x="96" y="332" width="784" height="64" fill="#F4F9F7" stroke="rgba(18,43,38,0.12)" stroke-width="1"/>
+        <text x="112" y="368" fill="#5b7670" font-size="9" font-family="'Geist Mono', monospace" letter-spacing="0.14em">L2</text>
+        <text x="168" y="370" fill="#122b26" font-size="15" font-weight="600" font-family="'Geist', sans-serif">Transport</text>
+        <text x="864" y="370" fill="#47615b" font-size="10" font-family="'Geist Mono', monospace" text-anchor="end">axios client · token cache · perf tracer</text>
+        <!-- L1 -->
+        <rect x="96" y="396" width="784" height="64" fill="#F4F9F7" stroke="rgba(18,43,38,0.12)" stroke-width="1"/>
+        <text x="112" y="432" fill="#5b7670" font-size="9" font-family="'Geist Mono', monospace" letter-spacing="0.14em">L1</text>
+        <text x="168" y="434" fill="#122b26" font-size="15" font-weight="600" font-family="'Geist', sans-serif">Native &amp; platform</text>
+        <text x="864" y="434" fill="#47615b" font-size="10" font-family="'Geist Mono', monospace" text-anchor="end">sms-capture · SQLite · Keystore · EAS</text>
+
+        <!-- outer silhouette -->
+        <rect x="96" y="140" width="784" height="320" fill="none" stroke="#122b26" stroke-width="1"/>
+
+        <!-- legend -->
+        <line x1="16" y1="540" x2="944" y2="540" stroke="rgba(18,43,38,0.12)" stroke-width="0.8"/>
+        <rect x="16" y="552" width="14" height="14" rx="3" fill="rgba(0,107,95,0.08)" stroke="#006b5f" stroke-width="1.2"/>
+        <text x="36" y="563" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace">offline source of truth</text>
+        <text x="252" y="563" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace">calls flow down · data flows up</text>
+      </svg>
+    </div>
+    <p class="callout">Cold start ≈ splash floor + parallel auth/business + first paint — tracked live as startup.cold.</p>
+  </div>
+</body>
+</html>

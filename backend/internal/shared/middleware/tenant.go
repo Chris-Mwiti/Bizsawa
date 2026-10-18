@@ -37,6 +37,14 @@ func TenantResolution(next http.Handler) http.Handler {
 			ctx = WithTenantID(ctx, parsed)
 		}
 
+		// Stable install identity for sync writer attribution. Any client
+		// may send it; absence simply means "unknown writer" downstream.
+		if deviceID := r.Header.Get("X-Device-Id"); deviceID != "" {
+			ctx = WithDeviceID(ctx, deviceID)
+		} else if deviceID := r.Header.Get("x-device-id"); deviceID != "" {
+			ctx = WithDeviceID(ctx, deviceID)
+		}
+
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

@@ -17,6 +17,7 @@
         "@tanstack/react-query": "^5.90.21",
         "axios": "^1.13.6",
         "bcryptjs": "^3.0.3",
+        "bizsawa-sms-capture": "file:./modules/sms-capture",
         "expo": "~54.0.37",
         "expo-build-properties": "~1.0.10",
         "expo-constants": "~18.0.14",
@@ -991,6 +992,8 @@
     "big-integer": ["big-integer@1.6.52", "", {}, "sha512-QxD8cf2eVqJOOz63z6JIN9BzvVs/dlySa5HGSBH5xtR8dPteIRQnBxxKqkNTiT6jbDTF6jAfrd4oMcND9RGbQg=="],
 
     "binary-extensions": ["binary-extensions@2.3.0", "", {}, "sha512-Ceh+7ox5qe7LJuLHoY0feh3pHuUDHAcRUeyL2VYghZwfpkNIy/+8Ocg0a3UuSoYzavmylwuLWQOf3hl0jjMMIw=="],
+
+    "bizsawa-sms-capture": ["bizsawa-sms-capture@file:modules/sms-capture", { "peerDependencies": { "expo": "*", "expo-modules-core": "*", "react": "*", "react-native": "*" } }],
 
     "boolbase": ["boolbase@1.0.0", "", {}, "sha512-JZOSA7Mo9sNGB8+UjSgzdLtokWAky1zbztM3WRLCbZ70/3cTANmQmOdR7y2g+J0e2WXywy1yS468tY+IruqEww=="],
 

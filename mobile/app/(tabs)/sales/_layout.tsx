@@ -2,12 +2,13 @@ import React from 'react'
 import { View, Text, Pressable } from 'react-native'
 import { Slot, usePathname, useRouter } from 'expo-router'
 
-type SubTab = 'sales' | 'orders' | 'invoices'
+type SubTab = 'sales' | 'orders' | 'invoices' | 'captures'
 
 const TABS: { key: SubTab; label: string; href: string }[] = [
   { key: 'sales', label: 'Sales', href: '/(tabs)/sales' },
   { key: 'orders', label: 'Orders', href: '/(tabs)/sales/orders' },
   { key: 'invoices', label: 'Invoices', href: '/(tabs)/sales/invoices' },
+  { key: 'captures', label: 'M-PESA', href: '/(tabs)/sales/captures' },
 ]
 
 function activeTab(pathname: string): SubTab {
@@ -15,6 +16,8 @@ function activeTab(pathname: string): SubTab {
     return 'orders'
   if (pathname.endsWith('/invoices') || pathname.includes('/sales/invoices'))
     return 'invoices'
+  if (pathname.endsWith('/captures') || pathname.includes('/sales/captures'))
+    return 'captures'
   return 'sales'
 }
 
@@ -29,6 +32,11 @@ const META: Record<SubTab, { eyebrow: string; title: string; sub: string }> = {
     eyebrow: 'Billing',
     title: 'Invoices',
     sub: 'Track and share invoices',
+  },
+  captures: {
+    eyebrow: 'Workspace',
+    title: 'M-PESA Captures',
+    sub: 'Unverified device reports — pending, never revenue',
   },
 }
 
