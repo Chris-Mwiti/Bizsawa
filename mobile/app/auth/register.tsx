@@ -405,7 +405,7 @@ export default function RegisterScreen() {
                     <TouchableOpacity
                       onPress={handleVerifyOtp}
                       disabled={isVerifyingOtp || otpCode.length !== 6}
-                      className={`rounded-full py-4 items-center ${otpCode.length === 6 ? 'bg-accent shadow-clinical-sm' : 'bg-paper border border-hairline'}`}
+                      className={`rounded-full py-4 items-center ${otpCode.length === 6 ? 'bg-accent shadow-clinical-sm' : 'bg-paper border border-hairline shadow-none'}`}
                       style={{ opacity: isVerifyingOtp ? 0.7 : 1 }}
                     >
                       {isVerifyingOtp ? <ActivityIndicator color="white" /> : <Text className={`font-geist-bold font-bold text-lg ${otpCode.length === 6 ? 'text-white' : 'text-ink-muted'}`}>Verify & Continue</Text>}

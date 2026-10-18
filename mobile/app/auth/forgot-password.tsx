@@ -208,7 +208,7 @@ export default function ForgotPasswordScreen() {
             <TouchableOpacity
               onPress={handleReset}
               disabled={isResetting || otp.length !== 6 || password.length < 8}
-              className={`rounded-full py-4 items-center ${otp.length === 6 && password.length >= 8 ? 'bg-accent shadow-clinical-sm' : 'bg-paper border border-hairline'}`}
+              className={`rounded-full py-4 items-center ${otp.length === 6 && password.length >= 8 ? 'bg-accent shadow-clinical-sm' : 'bg-paper border border-hairline shadow-none'}`}
               style={{ opacity: isResetting ? 0.7 : 1 }}
             >
               {isResetting ? <ActivityIndicator color="white" /> : <Text className={`font-geist-bold font-bold ${otp.length === 6 && password.length >= 8 ? 'text-white' : 'text-ink-subtle'}`}>Reset password</Text>}
