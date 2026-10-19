@@ -20,7 +20,7 @@ Money/quantities are **`string`** (decimal-safe); booleans/dates are `boolean`/`
 
 `syncNow()` runs Watermelon `synchronize`:
 
-- **Pull:** `GET /sync/pull?since=` → sanitize (`RawRecord.setRawSanitized` + `Model._setRaw` patches), `repairCorruptedLocal` (NaN/1970 dates), `_changed` cleaning, pull `created→updated` dedup, unknown-column stripping → apply.
+- **Pull:** `GET /sync/pull?since=` → sanitize (`RawRecord.setRawSanitized` + `Model._setRaw` patches), `repairCorruptedLocal` (NaN/1970 dates), `_changed` cleaning, pull `created→updated` dedup, unknown-column stripping → apply. The server caps rows per table (default 1000, max 5000), so `pullChanges` **pages**: it loops while the response has `hasMore=true`, resuming from the furthest per-table `cursors` value (falling back to `timestamp`), and merges every page (`mergePulledChanges`) before returning the drained `timestamp` to Watermelon. This prevents the first full pull on a fresh install — or any table over the cap — from silently dropping rows and advancing `lastPulledAt` past them.
 - **Push:** `POST /sync/push {changes, lastPulledAt}` with `X-Idempotency-Key: randomUUID()` → `extractRejectedIds(response)` (tolerates axios/data envelopes) returned as `experimentalRejectedIds` so rejected rows **stay pending** instead of being marked clean.
 - Triggers: `startSyncEngine()` (hydration + reconnect listener + 8-min interval), `pushPendingOnly`, `refreshFromRemote`, `manualSync`, `getPendingChangesCount/Debug` (14 `PENDING_TABLES`), `getConflictsCount`, `debugSyncState`, `resetLocalDatabase`, `getLastSyncDebug`. Hardening: `_isSyncing` mutex so polls never pile up (mirrors the server's `refreshBusyRef` guard).
 

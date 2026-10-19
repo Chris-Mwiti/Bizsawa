@@ -7,7 +7,7 @@ Module: `New(db)`; `RegisterRoutes` (pull/push/conflicts); `Service()`; `Handler
 Service (`service.go`):
 - `NewService(db)` — constructor.
 - `Pull(ctx, businessID, since)` — delta since cursor, default 1000 rows/table.
-- `PullWithLimit(ctx, businessID, since, perTable)` — explicit cap (clamped 1–5000), `ORDER BY updated_at` + tombstone sweep.
+- `PullWithLimit(ctx, businessID, since, perTable)` — explicit cap (clamped 1–5000), `ORDER BY updated_at` + tombstone sweep. Returns `{changes, timestamp, hasMore, cursors}`: `hasMore=true` when any table hit the cap, `cursors` maps each capped table → highest `updated_at`/`deleted_at` (ms) emitted. A table query error aborts the pull (non-2xx) instead of being skipped, so clients never advance `lastPulledAt` past unseen rows. `timestamp` is only a drain-point (safe to persist) once `hasMore=false`.
 - `Push(ctx, businessID, req)` — batch apply without user attribution.
 - `PushWithUser(ctx, businessID, userID, req)` — canonical order (products → … → tax_rules) respecting FKs; per-record `sync_version` match → apply, mismatch → `Conflict` row; offline order side-effects (confirm → invoice + inventory, fulfill → sale, cancel → restore); sales post-pass deduction; analytics invalidation on sales/expense writes.
 - `ForceApplyClientPayload` — `kept_client` resolution overwrite.

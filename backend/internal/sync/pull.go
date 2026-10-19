@@ -14,6 +14,12 @@ func (s *Service) Pull(ctx context.Context, businessID uuid.UUID, since time.Tim
 }
 
 // PullWithLimit is Pull with an explicit per-table row cap (clamped).
+//
+// Paging contract: a single call returns at most `perTable` rows per table.
+// When any table hits that cap, HasMore is true and Cursors carries the
+// highest updated_at (ms) emitted for each capped table. The client must call
+// again with those cursors before advancing lastPulledAt; Timestamp is only
+// safe to persist once HasMore is false.
 func (s *Service) PullWithLimit(ctx context.Context, businessID uuid.UUID, since time.Time, perTable int) (*PullResult, error) {
 	if perTable <= 0 {
 		perTable = DefaultPullLimit
@@ -22,32 +28,92 @@ func (s *Service) PullWithLimit(ctx context.Context, businessID uuid.UUID, since
 		perTable = MaxPullLimit
 	}
 	changes := map[string]TableChanges{}
+	cursors := map[string]int64{}
+	hasMore := false
 
 	for _, table := range syncableTables {
-		tc, err := s.pullTable(ctx, businessID, table, since, perTable)
+		tp, err := s.pullTable(ctx, businessID, table, since, perTable)
 		if err != nil {
-			// table may not exist in some envs — skip
-			continue
+			// Do not silently skip: a failed table would advance lastPulledAt
+			// past rows the client never received. Surface the error so the
+			// handler returns non-2xx and Watermelon keeps lastPulledAt.
+			return nil, fmt.Errorf("pull table %s: %w", table, err)
 		}
 
-		if len(tc.Created)+len(tc.Updated)+len(tc.Deleted) > 0 {
-			changes[table] = tc
+		if len(tp.Changes.Created)+len(tp.Changes.Updated)+len(tp.Changes.Deleted) > 0 {
+			changes[table] = tp.Changes
 		}
+		if tp.more {
+			hasMore = true
+			cursors[table] = tp.cursor
+		}
+	}
+	// Timestamp is the max cursor actually emitted, not time.Now(): using wall
+	// clock here would mark rows written mid-pull as "already pulled" and lose
+	// them. When HasMore is true the client must not persist this value yet.
+	timestamp := since.UnixMilli()
+	for _, ms := range cursors {
+		if ms > timestamp {
+			timestamp = ms
+		}
+	}
+	if !hasMore {
+		// Fully drained up to now: safe for the client to store.
+		timestamp = time.Now().UnixMilli()
 	}
 	// Ensure every syncable table present (Watermelon expects empty buckets, not missing keys) — but brief says only changed
 	// Keep as is; Watermelon tolerates missing keys as empty.
-	return &PullResult{Changes: changes, Timestamp: time.Now().UnixMilli()}, nil
+	return &PullResult{Changes: changes, Timestamp: timestamp, HasMore: hasMore, Cursors: cursors}, nil
 }
 
-func (s *Service) pullTable(ctx context.Context, businessID uuid.UUID, table string, since time.Time, limit int) (TableChanges, error) {
-	var tc TableChanges
+// tablePull is one table's page: the changes plus the paging cursor and a flag
+// indicating the cap was hit (more rows remain beyond the cursor).
+type tablePull struct {
+	Changes TableChanges
+	cursor  int64 // max updated_at/deleted_at (ms) emitted for this table
+	more    bool
+}
+
+// tableCursor extracts the cursor value used for a table's ordering column.
+// updated_at orders rows; deleted_at orders tombstones. Both are compared as
+// "> since" on the next page, so the emitted max is the correct resume point.
+func tableCursor(row map[string]any, col string) (int64, bool) {
+	v, ok := row[col]
+	if !ok {
+		return 0, false
+	}
+
+	switch x := v.(type) {
+	case time.Time:
+		return x.UnixMilli(), true
+	case int64:
+		return x, true
+	case int:
+		return int64(x), true
+	case float64:
+		return int64(x), true
+	case string:
+		if t, err := time.Parse(time.RFC3339Nano, x); err == nil {
+			return t.UnixMilli(), true
+		}
+
+		if t, err := time.Parse(time.RFC3339, x); err == nil {
+			return t.UnixMilli(), true
+		}
+	}
+
+	return 0, false
+}
+
+func (s *Service) pullTable(ctx context.Context, businessID uuid.UUID, table string, since time.Time, limit int) (tablePull, error) {
+	var tp tablePull
+	tc := tp.Changes
 
 	rows := []map[string]any{}
 	q := fmt.Sprintf(`SELECT * FROM %s WHERE business_id = ? AND updated_at > ? AND deleted_at IS NULL ORDER BY updated_at ASC LIMIT %d`, table, limit)
 
 	if err := s.db.WithContext(ctx).Raw(q, businessID, since).Scan(&rows).Error; err != nil {
-		// Don't log as ERROR for missing table — syncableTables is now correct, but keep graceful
-		return tc, err
+		return tp, err
 	}
 
 	for _, row := range rows {
@@ -109,6 +175,11 @@ func (s *Service) pullTable(ctx context.Context, businessID uuid.UUID, table str
 				createdAt = t
 			}
 		}
+		// Capture this row's cursor (max updated_at emitted) before the column is
+		// stripped below — paging resumes strictly after it.
+		if ms, ok := tableCursor(row, "updated_at"); ok && ms > tp.cursor {
+			tp.cursor = ms
+		}
 		// Strip server-only/system fields not in client Watermelon schema
 		delete(row, "created_at")
 		delete(row, "updated_at")
@@ -121,12 +192,34 @@ func (s *Service) pullTable(ctx context.Context, businessID uuid.UUID, table str
 		}
 	}
 
+	// Cap hit => a full page means more rows may exist. The cursor is the max
+	// updated_at emitted across live rows and tombstones; paging re-queries
+	// both streams with `> cursor`, so a full page on either is authoritative.
+	if len(rows) >= limit {
+		tp.more = true
+	}
+
 	var deleted []string
 
-	qdel := fmt.Sprintf(`SELECT id::text FROM %s WHERE business_id = ? AND deleted_at IS NOT NULL AND deleted_at > ? ORDER BY deleted_at ASC LIMIT %d`, table, limit)
-	if err := s.db.WithContext(ctx).Raw(qdel, businessID, since).Scan(&deleted).Error; err == nil {
-		tc.Deleted = deleted
+	qdel := fmt.Sprintf(`SELECT id::text, deleted_at FROM %s WHERE business_id = ? AND deleted_at IS NOT NULL AND deleted_at > ? ORDER BY deleted_at ASC LIMIT %d`, table, limit)
+
+	delRows := []map[string]any{}
+	if err := s.db.WithContext(ctx).Raw(qdel, businessID, since).Scan(&delRows).Error; err != nil {
+		return tp, err
 	}
+	for _, dr := range delRows {
+		if id, ok := dr["id"].(string); ok {
+			deleted = append(deleted, id)
+		}
+		// Advance the cursor for tombstones too, so capped deletes page correctly.
+		if ms, ok := tableCursor(dr, "deleted_at"); ok && ms > tp.cursor {
+			tp.cursor = ms
+		}
+	}
+	if len(delRows) >= limit {
+		tp.more = true
+	}
+	tc.Deleted = deleted
 
 	if tc.Created == nil {
 		tc.Created = []map[string]any{}
@@ -140,5 +233,7 @@ func (s *Service) pullTable(ctx context.Context, businessID uuid.UUID, table str
 		tc.Deleted = []string{}
 	}
 
-	return tc, nil
+	tp.Changes = tc
+
+	return tp, nil
 }
