@@ -20,9 +20,12 @@ import {
   RouteLoadingBar,
   RouteLoadingChip,
 } from '../components/RouteLoadingBar'
+import { ClerkProviderWrapper } from '../lib/auth/ClerkProvider'
 
 initPerf()
 perf.mark('app.import')
+
+const PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY || '';
 
 export default function RootLayout() {
   const [queryClient] = useState(
@@ -70,12 +73,13 @@ export default function RootLayout() {
   return (
     <TamaguiProvider config={tamaguiConfig} defaultTheme='light'>
       <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <BusinessProvider>
-            {!fontsReady ? null : (
-            <SyncProvider>
-              <TourProvider>
-                <NavigationGateProvider>
+        <ClerkProviderWrapper publishableKey={PUBLISHABLE_KEY}>
+          <AuthProvider>
+            <BusinessProvider>
+              {!fontsReady ? null : (
+              <SyncProvider>
+                <TourProvider>
+                  <NavigationGateProvider>
                 {/* Fix status-bar covering: opaque bar, dark content, never translucent so swipe-down shade stays reachable */}
                 <StatusBar
                   barStyle='dark-content'
@@ -170,6 +174,7 @@ export default function RootLayout() {
             )}
           </BusinessProvider>
         </AuthProvider>
+        </ClerkProviderWrapper>
       </QueryClientProvider>
     </TamaguiProvider>
   )

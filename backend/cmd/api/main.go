@@ -163,7 +163,7 @@ func main() {
 	emailSender := email.NewSender(cfg.Email)
 	usersModule.InitInvites(emailSender)
 
-	authModule := auth.New(gormDB, auth.Config{SigningKey: cfg.JWT.SigningKey, Issuer: cfg.JWT.Issuer, AccessTTL: 90 * time.Minute, RefreshTTL: 30 * 24 * time.Hour}, auth.WithMembershipResolver(usersModule), auth.WithSubscriptionProvisioner(tenancyModule), auth.WithGoogleConfig(cfg.Google), auth.WithEmailSender(emailSender))
+	authModule := auth.New(gormDB, auth.Config{SigningKey: cfg.JWT.SigningKey, Issuer: cfg.JWT.Issuer, AccessTTL: 90 * time.Minute, RefreshTTL: 30 * 24 * time.Hour}, auth.WithMembershipResolver(usersModule), auth.WithSubscriptionProvisioner(tenancyModule), auth.WithGoogleConfig(cfg.Google), auth.WithClerkConfig(cfg.Clerk), auth.WithEmailSender(emailSender))
 	businessModule := business.New(gormDB, tenancyModule, usersModule, cryptoManager)
 	// Isolate subscription payments: inject mpesa STK provider into tenancy (separate from business payments)
 	mpesaClient := payments.NewMpesaClient(cfg.Mpesa, logger)

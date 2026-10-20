@@ -19,6 +19,7 @@ type Config struct {
 	CORS            CORSConfig
 	JWT             JWTConfig
 	Google          GoogleConfig
+	Clerk           ClerkConfig
 	MCP             MCPConfig
 	WhatsApp        WhatsAppConfig
 	Crypto          CryptoConfig
@@ -81,6 +82,12 @@ type GoogleConfig struct {
 	Prompt               string // e.g. "select_account" or "select_account consent"
 	AccessType           string // "offline" to obtain refresh_token
 	IncludeGrantedScopes bool
+}
+
+type ClerkConfig struct {
+	PublishableKey string
+	SecretKey      string
+	JWKSURL        string // e.g. https://your-instance.clerk.accounts.dev/.well-known/jwks.json
 }
 
 type MpesaConfig struct {
@@ -177,6 +184,11 @@ func Load() Config {
 			Prompt:               env("GOOGLE_PROMPT", "select_account"),
 			AccessType:           env("GOOGLE_ACCESS_TYPE", "offline"),
 			IncludeGrantedScopes: boolEnv("GOOGLE_INCLUDE_GRANTED_SCOPES", true),
+		},
+		Clerk: ClerkConfig{
+			PublishableKey: env("CLERK_PUBLISHABLE_KEY", ""),
+			SecretKey:      env("CLERK_SECRET_KEY", ""),
+			JWKSURL:        env("CLERK_JWKS_URL", ""),
 		},
 		MCP: MCPConfig{
 			Addr:                  env("MCP_ADDR", ":5574"),

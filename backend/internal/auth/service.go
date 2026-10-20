@@ -28,6 +28,7 @@ type Service struct {
 	subscriptions SubscriptionProvisioner
 	googleCfg     *config.GoogleConfig
 	emailSender   email.Sender
+	clerkVerifier *ClerkVerifier
 }
 
 func NewService(repo *Repository, tokens *TokenService, memberships MembershipResolver, subscriptions SubscriptionProvisioner) *Service {

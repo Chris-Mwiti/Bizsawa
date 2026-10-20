@@ -26,6 +26,8 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@clerk/clerk-expo": "^2.20.1",
+    "@clerk/clerk-react": "^5.61.10",
     "@expo-google-fonts/geist": "^0.4.2",
     "@expo-google-fonts/geist-mono": "^0.4.3",
     "@lottiefiles/dotlottie-react": "^0.20.0",
@@ -41,6 +43,7 @@
     "bcryptjs": "^3.0.3",
     "bizsawa-sms-capture": "file:./modules/sms-capture",
     "expo": "~54.0.37",
+    "expo-auth-session": "~55.0.18",
     "expo-build-properties": "~1.0.10",
     "expo-constants": "~18.0.14",
     "expo-crypto": "~15.0.9",
@@ -59,6 +62,7 @@
     "expo-status-bar": "~3.0.9",
     "expo-system-ui": "~6.0.9",
     "expo-updates": "~29.0.20",
+    "expo-web-browser": "~55.0.19",
     "lottie-react-native": "~7.3.1",
     "lucide-react-native": "^1.11.0",
     "nativewind": "^4.2.3",

@@ -15,6 +15,7 @@ import {
 } from 'lucide-react-native'
 import NetInfo from '@react-native-community/netinfo'
 import { useRouter } from 'expo-router'
+import { useSSO } from '@clerk/clerk-expo'
 
 // Lazy-load so missing native module (dev-client without rebuild) doesn't crash bundle
 let LocalAuthentication: any = null
@@ -54,8 +55,32 @@ export default function LoginScreen() {
   const [graceDays, setGraceDays] = useState(0)
   const [biometricAvailable, setBiometricAvailable] = useState(false)
 
-  const { login, loginWithBiometrics } = useAuth()
+  const { login, loginWithBiometrics, syncClerkSession } = useAuth()
+  const { startSSOFlow } = useSSO()
   const router = useRouter()
+
+  const handleGoogleSignIn = async () => {
+    setIsLoading(true)
+    try {
+      const result = await startSSOFlow({ strategy: 'oauth_google' })
+      if (result.createdSessionId) {
+        await syncClerkSession()
+        try {
+          const res = await api.get<{ businesses: any[] }>('/businesses')
+          const hasBusiness = Array.isArray(res.data.businesses) && res.data.businesses.length > 0
+          router.replace(hasBusiness ? '/(tabs)' : '/auth/business-setup')
+        } catch {
+          router.replace('/(tabs)')
+        }
+      }
+    } catch (error: any) {
+      if (error?.code !== 'ERR_CANCELED') {
+        Alert.alert('Google Sign-in Failed', error.message)
+      }
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   useEffect(() => {
     const unsub = NetInfo.addEventListener((s) => setIsOffline(!s.isConnected))
@@ -298,7 +323,7 @@ export default function LoginScreen() {
         <OrDivider />
 
         <SocialRow
-          onGoogle={() => Alert.alert('Temporarily disabled', 'Google sign-in is paused while we fix the OAuth callback. Please use email/password or email code.')}
+          onGoogle={handleGoogleSignIn}
           onApple={() => Alert.alert('Coming soon', 'Apple sign-in is not available yet. Please use email/password or email code.')}
           onFacebook={() => Alert.alert('Coming soon', 'Facebook sign-in is not available yet. Please use email/password or email code.')}
         />

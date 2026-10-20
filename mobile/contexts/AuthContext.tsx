@@ -16,6 +16,7 @@ import {
   persistAuthResponse,
   primeAuthCache,
 } from '../lib/api'
+import { useAuth as useClerkAuth } from '@clerk/clerk-expo'
 import {
   secureStorage,
   persistSecureAuth,
@@ -56,8 +57,8 @@ interface AuthContextType {
   authTokens: AuthTokens | null
   isLoading: boolean
   login: (credentials: LoginRequest) => Promise<void>
-  loginWithGoogle: () => Promise<void>
   loginWithBiometrics: (email: string) => Promise<void>
+  syncClerkSession: () => Promise<void>
   // Email OTP — BetterAuth EmailOTP plugin parity (Agents_Documents/BetterAuth/EmailOTP.md)
   sendVerificationOtp: (email: string, type: 'sign-in' | 'email-verification' | 'forget-password') => Promise<void>
   checkVerificationOtp: (email: string, type: 'sign-in' | 'email-verification' | 'forget-password', otp: string) => Promise<boolean>
@@ -333,45 +334,24 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
     }
   }
 
-  const loginWithGoogle = async () => {
-    // Better-Auth parity: GoogleSocialLogin.md Cross-Platform Sign In
-    // Mobile: native SDK -> idToken -> POST /auth/google {idToken:{token, accessToken}}
-    // Web fallback: GET /auth/google redirect handled by backend (baseURL + /callback)
+  const syncClerkSession = async () => {
     try {
-      const { GoogleSignin } = await import('@react-native-google-signin/google-signin')
-      // Configure from env — supports web/ios/android clientIds array per BetterAuth docs
-      try {
-        const Constants: any = await import('expo-constants').then((m) => m.default || m)
-        const webId = Constants?.expoConfig?.extra?.googleWebClientId || process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID
-        if (webId) {
-          GoogleSignin.configure({
-            webClientId: webId,
-            offlineAccess: true, // accessType offline per GoogleSocialLogin.md
-            forceCodeForRefreshToken: true,
-          })
+      const { getClerkInstance } = await import('@clerk/clerk-expo');
+      const clerk = getClerkInstance();
+      if (clerk?.session) {
+        const clerkToken = await clerk.session.getToken();
+        if (clerkToken) {
+          const businessId = (await AsyncStorage.getItem(AUTH_STORAGE_KEYS.businessId)) || undefined;
+          
+          const response = await api.post<AuthResponse>('/auth/clerk', { 
+            token: clerkToken,
+            businessId: businessId || undefined,
+          });
+          await applyAuth(response.data);
         }
-      } catch {}
-      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true })
-      const res: any = await GoogleSignin.signIn()
-      const idToken = res?.data?.idToken || res?.idToken
-      const accessToken = res?.data?.accessToken || undefined
-      if (!idToken) throw new Error('Google sign-in failed: missing idToken')
-      // Business scoping: if user already selected business before SSO, pass it for role hydration
-      const businessId = (await AsyncStorage.getItem(AUTH_STORAGE_KEYS.businessId)) || undefined
-      const payload: any = {
-        idToken: { token: idToken, accessToken },
-        businessId: businessId || undefined,
       }
-      const response = await api.post<AuthResponse>('/auth/google', payload)
-      await applyAuth(response.data)
     } catch (e: any) {
-      console.error('[Auth] Google login error', { code: e?.code, message: e?.message, friendly: e?.friendlyMessage, response: e?.response?.data })
-      // Fallback: web redirect flow via backend (better-auth baseURL)
-      if (e?.code === 'SIGN_IN_CANCELLED' || e?.code === '12501') throw new Error('Google sign-in cancelled')
-      if (e?.response?.data || e?.friendlyMessage) {
-        throw new Error(e.friendlyMessage || e.response?.data?.error?.message || e.message)
-      }
-      throw new Error(e.message || 'Google login failed')
+      console.error('[Auth] Clerk session sync error', e);
     }
   }
 
@@ -467,8 +447,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
       authTokens,
       isLoading,
       login,
-      loginWithGoogle,
       loginWithBiometrics,
+      syncClerkSession,
       sendVerificationOtp,
       checkVerificationOtp,
       signInWithOtp,
