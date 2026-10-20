@@ -1,6 +1,6 @@
 module github.com/Codecx-Org/FinAI/backend
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/felixge/httpsnoop v1.1.0
@@ -31,7 +31,7 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.46.0
 	go.opentelemetry.io/otel/trace v1.46.0
 	golang.org/x/crypto v0.55.0
-	golang.org/x/sync v0.22.0
+	golang.org/x/sync v0.24.0
 	gorm.io/driver/postgres v1.5.11
 	gorm.io/gorm v1.25.12
 )
