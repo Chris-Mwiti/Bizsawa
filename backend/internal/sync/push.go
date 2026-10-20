@@ -128,7 +128,7 @@ func (s *Service) pushCreated(ctx context.Context, tx *gorm.DB, businessID, user
 			// to inventory_items. Guarded by the same reference-based rules as
 			// ApplyLedger so a mirrored movement can never double-apply a change
 			// the server already made (REST confirm/sale) and re-pushes stay no-ops.
-			if err := s.insertPushedMovement(ctx, tx, businessID, rec); err != nil {
+			if err := s.insertPushedMovement(ctx, tx, businessID, rec, result); err != nil {
 				result.reject(table, idStr, err.Error())
 			} else {
 				result.Applied[table] = append(result.Applied[table], idStr)
@@ -143,6 +143,9 @@ func (s *Service) pushCreated(ctx context.Context, tx *gorm.DB, businessID, user
 		} else {
 			result.Applied[table] = append(result.Applied[table], idStr)
 			s.setWriter(tx, businessID, table, id, deviceID)
+			if table == "inventory_items" {
+				result.markStockWritten(fmt.Sprint(rec["product_id"]))
+			}
 		}
 	}
 }
@@ -297,6 +300,11 @@ func (s *Service) applyUpdateWithSideEffects(ctx context.Context, tx *gorm.DB, b
 		return false
 	}
 	result.Applied[table] = append(result.Applied[table], idStr)
+	if table == "inventory_items" {
+		var productID string
+		_ = tx.Raw(`SELECT product_id::text FROM inventory_items WHERE id = ? AND business_id = ?`, id, businessID).Scan(&productID).Error
+		result.markStockWritten(productID)
+	}
 	// Post-update side-effects for offline order confirm/fulfill (fixes sync bypass)
 	if table == "orders" {
 		newStatus, _ := rec["status"].(string)
