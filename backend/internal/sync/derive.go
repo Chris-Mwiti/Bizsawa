@@ -3,7 +3,6 @@ package sync
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
@@ -67,7 +66,7 @@ func (s *Service) ensureInvoiceForOrder(ctx context.Context, tx *gorm.DB, busine
 	_ = tx.Raw(`SELECT COALESCE(MAX(CAST(substring(invoice_number from '([0-9]+)$') AS BIGINT)), 0) FROM invoices WHERE business_id = ? AND deleted_at IS NULL`, businessID).Scan(&maxSuffix).Error
 	invoiceID := uuid.New()
 	invoiceNumber := fmt.Sprintf("INV-%s-%06d", businessID.String()[:8], maxSuffix+1)
-	now := time.Now().UTC()
+	now := dbNow(tx)
 	dueAt := now.AddDate(0, 0, 5)
 
 	subtotal := order.Subtotal
@@ -228,7 +227,7 @@ func (s *Service) ensureSaleForOrder(ctx context.Context, tx *gorm.DB, businessI
 
 	saleID := uuid.New()
 	receipt := fmt.Sprintf("RCPT-%s", saleID.String()[:6])
-	now := time.Now().UTC()
+	now := dbNow(tx)
 	// staff_id FKs to auth_users(id) — never use businessID here (it is a
 	// businesses.id and always trips sales_staff_id_fkey / SQLSTATE 23503).
 	staffID, err := s.resolveSaleStaffID(tx, businessID, userID)

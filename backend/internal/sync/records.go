@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
@@ -25,6 +24,12 @@ func (s *Service) insertRecord(tx *gorm.DB, businessID uuid.UUID, userID uuid.UU
 	}
 
 	rec = clean
+	// created_at/updated_at are server-owned: the pull cursor compares them
+	// against the server clock. A device's own clock (often hours behind for
+	// an offline sale) would stamp the row before other devices' cursors and
+	// they would never pull it. Let the column defaults (NOW()) apply.
+	delete(rec, "created_at")
+	delete(rec, "updated_at")
 	s.sanitizeUUIDPlaceholders(businessID, userID, rec)
 
 	if _, ok := rec["business_id"]; !ok {
@@ -231,6 +236,10 @@ func (s *Service) updateRecord(tx *gorm.DB, businessID uuid.UUID, table string, 
 			}
 		}
 
+		if k == "created_at" || k == "updated_at" {
+			continue // server-owned, see insertRecord
+		}
+
 		if isTimestampColumn(k) {
 			if t := asTime(v); t != nil {
 				update[k] = *t
@@ -264,7 +273,9 @@ func (s *Service) updateRecord(tx *gorm.DB, businessID uuid.UUID, table string, 
 	}
 
 	update["sync_version"] = gorm.Expr("sync_version + 1")
-	update["updated_at"] = time.Now()
+	// Database clock, like the column default on insert: mixing the API host's
+	// clock with Postgres's would let skew between them hide rows from pulls.
+	update["updated_at"] = gorm.Expr("NOW()")
 
 	return tx.Table(table).Where("id = ? AND business_id = ?", id, businessID).Updates(update).Error
 }
@@ -398,7 +409,10 @@ func (s *Service) validateFKs(tx *gorm.DB, businessID uuid.UUID, table string, r
 //     deduction already exists elsewhere, report as applied without re-applying.
 //   - positive (in): apply only if a deduction exists AND no restore has been applied;
 //     a phantom restore with no prior deduction is recorded without changing quantity.
-func (s *Service) insertPushedMovement(ctx context.Context, tx *gorm.DB, businessID uuid.UUID, rec map[string]any) error {
+//
+// If this same push already wrote the product's inventory_items row, the client sent
+// that row's quantity with this movement already applied locally: record, don't apply.
+func (s *Service) insertPushedMovement(ctx context.Context, tx *gorm.DB, businessID uuid.UUID, rec map[string]any, result *PushResult) error {
 	productStr := strings.TrimSpace(fmt.Sprint(rec["product_id"]))
 
 	productID, err := uuid.Parse(productStr)
@@ -458,6 +472,10 @@ func (s *Service) insertPushedMovement(ctx context.Context, tx *gorm.DB, busines
 
 	if err := s.insertRecord(tx, businessID, uuid.Nil, "stock_movements", rec); err != nil {
 		return err
+	}
+
+	if result != nil && result.stockWritten[productID.String()] {
+		return nil
 	}
 
 	return tx.Exec(`UPDATE inventory_items SET quantity = quantity + ?::numeric, updated_at = NOW() WHERE business_id = ? AND product_id = ? AND deleted_at IS NULL`,

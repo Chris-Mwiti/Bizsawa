@@ -2,7 +2,6 @@ package sync
 
 import (
 	"context"
-	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -24,7 +23,7 @@ func (s *Service) ForceApplyClientPayloadWithDevice(ctx context.Context, busines
 		update := map[string]any{}
 
 		for k, v := range payload {
-			if k == "id" || k == "sync_version" || k == "syncVersion" || k == "business_id" || k == "tenant_id" || (len(k) > 0 && k[0] == '_') {
+			if k == "id" || k == "sync_version" || k == "syncVersion" || k == "business_id" || k == "tenant_id" || k == "created_at" || k == "updated_at" || (len(k) > 0 && k[0] == '_') {
 				continue
 			}
 
@@ -39,7 +38,7 @@ func (s *Service) ForceApplyClientPayloadWithDevice(ctx context.Context, busines
 		}
 
 		update["sync_version"] = gorm.Expr("sync_version + 1")
-		update["updated_at"] = time.Now()
+		update["updated_at"] = gorm.Expr("NOW()") // database clock, see updateRecord
 
 		if err := tx.Table(table).Where("id = ? AND business_id = ?", recordID, businessID).Updates(update).Error; err != nil {
 			return err

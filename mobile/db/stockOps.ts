@@ -32,8 +32,9 @@ function signOf(delta: string): number {
 //   - side 'in': only applies if this reference previously deducted AND has not
 //     already restored (prevents phantom restores of draft orders / voiding never).
 // Only products with a tracked inventory_items row are adjusted (untracked stock is
-// left alone, matching the backend). The inventory_items row is marked synced so the
-// server's canonical quantity wins on pull (no sync-version conflict), while the
+// left alone, matching the backend). An already-synced inventory_items row is kept
+// synced so the server's canonical quantity wins on pull (no sync-version
+// conflict); a still-pending row keeps its pending status. In both cases the
 // stock_movements ledger row IS pushed so the server ledger dedupes.
 export async function applyLocalStockLedgerBatch(req: LocalLedgerRequest): Promise<void> {
   if (!req.businessId || !req.refId || !req.lines.length) return
@@ -97,10 +98,18 @@ export async function applyLocalStockLedgerBatch(req: LocalLedgerRequest): Promi
       const next = Math.max(req.side === 'out' ? current - qty : current + qty, 0)
       const nextStr = toDecimalString(next)
 
+      // Only a row the server already has may be force-marked synced (the
+      // server recomputes it from the pushed ledger row). A row still pending
+      // — created offline, or an unpushed manual adjustment — must stay
+      // pending, or it is never pushed. The server then records this
+      // movement without re-applying it (see insertPushedMovement).
+      const wasSynced = (item._raw?._status ?? 'synced') === 'synced'
       await item.update((r: any) => {
         r.quantity = nextStr
-        r._raw._status = 'synced'
-        r._raw._changed = ''
+        if (wasSynced) {
+          r._raw._status = 'synced'
+          r._raw._changed = ''
+        }
       })
 
       await movCol.create((rec: any) => {
