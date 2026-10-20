@@ -21,6 +21,7 @@
     "build:android:preview": "eas build --platform android --profile preview",
     "build:android:production": "eas build --platform android --profile production",
     "test:e2e:api": "vitest run e2e/api",
+    "test:e2e:sync": "vitest run --config vitest.sync.config.ts",
     "test:e2e:maestro": "maestro test e2e/maestro",
     "test": "vitest run --passWithNoTests"
   },
@@ -80,8 +81,10 @@
     "@types/react": "~19.1.0",
     "@typescript-eslint/eslint-plugin": "8.26.0",
     "@typescript-eslint/parser": "8.26.0",
+    "better-sqlite3": "^11",
     "eslint": "9.23.0",
     "eslint-config-prettier": "10.1.2",
+    "fake-indexeddb": "^6",
     "patch-package": "^8.0.1",
     "postcss": "^8.5.12",
     "prettier": "3.6.2",

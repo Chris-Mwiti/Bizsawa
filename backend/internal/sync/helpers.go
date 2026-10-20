@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 func isSyncable(t string) bool {
@@ -226,4 +227,14 @@ var allowedUpdateColumns = map[string]map[string]bool{
 	"payments":         {"invoice_id": true, "order_id": true, "amount": true, "currency": true, "phone": true, "status": true, "provider": true, "sync_version": true, "deleted_at": true},
 	"payment_commands": {"order_id": true, "amount": true, "currency": true, "phone": true, "status": true, "provider": true, "type": true, "idempotency_key": true, "sync_version": true, "deleted_at": true},
 	"tax_rules":        {"name": true, "rate": true, "country": true, "is_default": true, "is_active": true, "sync_version": true, "deleted_at": true},
+}
+
+// dbNow is Postgres NOW() for this transaction: the same instant the column
+// defaults stamp. Rows the pull cursor compares must all come from one clock.
+func dbNow(tx *gorm.DB) time.Time {
+	var now time.Time
+	if err := tx.Raw(`SELECT NOW()`).Scan(&now).Error; err != nil || now.IsZero() {
+		return time.Now().UTC()
+	}
+	return now.UTC()
 }
