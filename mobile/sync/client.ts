@@ -416,6 +416,23 @@ function summarizeChanges(ch: any): Record<string, { created: number; updated: n
   return out
 }
 
+// mergePulledChanges folds one paginated pull page into the accumulator.
+// Per-table created/updated/deleted are concatenated; deleted ids are deduped
+// so retrying a page (or a cursor overlapping a tombstone) can't double-apply.
+function mergePulledChanges(target: any, page: any) {
+  if (!page) return
+  for (const tbl of Object.keys(page)) {
+    const src: any = (page as any)[tbl] || {}
+    const dst: any = (target[tbl] = target[tbl] || { created: [], updated: [], deleted: [] })
+    if (src.created?.length) dst.created.push(...src.created)
+    if (src.updated?.length) dst.updated.push(...src.updated)
+    if (src.deleted?.length) {
+      const seen = new Set<string>(dst.deleted)
+      for (const id of src.deleted) if (!seen.has(id)) { seen.add(id); dst.deleted.push(id) }
+    }
+  }
+}
+
 // WatermelonDB synchronize() wired to Brief §5 endpoints — single source of truth while offline is local SQLite
 export async function syncNow(options?: { force?: boolean }) {
   if (_isSyncing) {
@@ -481,11 +498,38 @@ export async function syncNow(options?: { force?: boolean }) {
       const since = lastPulledAt ? String(lastPulledAt) : '0'
       console.log('[Sync] pull start since=', since, 'schemaVersion=', schemaVersion)
       try {
-        const res = await api.get(`/sync/pull`, { params: { since } })
-        const data = res.data as any
-        const changes = data.changes ?? data
-        const remoteCount = countChanges(changes)
-        console.log('[Sync] pull response timestamp=', data.timestamp, 'remoteCount=', remoteCount, 'tables=', Object.keys(changes ?? {}))
+        // Page through the server's per-table cap. One pull session: every
+        // page sends the same `since` plus the opaque cursor from the previous
+        // page (per-table (updated_at, id) keysets), until hasMore=false. Only
+        // then is the session's timestamp safe to persist as lastPulledAt.
+        const changes: any = {}
+        let cursor: string | undefined
+        let page = 0
+        let finalTimestamp: number | undefined
+        // Safety valve against an infinite loop if the server never clears hasMore.
+        const MAX_PAGES = 1000
+        while (true) {
+          page++
+          const res = await api.get(`/sync/pull`, { params: cursor ? { since, cursor } : { since } })
+          const data = res.data as any
+          const pageChanges = data.changes ?? data
+          const remoteCount = countChanges(pageChanges)
+          console.log('[Sync] pull page=', page, 'since=', since, 'timestamp=', data.timestamp, 'hasMore=', data.hasMore, 'remoteCount=', remoteCount, 'tables=', Object.keys(pageChanges ?? {}))
+          mergePulledChanges(changes, pageChanges)
+          finalTimestamp = data.timestamp ?? finalTimestamp
+          if (!data.hasMore) break
+          if (!data.cursor || data.cursor === cursor) {
+            // Never persist a partial session: fail so Watermelon keeps lastPulledAt.
+            throw new Error('[Sync] pull paging stalled: hasMore without an advancing cursor')
+          }
+          if (page >= MAX_PAGES) {
+            throw new Error(`[Sync] pull paging exceeded ${MAX_PAGES} pages`)
+          }
+          cursor = data.cursor
+        }
+        // The session timestamp (server snapshot, never past an open write)
+        // is only safe to persist once hasMore=false, which is the case here.
+        const timestamp = finalTimestamp ?? Date.now()
         // Fix for "Server wants client to create but already exists" — last sync partially executed.
         // If remote sends `created` for an id we already have as pending (_status='created'), Watermelon
         // will log diagnostic and try to update, but can hit `type` crash if schema mismatch. Pre-filter:
@@ -627,7 +671,7 @@ export async function syncNow(options?: { force?: boolean }) {
         } catch (e) { console.warn('[Sync] _changed cleaning failed', (e as any)?.message) }
         return {
           changes,
-          timestamp: data.timestamp ?? Date.now(),
+          timestamp,
         }
       } catch (e: any) {
         console.warn('[Sync] pull failed', e?.message, e?.stack || String(e), 'status=', e?.response?.status, 'data=', e?.response?.data)

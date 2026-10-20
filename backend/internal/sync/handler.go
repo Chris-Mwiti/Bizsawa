@@ -64,7 +64,9 @@ func (h *Handler) Pull(w http.ResponseWriter, r *http.Request) {
 		limit = MaxPullLimit
 	}
 	// default epoch
-	res, err := h.svc.PullWithLimit(r.Context(), bid, since, limit)
+	// Later pages of a pull session carry the opaque cursor from the previous
+	// page; `since` stays the client's lastPulledAt for the whole session.
+	res, err := h.svc.PullPage(r.Context(), bid, since, limit, r.URL.Query().Get("cursor"))
 	if err != nil {
 		sharedhttp.Error(w, err)
 		return

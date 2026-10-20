@@ -49,6 +49,13 @@ const (
 type PullResult struct {
 	Changes   map[string]TableChanges `json:"changes"`
 	Timestamp int64                   `json:"timestamp"` // Watermelon expects lastPulledAt as number (ms)
+	// HasMore is true when at least one table hit the per-table row cap. The
+	// client must re-pull with the same `since` plus Cursor until HasMore is
+	// false, and only then persist Timestamp (see Service.PullPage).
+	HasMore bool `json:"hasMore"`
+	// Cursor is the opaque resume position for the next page of this pull
+	// session (per-table (updated_at, id) keysets + the session snapshot).
+	Cursor string `json:"cursor,omitempty"`
 }
 
 type TableChanges struct {
