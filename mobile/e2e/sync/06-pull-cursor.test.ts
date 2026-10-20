@@ -63,34 +63,44 @@ describe('06 pull cursor and pagination', () => {
     expect(ids(next.changes.customers?.created)).not.toContain(c.id)
   })
 
-  it('more rows than the per-table limit: following the cursor still delivers every row', async () => {
+  it('more rows than the per-table limit: one pull session delivers every row exactly once', async () => {
     const fresh = await newTenant()
     const writer = await new SyncDevice(fresh).login()
     const reader = await new SyncDevice(fresh).login()
 
     const LIMIT = 25
-    const TOTAL = 60
-    const customers = Array.from({ length: TOTAL }, (_, i) =>
+    // One push = one transaction: every row shares updated_at, so the page
+    // boundaries fall inside a timestamp tie. Two tables, capped at different points.
+    const customers = Array.from({ length: 60 }, (_, i) =>
       rec.customer(fresh.businessId, { name: `C${i}` }),
     )
-    await writer.push({ customers: { created: customers } })
+    const expenses = Array.from({ length: 40 }, () =>
+      rec.expense(fresh.businessId, 10),
+    )
+    await writer.push({
+      customers: { created: customers },
+      expenses: { created: expenses },
+    })
 
     // The app pulls with the server default limit (1000); a small limit
-    // exercises the same truncation without writing thousands of rows.
-    const seen = new Set<string>()
-    for (let page = 0; page < 5; page++) {
-      const res = await reader.pull({ limit: LIMIT })
+    // exercises the same paging without writing thousands of rows.
+    const res = await reader.pull({ limit: LIMIT })
+    for (const [table, rows] of [
+      ['customers', customers],
+      ['expenses', expenses],
+    ] as const) {
       const got = [
-        ...(res.changes.customers?.created ?? []),
-        ...(res.changes.customers?.updated ?? []),
-      ]
-      got.forEach((r) => seen.add(r.id))
-      if (got.length === 0) break
+        ...(res.changes[table]?.created ?? []),
+        ...(res.changes[table]?.updated ?? []),
+      ].map((r) => r.id)
+      expect(
+        new Set(got).size,
+        `${table}: received ${new Set(got).size}/${rows.length} — rows past the limit were skipped`,
+      ).toBe(rows.length)
+      expect(got.length, `${table}: rows delivered more than once`).toBe(
+        rows.length,
+      )
     }
-    expect(
-      seen.size,
-      `received ${seen.size}/${TOTAL} customers — rows past the limit were skipped by the cursor`,
-    ).toBe(TOTAL)
   })
 
   it('a change committed while another device is pulling is not lost', async () => {

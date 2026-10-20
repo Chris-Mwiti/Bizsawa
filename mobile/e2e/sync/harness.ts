@@ -114,20 +114,46 @@ export class SyncDevice {
   }
 
   /** One pull, advancing the cursor exactly like WatermelonDB's synchronize(). */
+  /**
+   * One complete pull session, exactly like sync/client.ts: page with the same
+   * `since` plus the server's cursor while hasMore, merge the pages, then
+   * advance lastPulledAt to the session timestamp. An old server without
+   * paging simply answers hasMore=false on the first page.
+   */
   async pull(
     opts: { limit?: number; since?: number | null } = {},
   ): Promise<PullResult> {
     const since = opts.since !== undefined ? opts.since : this.lastPulledAt
-    const params: Record<string, any> = { since: since ?? 0 }
-    if (opts.limit) params.limit = opts.limit
-    const res = await api.get('/sync/pull', { headers: this.headers(), params })
-    if (res.status !== 200)
-      throw new Error(`pull failed ${res.status} ${JSON.stringify(res.data)}`)
-    const data: PullResult = res.data?.changes
-      ? res.data
-      : { changes: res.data, timestamp: Date.now() }
-    if (opts.since === undefined) this.lastPulledAt = data.timestamp
-    return data
+    const merged: Record<string, TableChanges> = {}
+    let cursor: string | undefined
+    let timestamp = Date.now()
+    for (let page = 0; page < 1000; page++) {
+      const params: Record<string, any> = { since: since ?? 0 }
+      if (opts.limit) params.limit = opts.limit
+      if (cursor) params.cursor = cursor
+      const res = await api.get('/sync/pull', {
+        headers: this.headers(),
+        params,
+      })
+      if (res.status !== 200)
+        throw new Error(`pull failed ${res.status} ${JSON.stringify(res.data)}`)
+      const changes = res.data?.changes ?? res.data
+      for (const [t, c] of Object.entries<any>(changes ?? {})) {
+        const m = (merged[t] ??= { created: [], updated: [], deleted: [] })
+        m.created.push(...(c.created ?? []))
+        m.updated.push(...(c.updated ?? []))
+        m.deleted.push(...(c.deleted ?? []))
+      }
+      timestamp = res.data?.timestamp ?? timestamp
+      if (!res.data?.hasMore) break
+      if (!res.data.cursor || res.data.cursor === cursor)
+        throw new Error(
+          'pull paging stalled: hasMore without an advancing cursor',
+        )
+      cursor = res.data.cursor
+    }
+    if (opts.since === undefined) this.lastPulledAt = timestamp
+    return { changes: merged, timestamp }
   }
 
   async get(path: string, params?: Record<string, any>) {
