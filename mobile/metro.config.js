@@ -11,7 +11,6 @@ const config = getDefaultConfig(__dirname)
 const extraIgnoreSources = [
   /node_modules\/.*\/\.cxx\/.*/,
   /node_modules\/.*\/android\/build\/.*/,
-  /node_modules\/.*\/build\/.*/,
   /android\/build\/.*/,
   /android\/\.cxx\/.*/,
   /android\/app\/build\/.*/,
