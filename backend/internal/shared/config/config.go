@@ -170,7 +170,10 @@ func Load() Config {
 			// LAN wildcards (exp://*, 192.168/10/172 ranges) mean a DHCP lease
 			// change never requires a backend .env edit for Expo web/dev.
 			// go-chi/cors supports one `*` per entry as prefix/suffix match.
-			AllowedOrigins: listEnv("CORS_ALLOWED_ORIGINS", []string{"http://localhost:3000", "https://*.bizsawa.com", "http://192.168.*", "http://10.*", "http://172.*", "exp://*"}),
+			// `http://localhost:*` covers every local dev port — Expo falls back
+			// to 8082+ when 8081 is busy, and a port-pinned origin would then
+			// be blocked by CORS and surface as "Network Error" in the browser.
+			AllowedOrigins: listEnv("CORS_ALLOWED_ORIGINS", []string{"http://localhost:*", "http://127.0.0.1:*", "https://*.bizsawa.com", "http://192.168.*", "http://10.*", "http://172.*", "exp://*"}),
 		},
 		JWT: JWTConfig{
 			Issuer:     env("JWT_ISSUER", "bizsawa"),
