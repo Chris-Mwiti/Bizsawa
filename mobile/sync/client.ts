@@ -498,46 +498,37 @@ export async function syncNow(options?: { force?: boolean }) {
       const since = lastPulledAt ? String(lastPulledAt) : '0'
       console.log('[Sync] pull start since=', since, 'schemaVersion=', schemaVersion)
       try {
-        // Page through the server's per-table cap. The server returns at most
-        // `limit` rows/table; hasMore=true + per-table cursors mean rows remain.
-        // Advancing lastPulledAt to a capped page's timestamp would drop rows,
-        // so we must drain every page before returning to Watermelon.
+        // Page through the server's per-table cap. One pull session: every
+        // page sends the same `since` plus the opaque cursor from the previous
+        // page (per-table (updated_at, id) keysets), until hasMore=false. Only
+        // then is the session's timestamp safe to persist as lastPulledAt.
         const changes: any = {}
-        let pageSince = since
+        let cursor: string | undefined
         let page = 0
         let finalTimestamp: number | undefined
         // Safety valve against an infinite loop if the server never clears hasMore.
         const MAX_PAGES = 1000
         while (true) {
           page++
-          const res = await api.get(`/sync/pull`, { params: { since: pageSince } })
+          const res = await api.get(`/sync/pull`, { params: cursor ? { since, cursor } : { since } })
           const data = res.data as any
           const pageChanges = data.changes ?? data
           const remoteCount = countChanges(pageChanges)
-          console.log('[Sync] pull page=', page, 'since=', pageSince, 'timestamp=', data.timestamp, 'hasMore=', data.hasMore, 'remoteCount=', remoteCount, 'tables=', Object.keys(pageChanges ?? {}))
+          console.log('[Sync] pull page=', page, 'since=', since, 'timestamp=', data.timestamp, 'hasMore=', data.hasMore, 'remoteCount=', remoteCount, 'tables=', Object.keys(pageChanges ?? {}))
           mergePulledChanges(changes, pageChanges)
           finalTimestamp = data.timestamp ?? finalTimestamp
           if (!data.hasMore) break
+          if (!data.cursor || data.cursor === cursor) {
+            // Never persist a partial session: fail so Watermelon keeps lastPulledAt.
+            throw new Error('[Sync] pull paging stalled: hasMore without an advancing cursor')
+          }
           if (page >= MAX_PAGES) {
-            console.warn('[Sync] pull paging exceeded MAX_PAGES; aborting to avoid infinite loop', MAX_PAGES)
-            break
+            throw new Error(`[Sync] pull paging exceeded ${MAX_PAGES} pages`)
           }
-          // Next page resumes at the furthest per-table cursor. The server
-          // opts each capped table's cursor into `cursors`; fall back to the
-          // response timestamp if cursors are absent (older server).
-          const cursors: Record<string, number> = data.cursors || {}
-          const cursorValues = Object.values(cursors).filter((v) => typeof v === 'number' && v > 0)
-          const nextSince = cursorValues.length
-            ? Math.max(Number(pageSince) || 0, ...cursorValues)
-            : Number(data.timestamp ?? pageSince)
-          if (!nextSince || nextSince <= (Number(pageSince) || 0)) {
-            console.warn('[Sync] pull paging stalled (no advancing cursor); stopping to avoid loop', { pageSince, nextSince, cursors })
-            break
-          }
-          pageSince = String(nextSince)
+          cursor = data.cursor
         }
-        // The drained timestamp is only safe to persist once hasMore=false;
-        // the final page's timestamp reflects a fully-drained state.
+        // The session timestamp (server snapshot, never past an open write)
+        // is only safe to persist once hasMore=false, which is the case here.
         const timestamp = finalTimestamp ?? Date.now()
         // Fix for "Server wants client to create but already exists" — last sync partially executed.
         // If remote sends `created` for an id we already have as pending (_status='created'), Watermelon

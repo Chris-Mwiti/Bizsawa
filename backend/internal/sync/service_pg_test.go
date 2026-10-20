@@ -179,14 +179,14 @@ func TestPgPullPagesLargeTable(t *testing.T) {
 	seedProducts(t, svc, bid, total-1)
 
 	seen := map[string]bool{}
-	since := time.Time{}
+	cursor := ""
 	pages := 0
 	for {
 		pages++
 		if pages > 20 {
 			t.Fatalf("paging did not terminate")
 		}
-		res, err := svc.PullWithLimit(ctx, bid, since, cap)
+		res, err := svc.PullPage(ctx, bid, time.Time{}, cap, cursor)
 		if err != nil {
 			t.Fatalf("pull: %v", err)
 		}
@@ -207,11 +207,10 @@ func TestPgPullPagesLargeTable(t *testing.T) {
 		if !res.HasMore {
 			break
 		}
-		cur, ok := res.Cursors["products"]
-		if !ok || cur <= 0 {
-			t.Fatalf("hasMore with no products cursor: %+v", res.Cursors)
+		if res.Cursor == "" {
+			t.Fatalf("hasMore with no cursor")
 		}
-		since = time.UnixMilli(cur)
+		cursor = res.Cursor
 	}
 
 	if len(seen) != total {
@@ -235,8 +234,8 @@ func TestPgPullDrainedHasNoMore(t *testing.T) {
 	if res.HasMore {
 		t.Fatalf("small dataset should not report hasMore")
 	}
-	if len(res.Cursors) != 0 {
-		t.Fatalf("drained pull should carry no cursors, got %v", res.Cursors)
+	if res.Cursor != "" {
+		t.Fatalf("drained pull should carry no cursor, got %q", res.Cursor)
 	}
 	if res.Timestamp <= 0 {
 		t.Fatalf("drained pull should return a usable timestamp, got %d", res.Timestamp)
