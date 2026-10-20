@@ -52,6 +52,13 @@ const modelClasses: any[] = [
 const API_URL = process.env.E2E_API_URL || 'http://localhost:5504/api/v1'
 const sqliteDir = mkdtempSync(join(tmpdir(), 'bizsawa-sync-'))
 
+// db/durableWrites.ts ships with the web build (feat/web-desktop-support).
+// Until that lands, web devices run on bare LokiJS — and the crash-after-write
+// test shows why it is needed.
+const webDurability: { makeWritesDurable: (db: Database) => Database } | null =
+  // @ts-ignore — module only exists once the web build is merged
+  await import('../../db/durableWrites').catch(() => null)
+
 // The real client keeps module-level state (_isSyncing, the database import),
 // so devices take turns: one run() at a time, like separate processes would.
 let queue: Promise<unknown> = Promise.resolve()
@@ -104,10 +111,12 @@ export class AppDevice {
             migrations,
             dbName: join(sqliteDir, `${this.storeName}.db`),
           } as any)
-    return new Database({ adapter, modelClasses })
+    const db = new Database({ adapter, modelClasses })
+    // Mirror db/database.web.ts: the web build wraps its database so writes
+    // are flushed to IndexedDB before they resolve.
+    return this.engine === 'web' && webDurability ? webDurability.makeWritesDurable(db) : db
   }
 
-  /** Kill and relaunch the app: same on-disk store, fresh in-memory state. */
   /**
    * Kill and relaunch the app: same on-disk store, fresh in-memory state.
    * `afterMs` is how long the app stayed open after its last write — 0 is a
