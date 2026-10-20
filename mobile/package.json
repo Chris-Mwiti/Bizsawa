@@ -27,6 +27,7 @@
   "dependencies": {
     "@expo-google-fonts/geist": "^0.4.2",
     "@expo-google-fonts/geist-mono": "^0.4.3",
+    "@lottiefiles/dotlottie-react": "^0.20.0",
     "@morrowdigital/watermelondb-expo-plugin": "^2.4.0-beta.0",
     "@nozbe/watermelondb": "^0.28.0",
     "@react-native-async-storage/async-storage": "2.2.0",
@@ -36,8 +37,8 @@
     "@tamagui/tabs": "^2.7.7",
     "@tanstack/react-query": "^5.90.21",
     "axios": "^1.13.6",
-    "bizsawa-sms-capture": "file:./modules/sms-capture",
     "bcryptjs": "^3.0.3",
+    "bizsawa-sms-capture": "file:./modules/sms-capture",
     "expo": "~54.0.37",
     "expo-build-properties": "~1.0.10",
     "expo-constants": "~18.0.14",
@@ -70,6 +71,7 @@
     "react-native-screens": "~4.16.0",
     "react-native-svg": "15.12.1",
     "react-native-toast-message": "^2.2.0",
+    "react-native-web": "^0.21.0",
     "react-native-worklets": "0.5.1",
     "tamagui": "^2.7.7"
   },
