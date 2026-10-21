@@ -220,6 +220,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
       accessToken: data.accessToken,
       refreshToken: data.refreshToken,
       userId: data.userId,
+      // Backend resolves the business for the session — keep the secure
+      // mirror in sync so offline sign-in restores the same context.
+      businessId: data.businessId,
     })
     // Cache offline credential with 7-day grace
     if (email && password) {
@@ -341,13 +344,22 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
       if (clerk?.session) {
         const clerkToken = await clerk.session.getToken();
         if (clerkToken) {
-          const businessId = (await AsyncStorage.getItem(AUTH_STORAGE_KEYS.businessId)) || undefined;
-          
-          const response = await api.post<AuthResponse>('/auth/clerk', { 
+          // Don't send a stale businessId: the backend resolves the business
+          // for the signed-in account (owner membership first), so the same
+          // email always lands on the same business regardless of whether
+          // the user signed in with Google, an email code, or a password.
+          const response = await api.post<AuthResponse>('/auth/clerk', {
             token: clerkToken,
-            businessId: businessId || undefined,
           });
           await applyAuth(response.data);
+          // The business the session was scoped to, resolved server-side.
+          if (response.data.businessId) {
+            await AsyncStorage.setItem(
+              AUTH_STORAGE_KEYS.businessId,
+              response.data.businessId,
+            )
+            primeAuthCache({ businessId: response.data.businessId })
+          }
         }
       }
     } catch (e: any) {

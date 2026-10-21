@@ -25,8 +25,9 @@ try {
 } catch {
   LocalAuthentication = null
 }
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useAuth } from '../../contexts/AuthContext'
-import { api } from '../../lib/api'
+import { api, AUTH_STORAGE_KEYS } from '../../lib/api'
 import {
   hasOfflineCredential,
   getOfflineGraceDaysLeft,
@@ -55,7 +56,7 @@ export default function LoginScreen() {
   const [graceDays, setGraceDays] = useState(0)
   const [biometricAvailable, setBiometricAvailable] = useState(false)
 
-  const { login, loginWithBiometrics, syncClerkSession, setSelectedBusinessAuth } = useAuth()
+  const { login, loginWithBiometrics, syncClerkSession } = useAuth()
   const { startSSOFlow } = useSSO()
   const router = useRouter()
 
@@ -68,35 +69,18 @@ export default function LoginScreen() {
       const existingClerk = getClerkInstance();
       if (existingClerk?.session) {
         await syncClerkSession()
-        try {
-          const res = await api.get<{ businesses: any[] }>('/businesses')
-          const businesses = Array.isArray(res.data.businesses) ? res.data.businesses : []
-          const hasBusiness = businesses.length > 0
-          if (hasBusiness) {
-            await setSelectedBusinessAuth(businesses[0])
-          }
-          router.replace(hasBusiness ? '/(tabs)' : '/auth/business-setup')
-        } catch {
-          router.replace('/(tabs)')
-        }
+        const businessId = await AsyncStorage.getItem(AUTH_STORAGE_KEYS.businessId)
+        router.replace(businessId ? '/(tabs)' : '/auth/business-setup')
         return
       }
       const result = await startSSOFlow({ strategy: 'oauth_google' })
       if (result.createdSessionId) {
         await syncClerkSession()
-        try {
-          const res = await api.get<{ businesses: any[] }>('/businesses')
-          const businesses = Array.isArray(res.data.businesses) ? res.data.businesses : []
-          const hasBusiness = businesses.length > 0
-          if (hasBusiness) {
-            // Persist the resolved business so subsequent requests carry
-            // X-Business-ID and the user keeps their previously captured data.
-            await setSelectedBusinessAuth(businesses[0])
-          }
-          router.replace(hasBusiness ? '/(tabs)' : '/auth/business-setup')
-        } catch {
-          router.replace('/(tabs)')
-        }
+        // The backend resolves the business for the signed-in account and
+        // returns it, so Google sign-in lands on exactly the same business
+        // as an email-code sign-in for the same email.
+        const businessId = await AsyncStorage.getItem(AUTH_STORAGE_KEYS.businessId)
+        router.replace(businessId ? '/(tabs)' : '/auth/business-setup')
       }
     } catch (error: any) {
       if (error?.code !== 'ERR_CANCELED') {

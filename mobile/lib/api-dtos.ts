@@ -8,6 +8,10 @@ export interface AuthResponse {
   userId: UUID
   accessToken: string
   refreshToken: string
+  /** Business the session was scoped to (resolved server-side). */
+  businessId?: UUID
+  /** Role of the user in that business. */
+  role?: string
 }
 
 export interface RegisterRequest {

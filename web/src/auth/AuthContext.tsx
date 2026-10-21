@@ -58,11 +58,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const response = await api.post("/auth/clerk", { token });
-      const { accessToken, refreshToken, userId } = response.data;
+      const { accessToken, refreshToken, userId, businessId } = response.data;
 
       localStorage.setItem("accessToken", accessToken);
       localStorage.setItem("refreshToken", refreshToken);
       localStorage.setItem("userId", userId);
+      // The backend resolves the business for this account, so every sign-in
+      // method (Google SSO, email code, password) ends up on the same one.
+      if (businessId) {
+        localStorage.setItem("businessId", businessId);
+      }
 
       setUser({
         id: userId,
@@ -85,11 +90,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     try {
       const response = await api.post("/auth/clerk", { token });
-      const { accessToken, refreshToken, userId } = response.data;
+      const { accessToken, refreshToken, userId, businessId } = response.data;
 
       localStorage.setItem("accessToken", accessToken);
       localStorage.setItem("refreshToken", refreshToken);
       localStorage.setItem("userId", userId);
+      // The backend resolves the business for this account, so every sign-in
+      // method (Google SSO, email code, password) ends up on the same one.
+      if (businessId) {
+        localStorage.setItem("businessId", businessId);
+      }
 
       setUser({
         id: userId,
@@ -106,6 +116,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem("accessToken");
     localStorage.removeItem("refreshToken");
     localStorage.removeItem("userId");
+    localStorage.removeItem("businessId");
     setUser(null);
   };
 

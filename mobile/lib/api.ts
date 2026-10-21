@@ -145,13 +145,30 @@ export const api = axios.create({
 })
 
 export async function persistAuthResponse(data: AuthResponse): Promise<void> {
-  await AsyncStorage.multiSet([
+  const entries: [string, string][] = [
     [AUTH_STORAGE_KEYS.accessToken, data.accessToken],
     [AUTH_STORAGE_KEYS.refreshToken, data.refreshToken],
     [AUTH_STORAGE_KEYS.userId, data.userId],
-  ])
+  ]
+  await AsyncStorage.multiSet(entries)
   await AsyncStorage.removeItem(AUTH_STORAGE_KEYS.legacyToken)
   primeAuthCache({ token: data.accessToken })
+  // The backend resolves the business for the session (owner membership
+  // first). Persist it so every later request carries X-Business-ID without
+  // depending on which sign-in method the user used.
+  if (data.businessId) {
+    await AsyncStorage.setItem(AUTH_STORAGE_KEYS.businessId, data.businessId)
+    primeAuthCache({ businessId: data.businessId })
+    try {
+      const { persistSecureAuth } = await import('./secureStorage')
+      await persistSecureAuth({
+        accessToken: data.accessToken,
+        refreshToken: data.refreshToken,
+        userId: data.userId,
+        businessId: data.businessId,
+      })
+    } catch {}
+  }
   // Also mirror to SecureStore for offline
   try {
     const { persistSecureAuth } = await import('./secureStorage')

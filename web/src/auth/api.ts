@@ -14,6 +14,13 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  // The backend scopes the session to a business and returns its id on
+  // login. Send it on every request so tenant-scoped data resolves the
+  // same way for every sign-in method.
+  const businessId = localStorage.getItem("businessId");
+  if (businessId) {
+    config.headers["X-Business-ID"] = businessId;
+  }
   return config;
 });
 
