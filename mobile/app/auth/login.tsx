@@ -55,19 +55,44 @@ export default function LoginScreen() {
   const [graceDays, setGraceDays] = useState(0)
   const [biometricAvailable, setBiometricAvailable] = useState(false)
 
-  const { login, loginWithBiometrics, syncClerkSession } = useAuth()
+  const { login, loginWithBiometrics, syncClerkSession, setSelectedBusinessAuth } = useAuth()
   const { startSSOFlow } = useSSO()
   const router = useRouter()
 
   const handleGoogleSignIn = async () => {
     setIsLoading(true)
     try {
+      // If a Clerk session already exists (e.g. previous sign-in), don't
+      // start a new SSO flow — Clerk rejects it with session_exists.
+      const { getClerkInstance } = await import('@clerk/clerk-expo');
+      const existingClerk = getClerkInstance();
+      if (existingClerk?.session) {
+        await syncClerkSession()
+        try {
+          const res = await api.get<{ businesses: any[] }>('/businesses')
+          const businesses = Array.isArray(res.data.businesses) ? res.data.businesses : []
+          const hasBusiness = businesses.length > 0
+          if (hasBusiness) {
+            await setSelectedBusinessAuth(businesses[0])
+          }
+          router.replace(hasBusiness ? '/(tabs)' : '/auth/business-setup')
+        } catch {
+          router.replace('/(tabs)')
+        }
+        return
+      }
       const result = await startSSOFlow({ strategy: 'oauth_google' })
       if (result.createdSessionId) {
         await syncClerkSession()
         try {
           const res = await api.get<{ businesses: any[] }>('/businesses')
-          const hasBusiness = Array.isArray(res.data.businesses) && res.data.businesses.length > 0
+          const businesses = Array.isArray(res.data.businesses) ? res.data.businesses : []
+          const hasBusiness = businesses.length > 0
+          if (hasBusiness) {
+            // Persist the resolved business so subsequent requests carry
+            // X-Business-ID and the user keeps their previously captured data.
+            await setSelectedBusinessAuth(businesses[0])
+          }
           router.replace(hasBusiness ? '/(tabs)' : '/auth/business-setup')
         } catch {
           router.replace('/(tabs)')

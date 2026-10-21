@@ -1,26 +1,38 @@
 import { SignIn, SignUp } from "@clerk/clerk-react";
 import { useAuth } from "../auth/AuthContext";
-import { useState } from "react";
+import { Navigate, useLocation, useSearchParams } from "react-router-dom";
+
+const HOME_PATH = "/";
 
 export function LoginPage() {
-  const { isSignedIn, user, signOut } = useAuth();
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const { isSignedIn } = useAuth();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  if (isSignedIn && user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-paper">
-        <div className="text-center p-8">
-          <h1 className="text-3xl font-bold text-ink mb-4">Welcome, {user.name || user.email}!</h1>
-          <p className="text-muted mb-8">You are signed in.</p>
-          <button
-            onClick={() => signOut()}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-ink text-paper rounded-lg hover:bg-ink/80 transition-colors"
-          >
-            Sign Out
-          </button>
-        </div>
-      </div>
+  const mode = searchParams.get("mode") === "signup" ? "signup" : "signin";
+
+  // Clerk owns sub-routes of the sign-in path (e.g. /login/sso-callback).
+  // Those must keep rendering this page so Clerk can finish the flow.
+  const isClerkCallbackRoute =
+    location.pathname !== "/login" && location.pathname.startsWith("/login/");
+
+  const setMode = (next: "signin" | "signup") => {
+    setSearchParams(
+      (prev) => {
+        const nextParams = new URLSearchParams(prev);
+        if (next === "signup") {
+          nextParams.set("mode", "signup");
+        } else {
+          nextParams.delete("mode");
+        }
+        return nextParams;
+      },
+      { replace: true }
     );
+  };
+
+  if (isSignedIn && !isClerkCallbackRoute) {
+    return <Navigate to={HOME_PATH} replace />;
   }
 
   return (
@@ -60,6 +72,8 @@ export function LoginPage() {
               routing="path"
               path="/login"
               signUpUrl="/login?mode=signup"
+              fallbackRedirectUrl={HOME_PATH}
+              signUpFallbackRedirectUrl={HOME_PATH}
               appearance={{
                 elements: {
                   formButtonPrimary: "bg-ink hover:bg-ink/80 text-paper",
@@ -76,6 +90,8 @@ export function LoginPage() {
               routing="path"
               path="/login"
               signInUrl="/login?mode=signin"
+              fallbackRedirectUrl={HOME_PATH}
+              signInFallbackRedirectUrl={HOME_PATH}
               appearance={{
                 elements: {
                   formButtonPrimary: "bg-ink hover:bg-ink/80 text-paper",

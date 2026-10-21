@@ -7,6 +7,7 @@ import { Hero } from "./components/Hero";
 import { Footer, Landing } from "./components/Landing";
 import { Nav, type View } from "./components/Nav";
 import { LoginPage } from "./pages/LoginPage";
+import { SSOCallbackPage } from "./pages/SSOCallbackPage";
 import type { Lang } from "./data";
 
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY || "";
@@ -22,13 +23,18 @@ function App() {
   const [lang, setLang] = useState<Lang>("en");
 
   return (
-    <ClerkProviderWrapper publishableKey={PUBLISHABLE_KEY}>
-      <BrowserRouter>
+    <BrowserRouter>
+      <ClerkProviderWrapper publishableKey={PUBLISHABLE_KEY}>
         <AuthProvider>
           <div id="top" className="min-h-[100dvh] bg-paper font-sans text-ink">
             <Nav lang={lang} setLang={setLang} setView={setView} />
             <Routes>
-              <Route path="/login" element={<LoginPage />} />
+              {/* Clerk mounts its own sub-routes under the sign-in path
+                  (e.g. /login/sso-callback for SSO), so the whole subtree
+                  must render the login page instead of falling through. */}
+              <Route path="/login/*" element={<LoginPage />} />
+              <Route path="/sso-callback" element={<SSOCallbackPage />} />
+              <Route path="/sso-callback/*" element={<SSOCallbackPage />} />
               <Route
                 path="/*"
                 element={
@@ -48,8 +54,8 @@ function App() {
             <Footer setView={setView} />
           </div>
         </AuthProvider>
-      </BrowserRouter>
-    </ClerkProviderWrapper>
+      </ClerkProviderWrapper>
+    </BrowserRouter>
   );
 }
 

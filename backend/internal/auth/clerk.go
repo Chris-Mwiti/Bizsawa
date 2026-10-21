@@ -76,9 +76,6 @@ func (v *ClerkVerifier) VerifyToken(ctx context.Context, tokenString string) (*C
 		if claims.Subject == "" {
 			return nil, errors.New("missing user ID (sub) in token")
 		}
-		if claims.Email == "" {
-			return nil, errors.New("missing email in token")
-		}
 		return claims, nil
 	}
 
@@ -193,6 +190,36 @@ type ClerkLoginResponse struct {
 	RefreshToken string `json:"refreshToken"`
 }
 
+
+
+func fetchClerkUserEmail(ctx context.Context, secretKey, userID string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.clerk.com/v1/users/"+userID, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+secretKey)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("clerk api status %d", resp.StatusCode)
+	}
+	var body struct {
+		EmailAddresses []struct {
+			EmailAddress string `json:"email_address"`
+		} `json:"email_addresses"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		return "", err
+	}
+	if len(body.EmailAddresses) > 0 {
+		return body.EmailAddresses[0].EmailAddress, nil
+	}
+	return "", nil
+}
+
 func (s *Service) LoginWithClerk(ctx context.Context, req ClerkLoginRequest) (*AuthResponse, error) {
 	if s.clerkVerifier == nil {
 		return nil, ErrUnauthorized.WithMessage("clerk not configured")
@@ -204,6 +231,16 @@ func (s *Service) LoginWithClerk(ctx context.Context, req ClerkLoginRequest) (*A
 	}
 
 	email := strings.ToLower(strings.TrimSpace(claims.Email))
+	if email == "" && s.clerkVerifier != nil && s.clerkVerifier.cfg.SecretKey != "" {
+		// Clerk's default session token may omit email; fetch from Backend API.
+		sub := strings.TrimSpace(claims.Subject)
+		if sub != "" {
+			fetched, err := fetchClerkUserEmail(ctx, s.clerkVerifier.cfg.SecretKey, sub)
+			if err == nil && fetched != "" {
+				email = strings.ToLower(strings.TrimSpace(fetched))
+			}
+		}
+	}
 	if email == "" {
 		return nil, ErrUnauthorized.WithMessage("clerk email missing")
 	}

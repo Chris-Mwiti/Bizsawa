@@ -12,7 +12,7 @@
     "android:lan:usb": "adb reverse tcp:5504 tcp:5504 && adb reverse tcp:8081 tcp:8081 && EXPO_PUBLIC_API_URL=http://127.0.0.1:5504/api/v1 expo run:android",
     "ios": "expo run:ios",
     "ios:dev": "NODE_ENV=development expo run:ios",
-    "web": "expo start --web",
+    "web": "expo start --web --port 3046",
     "postinstall": "patch-package",
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
     "lint:fix": "eslint . --ext .js,.jsx,.ts,.tsx --fix",
