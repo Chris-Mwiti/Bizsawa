@@ -27,7 +27,10 @@
       "package": "com.bizsawa.mobile",
       "softwareKeyboardLayoutMode": "resize",
       "googleServicesFile": "./google-services.json",
-      "permissions": ["android.permission.READ_SMS", "android.permission.RECEIVE_SMS"],
+      "permissions": [
+        "android.permission.READ_SMS",
+        "android.permission.RECEIVE_SMS"
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#F4F9F7"
@@ -51,8 +54,8 @@
         {
           "android": {
             "kotlinVersion": "2.1.20",
-            "compileSdkVersion": 35,
-            "targetSdkVersion": 35,
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36,
             "packagingOptions": {
               "pickFirst": [
                 "**/libc++_shared.so",
