@@ -23,7 +23,9 @@
     "test:e2e:api": "vitest run e2e/api",
     "test:e2e:sync": "vitest run --config vitest.sync.config.ts",
     "test:e2e:maestro": "maestro test e2e/maestro",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "build:web": "expo export -p web && node scripts/patch-web-pwa.js",
+    "build:web:dev": "expo export -p web --dev && node scripts/patch-web-pwa.js"
   },
   "dependencies": {
     "@clerk/clerk-expo": "^2.20.1",

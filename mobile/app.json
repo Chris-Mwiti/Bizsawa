@@ -38,7 +38,20 @@
       "versionCode": 4
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro",
+      "output": "single",
+      "name": "BizSawa",
+      "shortName": "BizSawa",
+      "description": "Track sales, stock and expenses, even offline.",
+      "themeColor": "#006B5F",
+      "backgroundColor": "#F4F9F7",
+      "lang": "en",
+      "orientation": "portrait",
+      "display": "standalone",
+      "startUrl": "/",
+      "scope": "/",
+      "manifest": "/manifest.json"
     },
     "plugins": [
       "expo-router",

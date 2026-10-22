@@ -16,6 +16,7 @@ import { parseMpesaSms } from '../lib/mpesa-sms/parser'
 import { isMpesaSender } from '../lib/mpesa-sms/sender'
 import { hashPayerPhone } from '../lib/mpesa-sms/payerHash'
 import { isAutoCaptureSupported, getAutoCaptureAvailability, getSmsCaptureNativeVersion } from '../modules/sms-capture'
+import { supportsSmsCapture, unavailableReason } from '../lib/platform/capabilities'
 import { useSmsAutoCapture } from '../hooks/api/useSmsAutoCapture'
 import { grantSmsConsent, hasSmsConsent, revokeSmsConsent } from '../lib/mpesa-sms/consent'
 import {
@@ -57,6 +58,9 @@ function SmsTestBody({ onClose }: { onClose: () => void }) {
   React.useEffect(() => {
     hasSmsConsent().then(setConsented).catch(() => setConsented(false))
     append(`native module: ${nativeVersion ?? 'missing'}`)
+    if (!supportsSmsCapture) {
+      append(`auto-capture: unavailable — ${unavailableReason('sms')}`)
+    }
   }, [])
   React.useEffect(() => {
     if (auto.lastResult) append(`auto-capture: ${JSON.stringify(auto.lastResult)}`)

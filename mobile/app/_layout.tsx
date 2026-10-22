@@ -14,6 +14,7 @@ import { BusinessProvider } from '../contexts/BusinessContext'
 import { SyncProvider } from '../sync/SyncProvider'
 import { TourProvider } from '../contexts/TourContext'
 import { OfflineBanner } from '../components/OfflineBanner'
+import { PwaInstallBanner } from '../components/PwaInstallBanner'
 import { NavigationGateProvider } from '../lib/navigation/NavigationGate'
 import { initPerf, perf } from '../lib/perf'
 import {
@@ -21,6 +22,7 @@ import {
   RouteLoadingChip,
 } from '../components/RouteLoadingBar'
 import { ClerkProviderWrapper } from '../lib/auth/ClerkProvider'
+import { registerServiceWorker } from '../lib/pwa/serviceWorker'
 
 initPerf()
 perf.mark('app.import')
@@ -70,6 +72,12 @@ export default function RootLayout() {
     if (fontsReady) perf.mark('startup.fonts.ready')
   }, [fontsReady])
 
+  // PWA: register the service worker (web only, no-op in dev) so the app
+  // is installable and opens offline from the cached shell.
+  useEffect(() => {
+    registerServiceWorker()
+  }, [])
+
   return (
     <TamaguiProvider config={tamaguiConfig} defaultTheme='light'>
       <QueryClientProvider client={queryClient}>
@@ -87,6 +95,7 @@ export default function RootLayout() {
                   translucent={false}
                 />
                 <View style={{ flex: 1, backgroundColor: '#F4F9F7' }}>
+                  <PwaInstallBanner />
                   <OfflineBanner />
                   <View style={{ flex: 1 }}>
                     <Stack

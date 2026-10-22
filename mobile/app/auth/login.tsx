@@ -27,6 +27,7 @@ try {
 }
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useAuth } from '../../contexts/AuthContext'
+import { supportsBiometrics, unavailableReason } from '../../lib/platform/capabilities'
 import { api, AUTH_STORAGE_KEYS } from '../../lib/api'
 import {
   hasOfflineCredential,
@@ -94,7 +95,7 @@ export default function LoginScreen() {
   useEffect(() => {
     const unsub = NetInfo.addEventListener((s) => setIsOffline(!s.isConnected))
     NetInfo.fetch().then((s) => setIsOffline(!s.isConnected))
-    if (LocalAuthentication?.hasHardwareAsync) {
+    if (supportsBiometrics && LocalAuthentication?.hasHardwareAsync) {
       LocalAuthentication.hasHardwareAsync()
         .then((has: boolean) => {
           if (has) LocalAuthentication.isEnrolledAsync().then(setBiometricAvailable)
@@ -154,6 +155,13 @@ export default function LoginScreen() {
   }
 
   const handleBiometricLogin = async () => {
+    if (!supportsBiometrics) {
+      Alert.alert(
+        'Not available in the browser',
+        unavailableReason('biometrics') ?? 'Biometrics require the Android or iOS app.',
+      )
+      return
+    }
     if (!LocalAuthentication?.authenticateAsync) {
       Alert.alert('Not available', 'Biometrics not available in this build. Run a dev-client build to enable.')
       return

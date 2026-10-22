@@ -6,5 +6,7 @@
   "sizeMb": 127.3,
   "minAndroid": "8.0",
   "notes": "Stable preview build.",
-  "status": "live"
+  "status": "live",
+  "pwaUrl": "https://app.bizsawa.com",
+  "pwaNotes": "Runs in your browser and installs to your home screen. Works offline and syncs the same data as the app."
 }

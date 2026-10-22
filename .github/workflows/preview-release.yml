@@ -16,6 +16,10 @@
 #   (Release upload authenticates with RELEASES_PAT — the built-in
 #   GITHUB_TOKEN cannot reach across repos.)
 #
+# The web (PWA) bundle is built with the APK and attached to the same
+# release as a zip. Deploy its contents to the root of a static host and pass
+# that URL as the `pwa_url` input so the website can link to it.
+#
 # Run: Actions → "Preview release" → Run workflow → enter version (e.g. 1.1.0).
 
 name: Preview release
@@ -34,6 +38,10 @@ on:
         description: "Release notes (one line)"
         required: false
         default: "Stable preview build."
+      pwa_url:
+        description: "Public URL where the PWA is hosted (e.g. https://app.bizsawa.com). Leave empty to skip publishing the browser build."
+        required: false
+        default: ""
 
 jobs:
   preview-release:
@@ -85,30 +93,45 @@ jobs:
           if [ -z "$URL" ]; then echo "no finished preview build found"; exit 1; fi
           curl -fL -H "Authorization: Bearer $EXPO_TOKEN" -o bizsawa-preview.apk "$URL"
 
-      - name: Publish GitHub Release with APK
+      # The web build ships alongside the APK: same account, same business,
+      # installable to the home screen, works offline via IndexedDB.
+      - name: Build PWA (web bundle)
+        run: bash scripts/build-web-pwa.sh "${{ inputs.version }}"
+
+      - name: Publish GitHub Release with APK + PWA
         id: release
         env:
           GH_TOKEN: ${{ secrets.RELEASES_PAT }}
+          PWA_URL: ${{ inputs.pwa_url }}
         run: |
           TAG="preview-v${{ inputs.version }}"
           APK="bizsawa-preview-v${{ inputs.version }}.apk"
+          PWA="bizsawa-pwa-v${{ inputs.version }}.zip"
           cp ./bizsawa-preview.apk "./$APK"
+          ASSETS="./$APK"
+          if [ -f "./dist-pwa/$PWA" ]; then
+            ASSETS="$ASSETS ./$PWA"
+          fi
           if gh release view "$TAG" --repo "$RELEASES_REPO" >/dev/null 2>&1; then
-            gh release upload "$TAG" "./$APK" --repo "$RELEASES_REPO" --clobber
+            gh release upload "$TAG" $ASSETS --repo "$RELEASES_REPO" --clobber
           else
-            gh release create "$TAG" "./$APK" --repo "$RELEASES_REPO" --title "Preview v${{ inputs.version }}" --notes "${{ inputs.notes }}" --prerelease
+            gh release create "$TAG" $ASSETS --repo "$RELEASES_REPO" --title "Preview v${{ inputs.version }}" --notes "${{ inputs.notes }}" --prerelease
           fi
           echo "apk_url=https://github.com/$RELEASES_REPO/releases/download/$TAG/$APK" >> "$GITHUB_OUTPUT"
+          if [ -n "$PWA_URL" ]; then
+            echo "pwa_url=$PWA_URL" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Update website manifest
         env:
           APK_URL: ${{ steps.release.outputs.apk_url }}
+          PWA_URL: ${{ steps.release.outputs.pwa_url }}
         run: |
           SIZE_MB=$(python3 -c "import os; print(f'{os.path.getsize(\"bizsawa-preview.apk\")/1048576:.1f}')")
           TODAY=$(date +%F)
           bun scripts/update-manifest.js "${{ inputs.version }}" \
             "$APK_URL" \
-            "$SIZE_MB" "$TODAY" "${{ inputs.notes }}"
+            "$SIZE_MB" "$TODAY" "${{ inputs.notes }}" "$PWA_URL"
 
       - name: Commit version + manifest
         run: |
