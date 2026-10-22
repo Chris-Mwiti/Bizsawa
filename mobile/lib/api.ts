@@ -168,6 +168,11 @@ export async function persistAuthResponse(data: AuthResponse): Promise<void> {
         businessId: data.businessId,
       })
     } catch {}
+  } else {
+    // No business resolved (new user): clear any stale id so we don't send
+    // a phantom businessId on the create-business request.
+    await AsyncStorage.removeItem(AUTH_STORAGE_KEYS.businessId)
+    primeAuthCache({ businessId: null })
   }
   // Also mirror to SecureStore for offline
   try {

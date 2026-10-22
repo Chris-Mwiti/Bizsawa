@@ -8,7 +8,7 @@ import {
 } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import NetInfo from '@react-native-community/netinfo'
-import { api, AUTH_STORAGE_KEYS } from '../lib/api'
+import { api, AUTH_STORAGE_KEYS, primeAuthCache } from '../lib/api'
 import { perf } from '../lib/perf'
 import type {
   Business,
@@ -209,6 +209,11 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
       return optimistic
     }
 
+    // Clear any stale cached businessId before creating, so the request
+    // interceptor doesn't send a phantom X-Business-ID to the create endpoint
+    // (which expects no business context for a brand-new business).
+    await AsyncStorage.removeItem(AUTH_STORAGE_KEYS.businessId)
+    primeAuthCache({ businessId: null })
     const response = await api.post<Business>('/businesses', data)
     const business = response.data
     setBusinesses((prev) => [
