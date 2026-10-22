@@ -294,7 +294,7 @@
     API-->>App: { id }
     App->>App: SecureStore.setSecure(DEVICE_KEY, id)
   end
-  Note over App,API: Later ingests send device_id; backend rejects unknown devices with device_unknown
+  Note over App,API: Later ingests send device_id. Backend rejects unknown devices with device_unknown.
 `);
   </script>
 </body>
