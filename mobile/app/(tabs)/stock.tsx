@@ -614,8 +614,35 @@ export default function StockTab() {
                   <View className='flex-row justify-end gap-2 mt-3 pt-3 border-t border-gray-100'>
                     <TouchableOpacity
                       onPress={() => {
-                        setFormState((prev) => ({ ...prev, currentStock: String((Number(item.currentStock) || 0) + 10) }))
-                        handleOpenEditModal(item)
+                        setEditingItem(item)
+                        setStep(2)
+                        const prod = products.find((p: any) => p.id === item.productId) as any
+                        setFormState({
+                          name: item.name,
+                          category: item.category,
+                          currentStock: String(item.currentStock),
+                          minimumThreshold: item.minimumThreshold.toString(),
+                          maximumCapacity: item.maximumCapacity.toString(),
+                          unitPrice: item.unitPrice.toString(),
+                          buyingPrice:
+                            prod?.cost != null && Number(prod.cost) > 0
+                              ? String(prod.cost)
+                              : (prod?.buyingPrice != null && Number(prod.buyingPrice) > 0
+                                ? String(prod.buyingPrice)
+                                : ''),
+                          supplier: item.supplier === '—' ? '' : item.supplier,
+                          sku: prod?.sku || '',
+                          barcode: prod?.barcode || '',
+                          variants: (prod?.variants || []).map((v: any) => ({
+                            id: v.id,
+                            name: v.name,
+                            sku: v.sku || '',
+                            barcode: v.barcode || '',
+                            price: String(v.price),
+                            cost: String(v.cost || v.price),
+                          })),
+                        })
+                        setShowItemModal(true)
                       }}
                       className='flex-row items-center gap-2 px-3 py-2 rounded-full bg-accent'
                     >
