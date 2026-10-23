@@ -114,6 +114,7 @@ export interface Product {
   description?: string
   sku?: string
   category?: string
+  supplier?: string | null
   barcode?: string
   imageUrl?: string
   taxRuleId?: UUID | null
@@ -139,6 +140,7 @@ export interface ProductRequest {
   description?: string
   sku?: string
   category?: string
+  supplier?: string | null
   barcode?: string
   imageUrl?: string
   taxRuleId?: UUID | null

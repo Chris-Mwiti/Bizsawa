@@ -613,6 +613,16 @@ export default function StockTab() {
 
                   <View className='flex-row justify-end gap-2 mt-3 pt-3 border-t border-gray-100'>
                     <TouchableOpacity
+                      onPress={() => {
+                        setFormState((prev) => ({ ...prev, currentStock: String((Number(item.currentStock) || 0) + 10) }))
+                        handleOpenEditModal(item)
+                      }}
+                      className='flex-row items-center gap-2 px-3 py-2 rounded-full bg-accent'
+                    >
+                      <Plus size={14} color='white' />
+                      <Text className='font-geist-bold text-xs font-bold text-white'>Restock</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
                       onPress={() => handleOpenEditModal(item)}
                       className='flex-row items-center gap-2 px-3 py-2 rounded-full bg-white border border-gray-200'
                     >
