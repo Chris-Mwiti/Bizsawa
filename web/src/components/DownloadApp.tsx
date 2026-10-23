@@ -79,8 +79,11 @@ export function DownloadApp() {
                 {/* The install prompt only exists in a browser that supports it. */}
                 {canInstall && !isInstalled ? (
                   <button
-                    onClick={() => {
-                      void install();
+                    onClick={async () => {
+                      const ok = await install();
+                      if (!ok) {
+                        console.warn("[PWA] install prompt did not complete");
+                      }
                     }}
                     className="mt-2 flex w-full items-center justify-center gap-2 rounded-full bg-white/12 px-5 py-3 text-[13px] font-semibold tracking-[0.1em] text-white ring-1 ring-white/20 transition-colors hover:bg-white/20"
                   >
