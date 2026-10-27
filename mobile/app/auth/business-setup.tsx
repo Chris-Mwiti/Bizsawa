@@ -10,8 +10,6 @@ import {
   Pressable,
   KeyboardAvoidingView,
   Platform,
-  Keyboard,
-  TouchableWithoutFeedback,
 } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
@@ -181,14 +179,13 @@ export default function BusinessSetup() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <ScrollView
-            className='flex-1 px-6'
-            contentContainerStyle={{ paddingTop: 16, paddingBottom: 32, gap: 16 }}
-            keyboardShouldPersistTaps='handled'
-            keyboardDismissMode='interactive'
-            showsVerticalScrollIndicator={false}
-          >
+        <ScrollView
+          className='flex-1 px-6'
+          contentContainerStyle={{ paddingTop: 16, paddingBottom: 32, gap: 16 }}
+          keyboardShouldPersistTaps='handled'
+          keyboardDismissMode='interactive'
+          showsVerticalScrollIndicator={false}
+        >
         {step === 0 && (
           <View className='gap-4'>
             <View>
@@ -405,7 +402,6 @@ export default function BusinessSetup() {
           </View>
         )}
           </ScrollView>
-        </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
 
       {/* Thumb-zone CTA: lifted off bottom edge + min 48dp hit target. Was flush to edge (16 + insets.bottom+12) → hard thumb reach */}
