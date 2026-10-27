@@ -23,6 +23,7 @@ type ProductRequest struct {
 	Description string           `json:"description"`
 	SKU         string           `json:"sku"`
 	Category    string           `json:"category"`
+	Supplier    string           `json:"supplier"`
 	Barcode     string           `json:"barcode"`
 	ImageURL    string           `json:"imageUrl"`
 	TaxRuleID   *uuid.UUID       `json:"taxRuleId"`
@@ -126,6 +127,10 @@ func (s *Service) Update(ctx context.Context, businessID, productID uuid.UUID, r
 
 	product.Name = updated.Name
 
+	if updated.Supplier != "" {
+		product.Supplier = updated.Supplier
+	}
+
 	if updated.Description != "" {
 		product.Description = updated.Description
 	}
@@ -213,6 +218,7 @@ func productFromRequest(businessID, productID uuid.UUID, req ProductRequest) (*P
 		Description: strings.TrimSpace(req.Description),
 		SKU:         normalizeSKU(req.SKU),
 		Category:    strings.TrimSpace(req.Category),
+		Supplier:    strings.TrimSpace(req.Supplier),
 		Barcode:     strings.TrimSpace(req.Barcode),
 		ImageURL:    strings.TrimSpace(req.ImageURL),
 		TaxRuleID:   req.TaxRuleID,

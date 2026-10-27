@@ -205,31 +205,51 @@ func (s *InviteService) AcceptInvite(ctx context.Context, req AcceptInviteReques
 	otp := strings.TrimSpace(req.Otp)
 	businessID := req.BusinessID
 
-	if email == "" || otp == "" || businessID == uuid.Nil {
-		return nil, uuid.Nil, "", apperrors.ErrUnprocessable.WithMessage("businessId, email and otp required")
+	if email == "" || otp == "" {
+		return nil, uuid.Nil, "", apperrors.ErrUnprocessable.WithMessage("email and otp required")
 	}
+
+	otpHash := hashInviteOTP(otp)
 
 	var invite BusinessInvite
 
-	err := s.db.WithContext(ctx).Where("business_id = ? AND email = ? AND used_at IS NULL AND expires_at > ?", businessID, email, time.Now().UTC()).Order("created_at DESC").First(&invite).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, uuid.Nil, "", apperrors.ErrUnauthorized.WithMessage("invite not found or expired")
+	if businessID != uuid.Nil {
+		// Caller knows the business — scope the lookup to it.
+		err := s.db.WithContext(ctx).Where("business_id = ? AND email = ? AND used_at IS NULL AND expires_at > ?", businessID, email, time.Now().UTC()).Order("created_at DESC").First(&invite).Error
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, uuid.Nil, "", apperrors.ErrUnauthorized.WithMessage("invite not found or expired")
+			}
+
+			return nil, uuid.Nil, "", err
 		}
 
-		return nil, uuid.Nil, "", err
+		if otpHash != invite.OtpHash {
+			return nil, uuid.Nil, "", apperrors.ErrUnauthorized.WithMessage("invalid invite code")
+		}
+	} else {
+		// No business supplied: the invite code alone identifies the invite.
+		// The OTP hash is unique per invite, so match on it and let the row
+		// tell us which business (and role) the code was issued for.
+		err := s.db.WithContext(ctx).Where("email = ? AND otp_hash = ? AND used_at IS NULL AND expires_at > ?", email, otpHash, time.Now().UTC()).Order("created_at DESC").First(&invite).Error
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, uuid.Nil, "", apperrors.ErrUnauthorized.WithMessage("invite not found or expired")
+			}
+
+			return nil, uuid.Nil, "", err
+		}
+
+		businessID = invite.BusinessID
 	}
 
-	if hashInviteOTP(otp) != invite.OtpHash {
-		return nil, uuid.Nil, "", apperrors.ErrUnauthorized.WithMessage("invalid invite code")
-	}
 	// Find or create user
 	// We need to interact with auth_users table directly via raw query to avoid import cycle.
 	var userID uuid.UUID
 
 	var existingID string
 
-	err = s.db.WithContext(ctx).Raw("SELECT id FROM auth_users WHERE email = ? LIMIT 1", email).Scan(&existingID).Error
+	err := s.db.WithContext(ctx).Raw("SELECT id FROM auth_users WHERE email = ? LIMIT 1", email).Scan(&existingID).Error
 	if err == nil && existingID != "" {
 		if uid, e := uuid.Parse(existingID); e == nil {
 			userID = uid

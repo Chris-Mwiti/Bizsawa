@@ -19,6 +19,7 @@ type Config struct {
 	CORS            CORSConfig
 	JWT             JWTConfig
 	Google          GoogleConfig
+	Clerk           ClerkConfig
 	MCP             MCPConfig
 	WhatsApp        WhatsAppConfig
 	Crypto          CryptoConfig
@@ -81,6 +82,12 @@ type GoogleConfig struct {
 	Prompt               string // e.g. "select_account" or "select_account consent"
 	AccessType           string // "offline" to obtain refresh_token
 	IncludeGrantedScopes bool
+}
+
+type ClerkConfig struct {
+	PublishableKey string
+	SecretKey      string
+	JWKSURL        string // e.g. https://your-instance.clerk.accounts.dev/.well-known/jwks.json
 }
 
 type MpesaConfig struct {
@@ -163,7 +170,10 @@ func Load() Config {
 			// LAN wildcards (exp://*, 192.168/10/172 ranges) mean a DHCP lease
 			// change never requires a backend .env edit for Expo web/dev.
 			// go-chi/cors supports one `*` per entry as prefix/suffix match.
-			AllowedOrigins: listEnv("CORS_ALLOWED_ORIGINS", []string{"http://localhost:3000", "https://*.bizsawa.com", "http://192.168.*", "http://10.*", "http://172.*", "exp://*"}),
+			// `http://localhost:*` covers every local dev port — Expo falls back
+			// to 8082+ when 8081 is busy, and a port-pinned origin would then
+			// be blocked by CORS and surface as "Network Error" in the browser.
+			AllowedOrigins: listEnv("CORS_ALLOWED_ORIGINS", []string{"http://localhost:*", "http://127.0.0.1:*", "https://*.bizsawa.com", "http://192.168.*", "http://10.*", "http://172.*", "exp://*"}),
 		},
 		JWT: JWTConfig{
 			Issuer:     env("JWT_ISSUER", "bizsawa"),
@@ -177,6 +187,11 @@ func Load() Config {
 			Prompt:               env("GOOGLE_PROMPT", "select_account"),
 			AccessType:           env("GOOGLE_ACCESS_TYPE", "offline"),
 			IncludeGrantedScopes: boolEnv("GOOGLE_INCLUDE_GRANTED_SCOPES", true),
+		},
+		Clerk: ClerkConfig{
+			PublishableKey: env("CLERK_PUBLISHABLE_KEY", ""),
+			SecretKey:      env("CLERK_SECRET_KEY", ""),
+			JWKSURL:        env("CLERK_JWKS_URL", ""),
 		},
 		MCP: MCPConfig{
 			Addr:                  env("MCP_ADDR", ":5574"),

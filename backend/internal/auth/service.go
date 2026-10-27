@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"log/slog"
 
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
@@ -28,6 +29,7 @@ type Service struct {
 	subscriptions SubscriptionProvisioner
 	googleCfg     *config.GoogleConfig
 	emailSender   email.Sender
+	clerkVerifier *ClerkVerifier
 }
 
 func NewService(repo *Repository, tokens *TokenService, memberships MembershipResolver, subscriptions SubscriptionProvisioner) *Service {
@@ -61,6 +63,44 @@ type AuthResponse struct {
 	UserID       uuid.UUID `json:"userId"`
 	AccessToken  string    `json:"accessToken"`
 	RefreshToken string    `json:"refreshToken"`
+	// BusinessID is the business the session was scoped to. It is resolved
+	// server-side on every login path (email OTP, Clerk SSO, password) so the
+	// client always lands on the right business regardless of which sign-in
+	// method was used. Nil when the user has no business yet.
+	BusinessID *uuid.UUID `json:"businessId,omitempty"`
+	Role       string     `json:"role,omitempty"`
+	// Profile fields — clients read these to render the signed-in user.
+	Email string `json:"email,omitempty"`
+	Name  string `json:"name,omitempty"`
+	Image string `json:"image,omitempty"`
+}
+
+// defaultBusinessForUser picks the business a session should be scoped to
+// when the caller did not specify one. Owner membership wins over other
+// roles, then the oldest membership wins, so the choice is deterministic
+// and stable across sign-in methods.
+func (s *Service) defaultBusinessForUser(ctx context.Context, userID uuid.UUID) (uuid.UUID, string, error) {
+	type membership struct {
+		BusinessID uuid.UUID `gorm:"column:business_id"`
+		Role       string    `gorm:"column:role"`
+	}
+
+	var memberships []membership
+
+	err := s.repo.db.WithContext(ctx).
+		Raw(`SELECT business_id, role FROM business_members
+			WHERE user_id = ? AND is_active = true AND deleted_at IS NULL
+			ORDER BY CASE WHEN role = 'OWNER' THEN 0 ELSE 1 END, joined_at ASC NULLS LAST, created_at ASC
+			LIMIT 1`, userID).Scan(&memberships).Error
+	if err != nil {
+		return uuid.Nil, "", err
+	}
+
+	if len(memberships) == 0 {
+		return uuid.Nil, "", nil
+	}
+
+	return memberships[0].BusinessID, memberships[0].Role, nil
 }
 
 func (s *Service) Register(ctx context.Context, req RegisterRequest) (*AuthResponse, error) {
@@ -162,6 +202,28 @@ func (s *Service) CheckEmailExists(ctx context.Context, email string) (bool, err
 }
 
 func (s *Service) issue(ctx context.Context, userID, tenantID, businessID uuid.UUID, roles []string) (*AuthResponse, error) {
+	// No business was requested (e.g. Clerk SSO, email OTP): scope the
+	// session to the user's default business so every sign-in method ends up
+	// with the same business context. Without this, the client had to guess
+	// and the businessId was frequently left unset.
+	role := ""
+
+	if businessID == uuid.Nil {
+		resolved, resolvedRole, err := s.defaultBusinessForUser(ctx, userID)
+		if err != nil {
+			// Best-effort: a user with no membership still gets a session.
+			slog.ErrorContext(ctx, "failed to resolve default business for user", "user", userID, "err", err)
+		} else if resolved != uuid.Nil {
+			businessID = resolved
+			tenantID = resolved
+			role = resolvedRole
+
+			if len(roles) == 0 {
+				roles = []string{resolvedRole}
+			}
+		}
+	}
+
 	access, err := s.tokens.IssueAccessToken(userID, tenantID, businessID, roles)
 	if err != nil {
 		return nil, err
@@ -181,5 +243,19 @@ func (s *Service) issue(ctx context.Context, userID, tenantID, businessID uuid.U
 		return nil, err
 	}
 
-	return &AuthResponse{UserID: userID, AccessToken: access, RefreshToken: rawRefresh}, nil
+	resp := &AuthResponse{UserID: userID, AccessToken: access, RefreshToken: rawRefresh, Role: role}
+
+	// Best-effort profile for the client (never fails the login).
+	if u, err := s.repo.FindByID(ctx, userID); err == nil && u != nil {
+		resp.Email = u.Email
+		resp.Name = u.Name
+		resp.Image = u.Image
+	}
+
+	if businessID != uuid.Nil {
+		biz := businessID
+		resp.BusinessID = &biz
+	}
+
+	return resp, nil
 }

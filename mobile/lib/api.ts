@@ -44,11 +44,60 @@ function isLoopbackHost(host: string | null): boolean {
   return !!host && LOOPBACK_HOSTS.has(host.trim().toLowerCase())
 }
 
+// A host-local address: the machine running the dev server. Its IP can change
+// under DHCP, so a value baked into the bundle goes stale — the same failure
+// that made the web build hit a dead 192.168.x.x and report "Network Error".
+function isHostLocalAddress(host: string | null): boolean {
+  if (!host) return false
+  const h = host.trim().toLowerCase().replace(/^\[|\]$/g, '')
+  if (LOOPBACK_HOSTS.has(h) || LOOPBACK_HOSTS.has(`[${h}]`)) return true
+  if (h === '10.0.2.2') return true // Android emulator alias for the host
+  if (/^10\./.test(h)) return true
+  if (/^192\.168\./.test(h)) return true
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(h)) return true
+  return false
+}
+
+function hostFromUrl(url: string): string | null {
+  try {
+    return new URL(url).hostname
+  } catch {
+    return null
+  }
+}
+
+// The host the browser is currently talking to. On web the app is served by
+// the dev server on this machine, so this is always the right API host —
+// whether the page was opened on localhost or on the LAN address.
+function browserHostname(): string | null {
+  if (typeof window === 'undefined') return null
+  const host = window.location?.hostname
+  return host && host.trim() ? host.trim() : null
+}
+
 export function getApiUrl(): string {
+  if (Platform.OS === 'web') {
+    // 1. Explicit web override wins (points the web build at staging/prod).
+    const webUrl = (process.env.EXPO_PUBLIC_WEB_API_URL as string)?.trim()
+    if (webUrl) return webUrl.replace(/\/$/, '')
+
+    const envUrl = (process.env.EXPO_PUBLIC_API_URL as string)?.trim()
+    if (envUrl) {
+      // 2. A public deployment URL is a deliberate target — keep it as-is.
+      const host = hostFromUrl(envUrl)
+      if (host && !isHostLocalAddress(host)) return envUrl.replace(/\/$/, '')
+    }
+
+    // 3. Otherwise derive the API host from the browser's own location so it
+    //    can never go stale (no hardcoded LAN IP in the bundle).
+    const browserHost = browserHostname()
+    if (browserHost) return `http://${browserHost}:${DEFAULT_API_PORT}`
+
+    return `http://localhost:${DEFAULT_API_PORT}`
+  }
+
   const envUrl = (process.env.EXPO_PUBLIC_API_URL as string)?.trim()
   if (envUrl) return envUrl.replace(/\/$/, '')
-
-  if (Platform.OS === 'web') return `http://localhost:${DEFAULT_API_PORT}`
 
   const expoHost = getExpoDevHost()
 
@@ -96,13 +145,35 @@ export const api = axios.create({
 })
 
 export async function persistAuthResponse(data: AuthResponse): Promise<void> {
-  await AsyncStorage.multiSet([
+  const entries: [string, string][] = [
     [AUTH_STORAGE_KEYS.accessToken, data.accessToken],
     [AUTH_STORAGE_KEYS.refreshToken, data.refreshToken],
     [AUTH_STORAGE_KEYS.userId, data.userId],
-  ])
+  ]
+  await AsyncStorage.multiSet(entries)
   await AsyncStorage.removeItem(AUTH_STORAGE_KEYS.legacyToken)
   primeAuthCache({ token: data.accessToken })
+  // The backend resolves the business for the session (owner membership
+  // first). Persist it so every later request carries X-Business-ID without
+  // depending on which sign-in method the user used.
+  if (data.businessId) {
+    await AsyncStorage.setItem(AUTH_STORAGE_KEYS.businessId, data.businessId)
+    primeAuthCache({ businessId: data.businessId })
+    try {
+      const { persistSecureAuth } = await import('./secureStorage')
+      await persistSecureAuth({
+        accessToken: data.accessToken,
+        refreshToken: data.refreshToken,
+        userId: data.userId,
+        businessId: data.businessId,
+      })
+    } catch {}
+  } else {
+    // No business resolved (new user): clear any stale id so we don't send
+    // a phantom businessId on the create-business request.
+    await AsyncStorage.removeItem(AUTH_STORAGE_KEYS.businessId)
+    primeAuthCache({ businessId: null })
+  }
   // Also mirror to SecureStore for offline
   try {
     const { persistSecureAuth } = await import('./secureStorage')

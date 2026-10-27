@@ -68,11 +68,15 @@ export async function persistSecureAuth(data: {
   accessToken: string
   refreshToken: string
   userId: string
+  businessId?: string
 }) {
   await Promise.all([
     setSecure(SECURE_KEYS.accessToken, data.accessToken),
     setSecure(SECURE_KEYS.refreshToken, data.refreshToken),
     setSecure(SECURE_KEYS.userId, data.userId),
+    ...(data.businessId
+      ? [setSecure(SECURE_KEYS.businessId, data.businessId)]
+      : []),
   ])
   // Also keep AsyncStorage for compat (migrated readers)
   await AsyncStorage.multiSet([

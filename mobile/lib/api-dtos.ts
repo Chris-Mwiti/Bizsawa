@@ -8,6 +8,10 @@ export interface AuthResponse {
   userId: UUID
   accessToken: string
   refreshToken: string
+  /** Business the session was scoped to (resolved server-side). */
+  businessId?: UUID
+  /** Role of the user in that business. */
+  role?: string
 }
 
 export interface RegisterRequest {
@@ -110,6 +114,7 @@ export interface Product {
   description?: string
   sku?: string
   category?: string
+  supplier?: string | null
   barcode?: string
   imageUrl?: string
   taxRuleId?: UUID | null
@@ -135,6 +140,7 @@ export interface ProductRequest {
   description?: string
   sku?: string
   category?: string
+  supplier?: string | null
   barcode?: string
   imageUrl?: string
   taxRuleId?: UUID | null

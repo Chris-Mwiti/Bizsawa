@@ -15,6 +15,7 @@ import {
 } from 'lucide-react-native'
 import NetInfo from '@react-native-community/netinfo'
 import { useRouter } from 'expo-router'
+import { useSSO } from '@clerk/clerk-expo'
 
 // Lazy-load so missing native module (dev-client without rebuild) doesn't crash bundle
 let LocalAuthentication: any = null
@@ -24,8 +25,10 @@ try {
 } catch {
   LocalAuthentication = null
 }
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useAuth } from '../../contexts/AuthContext'
-import { api } from '../../lib/api'
+import { supportsBiometrics, unavailableReason } from '../../lib/platform/capabilities'
+import { api, AUTH_STORAGE_KEYS } from '../../lib/api'
 import {
   hasOfflineCredential,
   getOfflineGraceDaysLeft,
@@ -54,13 +57,45 @@ export default function LoginScreen() {
   const [graceDays, setGraceDays] = useState(0)
   const [biometricAvailable, setBiometricAvailable] = useState(false)
 
-  const { login, loginWithBiometrics } = useAuth()
+  const { login, loginWithBiometrics, syncClerkSession } = useAuth()
+  const { startSSOFlow } = useSSO()
   const router = useRouter()
+
+  const handleGoogleSignIn = async () => {
+    setIsLoading(true)
+    try {
+      // If a Clerk session already exists (e.g. previous sign-in), don't
+      // start a new SSO flow — Clerk rejects it with session_exists.
+      const { getClerkInstance } = await import('@clerk/clerk-expo');
+      const existingClerk = getClerkInstance();
+      if (existingClerk?.session) {
+        await syncClerkSession()
+        const businessId = await AsyncStorage.getItem(AUTH_STORAGE_KEYS.businessId)
+        router.replace(businessId ? '/(tabs)' : '/auth/business-setup')
+        return
+      }
+      const result = await startSSOFlow({ strategy: 'oauth_google' })
+      if (result.createdSessionId) {
+        await syncClerkSession()
+        // The backend resolves the business for the signed-in account and
+        // returns it, so Google sign-in lands on exactly the same business
+        // as an email-code sign-in for the same email.
+        const businessId = await AsyncStorage.getItem(AUTH_STORAGE_KEYS.businessId)
+        router.replace(businessId ? '/(tabs)' : '/auth/business-setup')
+      }
+    } catch (error: any) {
+      if (error?.code !== 'ERR_CANCELED') {
+        Alert.alert('Google Sign-in Failed', error.message)
+      }
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   useEffect(() => {
     const unsub = NetInfo.addEventListener((s) => setIsOffline(!s.isConnected))
     NetInfo.fetch().then((s) => setIsOffline(!s.isConnected))
-    if (LocalAuthentication?.hasHardwareAsync) {
+    if (supportsBiometrics && LocalAuthentication?.hasHardwareAsync) {
       LocalAuthentication.hasHardwareAsync()
         .then((has: boolean) => {
           if (has) LocalAuthentication.isEnrolledAsync().then(setBiometricAvailable)
@@ -120,6 +155,13 @@ export default function LoginScreen() {
   }
 
   const handleBiometricLogin = async () => {
+    if (!supportsBiometrics) {
+      Alert.alert(
+        'Not available in the browser',
+        unavailableReason('biometrics') ?? 'Biometrics require the Android or iOS app.',
+      )
+      return
+    }
     if (!LocalAuthentication?.authenticateAsync) {
       Alert.alert('Not available', 'Biometrics not available in this build. Run a dev-client build to enable.')
       return
@@ -298,7 +340,7 @@ export default function LoginScreen() {
         <OrDivider />
 
         <SocialRow
-          onGoogle={() => Alert.alert('Temporarily disabled', 'Google sign-in is paused while we fix the OAuth callback. Please use email/password or email code.')}
+          onGoogle={handleGoogleSignIn}
           onApple={() => Alert.alert('Coming soon', 'Apple sign-in is not available yet. Please use email/password or email code.')}
           onFacebook={() => Alert.alert('Coming soon', 'Facebook sign-in is not available yet. Please use email/password or email code.')}
         />

@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { useInvites } from '../../hooks/api/useInvites'
 import { Button } from '../../components/ui/Button'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { api } from '../../lib/api'
 
 export default function AcceptInviteScreen() {
@@ -20,8 +21,16 @@ export default function AcceptInviteScreen() {
     if (!email.trim() || !otp.trim()) return Alert.alert('Validation', 'Email and code required')
     setIsLoading(true)
     try {
-      // Public accept creates membership (and user if not exists)
-      await acceptInvitePublic({ businessId: businessId.trim() || undefined, email: email.trim(), otp: otp.trim(), name: name.trim() || undefined })
+      // Public accept creates membership (and user if not exists).
+      // The backend resolves the business from the invite code when
+      // businessId is omitted, so the code alone carries the full context.
+      const accepted = await acceptInvitePublic({ businessId: businessId.trim() || undefined, email: email.trim(), otp: otp.trim(), name: name.trim() || undefined })
+      const resolvedBusinessId = accepted?.businessId || businessId.trim()
+      if (resolvedBusinessId) {
+        const { AUTH_STORAGE_KEYS, primeAuthCache } = await import('../../lib/api')
+        await AsyncStorage.setItem(AUTH_STORAGE_KEYS.businessId, resolvedBusinessId)
+        primeAuthCache({ businessId: resolvedBusinessId })
+      }
      // Use direct API sign-in to get tokens
       try {
         const res = await api.post('/auth/sign-in/email-otp', { email: email.trim(), otp: otp.trim(), name: name.trim() || undefined })

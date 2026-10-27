@@ -28,6 +28,7 @@ type options struct {
 	memberships   MembershipResolver
 	subscriptions SubscriptionProvisioner
 	googleCfg     *config.GoogleConfig
+	clerkCfg      *config.ClerkConfig
 	emailSender   email.Sender
 }
 
@@ -41,6 +42,10 @@ func WithSubscriptionProvisioner(provisioner SubscriptionProvisioner) Option {
 
 func WithGoogleConfig(cfg config.GoogleConfig) Option {
 	return func(opts *options) { opts.googleCfg = &cfg }
+}
+
+func WithClerkConfig(cfg config.ClerkConfig) Option {
+	return func(opts *options) { opts.clerkCfg = &cfg }
 }
 
 func WithEmailSender(sender email.Sender) Option {
@@ -61,6 +66,11 @@ func New(db *gorm.DB, cfg Config, opts ...Option) *Module {
 		svc.WithGoogleConfig(*options.googleCfg)
 	}
 
+	if options.clerkCfg != nil {
+		clerkVerifier := NewClerkVerifier(*options.clerkCfg)
+		svc.WithClerkVerifier(clerkVerifier)
+	}
+
 	if options.emailSender != nil {
 		svc.WithEmailSender(options.emailSender)
 	}
@@ -73,6 +83,8 @@ func (m *Module) RegisterRoutes(r chi.Router) {
 	r.Post("/register", h.Register)
 	r.Post("/login", h.Login)
 	r.Post("/refresh", h.Refresh)
+	// Clerk SSO — accepts Clerk JWT from frontend, verifies via JWKS, creates/links user
+	r.Post("/clerk", h.ClerkLogin)
 	// Google SSO — better-auth parity: idToken flow (mobile) + callback (web)
 	// POST /auth/google  {idToken:{token, accessToken}} per GoogleSocialLogin.md
 	r.Post("/google", h.GoogleLogin)

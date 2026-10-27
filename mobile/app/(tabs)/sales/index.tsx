@@ -236,6 +236,7 @@ export default function SalesTab() {
         </View>
       ) : null}
       <ScrollView
+        keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive"
         contentContainerStyle={{
           padding: 16,
           paddingBottom: TAB_BAR_SCROLL_PADDING + 96,

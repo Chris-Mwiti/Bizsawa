@@ -30,6 +30,7 @@ import {
   SocialRow,
   SwitchLink,
 } from '../../components/auth/AuthShell'
+import { useSSO } from '@clerk/clerk-expo'
 
 type Mode = 'otp' | 'password'
 
@@ -37,10 +38,11 @@ export default function RegisterScreen() {
   const router = useRouter()
   const {
     register,
-    loginWithGoogle,
+    syncClerkSession,
     sendVerificationOtp,
     signInWithOtp,
   } = useAuth()
+  const { startSSOFlow } = useSSO()
 
   const [mode, setMode] = useState<Mode>('otp')
 
@@ -88,21 +90,26 @@ export default function RegisterScreen() {
   const handleGoogle = async () => {
     setIsGoogleLoading(true)
     try {
-      await loginWithGoogle()
-      // After Google auth, check if business exists
-      try {
-        const res = await api.get<{ businesses: any[] }>('/businesses')
-        const hasBusiness = Array.isArray(res.data.businesses) && res.data.businesses.length > 0
-        if (!hasBusiness) {
+      const result = await startSSOFlow({ strategy: 'oauth_google' })
+      if (result.createdSessionId) {
+        await syncClerkSession()
+        // After Google auth, check if business exists
+        try {
+          const res = await api.get<{ businesses: any[] }>('/businesses')
+          const hasBusiness = Array.isArray(res.data.businesses) && res.data.businesses.length > 0
+          if (!hasBusiness) {
+            router.replace('/auth/business-setup')
+          } else {
+            router.replace('/(tabs)')
+          }
+        } catch {
           router.replace('/auth/business-setup')
-        } else {
-          router.replace('/(tabs)')
         }
-      } catch {
-        router.replace('/auth/business-setup')
       }
     } catch (e: any) {
-      Alert.alert('Google sign-up failed', e.message || 'Try again')
+      if (e?.code !== 'ERR_CANCELED') {
+        Alert.alert('Google sign-up failed', e.message || 'Try again')
+      }
     } finally {
       setIsGoogleLoading(false)
     }

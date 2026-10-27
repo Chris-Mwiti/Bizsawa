@@ -4,6 +4,7 @@ node_modules/
 # Expo
 .expo/
 dist/
+dist-pwa/
 web-build/
 expo-env.d.ts
 
@@ -34,6 +35,9 @@ yarn-error.*
 .env.staging
 .env.production
 .env*.local
+
+# npm lockfile — this package uses bun (bun.lock is the source of truth)
+package-lock.json
 
 # typescript
 *.tsbuildinfo

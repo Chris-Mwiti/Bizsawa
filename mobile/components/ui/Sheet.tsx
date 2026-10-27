@@ -82,11 +82,10 @@ export function Sheet({
           behavior={centered || Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
         >
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <View
-              className={`bg-paper overflow-hidden ${centered ? 'rounded-[28px] w-full' : 'rounded-t-[28px]'}`}
-              style={{ maxHeight: '92%' }}
-            >
+          <View
+            className={`bg-paper overflow-hidden ${centered ? 'rounded-[28px] w-full' : 'rounded-t-[28px]'}`}
+            style={{ maxHeight: '92%' }}
+          >
               {/* Drag handle — bottom sheets only; meaningless on a centered card */}
               {!centered ? (
                 <View className='items-center pt-2.5 bg-white'>
@@ -144,7 +143,6 @@ export function Sheet({
                 </View>
               ) : null}
             </View>
-          </TouchableWithoutFeedback>
         </KeyboardAvoidingView>
       </View>
     </Modal>
