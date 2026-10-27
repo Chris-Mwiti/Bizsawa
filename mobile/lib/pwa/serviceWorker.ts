@@ -5,19 +5,21 @@ import { Platform } from 'react-native';
  *
  * The SW lives at the site root so its scope covers every route (expo-router
  * serves the SPA from index.html). Registration is deferred until after
- * `load` so it never competes with the first paint, and it is skipped in
- * dev where the SW would fight the Metro dev server.
+ * `load` so it never competes with the first paint.
+ *
+ * In dev we register a cache-free worker (sw-dev.js): without a service worker
+ * Chrome never fires `beforeinstallprompt`, so the install button would never
+ * appear. The production worker caches the shell, which would fight Metro's
+ * HMR and serve stale bundles, hence the separate dev script.
  */
 export function registerServiceWorker(): void {
   if (Platform.OS !== 'web') return;
   if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
 
-  // Dev builds are served by Metro with no-cache headers; a SW would serve
-  // stale bundles and confuse hot reload.
-  if (__DEV__) return;
+  const scriptUrl = __DEV__ ? '/sw-dev.js' : '/sw.js';
 
   const register = () => {
-    navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch((error) => {
+    navigator.serviceWorker.register(scriptUrl, { scope: '/' }).catch((error) => {
       console.warn('[PWA] service worker registration failed', error);
     });
   };

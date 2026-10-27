@@ -126,31 +126,29 @@ export default function RootLayout() {
                     }}
                   />
                   <Stack.Screen
+                    name='ai'
+                    options={{
+                      presentation: 'fullScreenModal',
+                      headerShown: false,
+                      contentStyle: { backgroundColor: '#F4F9F7' },
+                      animation: 'slide_from_bottom',
+                    }}
+                  />
+                  <Stack.Screen
                     name='coach'
                     options={{
-                      presentation: 'formSheet',
-                      sheetAllowedDetents: [0.92, 1] as any,
-                      sheetCornerRadius: 20,
-                      sheetExpandsWhenScrolledToEdge: false,
-                      sheetGrabberVisible: true,
+                      presentation: 'fullScreenModal',
                       headerShown: false,
-                      // Android fallback when formSheet not supported
-                      ...((Platform.OS === 'android' ? { presentation: 'modal' } : {}) as any),
-                      contentStyle: { backgroundColor: 'transparent' },
+                      contentStyle: { backgroundColor: '#F4F9F7' },
                       animation: 'slide_from_bottom',
                     }}
                   />
                   <Stack.Screen
                     name='social'
                     options={{
-                      presentation: 'formSheet',
-                      sheetAllowedDetents: [0.92, 1] as any,
-                      sheetCornerRadius: 20,
-                      sheetExpandsWhenScrolledToEdge: false,
-                      sheetGrabberVisible: true,
+                      presentation: 'fullScreenModal',
                       headerShown: false,
-                      ...((Platform.OS === 'android' ? { presentation: 'modal' } : {}) as any),
-                      contentStyle: { backgroundColor: 'transparent' },
+                      contentStyle: { backgroundColor: '#F4F9F7' },
                       animation: 'slide_from_bottom',
                     }}
                   />

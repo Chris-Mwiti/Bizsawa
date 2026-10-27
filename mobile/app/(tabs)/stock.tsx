@@ -1,11 +1,11 @@
 import React, { useState } from 'react'
 import {
-  ScrollView,
+  FlatList,
+  Image,
   View,
   Text,
   TouchableOpacity,
   TextInput,
-  Alert,
   Pressable,
 } from 'react-native'
 import {
@@ -14,9 +14,12 @@ import {
   Search,
   AlertTriangle,
   TrendingUp,
-  Edit,
+  MoreVertical,
+  ArrowUpDown,
   Trash2,
+  Pencil,
 } from 'lucide-react-native'
+import Toast from 'react-native-toast-message'
 import {
   Card,
   CardContent,
@@ -24,12 +27,12 @@ import {
 } from '../../components/ui/Card'
 import { Sheet } from '../../components/ui/Sheet'
 import { Button } from '../../components/ui/Button'
+import { Pill } from '../../components/ui/SoftUI'
 import { TAB_BAR_SCROLL_PADDING } from '../../constants/tabBar'
 import { SuccessCelebration } from '../../components/ui/SuccessCelebration'
 import { DashboardSkeleton } from '../../components/ui/Skeleton'
 import { useProducts } from '../../hooks/api/useProducts'
 import { useInventory } from '../../hooks/api/useInventory'
-import { shortId } from '../../lib/ids'
 import { formatCompactCurrency } from '../../lib/format'
 
 interface InventoryItem {
@@ -43,6 +46,10 @@ interface InventoryItem {
   unitPrice: number
   supplier: string
   lastRestocked: string
+  imageUrl?: string
+  sku?: string
+  variantCount: number
+  variantMinPrice?: number
 }
 
 export default function StockTab() {
@@ -65,11 +72,14 @@ export default function StockTab() {
 
   const [searchTerm, setSearchTerm] = useState('')
   const [filter, setFilter] = useState<'all' | 'low'>('all')
+  const [sort, setSort] = useState<'name' | 'stock' | 'value'>('name')
   const [showItemModal, setShowItemModal] = useState(false)
   const [inlineError, setInlineError] = useState<string | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
   const [successMsg, setSuccessMsg] = useState('')
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null)
+  const [actionItem, setActionItem] = useState<InventoryItem | null>(null)
+  const [actionMode, setActionMode] = useState<'menu' | 'delete'>('menu')
   const [step, setStep] = useState(0)
   const [formState, setFormState] = useState({
     name: '',
@@ -118,6 +128,10 @@ export default function StockTab() {
       p.maxStockLevel != null && p.maxStockLevel > 0
         ? p.maxStockLevel
         : Math.max(stockQty * 2, 1)
+    const variants = ((p as any).variants || []) as Array<{ price: unknown }>
+    const variantPrices = variants
+      .map((v) => parseFloat(String(v.price)))
+      .filter((price) => !isNaN(price))
     return {
       id: p.id.toString(),
       productId: p.id.toString(),
@@ -131,6 +145,11 @@ export default function StockTab() {
       lastRestocked: p.lastRestockedAt
         ? new Date(p.lastRestockedAt).toLocaleDateString()
         : new Date(p.createdAt).toLocaleDateString(),
+      imageUrl: (p as any).imageUrl || '',
+      sku: (p as any).sku || '',
+      variantCount: variants.length,
+      variantMinPrice:
+        variantPrices.length > 0 ? Math.min(...variantPrices) : undefined,
       _status: (p as any)._status,
       _changed: (p as any)._changed,
     } as any
@@ -170,6 +189,20 @@ export default function StockTab() {
       (item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         item.category.toLowerCase().includes(searchTerm.toLowerCase())),
   )
+  const sortedInventory = [...filteredInventory].sort((a, b) => {
+    if (sort === 'stock') return a.currentStock - b.currentStock
+    if (sort === 'value')
+      return (
+        b.currentStock * b.unitPrice - a.currentStock * a.unitPrice
+      )
+    return a.name.localeCompare(b.name)
+  })
+  const sortLabel =
+    sort === 'name' ? 'Name' : sort === 'stock' ? 'Stock' : 'Value'
+  const cycleSort = () =>
+    setSort((current) =>
+      current === 'name' ? 'stock' : current === 'stock' ? 'value' : 'name',
+    )
   const lowStockItems = combinedInventory.filter(
     (item) => item.currentStock <= item.minimumThreshold,
   )
@@ -239,6 +272,51 @@ export default function StockTab() {
       })),
     })
     setShowItemModal(true)
+  }
+  const handleOpenRestock = (item: InventoryItem) => {
+    setEditingItem(item)
+    setStep(2)
+    const prod = products.find((p: any) => p.id === item.productId) as any
+    setFormState({
+      name: item.name,
+      category: item.category,
+      currentStock: String(item.currentStock),
+      minimumThreshold: item.minimumThreshold.toString(),
+      maximumCapacity: item.maximumCapacity.toString(),
+      unitPrice: item.unitPrice.toString(),
+      buyingPrice:
+        prod?.cost != null && Number(prod.cost) > 0
+          ? String(prod.cost)
+          : (prod?.buyingPrice != null && Number(prod.buyingPrice) > 0
+            ? String(prod.buyingPrice)
+            : ''),
+      supplier: item.supplier === '—' ? '' : item.supplier,
+      sku: prod?.sku || '',
+      barcode: prod?.barcode || '',
+      variants: (prod?.variants || []).map((v: any) => ({
+        id: v.id,
+        name: v.name,
+        sku: v.sku || '',
+        barcode: v.barcode || '',
+        price: String(v.price),
+        cost: String(v.cost || v.price),
+      })),
+    })
+    setShowItemModal(true)
+  }
+  const openProductActions = (item: InventoryItem) => {
+    setActionMode('menu')
+    setActionItem(item)
+  }
+  const closeProductActions = () => {
+    setActionItem(null)
+    setActionMode('menu')
+  }
+  const runAction = (action: (item: InventoryItem) => void) => {
+    if (!actionItem) return
+    const item = actionItem
+    closeProductActions()
+    setTimeout(() => action(item), 220)
   }
   const handleSaveItem = async () => {
     setInlineError(null)
@@ -343,22 +421,21 @@ export default function StockTab() {
       setInlineError(e.message || 'Failed to save')
     }
   }
-  const handleDeleteItem = (item: InventoryItem) => {
-    Alert.alert('Delete product', `Delete "${item.name}"?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await deleteProduct(item.productId)
-            setSuccessMsg('Product removed'); setShowSuccess(true)
-          } catch (e: any) {
-            Alert.alert('Error', e.message)
-          }
-        },
-      },
-    ])
+  const confirmDeleteItem = async () => {
+    if (!actionItem) return
+    const item = actionItem
+    try {
+      await deleteProduct(item.productId)
+      closeProductActions()
+      setSuccessMsg('Product removed')
+      setShowSuccess(true)
+    } catch (e: any) {
+      Toast.show({
+        type: 'error',
+        text1: 'Could not delete product',
+        text2: e.message || 'Please try again.',
+      })
+    }
   }
 
   if (isLoadingProducts || isLoadingInventory) {
@@ -391,15 +468,145 @@ export default function StockTab() {
         </View>
       </View>
 
-      <ScrollView
-        keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive"
+      <FlatList
+        keyboardShouldPersistTaps='handled'
+        keyboardDismissMode='interactive'
+        showsVerticalScrollIndicator={false}
         contentContainerStyle={{
           padding: 16,
           paddingBottom: TAB_BAR_SCROLL_PADDING + 24,
-          gap: 16,
         }}
-        showsVerticalScrollIndicator={false}
-      >
+        data={sortedInventory}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => {
+          const st = getStockStatus(item)
+          const pct = Math.min(
+            (item.currentStock / Math.max(item.maximumCapacity, 1)) * 100,
+            100,
+          )
+          const isPending =
+            (item as any)._status === 'created' ||
+            (item as any)._status === 'updated'
+
+          return (
+            <View className='bg-surface rounded-3xl border border-hairline px-3 py-3'>
+              <Pressable
+                onPress={() => handleOpenEditModal(item)}
+                accessibilityRole='button'
+                accessibilityLabel={`${item.name}, ${formatCurrency(item.unitPrice)}, ${item.currentStock} in stock, ${st.label}`}
+                accessibilityHint='Opens product details'
+                className='flex-row items-center gap-3 active:opacity-90'
+              >
+                <View className='w-12 h-12 rounded-2xl bg-accent-soft items-center justify-center overflow-hidden shrink-0'>
+                  {item.imageUrl ? (
+                    <Image
+                      source={{ uri: item.imageUrl }}
+                      style={{ width: '100%', height: '100%' }}
+                      resizeMode='cover'
+                    />
+                  ) : (
+                    <Text className='font-geist-bold text-base font-bold text-accent'>
+                      {item.name.charAt(0).toUpperCase()}
+                    </Text>
+                  )}
+                </View>
+
+                <View className='flex-1 min-w-0'>
+                  <View className='flex-row items-center gap-2'>
+                    <Text
+                      className='font-geist-bold text-sm font-bold text-ink flex-1'
+                      numberOfLines={1}
+                    >
+                      {item.name}
+                    </Text>
+                    <Text className='font-geist-mono-bold text-sm font-bold text-ink'>
+                      {formatCurrency(item.unitPrice)}
+                    </Text>
+                  </View>
+                  <View className='flex-row items-center gap-2 mt-0.5'>
+                    <Text
+                      className='font-sans text-xs text-ink-muted flex-1'
+                      numberOfLines={1}
+                    >
+                      {item.category}
+                      {item.sku ? ` · ${item.sku}` : ''}
+                    </Text>
+                    {isPending ? (
+                      <View className='px-2 py-0.5 rounded-full bg-warn-soft border border-warn'>
+                        <Text className='font-geist-bold text-[10px] font-bold text-warn'>
+                          Pending
+                        </Text>
+                      </View>
+                    ) : null}
+                    <View className={`px-2 py-0.5 rounded-full border ${st.bg}`}>
+                      <Text
+                        className={`font-geist-bold text-[10px] font-bold ${st.text}`}
+                      >
+                        {st.label}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              </Pressable>
+
+              <View className='flex-row items-center gap-2 mt-2.5'>
+                <View className='flex-1'>
+                  <View className='h-1.5 bg-paper rounded-full overflow-hidden'>
+                    <View
+                      style={{ width: `${pct}%` }}
+                      className={`h-1.5 rounded-full ${
+                        item.currentStock <= item.minimumThreshold
+                          ? 'bg-neg'
+                          : pct <= 50
+                            ? 'bg-warn'
+                            : 'bg-accent'
+                      }`}
+                    />
+                  </View>
+                  <Text
+                    className='font-sans text-xs text-ink-subtle mt-1'
+                    numberOfLines={1}
+                  >
+                    {item.currentStock} in stock · min {item.minimumThreshold}
+                    {item.variantCount > 0
+                      ? ` · ${item.variantCount} variant${item.variantCount === 1 ? '' : 's'}`
+                      : ''}
+                    {item.variantMinPrice != null
+                      ? ` from ${formatCurrency(item.variantMinPrice)}`
+                      : ''}
+                  </Text>
+                </View>
+
+                <Pressable
+                  onPress={() => handleOpenRestock(item)}
+                  hitSlop={6}
+                  accessibilityRole='button'
+                  accessibilityLabel={`Restock ${item.name}`}
+                  className='flex-row items-center gap-1 px-3 rounded-full bg-accent active:opacity-90'
+                  style={{ minHeight: 36 }}
+                >
+                  <Plus size={13} color='white' />
+                  <Text className='font-geist-bold text-xs font-bold text-white'>
+                    Restock
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => openProductActions(item)}
+                  hitSlop={6}
+                  accessibilityRole='button'
+                  accessibilityLabel={`More actions for ${item.name}`}
+                  className='w-9 h-9 rounded-full bg-paper border border-hairline items-center justify-center active:opacity-90'
+                >
+                  <MoreVertical size={16} color='#4F625E' />
+                </Pressable>
+              </View>
+            </View>
+          )
+        }}
+        ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+        ListHeaderComponent={
+          <>
+            <View className='gap-4 pb-3'>
         {/* Metrics */}
         <View className='flex-row gap-3'>
           {[
@@ -498,198 +705,63 @@ export default function StockTab() {
           </Card>
         )}
 
-        {/* List */}
-        <View className='gap-3'>
-          {filteredInventory.map((item) => {
-            const st = getStockStatus(item)
-            const pct = Math.min(
-              (item.currentStock / Math.max(item.maximumCapacity, 1)) * 100,
-              100,
-            )
-            return (
-              <Card key={item.id} className='border border-gray-200'>
-                <CardContent className='p-4'>
-                  <View className='flex-row justify-between items-start gap-3 mb-3'>
-                    <View className='flex-1'>
-                      <View className='flex-row items-center gap-2 flex-wrap'>
-                        <Text className='font-geist-bold text-sm font-bold text-gray-900'>
-                          {item.name}
-                        </Text>
-                        <View className='px-2 py-1 rounded-full bg-white border border-gray-200'>
-                          <Text className='font-geist-bold text-xs font-bold tracking-widest text-gray-500'>
-                            {shortId(item.productId, 6)}
-                          </Text>
-                        </View>
-                        <View className='px-2 py-1 rounded-full bg-gray-100 border border-gray-200'>
-                          <Text className='font-geist-bold text-xs font-bold text-gray-600'>
-                            {item.category}
-                          </Text>
-                        </View>
-                        {(item as any)._status === 'created' || (item as any)._status === 'updated' ? (
-                          <View className='px-2 py-1 rounded-full bg-amber-50 border border-amber-200 flex-row items-center gap-1'>
-                            <View className='w-1.5 h-1.5 rounded-full bg-amber-500' />
-                            <Text className='font-geist-bold text-xs font-bold text-amber-700'>Pending</Text>
-                          </View>
-                        ) : null}
-                      </View>
-                      <Text className='font-sans text-xs text-gray-500 mt-1'>
-                        Supplier • {item.supplier} • Last {item.lastRestocked}
-                      </Text>
-                      <Text className='font-geist-semibold text-xs font-semibold text-gray-900 mt-1'>
-                        {formatCurrency(item.unitPrice)} / unit
-                      </Text>
-                      {(() => {
-                        const prod = products.find(
-                          (p: any) => p.id === item.productId,
-                        ) as any
-                        const vcount = prod?.variants?.length || 0
-                        if (vcount === 0) return null
-                        return (
-                          <View className='flex-row items-center gap-2 mt-1'>
-                            <View className='px-2 py-1 rounded-full bg-amber-50 border border-amber-200'>
-                              <Text className='font-geist-bold text-xs font-bold text-amber-700'>
-                                {vcount} variant{vcount === 1 ? '' : 's'}
-                              </Text>
-                            </View>
-                            <Text className='font-sans text-xs text-gray-500'>
-                              from{' '}
-                              {formatCurrency(
-                                Math.min(
-                                  ...prod.variants.map((v: any) =>
-                                    parseFloat(String(v.price)),
-                                  ),
-                                ),
-                              )}
-                            </Text>
-                          </View>
-                        )
-                      })()}
-                    </View>
-                    <View className='items-end'>
-                      <View className='flex-row items-center gap-2'>
-                        <View
-                          className={`w-2.5 h-2.5 rounded-full ${st.color}`}
-                        />
-                        <Text className='font-geist-bold text-sm font-bold text-gray-900'>
-                          {item.currentStock}
-                        </Text>
-                      </View>
-                      <Text className='font-sans text-xs text-gray-500'>
-                        of {item.maximumCapacity}
-                      </Text>
-                      <View
-                        className={`mt-1 px-2 py-1 rounded-full border ${st.bg}`}
-                      >
-                        <Text className={`font-geist-bold text-xs font-bold ${st.text}`}>
-                          {st.label}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  <View className='gap-2'>
-                    <View className='flex-row justify-between'>
-                      <Text className='font-sans text-xs text-gray-500'>Stock level</Text>
-                      <Text className='font-geist-medium text-xs font-medium text-gray-700'>
-                        {Math.round(pct)}%
-                      </Text>
-                    </View>
-                    <View className='h-2 bg-gray-100 rounded-full overflow-hidden'>
-                      <View
-                        style={{ width: `${pct}%` }}
-                        className={`h-2 rounded-full ${item.currentStock <= item.minimumThreshold ? 'bg-red-500' : pct <= 50 ? 'bg-amber-500' : 'bg-accent'}`}
-                      />
-                    </View>
-                    <View className='flex-row justify-between'>
-                      <Text className='font-sans text-xs text-gray-500'>
-                        Min {item.minimumThreshold}
-                      </Text>
-                      <Text className='font-geist-bold text-xs font-bold text-gray-700'>
-                        Value{' '}
-                        {formatCurrency(item.currentStock * item.unitPrice)}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View className='flex-row justify-end gap-2 mt-3 pt-3 border-t border-gray-100'>
-                    <TouchableOpacity
-                      onPress={() => {
-                        setEditingItem(item)
-                        setStep(2)
-                        const prod = products.find((p: any) => p.id === item.productId) as any
-                        setFormState({
-                          name: item.name,
-                          category: item.category,
-                          currentStock: String(item.currentStock),
-                          minimumThreshold: item.minimumThreshold.toString(),
-                          maximumCapacity: item.maximumCapacity.toString(),
-                          unitPrice: item.unitPrice.toString(),
-                          buyingPrice:
-                            prod?.cost != null && Number(prod.cost) > 0
-                              ? String(prod.cost)
-                              : (prod?.buyingPrice != null && Number(prod.buyingPrice) > 0
-                                ? String(prod.buyingPrice)
-                                : ''),
-                          supplier: item.supplier === '—' ? '' : item.supplier,
-                          sku: prod?.sku || '',
-                          barcode: prod?.barcode || '',
-                          variants: (prod?.variants || []).map((v: any) => ({
-                            id: v.id,
-                            name: v.name,
-                            sku: v.sku || '',
-                            barcode: v.barcode || '',
-                            price: String(v.price),
-                            cost: String(v.cost || v.price),
-                          })),
-                        })
-                        setShowItemModal(true)
-                      }}
-                      className='flex-row items-center gap-2 px-3 py-2 rounded-full bg-accent'
-                    >
-                      <Plus size={14} color='white' />
-                      <Text className='font-geist-bold text-xs font-bold text-white'>Restock</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => handleOpenEditModal(item)}
-                      className='flex-row items-center gap-2 px-3 py-2 rounded-full bg-white border border-gray-200'
-                    >
-                      <Edit size={14} color='#374151' />
-                      <Text className='font-geist-semibold text-xs font-semibold text-gray-700'>
-                        Edit
-                      </Text>
-                    </TouchableOpacity>
-                    <Button
-                      variant='secondary'
-                      size='sm'
-                      onPress={() => handleDeleteItem(item)}
-                      loading={!!isDeleting}
-                      className='border-red-200'
-                    >
-                      <Trash2 size={14} color='#dc2626' />
-                      <Text className='font-geist-bold text-xs font-bold text-red-600'>
-                        Delete
-                      </Text>
-                    </Button>
-                  </View>
-                </CardContent>
-              </Card>
-            )
-          })}
-          {filteredInventory.length === 0 && (
-            <Card className='border border-dashed border-gray-300'>
-              <CardContent className='items-center py-12'>
-                <Package size={28} color='#6b7280' />
-                <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mt-3'>
-                  {searchTerm ? 'No matches' : filter === 'low' ? 'All stocked up' : 'No inventory'}
+            {/* Filters + sort */}
+            <View className='flex-row items-center gap-2 pb-1'>
+              <Pill
+                label='All'
+                active={filter === 'all'}
+                onPress={() => setFilter('all')}
+              />
+              <Pill
+                label='Low stock'
+                active={filter === 'low'}
+                onPress={() => setFilter('low')}
+              />
+              <View className='flex-1' />
+              <Pressable
+                onPress={cycleSort}
+                accessibilityRole='button'
+                accessibilityLabel={`Sort products by ${sortLabel}`}
+                accessibilityHint='Cycles between name, stock and value'
+                className='flex-row items-center gap-1.5 px-3 py-2 rounded-full bg-surface border border-hairline'
+              >
+                <ArrowUpDown size={13} color='#64746F' />
+                <Text className='font-geist-bold text-xs font-bold text-ink-muted'>
+                  Sort: {sortLabel}
                 </Text>
-                <Text className='font-sans text-xs text-gray-500 mt-1'>
-                  Try a different search or add a product
-                </Text>
-              </CardContent>
-            </Card>
-          )}
-        </View>
-      </ScrollView>
+              </Pressable>
+            </View>
+
+            <View className='flex-row items-center justify-between'>
+              <Text className='font-sans text-xs text-ink-subtle'>
+                {sortedInventory.length}{' '}
+                {sortedInventory.length === 1 ? 'product' : 'products'}
+              </Text>
+              <Text className='font-sans text-xs text-ink-subtle'>
+                Tap a row to edit
+              </Text>
+            </View>
+            </View>
+          </>
+        }
+        ListEmptyComponent={
+          <Card className='border border-dashed border-gray-300'>
+            <CardContent className='items-center py-12'>
+              <Package size={28} color='#6b7280' />
+              <Text className='font-geist-semibold text-sm font-semibold text-gray-700 mt-3'>
+                {searchTerm
+                  ? 'No matches'
+                  : filter === 'low'
+                    ? 'All stocked up'
+                    : 'No inventory'}
+              </Text>
+              <Text className='font-sans text-xs text-gray-500 mt-1'>
+                Try a different search or add a product
+              </Text>
+            </CardContent>
+          </Card>
+        }
+      />
 
       <Sheet
         visible={showItemModal}
@@ -1240,6 +1312,123 @@ export default function StockTab() {
           </View>
         )}
       </Sheet>
+
+      <Sheet
+        visible={!!actionItem}
+        onClose={closeProductActions}
+        eyebrow={actionMode === 'delete' ? 'Confirm' : 'Product'}
+        title={
+          actionMode === 'delete'
+            ? 'Delete product?'
+            : actionItem?.name || 'Product'
+        }
+        subtitle={
+          actionItem
+            ? `${actionItem.currentStock} in stock • ${formatCurrency(actionItem.unitPrice)}`
+            : undefined
+        }
+        align='bottom'
+      >
+        {actionMode === 'menu' ? (
+          <View className='gap-2'>
+            <Pressable
+              onPress={() => runAction(handleOpenRestock)}
+              accessibilityRole='button'
+              accessibilityLabel={`Restock ${actionItem?.name || 'product'}`}
+              className='flex-row items-center gap-3 p-3 rounded-2xl bg-surface border border-hairline active:opacity-90'
+              style={{ minHeight: 56 }}
+            >
+              <View className='w-10 h-10 rounded-full bg-accent-soft items-center justify-center'>
+                <Plus size={17} color='#006B5F' />
+              </View>
+              <View className='flex-1'>
+                <Text className='font-geist-bold text-sm font-bold text-ink'>
+                  Restock
+                </Text>
+                <Text className='font-sans text-xs text-ink-muted'>
+                  Add incoming stock
+                </Text>
+              </View>
+            </Pressable>
+
+            <Pressable
+              onPress={() => runAction(handleOpenEditModal)}
+              accessibilityRole='button'
+              accessibilityLabel={`Edit ${actionItem?.name || 'product'}`}
+              className='flex-row items-center gap-3 p-3 rounded-2xl bg-surface border border-hairline active:opacity-90'
+              style={{ minHeight: 56 }}
+            >
+              <View className='w-10 h-10 rounded-full bg-paper border border-hairline items-center justify-center'>
+                <Pencil size={16} color='#4F625E' />
+              </View>
+              <View className='flex-1'>
+                <Text className='font-geist-bold text-sm font-bold text-ink'>
+                  Edit details
+                </Text>
+                <Text className='font-sans text-xs text-ink-muted'>
+                  Price, stock and variants
+                </Text>
+              </View>
+            </Pressable>
+
+            <Pressable
+              onPress={() => setActionMode('delete')}
+              accessibilityRole='button'
+              accessibilityLabel={`Delete ${actionItem?.name || 'product'}`}
+              className='flex-row items-center gap-3 p-3 rounded-2xl bg-neg-soft border border-neg/20 active:opacity-90'
+              style={{ minHeight: 56 }}
+            >
+              <View className='w-10 h-10 rounded-full bg-surface items-center justify-center'>
+                <Trash2 size={16} color='#A32C21' />
+              </View>
+              <View className='flex-1'>
+                <Text className='font-geist-bold text-sm font-bold text-neg'>
+                  Delete product
+                </Text>
+                <Text className='font-sans text-xs text-neg/80'>
+                  Remove from your catalog
+                </Text>
+              </View>
+            </Pressable>
+
+            <Button
+              variant='secondary'
+              size='md'
+              onPress={closeProductActions}
+              className='mt-1'
+            >
+              Cancel
+            </Button>
+          </View>
+        ) : (
+          <View className='gap-4'>
+            <Text className='font-sans text-sm text-ink-muted'>
+              This removes “{actionItem?.name}” from your catalog and hides its
+              stock. This cannot be undone.
+            </Text>
+            <View className='flex-row gap-2'>
+              <Button
+                variant='secondary'
+                size='md'
+                onPress={() => setActionMode('menu')}
+                className='flex-1'
+              >
+                Keep
+              </Button>
+              <Button
+                variant='destructive'
+                size='md'
+                loading={isDeleting}
+                onPress={confirmDeleteItem}
+                className='flex-1'
+              >
+                Delete
+              </Button>
+            </View>
+          </View>
+        )}
+      </Sheet>
+
       <SuccessCelebration visible={showSuccess} title='Stock updated!' message={successMsg} onClose={() => setShowSuccess(false)} />
     </View>
   )

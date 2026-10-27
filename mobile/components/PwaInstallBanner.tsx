@@ -31,7 +31,9 @@ export function PwaInstallBanner() {
     )
   }
 
-  if (state !== 'ready' && state !== 'available') return null
+  // `available` means the browser supports install but hasn't handed us the
+  // prompt yet — a button here would do nothing when tapped.
+  if (state !== 'ready') return null
 
   return (
     <View className='bg-ink px-4 py-3 flex-row items-center justify-between gap-3'>

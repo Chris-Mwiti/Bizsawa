@@ -17,6 +17,10 @@ export type PwaInstallState =
   /** This browser can't install the app. */
   | "unsupported";
 
+function isBrowser(): boolean {
+  return typeof window !== "undefined" && typeof window.addEventListener === "function";
+}
+
 function isStandalone(): boolean {
   if (typeof window === "undefined") return false;
   const iosStandalone = (window.navigator as { standalone?: boolean }).standalone === true;
@@ -32,6 +36,41 @@ function isIos(): boolean {
   return iOSDevice || iPadOS;
 }
 
+// Capture `beforeinstallprompt` as soon as the module loads. It can fire before
+// React mounts, and a missed event can never be replayed — which left the
+// install button visible but silently doing nothing.
+let deferredPrompt: BeforeInstallPromptEvent | null = null;
+let didInstall = false;
+const subscribers = new Set<() => void>();
+
+function notify() {
+  subscribers.forEach((subscriber) => subscriber());
+}
+
+function currentState(): PwaInstallState {
+  if (!isBrowser()) return "unsupported";
+  if (isStandalone() || didInstall) return "installed";
+  if (deferredPrompt) return "ready";
+  if ("onbeforeinstallprompt" in window) return "available";
+  if (isIos()) return "ios-manual";
+  return "unsupported";
+}
+
+if (isBrowser()) {
+  window.addEventListener("beforeinstallprompt", (event) => {
+    // Suppress Chrome's mini-infobar — we render our own button.
+    event.preventDefault();
+    deferredPrompt = event as BeforeInstallPromptEvent;
+    notify();
+  });
+
+  window.addEventListener("appinstalled", () => {
+    deferredPrompt = null;
+    didInstall = true;
+    notify();
+  });
+}
+
 /**
  * Drives the PWA install prompt on the marketing site.
  *
@@ -41,71 +80,55 @@ function isIos(): boolean {
  * the app by hand, so we show instructions rather than a dead button.
  */
 export function usePwaInstall() {
-  const [state, setState] = useState<PwaInstallState>("unsupported");
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [state, setState] = useState<PwaInstallState>(currentState);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (!isBrowser()) return;
 
-    if (isStandalone()) {
-      setState("installed");
-      return;
-    }
-
-    const onBeforeInstallPrompt = (event: Event) => {
-      // Suppress Chrome's mini-infobar — we render our own button.
-      event.preventDefault();
-      setDeferredPrompt(event as BeforeInstallPromptEvent);
-      setState("ready");
-    };
-
-    const onAppInstalled = () => {
-      setDeferredPrompt(null);
-      setState("installed");
-    };
-
-    window.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
-    window.addEventListener("appinstalled", onAppInstalled);
-
-    if ("onbeforeinstallprompt" in window) {
-      setState((current) => (current === "installed" ? current : "available"));
-    } else if (isIos()) {
-      setState("ios-manual");
-    } else {
-      setState("unsupported");
-    }
+    const update = () => setState(currentState());
+    // Re-read after mount in case the event fired before we subscribed.
+    update();
+    subscribers.add(update);
 
     return () => {
-      window.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt);
-      window.removeEventListener("appinstalled", onAppInstalled);
+      subscribers.delete(update);
     };
   }, []);
 
   const install = useCallback(async (): Promise<boolean> => {
-    if (!deferredPrompt) return false;
+    // Only a captured event can be prompted; there is nothing to call before
+    // the browser fires `beforeinstallprompt`.
+    const promptEvent = deferredPrompt;
+    if (!promptEvent) return false;
 
     try {
-      await deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      setDeferredPrompt(null);
+      await promptEvent.prompt();
+      const { outcome } = await promptEvent.userChoice;
+
+      // One prompt call per event — drop it even if the user dismissed.
+      if (deferredPrompt === promptEvent) {
+        deferredPrompt = null;
+      }
 
       if (outcome === "accepted") {
-        setState("installed");
+        didInstall = true;
+        notify();
         return true;
       }
 
-      // Dismissed — the browser may offer it again later.
-      setState("available");
+      // Dismissed — the browser may offer the prompt again later.
+      notify();
       return false;
     } catch (error) {
       console.warn("[PWA] install prompt failed", error);
       return false;
     }
-  }, [deferredPrompt]);
+  }, []);
 
   return {
     state,
-    canInstall: state === "ready" || state === "available",
+    // A button is only useful once the native prompt has been captured.
+    canInstall: state === "ready",
     isInstalled: state === "installed",
     needsManualSteps: state === "ios-manual",
     install,
