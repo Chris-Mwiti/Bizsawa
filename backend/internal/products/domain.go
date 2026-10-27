@@ -19,6 +19,7 @@ type Product struct {
 	TaxRuleID   *uuid.UUID       `gorm:"type:uuid" json:"taxRuleId"`
 	Price       decimal.Decimal  `gorm:"type:numeric(18,2);not null" json:"price"`
 	Cost        decimal.Decimal  `gorm:"type:numeric(18,2);not null" json:"cost"`
+	Supplier    string           `gorm:"type:text" json:"supplier"`
 	IsActive    bool             `gorm:"not null;default:true" json:"isActive"`
 	Variants    []ProductVariant `gorm:"foreignKey:ProductID" json:"variants,omitempty"`
 }

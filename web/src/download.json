@@ -1,10 +1,12 @@
 {
-  "version": "1.2.0",
-  "buildNumber": 3,
-  "releasedAt": "2026-10-07",
-  "apkUrl": "https://github.com/Chris-Mwiti/Bizsawa-releases/releases/download/preview-v1.2.0/bizsawa-preview-v1.2.0.apk",
+  "version": "1.3.0",
+  "buildNumber": 4,
+  "releasedAt": "2026-10-11",
+  "apkUrl": "https://github.com/Chris-Mwiti/Bizsawa-releases/releases/download/preview-v1.3.0/bizsawa-preview-v1.3.0.apk",
   "sizeMb": 127.3,
   "minAndroid": "8.0",
   "notes": "Stable preview build.",
-  "status": "live"
+  "status": "live",
+  "pwaUrl": "https://app.bizsawa.com",
+  "pwaNotes": "Runs in your browser and installs to your home screen. Works offline and syncs the same data as the app."
 }

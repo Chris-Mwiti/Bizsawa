@@ -329,3 +329,22 @@ func (h Handler) CheckEmailExists(w http.ResponseWriter, r *http.Request) {
 
 	sharedhttp.JSON(w, http.StatusOK, sharedhttp.Envelope{"exists": exists, "email": email})
 }
+
+func (h Handler) ClerkLogin(w http.ResponseWriter, r *http.Request) {
+	var req ClerkLoginRequest
+	if err := sharedhttp.Decode(r, &req); err != nil {
+		slog.ErrorContext(r.Context(), "clerk login decode failed", "err", err)
+		sharedhttp.Error(w, err)
+		return
+	}
+
+	resp, err := h.svc.LoginWithClerk(r.Context(), req)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "clerk login failed", "err", err)
+		sharedhttp.Error(w, err)
+		return
+	}
+
+	slog.InfoContext(r.Context(), "clerk login succeeded", "userId", resp.UserID)
+	sharedhttp.JSON(w, http.StatusOK, resp)
+}

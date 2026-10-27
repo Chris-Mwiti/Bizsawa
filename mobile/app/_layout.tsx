@@ -14,15 +14,20 @@ import { BusinessProvider } from '../contexts/BusinessContext'
 import { SyncProvider } from '../sync/SyncProvider'
 import { TourProvider } from '../contexts/TourContext'
 import { OfflineBanner } from '../components/OfflineBanner'
+import { PwaInstallBanner } from '../components/PwaInstallBanner'
 import { NavigationGateProvider } from '../lib/navigation/NavigationGate'
 import { initPerf, perf } from '../lib/perf'
 import {
   RouteLoadingBar,
   RouteLoadingChip,
 } from '../components/RouteLoadingBar'
+import { ClerkProviderWrapper } from '../lib/auth/ClerkProvider'
+import { registerServiceWorker } from '../lib/pwa/serviceWorker'
 
 initPerf()
 perf.mark('app.import')
+
+const PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY || '';
 
 export default function RootLayout() {
   const [queryClient] = useState(
@@ -67,15 +72,22 @@ export default function RootLayout() {
     if (fontsReady) perf.mark('startup.fonts.ready')
   }, [fontsReady])
 
+  // PWA: register the service worker (web only, no-op in dev) so the app
+  // is installable and opens offline from the cached shell.
+  useEffect(() => {
+    registerServiceWorker()
+  }, [])
+
   return (
     <TamaguiProvider config={tamaguiConfig} defaultTheme='light'>
       <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <BusinessProvider>
-            {!fontsReady ? null : (
-            <SyncProvider>
-              <TourProvider>
-                <NavigationGateProvider>
+        <ClerkProviderWrapper publishableKey={PUBLISHABLE_KEY}>
+          <AuthProvider>
+            <BusinessProvider>
+              {!fontsReady ? null : (
+              <SyncProvider>
+                <TourProvider>
+                  <NavigationGateProvider>
                 {/* Fix status-bar covering: opaque bar, dark content, never translucent so swipe-down shade stays reachable */}
                 <StatusBar
                   barStyle='dark-content'
@@ -83,6 +95,7 @@ export default function RootLayout() {
                   translucent={false}
                 />
                 <View style={{ flex: 1, backgroundColor: '#F4F9F7' }}>
+                  <PwaInstallBanner />
                   <OfflineBanner />
                   <View style={{ flex: 1 }}>
                     <Stack
@@ -113,31 +126,29 @@ export default function RootLayout() {
                     }}
                   />
                   <Stack.Screen
+                    name='ai'
+                    options={{
+                      presentation: 'fullScreenModal',
+                      headerShown: false,
+                      contentStyle: { backgroundColor: '#F4F9F7' },
+                      animation: 'slide_from_bottom',
+                    }}
+                  />
+                  <Stack.Screen
                     name='coach'
                     options={{
-                      presentation: 'formSheet',
-                      sheetAllowedDetents: [0.92, 1] as any,
-                      sheetCornerRadius: 20,
-                      sheetExpandsWhenScrolledToEdge: false,
-                      sheetGrabberVisible: true,
+                      presentation: 'fullScreenModal',
                       headerShown: false,
-                      // Android fallback when formSheet not supported
-                      ...((Platform.OS === 'android' ? { presentation: 'modal' } : {}) as any),
-                      contentStyle: { backgroundColor: 'transparent' },
+                      contentStyle: { backgroundColor: '#F4F9F7' },
                       animation: 'slide_from_bottom',
                     }}
                   />
                   <Stack.Screen
                     name='social'
                     options={{
-                      presentation: 'formSheet',
-                      sheetAllowedDetents: [0.92, 1] as any,
-                      sheetCornerRadius: 20,
-                      sheetExpandsWhenScrolledToEdge: false,
-                      sheetGrabberVisible: true,
+                      presentation: 'fullScreenModal',
                       headerShown: false,
-                      ...((Platform.OS === 'android' ? { presentation: 'modal' } : {}) as any),
-                      contentStyle: { backgroundColor: 'transparent' },
+                      contentStyle: { backgroundColor: '#F4F9F7' },
                       animation: 'slide_from_bottom',
                     }}
                   />
@@ -147,6 +158,14 @@ export default function RootLayout() {
                       presentation: 'card',
                       headerShown: true,
                       title: 'Sync Conflicts',
+                    }}
+                  />
+                  <Stack.Screen
+                    name='sms-test'
+                    options={{
+                      presentation: 'card',
+                      headerShown: true,
+                      title: 'SMS Capture Test',
                     }}
                   />
                 </Stack>
@@ -162,6 +181,7 @@ export default function RootLayout() {
             )}
           </BusinessProvider>
         </AuthProvider>
+        </ClerkProviderWrapper>
       </QueryClientProvider>
     </TamaguiProvider>
   )

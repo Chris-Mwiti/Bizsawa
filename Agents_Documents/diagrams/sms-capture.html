@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SMS capture module — frontend + backend, end to end</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:   #F4F9F7;
+      --color-ink:     #122b26;
+      --color-muted:   #47615b;
+      --color-soft:    #5b7670;
+      --color-accent:  #006b5f;
+      --color-link:    #04574d;
+      --font-sans:     'Geist', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', 'Noto Serif', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace;
+    }
+    body { font-family: var(--font-sans); background: var(--color-paper); color: var(--color-ink);
+      min-height: 100vh; padding: 3rem 2rem; }
+    .frame { max-width: 1240px; width: 100%; margin: 0 auto; }
+    .diagram-container { width: 100%; overflow-x: auto; margin-bottom: 2.5rem; }
+    .diagram-container .pele { min-width: 960px; }
+    .eyebrow { font-family: var(--font-mono); font-size: 0.66rem; font-weight: 500;
+      letter-spacing: 0.18em; text-transform: uppercase; color: var(--color-muted); margin-bottom: 0.5rem; }
+    h1 { font-family: var(--font-serif); font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400; letter-spacing: -0.02em; line-height: 1.15; color: var(--color-ink); margin-bottom: 1.5rem; }
+    h2 { font-family: var(--font-serif); font-size: 1.25rem; font-weight: 400;
+      letter-spacing: -0.01em; color: var(--color-ink); margin: 2rem 0 0.75rem; }
+    .ref { font-family: var(--font-mono); font-size: 0.8rem; color: var(--color-muted); margin-top: 1rem; }
+    .notes { font-size: 0.85rem; line-height: 1.6; color: var(--color-soft); max-width: 96ch; margin-top: 0.5rem; }
+    .notes code { font-family: var(--font-mono); font-size: 0.8rem; color: var(--color-ink); background: rgba(18,43,38,0.06); padding: 1px 5px; border-radius: 4px; }
+    .legend { display: flex; gap: 1.5rem; flex-wrap: wrap; margin: 1rem 0 2rem; font-size: 0.78rem; color: var(--color-muted); }
+    .legend span { display: inline-flex; align-items: center; gap: 6px; }
+    .legend i { display: inline-block; width: 14px; height: 2px; }
+    .pele { --pele-bg: #F4F9F7; --pele-fg: #122b26; --pele-muted: #47615b;
+      --pele-line: #122b26; --pele-surface: #ffffff; --pele-surface-alt: #e6e4d9;
+      --pele-border: #8a8a8a; --pele-accent: #006b5f; --pele-critical: #a32c21;
+      --pele-font: var(--font-sans); --pele-font-mono: var(--font-mono); }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Sequence · SMS capture module</p>
+    <h1>Device to backend, end to end</h1>
+    <div class="legend">
+      <span><i style="background:#006b5f"></i> happy path</span>
+      <span><i style="background:#a32c21"></i> rejection / quarantine</span>
+      <span><i style="background:#47615b"></i> infra / plumbing</span>
+    </div>
+    <div class="diagram-container"><div id="d1"></div></div>
+
+    <h2>1 · Happy path — one M-PESA SMS to a stored capture</h2>
+    <p class="notes">The Consent API surfaces a single SMS only after the user taps "Allow" on the system dialog.
+      Raw text never leaves the device until the strict TS parser accepts it, and even then only a hashed payer id
+      (no raw phone, no message text) is sent. The backend dedupes by <code>client_event_id</code> and by receipt,
+      merges processor-side records, and emits an outbox event — but quarantines unverified rows so they never
+      reach revenue totals.</p>
+
+    <p class="eyebrow" style="margin-top:2rem">Flowchart · frontend module map</p>
+    <h1>Mobile SMS capture — who calls whom</h1>
+    <div class="diagram-container"><div id="d2"></div></div>
+
+    <h2>2 · Frontend function map</h2>
+    <p class="notes">The native module is Android-only and optional: every function degrades to a no-op on iOS/web
+      so the rest of the app builds. <code>handleIncomingSms</code> is the single facade — the only place a
+      parsed SMS becomes a queued ingest item.</p>
+
+    <p class="eyebrow" style="margin-top:2rem">Flowchart · backend ingest pipeline</p>
+    <h1>Backend ingest — validation, merge, outbox</h1>
+    <div class="diagram-container"><div id="d3"></div></div>
+
+    <h2>3 · Backend ingest pipeline</h2>
+    <p class="notes">Each item runs in its own transaction so one bad row never fails the batch. <code>DecideMerge</code>
+      is a pure function (no DB) reused by the Pesapal/Daraja paths. Device-reported and disputed rows are
+      quarantined by <code>VerifiedScope()</code> and never feed revenue, analytics or tax.</p>
+
+    <p class="eyebrow" style="margin-top:2rem">State machine · captured payment lifecycle</p>
+    <h1>Captured payment states</h1>
+    <div class="diagram-container"><div id="d4"></div></div>
+
+    <h2>4 · CapturedPayment state machine</h2>
+    <p class="notes">Trust only goes up: a processor-side record (Pesapal/Daraja) upgrades a device-reported
+      row to <code>verified</code>, never the reverse. A receipt collision with a different amount marks both
+      rows <code>disputed</code> for review.</p>
+
+    <p class="eyebrow" style="margin-top:2rem">Sequence · device registration</p>
+    <h1>Device registration (first capture)</h1>
+    <div class="diagram-container"><div id="d5"></div></div>
+
+    <h2>5 · Device registration</h2>
+    <p class="notes">A device id is minted once per install via <code>POST /devices</code> and cached in
+      SecureStore. Unknown devices are rejected with <code>device_unknown</code>, so a replayed <code>client_event_id</code>
+      from a foreign device cannot create a capture.</p>
+
+    <p class="ref">Rendered with Pele · BizSawa SMS capture module · v2 parser, consent v1.</p>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/pele@1.8.0/dist/pele.global.js"></script>
+  <script>
+    const D = (id, src) => {
+      try {
+        document.getElementById(id).innerHTML = pele.render(src).svg;
+      } catch (e) {
+        console.error('Pele render failed for', id, e);
+        document.getElementById(id).textContent = 'Render error: ' + (e && e.message ? e.message : e);
+      }
+    };
+
+    D('d1', `sequenceDiagram
+  autonumber
+  participant U as User
+  participant N as Native SmsCapture module (Android)
+  participant J as JS autoCapture (armAutoCapture)
+  participant H as handleIncomingSms
+  participant P as parseMpesaSms (TS)
+  participant Q as sms queue (AsyncStorage)
+  participant A as Backend /payments/ingest
+  participant D as Backend DB + outbox
+  U->>J: grant consent (grantSmsConsent)
+  J->>N: startSmsUserConsent(sender=null)
+  N-->>J: consent task accepted, receiver registered
+  N->>N: user taps "Allow" on system dialog
+  N->>J: onSmsReceived{message}
+  J->>H: handleIncomingSms({body, sender})
+  H->>H: isMpesaSender(sender) gate
+  H->>P: parseMpesaSms(body)
+  P-->>H: ok {receipt, amountMinor, occurredAt, channel, rawPayerPhone}
+  H->>H: hashPayerPhone(phone) -> 32 hex
+  H->>Q: enqueueSmsItem(item)
+  H->>A: POST /payments/ingest [batch of 1]
+  A->>A: ValidateIngestItem (receipt, amount, age, currency)
+  A->>A: FindDevice(business, device) -> 404? device_unknown
+  A->>D: tx: FindCaptureByEvent (replay guard)
+  A->>D: tx: FindCaptureByReceipt (merge/dispute)
+  A->>D: tx: CreateCapture (device_reported)
+  A->>D: tx: emit PaymentCaptured outbox
+  A-->>H: {result: "created"}
+  H->>Q: setSmsQueue (drop acked)
+  H-->>J: {stored:true, receipt, amountMinor}
+  J->>N: re-arm consent (rearm)
+`);
+
+    D('d2', `flowchart TB
+  subgraph Native["Native (Android only)"]
+    NM["SmsCaptureModule.kt<br/>startUserConsent / stopUserConsent<br/>onSmsReceived · onSmsTimeout"]
+    GMS["Google Play Services<br/>SmsRetriever (Consent API)"]
+  end
+  subgraph Bridge["JS bridge · modules/sms-capture/index.ts"]
+    B1["getNativeModule() / getEmitter()"]
+    B2["startSmsUserConsent(sender)"]
+    B3["addSmsReceivedListener(cb)"]
+    B4["addSmsTimeoutListener(cb)"]
+    B5["getAutoCaptureAvailability()"]
+  end
+  subgraph Pipeline["TS pipeline · lib/mpesa-sms"]
+    C1["handleIncomingSms()<br/>facade: gate -> parse -> hash -> queue"]
+    C2["isMpesaSender()"]
+    C3["parseMpesaSms()"]
+    C4["hashPayerPhone() (SHA-256)"]
+    C5["enqueueSmsItem() / flushSmsQueue()"]
+    C6["hasSmsConsent()"]
+  end
+  subgraph Orchestration["Orchestration · lib/mpesa-sms/autoCapture.ts"]
+    O1["armAutoCapture(onResult, sender, onRearmError)"]
+    O2["rearm()"]
+    O3["handleIncomingSms -> onResult"]
+  end
+  subgraph Hooks["React hooks"]
+    H1["useSmsAutoCapture(enabled)"]
+    H2["useSmsCaptures() (react-query)"]
+    H3["useSmsQueue()"]
+    H4["useHandleSms()"]
+  end
+  subgraph UI["Screens"]
+    U1["sales/captures.tsx (list + flush)"]
+    U2["sms-test.tsx (diagnostics)"]
+  end
+  subgraph API["lib/api.ts"]
+    A1["POST /payments/ingest (batch <=50)"]
+    A2["GET /payments/captured"]
+    A3["POST /devices (registerDevice)"]
+  end
+
+  NM <--> GMS
+  B1 --> NM
+  B2 --> NM
+  B3 --> NM
+  B4 --> NM
+  B5 --> NM
+
+  O1 --> B2
+  O1 --> B3
+  O1 --> B4
+  O1 --> C6
+  O3 --> C1
+  C1 --> C2
+  C1 --> C3
+  C1 --> C4
+  C1 --> C5
+  C5 --> A1
+  H1 --> O1
+  H2 --> A2
+  H3 --> C5
+  H3 --> A1
+  H4 --> C1
+  U1 --> H2
+  U1 --> H3
+  U2 --> H1
+`);
+
+    D('d3', `flowchart TB
+  subgraph Handler["Handler · payments/ingest.go"]
+    H1["Ingest(w,r) -> businessID from ctx"]
+    H2["strictDecodeBody -> []IngestItem (unknown fields rejected)"]
+    H3["batch size 1..50 check"]
+    H4["svc.Ingest(ctx, businessID, items)"]
+  end
+  subgraph Validate["ValidateIngestItem (pure)"]
+    V1["client_event_id required"]
+    V2["source in {sms_device, manual, statement, pesapal, daraja}"]
+    V3["channel in {till, paybill, pochi, unknown}"]
+    V4["amountMinor > 0 ; currency ISO3"]
+    V5["receipt regex 6-16 alnum (required unless manual)"]
+    V6["occurred_at within 90d, not > now+5min"]
+    V7["payer_hash 16..128 chars"]
+  end
+  subgraph Ingest["svc.IngestOne (per item, own tx)"]
+    I1["FindDevice (device_unknown if missing)"]
+    I2["replay guard: FindCaptureByEvent -> duplicate"]
+    I3["receipt match: FindCaptureByReceipt"]
+    I4["DecideMerge (pure)"]
+    I5["CreateCapture (device_reported)"]
+    I6["emit PaymentCaptured outbox"]
+  end
+  subgraph Merge["DecideMerge outcomes"]
+    M1["MergeDuplicate (same client_event_id)"]
+    M2["MergeMerged (same receipt+amount; verified upgrades)"]
+    M3["MergeDisputed (same receipt, diff amount)"]
+    M4["MergeCreate (fresh)"]
+  end
+  subgraph Repo["Repository"]
+    R1["FindDevice"]
+    R2["FindCaptureByEvent"]
+    R3["FindCaptureByReceipt"]
+    R4["CreateCapture"]
+    R5["UpdateCapture"]
+    R6["ListCaptured (VerifiedScope filter)"]
+  end
+
+  H1 --> H2 --> H3 --> H4
+  H4 --> I1
+  I1 --> R1
+  I1 --> I2 --> R2
+  I2 --> I3 --> R3
+  I3 --> I4
+  I4 --> M1
+  I4 --> M2
+  I4 --> M3
+  I4 --> M4
+  M4 --> I5 --> R4
+  I5 --> I6
+  M2 --> R5
+  M3 --> R5
+  Validate --> I1
+`);
+
+    D('d4', `stateDiagram-v2
+  [*] --> device_reported : SMS captured (SourceSMSDevice)
+  device_reported --> verified : receipt+amount match with processor record (Pesapal/Daraja) — trustRank upgrade
+  device_reported --> disputed : same receipt, different amount (DecideMerge MergeDisputed)
+  device_reported --> device_reported : duplicate replay (client_event_id) — idempotent
+  verified --> verified : re-ingest (no downgrade — trustRank never decreases)
+  disputed --> disputed : stays disputed until manual review
+  note right of device_reported : quarantined — excluded from revenue, analytics, tax
+  note right of verified : only verified rows may aggregate (VerifiedScope)
+`);
+
+    D('d5', `sequenceDiagram
+  autonumber
+  participant App as Mobile app
+  participant API as Backend /devices
+  participant DB as business DB
+  App->>App: getOrRegisterDevice() -> SecureStore lookup
+  alt device id cached
+    App-->>App: return cached id (no network)
+  else no cached id
+    App->>API: POST /devices {platform, parserVersion}
+    API->>API: tenant + business from auth context (X-Business-ID)
+    API->>DB: CreateDevice (CaptureDevice row)
+    DB-->>API: device id (uuid)
+    API-->>App: { id }
+    App->>App: SecureStore.setSecure(DEVICE_KEY, id)
+  end
+  Note over App,API: Later ingests send device_id. Backend rejects unknown devices with device_unknown.
+`);
+  </script>
+</body>
+</html>

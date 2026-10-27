@@ -1,6 +1,7 @@
 package inventory
 
 import (
+	"context"
 	"time"
 
 	"github.com/google/uuid"
@@ -21,7 +22,7 @@ import (
 // (a matching out-movement exists) and has not already been restored. This prevents
 // phantom restores (e.g. cancelling a draft order that never removed stock) and
 // double restores (e.g. a sale voided twice).
-func ApplyLedger(db *gorm.DB, businessID uuid.UUID, refType string, refID uuid.UUID, lines []DecrementLine, sign int64, movementType, notes string) error {
+func ApplyLedger(ctx context.Context, db *gorm.DB, businessID uuid.UUID, refType string, refID uuid.UUID, lines []DecrementLine, sign int64, movementType, notes string) error {
 	if len(lines) == 0 {
 		return nil
 	}
@@ -99,6 +100,17 @@ func ApplyLedger(db *gorm.DB, businessID uuid.UUID, refType string, refID uuid.U
 		if err := db.Create(mv).Error; err != nil {
 			return err
 		}
+
+		// Attribute the touched inventory row + the new movement so later
+		// offline edits race through the version protocol instead of
+		// overwriting silently. Item id is looked up: the update above
+		// matched on product_id.
+		var itemID uuid.UUID
+		_ = db.Raw(`SELECT id FROM inventory_items WHERE business_id = ? AND product_id = ? AND deleted_at IS NULL`, businessID, line.ProductID).Scan(&itemID).Error
+		if itemID != uuid.Nil {
+			shareddb.TouchUpdated(db, ctx, businessID, "inventory_items", itemID)
+		}
+		shareddb.TouchCreated(db, ctx, businessID, "stock_movements", mv.ID)
 	}
 
 	return nil

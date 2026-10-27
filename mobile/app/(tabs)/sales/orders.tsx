@@ -56,6 +56,7 @@ const OrderItem = memo(
     onUpdateStatus,
     onInitiatePayment,
     isInitiatingPayment,
+    isUpdatingOrder,
     formatCurrency,
     formatDate,
   }: {
@@ -64,6 +65,7 @@ const OrderItem = memo(
     onUpdateStatus: (order: Order, status: OrderStatus) => void
     onInitiatePayment: (order: Order) => void
     isInitiatingPayment: boolean
+    isUpdatingOrder: boolean
     formatCurrency: (amount: number) => string
     formatDate: (iso: string) => string
   }) => {
@@ -106,53 +108,49 @@ const OrderItem = memo(
 
             <View className='flex-row gap-2'>
               {order.status === 'draft' && (
-                <TouchableOpacity
-                  className='flex-1 bg-accent py-3 rounded-2xl items-center'
-                  onPress={(e) => {
-                    e.stopPropagation()
-                    onUpdateStatus(order, OrderStatus.confirmed)
-                  }}
+                <Button
+                  size='md'
+                  className='flex-1'
+                  loading={isUpdatingOrder}
+                  onPress={() => onUpdateStatus(order, OrderStatus.confirmed)}
                 >
-                  <Text className='font-geist-bold text-white font-bold text-sm'>Confirm</Text>
-                </TouchableOpacity>
+                  Confirm
+                </Button>
               )}
               {order.status === 'confirmed' && (
-                <TouchableOpacity
-                  className='flex-1 bg-accent py-3 rounded-2xl items-center'
-                  onPress={(e) => {
-                    e.stopPropagation()
-                    onUpdateStatus(order, OrderStatus.fulfilled)
-                  }}
+                <Button
+                  size='md'
+                  className='flex-1'
+                  loading={isUpdatingOrder}
+                  onPress={() => onUpdateStatus(order, OrderStatus.fulfilled)}
                 >
-                  <Text className='font-geist-bold text-white font-bold text-sm'>Fulfill</Text>
-                </TouchableOpacity>
+                  Fulfill
+                </Button>
               )}
               {showMpesa ? (
-                <TouchableOpacity
-                  className='w-11 h-11 rounded-2xl bg-white border border-gray-200 items-center justify-center'
-                  onPress={(e) => {
-                    e.stopPropagation()
-                    onInitiatePayment(order)
-                  }}
-                  disabled={isInitiatingPayment}
+                <Button
+                  variant='secondary'
+                  size='sm'
+                  loading={isInitiatingPayment}
+                  onPress={() => onInitiatePayment(order)}
                 >
                   <Smartphone size={16} color='#111827' />
-                </TouchableOpacity>
+                </Button>
               ) : (
                 <View className='w-11 h-11 rounded-2xl bg-gray-100 border border-gray-200 items-center justify-center opacity-50'>
                   <Smartphone size={16} color='#6b7280' />
                 </View>
               )}
               {!isFulfilled && !isCancelled && (
-                <TouchableOpacity
-                  className='w-11 h-11 rounded-2xl bg-white border border-red-200 items-center justify-center'
-                  onPress={(e) => {
-                    e.stopPropagation()
-                    onUpdateStatus(order, OrderStatus.cancelled)
-                  }}
+                <Button
+                  variant='secondary'
+                  size='sm'
+                  loading={isUpdatingOrder}
+                  onPress={() => onUpdateStatus(order, OrderStatus.cancelled)}
+                  className='border-red-200'
                 >
                   <Trash2 size={16} color='#dc2626' />
-                </TouchableOpacity>
+                </Button>
               )}
             </View>
             {isFulfilled && (
@@ -189,7 +187,7 @@ export default function OrdersScreen() {
 
   const { products, isLoading: productsLoading } = useProducts()
   const { data: customers = [] } = useCustomers()
-  const { mutateAsync: createCustomer } = useCreateCustomer()
+  const { mutateAsync: createCustomer, isPending: isCreatingCustomer } = useCreateCustomer()
   const {
     orders,
     hasNextPage,
@@ -197,6 +195,7 @@ export default function OrdersScreen() {
     updateOrder,
     nextPage,
     isCreating: isCreatingOrder,
+    isUpdating: isUpdatingOrder,
     isFetching,
   } = useOrders({ limit: 25 })
   const { mutateAsync: initiatePayment, isPending: isInitiatingPayment } =
@@ -330,13 +329,17 @@ export default function OrdersScreen() {
   const handleCreateCustomer = async () => {
     if (!customerForm.name.trim())
       return Alert.alert('Validation', 'Customer name is required.')
-    const c = await createCustomer({
-      name: customerForm.name.trim(),
-      phone: customerForm.phone.trim() || undefined,
-    })
-    setCustomerId(c.id)
-    setCustomerForm({ name: '', phone: '' })
-    setShowCustomerModal(false)
+    try {
+      const c = await createCustomer({
+        name: customerForm.name.trim(),
+        phone: customerForm.phone.trim() || undefined,
+      })
+      setCustomerId(c.id)
+      setCustomerForm({ name: '', phone: '' })
+      setShowCustomerModal(false)
+    } catch (e: any) {
+      Alert.alert('Error', e.friendlyMessage || e.message || 'Failed to save customer.')
+    }
   }
   const handleCreateOrder = async () => {
     if (draftLines.length === 0)
@@ -477,6 +480,7 @@ export default function OrdersScreen() {
         onUpdateStatus={handleUpdateStatus}
         onInitiatePayment={handleInitiateOrderPayment}
         isInitiatingPayment={isInitiatingPayment}
+        isUpdatingOrder={isUpdatingOrder}
         formatCurrency={formatCurrency}
         formatDate={formatDate}
       />
@@ -486,6 +490,7 @@ export default function OrdersScreen() {
       handleUpdateStatus,
       handleInitiateOrderPayment,
       isInitiatingPayment,
+      isUpdatingOrder,
       formatCurrency,
       formatDate,
     ],
@@ -566,7 +571,7 @@ export default function OrdersScreen() {
         title='New customer'
         subtitle='They become selectable in the order sheet'
         footer={
-          <Button onPress={handleCreateCustomer}>Save customer</Button>
+          <Button onPress={handleCreateCustomer} loading={isCreatingCustomer}>Save customer</Button>
         }
       >
         <TextInput

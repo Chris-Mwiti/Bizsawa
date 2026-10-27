@@ -240,9 +240,7 @@ export const useInvoices = () => {
             r.amountPaid = toDecimalString(newPaid)
             r.amountDue = toDecimalString(newDue)
             r.status = newStatus
-            // bump sync version for conflict detection
-            const cur = (r.syncVersion ?? raw.sync_version ?? 1) as number
-            r.syncVersion = (typeof cur === 'number' ? cur : toNumber(cur as any) || 1) + 1
+            // NOTE: never bump syncVersion here — see useCustomers.ts.
           })
           localResult = { id, amount: amountStr, amountPaid: toDecimalString(newPaid), amountDue: toDecimalString(newDue), status: newStatus }
         })
@@ -315,8 +313,7 @@ export const useInvoices = () => {
               r.amountPaid = toDecimalString(newPaid)
               r.amountDue = toDecimalString(newDue)
               r.status = newStatus
-              const cur = (r.syncVersion ?? item.raw.sync_version ?? 1) as number
-              r.syncVersion = (typeof cur === 'number' ? cur : toNumber(cur as any) || 1) + 1
+              // NOTE: never bump syncVersion here — see useCustomers.ts.
             })
             allocations.push({ invoiceId: item.rec.id, invoiceNumber: item.rec.invoiceNumber ?? item.raw.invoice_number, amount: toDecimalString(apply), status: newStatus })
             totalApplied += apply

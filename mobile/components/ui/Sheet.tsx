@@ -23,6 +23,12 @@ interface SheetProps {
   /** Pinned to the bottom, inside the thumb zone. Total + CTA lives here. */
   footer?: React.ReactNode
   children: React.ReactNode
+  /**
+   * Card placement. 'bottom' is the default thumb-zone drawer; 'center'
+   * floats the card in the middle of the scrim for forms where a
+   * bottom-anchored sheet feels cramped (sales, orders, stock entry).
+   */
+  align?: 'bottom' | 'center'
 }
 
 /**
@@ -35,7 +41,10 @@ interface SheetProps {
  * Baymard/Stripe demand the action stay visible) points at one shape:
  *
  * - bottom-anchored card, capped at 92% of the screen, rounded top;
- * - drag handle + 44pt X button side by side in the header;
+ *   (`align="center"` floats it mid-scrim instead, with a fade — used by
+ *   the sales / orders / stock entry forms);
+ * - drag handle + 44pt X button side by side in the header (handle hidden
+ *   when centered);
  * - scrim tap and Back both dismiss;
  * - `footer` stays pinned in the thumb zone while `children` scroll.
  */
@@ -47,36 +56,42 @@ export function Sheet({
   subtitle,
   footer,
   children,
+  align = 'bottom',
 }: SheetProps) {
   const insets = useSafeAreaInsets()
+  const centered = align === 'center'
 
   return (
     <Modal
       visible={visible}
       transparent
-      animationType='slide'
+      animationType={centered ? 'fade' : 'slide'}
       onRequestClose={onClose}
       statusBarTranslucent
     >
-      <View className='flex-1 justify-end bg-black/50'>
+      <View className={`flex-1 bg-black/50 ${centered ? 'justify-center px-5' : 'justify-end'}`}>
         <Pressable className='absolute inset-0' onPress={onClose} />
-        {/* flex-1 + justify-end is load-bearing: without it the view sizes to
+        {/* flex-1 + matching justify is load-bearing: without it the view sizes to
             content and the keyboard-avoiding shift never engages, leaving the
-            focused field buried under the keyboard. */}
+            focused field buried under the keyboard.
+            Centered cards MUST use padding behavior: with adjustResize the
+            window already shrinks, so height behavior subtracts the keyboard
+            twice and the card collapses. Padding offsets without resizing. */}
         <KeyboardAvoidingView
-          style={{ flex: 1, justifyContent: 'flex-end' }}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1, justifyContent: centered ? 'center' : 'flex-end', alignItems: centered ? 'center' : undefined }}
+          behavior={centered || Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
         >
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <View
-              className='bg-paper rounded-t-[28px] overflow-hidden'
-              style={{ maxHeight: '92%' }}
-            >
-              {/* Drag handle */}
-              <View className='items-center pt-2.5 bg-white'>
-                <View className='w-10 h-1.5 rounded-full bg-gray-300' />
-              </View>
+          <View
+            className={`bg-paper overflow-hidden ${centered ? 'rounded-[28px] w-full' : 'rounded-t-[28px]'}`}
+            style={{ maxHeight: '92%' }}
+          >
+              {/* Drag handle — bottom sheets only; meaningless on a centered card */}
+              {!centered ? (
+                <View className='items-center pt-2.5 bg-white'>
+                  <View className='w-10 h-1.5 rounded-full bg-gray-300' />
+                </View>
+              ) : null}
               {/* Header: title left, 44pt close right */}
               <View className='flex-row justify-between items-center px-5 py-3 bg-white border-b border-gray-200'>
                 <View className='flex-1 pr-3'>
@@ -128,7 +143,6 @@ export function Sheet({
                 </View>
               ) : null}
             </View>
-          </TouchableWithoutFeedback>
         </KeyboardAvoidingView>
       </View>
     </Modal>

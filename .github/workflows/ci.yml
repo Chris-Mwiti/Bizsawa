@@ -1,11 +1,21 @@
 name: CI
 
+# Branch flow: feature branches (feat/*) → staging (preview) → main (production).
+# - feat/* pushes run the full test matrix against the development env config.
+# - staging runs the same matrix against staging env + builds the preview APK.
+# - main runs against production env and owns backend deploys.
+# Merge only after the branch's own CI is green: feat/* → staging → main.
 on:
   push:
-    branches: [main]
+    branches: [main, staging, 'feat/**']
   pull_request:
-    branches: [main]
+    branches: [main, staging]
   workflow_dispatch:
+
+# Resolves to development | staging | production from the ref under test,
+# so each environment is exercised with its own configuration.
+env:
+  APP_ENV: ${{ github.ref == 'refs/heads/main' && 'production' || (github.ref == 'refs/heads/staging' && 'staging' || 'development') }}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -87,7 +97,7 @@ jobs:
       - name: GolangCI-Lint
         uses: golangci/golangci-lint-action@v7
         with:
-          version: v2.1.6
+          version: v2.6.2
           working-directory: backend
           args: --timeout=2m
           # 121 inherited findings remain (errcheck, lll, gocritic…);
@@ -95,6 +105,7 @@ jobs:
           only-new-issues: true
       - name: Go test
         env:
+          APP_ENV: ${{ env.APP_ENV }}
           DATABASE_DSN: postgres://postgres:postgres@localhost:5432/bizsawa_test?sslmode=disable
           REDIS_ADDR: localhost:6379
           JWT_SIGNING_KEY: test-signing-key-for-ci-must-be-32+chars
@@ -118,6 +129,13 @@ jobs:
           bun-version: 1.3.10
       - name: Start postgres+redis
         working-directory: backend
+        # compose requires an env_file (.env.development is gitignored) and
+        # interpolates POSTGRES_* from the shell; match the DSNs used below.
+        env:
+          ENV_FILE: .env.example
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: bizsawa_test
         run: docker compose up -d postgres redis
       - name: Wait for postgres
         run: |
@@ -131,6 +149,7 @@ jobs:
       - name: Start API (background)
         working-directory: backend
         env:
+          APP_ENV: ${{ env.APP_ENV }}
           APP_ADDR: :5505
           DATABASE_DSN: postgres://postgres:postgres@localhost:5432/bizsawa_test?sslmode=disable
           REDIS_ADDR: localhost:6379
@@ -151,8 +170,10 @@ jobs:
         env:
           E2E_API_URL: http://localhost:5505/api/v1
           E2E_JWT_SIGNING_KEY: test-signing-key-for-ci-must-be-32+chars
-        run: |
-          if [ -f "scripts/e2e.sh" ]; then bash scripts/e2e.sh; else bunx vitest run e2e/api --passWithNoTests 2>&1 | head -n 50; echo "no e2e suite yet — placeholder pass"; fi
+        # Steps above already started postgres/redis, migrated and started the
+        # API on :5505; scripts/e2e.sh is the local-dev equivalent (it re-runs
+        # compose with a local password and its own API on :5504).
+        run: bunx vitest run e2e/api --reporter=verbose
       - name: Maestros (optional — requires emulator)
         if: false
         run: maestro test mobile/e2e/maestro
@@ -179,12 +200,12 @@ jobs:
           URL="${{ secrets.API_URL || 'https://api.bizsawa.com' }}"
           curl -f "$URL/ready" || curl -f "$URL/health" || echo "health check skipped (no API_URL secret)"
 
-  # ── CD: EAS preview on main ───────────────────────────────────────────
+  # ── CD: EAS preview on staging + main ───────────────────────────────────
   eas-preview:
     name: eas preview (android apk)
     runs-on: ubuntu-latest
     needs: [mobile-lint-type, backend-vet-test]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging')
     defaults:
       run:
         working-directory: mobile

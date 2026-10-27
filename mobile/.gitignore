@@ -4,6 +4,7 @@ node_modules/
 # Expo
 .expo/
 dist/
+dist-pwa/
 web-build/
 expo-env.d.ts
 
@@ -35,6 +36,9 @@ yarn-error.*
 .env.production
 .env*.local
 
+# npm lockfile — this package uses bun (bun.lock is the source of truth)
+package-lock.json
+
 # typescript
 *.tsbuildinfo
 
@@ -46,3 +50,8 @@ yarn-error.*
 NOTES*
 
 GoogleService-Info.plist
+
+# sms-capture standalone test project outputs
+modules/sms-capture/android/.gradle/
+modules/sms-capture/android/**/build/
+modules/sms-capture/**/local.properties

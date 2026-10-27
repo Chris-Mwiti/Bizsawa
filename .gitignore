@@ -1,4 +1,11 @@
 .env
+node_modules/
+.env.*
+!.env.example
+!.env.*.example
+
+.gradle/
+build/
 
 *.exe
 # --------------------------

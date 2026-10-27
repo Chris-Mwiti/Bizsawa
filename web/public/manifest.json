@@ -1,0 +1,17 @@
+{
+  "name": "BizSawa — The operating system for small trade",
+  "short_name": "BizSawa",
+  "description": "Sales, stock, invoices, M-Pesa and an AI coach that knows your numbers. Offline-first.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F4F9F7",
+  "theme_color": "#122b26",
+  "icons": [
+    { "src": "/logo-mark.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/logo-mark.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/logo-mark.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/logo-mark.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

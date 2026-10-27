@@ -22,6 +22,7 @@ import {
   Plus,
   ArrowUpRight,
   ArrowDownRight,
+  BarChart3,
 } from 'lucide-react-native'
 import {
   Card,
@@ -299,6 +300,40 @@ export default function Dashboard() {
               View analytics →
             </Text>
           </Pressable>
+        </CardContent>
+      </Card>
+
+      {/* Weekly revenue — bar chart */}
+      <Card className='border border-gray-200'>
+        <CardHeader className='flex-row items-center justify-between'>
+          <View className='flex-row items-center gap-2'>
+            <BarChart3 size={16} color='#111827' />
+            <Text className='text-sm font-bold text-gray-900'>Weekly revenue</Text>
+          </View>
+          <Text className='text-xs text-gray-400'>last 7 days</Text>
+        </CardHeader>
+        <CardContent className='pt-0'>
+          {(() => {
+            const days = weeklyOverview.length ? weeklyOverview : []
+            const max = Math.max(...days.map((d: any) => Number(d.sales) || 0), 1)
+            return (
+              <View className='flex-row items-end justify-between gap-2' style={{ height: 120 }}>
+                {days.map((d: any, i: number) => {
+                  const v = Number(d.sales) || 0
+                  const h = Math.max(4, (v / max) * 100)
+                  return (
+                    <View key={i} className='flex-1 items-center gap-1'>
+                      <View style={{ height: `${h}%` }} className='w-full rounded-t-md bg-accent' />
+                      <Text className='text-[10px] font-medium text-gray-500'>{d.day}</Text>
+                    </View>
+                  )
+                })}
+              </View>
+            )
+          })()}
+          <Text className='text-xs text-gray-500 mt-2'>
+            {formatCurrency(weeklyRevenue)} this week
+          </Text>
         </CardContent>
       </Card>
 

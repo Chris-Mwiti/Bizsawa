@@ -270,7 +270,14 @@ func (h Handler) AcceptInvitePublic(w http.ResponseWriter, r *http.Request) {
 		// For direct login, front-end can call /auth/sign-in/email-otp with same email/otp after this.
 	}
 
-	sharedhttp.JSON(w, http.StatusOK, sharedhttp.Envelope{"status": "accepted", "invite": invite, "userId": userID, "role": role, "businessId": req.BusinessID})
+	// businessId comes from the invite row when the client didn't supply one,
+	// so the client can select the right business right after accepting.
+	resolvedBusinessID := req.BusinessID
+	if resolvedBusinessID == uuid.Nil && invite != nil {
+		resolvedBusinessID = invite.BusinessID
+	}
+
+	sharedhttp.JSON(w, http.StatusOK, sharedhttp.Envelope{"status": "accepted", "invite": invite, "userId": userID, "role": role, "businessId": resolvedBusinessID})
 }
 
 func errForbiddenRole() error {

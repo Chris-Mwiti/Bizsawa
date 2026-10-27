@@ -83,7 +83,9 @@ export const useInvites = () => {
     inviteByEmail: inviteByEmail.mutateAsync,
     isInviting: inviteByEmail.isPending,
     acceptInvite: acceptInvite.mutateAsync,
+    isAcceptingInvite: acceptInvite.isPending,
     acceptInvitePublic: acceptInvitePublic.mutateAsync,
+    isAcceptingInvitePublic: acceptInvitePublic.isPending,
     refetch: () => {
       membersQuery.refetch()
       invitesQuery.refetch()

@@ -25,6 +25,7 @@ import {
   CardTitle,
 } from '../../../components/ui/Card'
 import { Badge } from '../../../components/ui/Badge'
+import { Button } from '../../../components/ui/Button'
 import { useExpenses } from '../../../hooks/api/useExpenses'
 import { TAB_BAR_SCROLL_PADDING } from '../../../constants/tabBar'
 import { toNumber } from '../../../lib/api-dtos'
@@ -40,7 +41,7 @@ export default function InsightsExpenses() {
     spentAt: new Date().toISOString(),
   })
 
-  const { expenses, isLoading, createExpense, deleteExpense, isCreating } =
+  const { expenses, isLoading, createExpense, deleteExpense, isCreating, isDeleting } =
     useExpenses()
 
   const formatCurrency = (amount: number) =>
@@ -134,7 +135,7 @@ export default function InsightsExpenses() {
       >
         {/* Hero total — impeccable: generous padding, hierarchy */}
         <Card className='border border-gray-200'>
-          <CardContent className='p-5'>
+          <CardContent className='p-6'>
             <Text className='font-geist-mono-bold text-xs font-bold tracking-widest text-gray-500 uppercase'>
               Total spend
             </Text>
@@ -251,12 +252,15 @@ export default function InsightsExpenses() {
                           {formatCurrency(toNumber(e.amount))}
                         </Text>
                         <View className='flex-row gap-1'>
-                          <Pressable
+                          <Button
+                            variant='secondary'
+                            size='sm'
+                            loading={!!isDeleting}
                             onPress={() => handleDelete(e.id)}
-                            className='w-11 h-11 rounded-full bg-red-50 border border-red-100 items-center justify-center active:bg-red-100'
+                            className='border-red-100'
                           >
                             <Trash2 size={14} color='#dc2626' />
-                          </Pressable>
+                          </Button>
                         </View>
                       </View>
                     </View>
@@ -388,17 +392,14 @@ export default function InsightsExpenses() {
               </Text>
             </View>
 
-            <TouchableOpacity
-              className='mt-2 bg-accent py-4 rounded-2xl items-center active:opacity-90 disabled:opacity-50'
+            <Button
+              size='md'
+              className='mt-2'
+              loading={isCreating}
               onPress={handleSubmit}
-              disabled={isCreating}
             >
-              {isCreating ? (
-                <ActivityIndicator color='white' />
-              ) : (
-                <Text className='font-geist-bold text-white font-bold'>Save Expense</Text>
-              )}
-            </TouchableOpacity>
+              Save Expense
+            </Button>
 
             <Text className='font-sans text-xs text-center text-gray-500'>
               POST /api/v1/expenses with X-Business-ID — creates Expense +

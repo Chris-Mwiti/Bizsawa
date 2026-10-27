@@ -44,7 +44,7 @@ export default function SalesTab() {
 
   const { products, isLoading: productsLoading } = useProducts()
   const { data: customers = [], isLoading: customersLoading } = useCustomers() as any
-  const { mutateAsync: createCustomer } = useCreateCustomer()
+  const { mutateAsync: createCustomer, isPending: isCreatingCustomer } = useCreateCustomer()
   const {
     sales,
     createSale,
@@ -182,13 +182,17 @@ export default function SalesTab() {
   const handleCreateCustomer = async () => {
     if (!customerForm.name.trim())
       return Alert.alert('Validation', 'Customer name is required.')
-    const customer = await createCustomer({
-      name: customerForm.name.trim(),
-      phone: customerForm.phone.trim() || undefined,
-    })
-    setCustomerId(customer.id)
-    setCustomerForm({ name: '', phone: '' })
-    setShowCustomerModal(false)
+    try {
+      const customer = await createCustomer({
+        name: customerForm.name.trim(),
+        phone: customerForm.phone.trim() || undefined,
+      })
+      setCustomerId(customer.id)
+      setCustomerForm({ name: '', phone: '' })
+      setShowCustomerModal(false)
+    } catch (error: any) {
+      setInlineError(error.friendlyMessage || error.message || 'Failed to save customer.')
+    }
   }
 
   const handleCreateSale = async () => {
@@ -232,6 +236,7 @@ export default function SalesTab() {
         </View>
       ) : null}
       <ScrollView
+        keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive"
         contentContainerStyle={{
           padding: 16,
           paddingBottom: TAB_BAR_SCROLL_PADDING + 96,
@@ -385,7 +390,7 @@ export default function SalesTab() {
         title='New customer'
         subtitle='They become selectable in the sale sheet'
         footer={
-          <Button onPress={handleCreateCustomer}>Save customer</Button>
+          <Button onPress={handleCreateCustomer} loading={isCreatingCustomer}>Save customer</Button>
         }
       >
         <TextInput

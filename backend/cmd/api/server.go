@@ -56,23 +56,49 @@ type Dependencies struct {
 	Sync      *sync.Module
 }
 
+// corsAllowedHeaders lists every request header the clients send.
+//
+// The web build runs in a browser, so any custom header triggers a CORS
+// preflight. go-chi/cors aborts the preflight — replying WITHOUT
+// Access-Control-Allow-Origin — as soon as one requested header is missing
+// from this list, and the browser then reports "blocked by CORS policy".
+// The native app is not subject to CORS, so a header added to the clients but
+// forgotten here breaks only the web build.
+//
+// Keep in sync with the headers set by mobile/lib/api.ts and mobile/sync.
+var corsAllowedHeaders = []string{
+	"Accept",
+	"Authorization",
+	"Content-Type",
+	"X-Idempotency-Key",
+	"X-Request-ID",
+	"X-Business-ID",
+	"X-Device-Id", // device attribution (mobile/lib/deviceId) — read by middleware.TenantResolution
+}
+
+// corsHandler builds the CORS middleware for the given allowed origins.
+// Split out from NewRouter so the policy can be exercised in tests.
+func corsHandler(allowedOrigins []string) func(http.Handler) http.Handler {
+	return cors.Handler(cors.Options{
+		AllowedOrigins:   allowedOrigins,
+		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowedHeaders:   corsAllowedHeaders,
+		AllowCredentials: true,
+		MaxAge:           300,
+	})
+}
+
 func NewRouter(deps Dependencies) http.Handler {
 	r := chi.NewRouter()
 
 	// Observability: OpenTelemetry tracing + metrics + correlated structured logging.
-	// Must be early to capture full latency for load/spike tests. Replaces chi Logger with trace-aware logging.
+	// Must be early to capture full latency for load/spike tests. Replaces chi Logger with request-aware logging.
 	r.Use(observability.HTTPMiddleware("bizsawa-api"))
 	r.Use(chimiddleware.RequestID)
 	r.Use(chimiddleware.RealIP)
 	r.Use(chimiddleware.Recoverer)
 	r.Use(chimiddleware.Timeout(60 * time.Second))
-	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   deps.Config.CORS.AllowedOrigins,
-		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Idempotency-Key", "X-Request-ID", "X-Business-ID"},
-		AllowCredentials: true,
-		MaxAge:           300,
-	}))
+	r.Use(corsHandler(deps.Config.CORS.AllowedOrigins))
 	r.Use(middleware.TenantResolution)
 	r.Use(middleware.Idempotency)
 
@@ -201,6 +227,7 @@ func NewRouter(deps Dependencies) http.Handler {
 
 			if deps.Payments != nil {
 				r.Route("/payments", deps.Payments.RegisterRoutes)
+				r.Route("/devices", deps.Payments.RegisterDeviceRoutes)
 			}
 
 			if deps.Analytics != nil {

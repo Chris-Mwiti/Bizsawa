@@ -126,3 +126,27 @@ func TestRejectedIDsAreValidUUIDs(t *testing.T) {
 		}
 	}
 }
+
+// Same device that wrote last wins silently; every other combination raises
+// an explicit conflict for the user to resolve on /sync-conflicts.
+func TestDecideVersionMismatch(t *testing.T) {
+	cases := []struct {
+		name   string
+		client string
+		writer string
+		want   VersionMismatchAction
+	}{
+		{"same device applies", "dev-a", "dev-a", MismatchApply},
+		{"another device conflicts", "dev-b", "dev-a", MismatchConflict},
+		{"unknown writer conflicts", "dev-b", "", MismatchConflict},
+		{"device-less push conflicts even against known writer", "", "dev-a", MismatchConflict},
+		{"both unknown conflicts", "", "", MismatchConflict},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := DecideVersionMismatch(tc.client, tc.writer); got != tc.want {
+				t.Fatalf("DecideVersionMismatch(%q, %q) = %q, want %q", tc.client, tc.writer, got, tc.want)
+			}
+		})
+	}
+}

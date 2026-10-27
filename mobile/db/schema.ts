@@ -4,7 +4,7 @@ import { appSchema, tableSchema } from '@nozbe/watermelondb'
 // All syncable Postgres tables mirrored; sync_version stays server-side but cached locally for conflict check (§4)
 // Watermelon auto-adds id, created_at, updated_at; we add deleted_at soft-delete + business_id + sync_version
 export const schema = appSchema({
-  version: 5,
+  version: 6,
   tables: [
     tableSchema({
       name: 'products',
@@ -264,6 +264,8 @@ export const schema = appSchema({
         { name: 'server_payload', type: 'string' },
         { name: 'client_version', type: 'number' },
         { name: 'server_version', type: 'number' },
+        { name: 'client_device_id', type: 'string', isOptional: true },
+        { name: 'server_device_id', type: 'string', isOptional: true },
         { name: 'resolution', type: 'string', isOptional: true },
       ],
     }),

@@ -2,7 +2,6 @@ import '../polyfills'
 import { Database } from '@nozbe/watermelondb'
 import SQLiteAdapter from '@nozbe/watermelondb/adapters/sqlite'
 import { schema } from './schema'
-import { tableSchema } from '@nozbe/watermelondb'
 import Product from './models/Product'
 import ProductVariant from './models/ProductVariant'
 import Customer from './models/Customer'
@@ -20,87 +19,7 @@ import Conflict from './models/Conflict'
 
 // SQLiteAdapter via @morrowdigital/watermelondb-expo-plugin (disableJsi:false) → JSI in dev-client
 // Expo Go has no native module — must use dev-client build (see guide below)
-import { schemaMigrations } from '@nozbe/watermelondb/Schema/migrations'
-
-const migrations = schemaMigrations({
-  migrations: [
-    {
-      toVersion: 2,
-      steps: [
-        {
-          type: 'add_columns',
-          table: 'sale_lines',
-          columns: [
-            {
-              name: 'product_variant_id',
-              type: 'string',
-              isOptional: true,
-            },
-          ],
-        },
-        {
-          type: 'add_columns',
-          table: 'order_lines',
-          columns: [
-            {
-              name: 'product_variant_id',
-              type: 'string',
-              isOptional: true,
-            },
-          ],
-        },
-      ],
-    },
-    {
-      toVersion: 3,
-      steps: [
-        {
-          type: 'add_columns',
-          table: 'payments',
-          columns: [{ name: 'type', type: 'string', isOptional: true }],
-        },
-      ],
-    },
-    {
-      toVersion: 4,
-      steps: [
-        {
-          type: 'create_table',
-          schema: tableSchema({
-            name: 'payment_commands',
-            columns: [
-              { name: 'business_id', type: 'string', isIndexed: true },
-              { name: 'order_id', type: 'string', isIndexed: true },
-              { name: 'amount', type: 'string' },
-              { name: 'currency', type: 'string' },
-              { name: 'phone', type: 'string', isOptional: true },
-              { name: 'status', type: 'string' },
-              { name: 'provider', type: 'string' },
-              { name: 'type', type: 'string' },
-              { name: 'idempotency_key', type: 'string', isOptional: true },
-              { name: 'sync_version', type: 'number' },
-              { name: 'deleted_at', type: 'number', isOptional: true },
-            ],
-          }),
-        },
-      ],
-    },
-    {
-      toVersion: 5,
-      steps: [
-        {
-          type: 'add_columns',
-          table: 'orders',
-          columns: [
-            { name: 'payment_status', type: 'string', isOptional: true },
-            { name: 'confirmed_at', type: 'number', isOptional: true },
-            { name: 'fulfilled_at', type: 'number', isOptional: true },
-          ],
-        },
-      ],
-    },
-  ],
-})
+import { migrations } from './migrations'
 
 let adapter: any
 try {

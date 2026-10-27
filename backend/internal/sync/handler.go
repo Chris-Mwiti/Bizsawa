@@ -64,7 +64,9 @@ func (h *Handler) Pull(w http.ResponseWriter, r *http.Request) {
 		limit = MaxPullLimit
 	}
 	// default epoch
-	res, err := h.svc.PullWithLimit(r.Context(), bid, since, limit)
+	// Later pages of a pull session carry the opaque cursor from the previous
+	// page; `since` stays the client's lastPulledAt for the whole session.
+	res, err := h.svc.PullPage(r.Context(), bid, since, limit, r.URL.Query().Get("cursor"))
 	if err != nil {
 		sharedhttp.Error(w, err)
 		return
@@ -139,7 +141,8 @@ func (h *Handler) ResolveConflict(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		Resolution string `json:"resolution"`
+		Resolution string  `json:"resolution"`
+		DeviceID   *string `json:"device_id"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -173,7 +176,11 @@ func (h *Handler) ResolveConflict(w http.ResponseWriter, r *http.Request) {
 
 		_ = json.Unmarshal(c.ClientPayload, &payload)
 
-		if err := h.svc.ForceApplyClientPayload(r.Context(), bid, c.Table, c.RecordID, payload); err != nil {
+		deviceID := ""
+		if body.DeviceID != nil {
+			deviceID = *body.DeviceID
+		}
+		if err := h.svc.ForceApplyClientPayloadWithDevice(r.Context(), bid, c.Table, c.RecordID, payload, deviceID); err != nil {
 			sharedhttp.Error(w, err)
 			return
 		}

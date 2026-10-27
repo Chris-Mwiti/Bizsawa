@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Commerce modules — orders · sales · invoices · payments</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:   #F4F9F7;
+      --color-ink:     #122b26;
+      --color-muted:   #47615b;
+      --color-soft:    #5b7670;
+      --color-accent:  #006b5f;
+      --color-link:    #04574d;
+      --font-sans:     'Geist', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', 'Noto Serif', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace;
+    }
+    body { font-family: var(--font-sans); background: var(--color-paper); color: var(--color-ink);
+      min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 3rem 2rem; }
+    .frame { max-width: 1200px; width: 100%; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+    .eyebrow { font-family: var(--font-mono); font-size: 0.66rem; font-weight: 500;
+      letter-spacing: 0.18em; text-transform: uppercase; color: var(--color-muted); margin-bottom: 0.5rem; }
+    h1 { font-family: var(--font-serif); font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400; letter-spacing: -0.02em; line-height: 1.15; color: var(--color-ink); margin-bottom: 1.5rem; }
+    svg { width: 100%; min-width: 960px; display: block; }
+    @media print { .diagram-container { overflow-x: visible; } svg { min-width: 0; } }
+    .ref { font-family: var(--font-mono); font-size: 0.8rem; color: var(--color-muted); margin-top: 1rem; }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Architecture · Commerce</p>
+    <h1>Money path: orders → invoices → sales</h1>
+    <div class="diagram-container">
+      <svg viewBox="0 0 960 600" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="mod-commerce-title mod-commerce-desc">
+        <title id="mod-commerce-title">Commerce modules and money flow</title>
+        <desc id="mod-commerce-desc">Order confirm fans out to invoices and payments, fulfill mints the sale, all persisting to Postgres.</desc>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#47615b"/></marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#006b5f"/></marker>
+          <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#04574d"/></marker>
+        </defs>
+        <rect width="100%" height="100%" fill="#F4F9F7"/>
+
+        <rect x="16" y="64" width="928" height="200" rx="8" fill="rgba(18,43,38,0.02)" stroke="rgba(18,43,38,0.10)" stroke-width="0.8"/>
+        <rect x="28" y="68" width="80" height="12" rx="2" fill="#F4F9F7"/>
+        <text x="68" y="77" fill="#5b7670" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">COMMERCE</text>
+
+        <!-- arrows -->
+        <line x1="236" y1="166" x2="252" y2="166" stroke="#006b5f" stroke-width="1.2" marker-end="url(#arrow-accent)"/>
+        <path d="M 100,236 V 300 H 598 V 236" fill="none" stroke="#006b5f" stroke-width="1.2" marker-end="url(#arrow-accent)"/>
+        <rect x="572" y="292" width="52" height="14" fill="#F4F9F7"/>
+        <text x="598" y="302" fill="#006b5f" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">FULFILL</text>
+        <path d="M 150,236 V 292 a 8,8 0 0,0 0,16 V 324 H 830 V 236" fill="none" stroke="#47615b" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+        <rect x="462" y="316" width="72" height="14" fill="#F4F9F7"/>
+        <text x="498" y="326" fill="#47615b" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">PAY EVENT</text>
+        <line x1="708" y1="166" x2="724" y2="166" stroke="#47615b" stroke-width="1" marker-end="url(#arrow)"/>
+        <rect x="658" y="142" width="48" height="14" fill="#F4F9F7"/>
+        <text x="682" y="152" fill="#47615b" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">SETTLE</text>
+
+        <!-- orders focal -->
+        <rect x="16" y="96" width="220" height="140" rx="6" fill="rgba(0,107,95,0.08)" stroke="#006b5f" stroke-width="1.2"/>
+        <rect x="24" y="102" width="52" height="12" rx="2" fill="none" stroke="#006b5f" stroke-width="0.8"/>
+        <text x="50" y="111" fill="#006b5f" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">ORDERS</text>
+        <text x="126" y="140" fill="#006b5f" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Orders</text>
+        <text x="126" y="160" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">orders · order_lines</text>
+        <text x="126" y="178" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">Confirm · Fulfill</text>
+        <text x="126" y="196" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">Cancel · Refund</text>
+        <text x="126" y="218" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">row lock · idem key</text>
+        <!-- invoices -->
+        <rect x="252" y="96" width="220" height="140" rx="6" fill="#ffffff" stroke="#122b26" stroke-width="1"/>
+        <rect x="260" y="102" width="58" height="12" rx="2" fill="none" stroke="#47615b" stroke-width="0.8"/>
+        <text x="289" y="111" fill="#47615b" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">INVOICES</text>
+        <text x="362" y="140" fill="#122b26" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Invoices</text>
+        <text x="362" y="160" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">invoices · invoice_lines</text>
+        <text x="362" y="178" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">FIFO settle · PDF</text>
+        <text x="362" y="196" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">record-payment · overdue</text>
+        <!-- sales -->
+        <rect x="488" y="96" width="220" height="140" rx="6" fill="#ffffff" stroke="#122b26" stroke-width="1"/>
+        <rect x="496" y="102" width="40" height="12" rx="2" fill="none" stroke="#47615b" stroke-width="0.8"/>
+        <text x="516" y="111" fill="#47615b" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">SALES</text>
+        <text x="598" y="140" fill="#122b26" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Sales</text>
+        <text x="598" y="160" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">sales · sale_lines</text>
+        <text x="598" y="178" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">walk-in · from-order</text>
+        <text x="598" y="196" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">void · summaries</text>
+        <!-- payments -->
+        <rect x="724" y="96" width="220" height="140" rx="6" fill="#ffffff" stroke="#122b26" stroke-width="1"/>
+        <rect x="732" y="102" width="62" height="12" rx="2" fill="none" stroke="#47615b" stroke-width="0.8"/>
+        <text x="763" y="111" fill="#47615b" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">PAYMENTS</text>
+        <text x="834" y="140" fill="#122b26" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Payments</text>
+        <text x="834" y="160" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">payment_commands</text>
+        <text x="834" y="178" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">captured_payments</text>
+        <text x="834" y="196" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">Daraja · ingest</text>
+        <text x="834" y="214" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">callbacks · workers</text>
+
+        <!-- store bar -->
+        <rect x="16" y="360" width="928" height="96" rx="6" fill="rgba(18,43,38,0.05)" stroke="#47615b" stroke-width="1"/>
+        <rect x="28" y="366" width="22" height="12" rx="2" fill="none" stroke="#47615b" stroke-width="0.8"/>
+        <text x="39" y="375" fill="#47615b" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">DB</text>
+        <text x="480" y="402" fill="#122b26" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Postgres — commerce tables + outbox</text>
+        <text x="480" y="420" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">advisory locks · receipt/event uniqueness · River jobs in-DB</text>
+
+        <!-- legend -->
+        <line x1="16" y1="540" x2="944" y2="540" stroke="rgba(18,43,38,0.12)" stroke-width="0.8"/>
+        <rect x="16" y="552" width="14" height="14" rx="3" fill="rgba(0,107,95,0.08)" stroke="#006b5f" stroke-width="1.2"/>
+        <text x="36" y="563" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace">order hub — focal</text>
+        <line x1="196" y1="559" x2="226" y2="559" stroke="#006b5f" stroke-width="1.2" marker-end="url(#arrow-accent)"/>
+        <text x="232" y="563" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace">creates</text>
+        <line x1="316" y1="559" x2="346" y2="559" stroke="#47615b" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+        <text x="352" y="563" fill="#47615b" font-size="9" font-family="'Geist Mono', monospace">async event</text>
+      </svg>
+    </div>
+    <p class="ref">Full function catalog: Agents_Documents/backend-modules/commerce.md</p>
+  </div>
+</body>
+</html>

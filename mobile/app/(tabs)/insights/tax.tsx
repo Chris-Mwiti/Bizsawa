@@ -26,7 +26,7 @@ export default function TaxInsights() {
 
   return (
     <View className='flex-1 bg-gray-50'>
-      <ScrollView contentContainerStyle={{ padding:16, paddingBottom: TAB_BAR_SCROLL_PADDING+24, gap:16 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding:16, paddingBottom: TAB_BAR_SCROLL_PADDING+96, gap:16 }} showsVerticalScrollIndicator={false}>
         <View className='flex-row gap-2'>
           {(['week','month','year'] as TF[]).map(k=>(
             <Pressable key={k} onPress={()=>setTf(k)} className={`px-4 py-2 rounded-full border ${tf===k?'bg-accent border-accent':'bg-white border-gray-200'}`}>
