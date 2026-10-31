@@ -31,11 +31,6 @@ class SmsCaptureModule : Module() {
 
     private var receiver: BroadcastReceiver? = null
 
-    companion object {
-        @Volatile
-        var instance: SmsCaptureModule? = null
-    }
-
     override fun definition() = ModuleDefinition {
         Name("SmsCapture")
 
@@ -157,8 +152,10 @@ class SmsCaptureModule : Module() {
     }
 
     companion object {
+        @Volatile
+        var instance: SmsCaptureModule? = null
         const val TAG = "SmsCapture"
         /** Bump on ANY native change; the JS test screen renders it. */
-        const val NATIVE_VERSION = "2"
+        const val NATIVE_VERSION = "3"
     }
 }
