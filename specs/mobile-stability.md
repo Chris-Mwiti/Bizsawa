@@ -82,13 +82,18 @@ Registered in `app.json` plugins:
 Local workaround already applied to `mobile/android/app/src/main/AndroidManifest.xml`
 (gitignored, regenerated — the plugin is the source of truth).
 
-## Phase 2: Google Sign In — keep Clerk OAuth (decision)
+## Phase 2: Google Sign In — keep Clerk OAuth, fix business routing
 
 **Today**
 
 `login.tsx` `handleGoogleSignIn()` uses Clerk `startSSOFlow({ strategy: 'oauth_google' })` — a browser-based
-OAuth flow. The `@react-native-google-signin/google-signin` native module is installed + plugged but **never
-`GoogleSignIn.configure()`d**, so if native Google Sign In is intended, it will not load/run.
+OAuth flow. After `syncClerkSession()` it read `businessId` from AsyncStorage. If that silent sync failed
+(network, Clerk misconfigured) or returned nil, `businessId` was unset and the user was routed to
+`/auth/business-setup` — which creates a NEW business instead of reusing the existing one. The email/password
+path (`handleSubmit`) correctly probed `/businesses` to detect existing businesses; the Google path did not.
+
+Also, the sign-in screen offered email/password, email code, Apple, and Facebook options alongside Google —
+surface area for bugs and user confusion.
 
 **Decision**
 
@@ -97,6 +102,25 @@ module/package is unused dead weight: leave it installed/plugged but do not add 
 If native Sign In is ever wanted later, add `GoogleSignIn.configure({ webClientId })`, register the Android
 SHA-1 fingerprint in Google Cloud Console, and replace `handleGoogleSignIn` — but that is out of scope.
 
+**Fix — robust business resolution across sign-in methods**
+
+After `syncClerkSession()`, `handleGoogleSignIn` now probes `GET /businesses` (same check the email/password
+path uses). If the user has any existing business membership, it persists the businessId and routes to
+`/(tabs)`. Only when no business exists does it route to `/auth/business-setup`. This guarantees that
+signing in with email code, then later with Google (or vice versa), lands on the same business context.
+
+```callstack [Google sign-in flow with robust business routing]
+ result = handleGoogleSignIn()
+├── existingClerk = getClerkInstance()
+├── if existingClerk.session: syncClerkSession() → resolveBusinessAndRoute()
+└── else: result = startSSOFlow({ strategy: 'oauth_google' })
+    ├── if result.createdSessionId: syncClerkSession() → resolveBusinessAndRoute()
+    │   ├── businesses = GET /businesses
+    │   ├── if businesses.length > 0: store businessId → router.replace('/(tabs)')
+    │   └── else: router.replace('/auth/business-setup')
+    └── catch (not ERR_CANCELED): Alert.alert('Google Sign-in Failed', ...)
+```
+
 **Prerequisite (do this in Clerk dashboard, not code)**
 
 Enable Google as a social connection in the Clerk dashboard for the publishable key in `.env.development`
@@ -104,35 +128,45 @@ Enable Google as a social connection in the Clerk dashboard for the publishable 
 scheme (`bizsawa` / `exp+bizsawa-mobile`). Without this, `startSSOFlow({ strategy: 'oauth_google' })` returns
 an error and `Alert.alert('Google Sign-in Failed', ...)` shows it.
 
-```callstack [Current Google sign-in flow — Clerk OAuth]
- result = handleGoogleSignIn()
-├── existingClerk = getClerkInstance()
-├── if existingClerk.session: syncClerkSession() → router.replace
-└── else: result = startSSOFlow({ strategy: 'oauth_google' })
-    ├── if result.createdSessionId: syncClerkSession() → router.replace
-    └── catch (not ERR_CANCELED): Alert.alert('Google Sign-in Failed', ...)
-```
-
 ```changes
 
 ```
 
-## Phase 3: Assets / logos
+## Phase 3: UI — Google-only sign-in with brand colors
 
 **Today**
 
-`components/auth/AuthShell.tsx` `BrandMark` uses `require('../../assets/adaptive-icon.png')`; `app.json`
-`icon`/`splash` reference existing `assets/icon-light.png` / `assets/splash-icon.png`. Assets are bundled and
-render correctly in isolation.
+`mobile/app/auth/login.tsx` rendered email/password fields, email code option, biometrics, and a SocialRow
+with Google, Apple, and Facebook buttons. `components/auth/AuthShell.tsx` `SocialRow` accepted all three
+social providers with plain single-color circles.
 
 **Proposed**
 
-No code change. Verify after the network fix (#1) that the device can reach the API/EAS updates — cold-start
-stall from a failed update check is the most likely reason logos "do not render" in the field.
+- Remove email/password fields, email code option, biometrics, Apple, Facebook — leave **only Google**.
+- `AuthShell.SocialRow` accepts only `onGoogle`; `SocialCircle` renders the Google button with the four
+  Google brand segments (blue #4285F4, red #DB4437, yellow #F4B400, green #0F9D58) as quadrant views,
+  with a white center circle and the "G" glyph on top.
+- `mobile/app/auth/register.tsx` updated to the new `SocialRow` signature (Google-only).
+
+```mermaid diff [UI simplification to Google-only]
+ flowchart LR
+-    E[Email/Password fields] -.-> L[LoginScreen]
+-    O[Email code button] -.-> L
+-    A[Apple button] -.-> S[SocialRow]
+-    F[Facebook button] -.-> S
++    G[Google button w/ brand colors] --> L[LoginScreen]
+     L --> S[SocialRow]
+     S -->|Clerk startSSOFlow| B[/auth/clerk backend]
+     B -->|resolves default business| C[/businesses probe]
+     C -->|has business| T[/(tabs)]
+     C -->|no business| BS[/auth/business-setup]
+```
 
 ```changes
 
 ```
+
+## Phase 4: Assets / logos
 
 ## Recommendations / follow-ups
 

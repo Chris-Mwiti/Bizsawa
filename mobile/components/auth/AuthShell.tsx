@@ -176,18 +176,32 @@ function SocialCircle({
   onPress,
   label,
   children,
+  variant = 'google',
 }: {
   onPress: () => void
   label: string
   children: React.ReactNode
+  variant?: 'google' | 'apple' | 'facebook'
 }) {
+  // Google brand segments: blue #4285F4, red #DB4437, yellow #F4B400, green #0F9D58
+  const googleSegments = variant === 'google' ? (
+    <>
+      <View className='absolute inset-0 top-0 left-1/2 rounded-tr-full' style={{ backgroundColor: '#4285F4' }} />
+      <View className='absolute inset-0 top-1/2 left-0 rounded-bl-full' style={{ backgroundColor: '#DB4437' }} />
+      <View className='absolute inset-0 top-1/2 left-1/2 rounded-br-full' style={{ backgroundColor: '#0F9D58' }} />
+      <View className='absolute inset-0 top-0 left-0 rounded-tl-full' style={{ backgroundColor: '#F4B400' }} />
+      <View className='absolute inset-[22%] rounded-full bg-white' />
+    </>
+  ) : null
   return (
     <TouchableOpacity
       onPress={onPress}
       accessibilityRole='button'
       accessibilityLabel={label}
-      className='w-[52px] h-[52px] rounded-full bg-surface border border-hairline items-center justify-center shadow-clinical-sm'
+      className='w-[56px] h-[56px] rounded-full bg-surface border border-hairline items-center justify-center shadow-clinical-sm relative overflow-hidden'
+      style={{ minWidth: 56, minHeight: 56 }}
     >
+      {googleSegments}
       {children}
     </TouchableOpacity>
   )
@@ -195,23 +209,13 @@ function SocialCircle({
 
 export function SocialRow({
   onGoogle,
-  onApple,
-  onFacebook,
 }: {
   onGoogle: () => void
-  onApple: () => void
-  onFacebook: () => void
 }) {
   return (
-    <View className='flex-row items-center justify-center gap-4'>
-      <SocialCircle onPress={onGoogle} label='Continue with Google'>
-        <Text className='font-geist-bold text-xl font-bold text-ink'>G</Text>
-      </SocialCircle>
-      <SocialCircle onPress={onApple} label='Continue with Apple'>
-        <Apple size={22} color='#0E1F1C' />
-      </SocialCircle>
-      <SocialCircle onPress={onFacebook} label='Continue with Facebook'>
-        <Text className='font-geist-bold text-xl font-bold text-accent'>f</Text>
+    <View className='flex-row justify-center items-center'>
+      <SocialCircle onPress={onGoogle} label='Continue with Google' variant='google'>
+        <Text className='font-geist-bold text-xl font-bold text-ink z-10'>G</Text>
       </SocialCircle>
     </View>
   )

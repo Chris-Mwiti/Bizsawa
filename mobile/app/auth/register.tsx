@@ -273,11 +273,9 @@ export default function RegisterScreen() {
         />
       }
     >
-      {/* Social — Google temporarily disabled (silent OAuth callback), Apple/Facebook coming soon */}
+      {/* Social — Google sign-up (temporarily disabled, silent OAuth callback) */}
       <SocialRow
         onGoogle={() => Alert.alert('Temporarily disabled', 'Google sign-up is paused while we fix the OAuth callback. Please use Email code or Password.')}
-        onApple={() => Alert.alert('Coming soon', 'Apple sign-up is not available yet. Please use Email code or Password.')}
-        onFacebook={() => Alert.alert('Coming soon', 'Facebook sign-up is not available yet. Please use Email code or Password.')}
       />
       <Text className="font-sans text-xs text-ink-subtle text-center mt-2">Google re-enabling soon — Email code works today.</Text>
 
