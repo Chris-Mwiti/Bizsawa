@@ -31,10 +31,28 @@ class SmsCaptureModule : Module() {
 
     private var receiver: BroadcastReceiver? = null
 
+    companion object {
+        @Volatile
+        var instance: SmsCaptureModule? = null
+    }
+
     override fun definition() = ModuleDefinition {
         Name("SmsCapture")
 
         Events("onSmsReceived", "onSmsTimeout")
+
+        OnCreate {
+            instance = this@SmsCaptureModule
+        }
+
+        OnDestroy {
+            instance = null
+            unregister()
+        }
+
+        Function("getPendingSms") {
+            SmsBroadcastReceiver.drain(appContext.reactContext ?: return@Function emptyList<String>())
+        }
 
         // Field diagnostics: the JS test screen renders this so a stale
         // native build on-device is visible (bump on any native change).
