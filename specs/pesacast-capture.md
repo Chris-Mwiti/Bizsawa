@@ -23,7 +23,7 @@ Port PesaCast's broadcast-receiver SMS capture into the Bizworth Android app and
 
 ## Phases
 
-### Phase 1: Backend PesaCast webhook
+### ✅ Phase 1: Backend PesaCast webhook
 
 **Today**
 
@@ -42,10 +42,16 @@ A public HTTPS endpoint verifies PesaCast signatures/tokens, ignores test pings,
 ```
 
 ```changes
-
+1b90439
+backend/internal/shared/config/config.go
+backend/internal/payments/pesacast.go
+backend/internal/payments/handler.go
+backend/internal/payments/module.go
+backend/cmd/api/server.go
+backend/cmd/api/main.go
 ```
 
-### Phase 2: Native broadcast SMS capture
+### ✅ Phase 2: Native broadcast SMS capture:
 
 **Today**
 
@@ -64,10 +70,18 @@ Port PesaCast's `SmsReceiver` into the Expo native module. It groups multipart S
 ```
 
 ```changes
-
+638b4a7
+mobile/modules/sms-capture/android/src/main/java/com/bizsawa/mobile/smscapture/SmsBroadcastReceiver.kt
+mobile/modules/sms-capture/android/src/main/java/com/bizsawa/mobile/smscapture/SmsCaptureModule.kt
+mobile/modules/sms-capture/android/src/main/AndroidManifest.xml
+mobile/modules/sms-capture/app.plugin.js
+mobile/modules/sms-capture/index.ts
+mobile/lib/mpesa-sms/autoCapture.ts
+mobile/hooks/api/useSmsAutoCapture.ts
+mobile/app/sms-test.tsx
 ```
 
-### Phase 3: JS capture pipeline update
+### ✅ Phase 3: JS capture pipeline update
 
 **Today**
 
@@ -78,10 +92,12 @@ Port PesaCast's `SmsReceiver` into the Expo native module. It groups multipart S
 Replace consent orchestration with broadcast listener registration. Keep parsing, hashing, queueing, and ingest unchanged.
 
 ```changes
-
+638b4a7
+mobile/lib/mpesa-sms/autoCapture.ts
+mobile/hooks/api/useSmsAutoCapture.ts
 ```
 
-### Phase 4: Web captures view
+### ✅ Phase 4: Web captures view
 
 **Today**
 
@@ -95,7 +111,7 @@ Add a captures page reading `/payments/captured` so web matches mobile.
 
 ```
 
-### Phase 5: Tests and security
+### ✅ Phase 5: Tests and security
 
 **Today**
 
@@ -106,10 +122,11 @@ No PesaCast signature or webhook tests exist.
 Add signature vector tests, stale timestamp tests, credential tests, and verify no secret/token/body logging.
 
 ```changes
-
+1b90439
+backend/internal/payments/pesacast_test.go
 ```
 
-### Phase 6: Rollout
+### Phase 6: Rollout:
 
 **Today**
 
