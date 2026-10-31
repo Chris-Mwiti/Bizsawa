@@ -147,6 +147,7 @@ func NewRouter(deps Dependencies) http.Handler {
 
 		if deps.Payments != nil {
 			r.Route("/mpesa", deps.Payments.RegisterPublicRoutes)
+			r.Route("/pesacast", deps.Payments.RegisterPesacastRoutes)
 		}
 
 		// Single /subscriptions mount — public callback + auth-protected upgrade/status

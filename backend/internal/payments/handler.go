@@ -7,13 +7,17 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	sharedconfig "github.com/Codecx-Org/FinAI/backend/internal/shared/config"
 	sharedhttp "github.com/Codecx-Org/FinAI/backend/internal/shared/http"
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/middleware"
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/models"
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/pagination"
 )
 
-type Handler struct{ svc *Service }
+type Handler struct {
+	svc         *Service
+	pesacastCfg sharedconfig.PesaCastConfig
+}
 
 func (h Handler) Initiate(w http.ResponseWriter, r *http.Request) {
 	bid, ok := middleware.BusinessIDFromCtx(r.Context())
