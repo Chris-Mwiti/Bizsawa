@@ -132,6 +132,37 @@ an error and `Alert.alert('Google Sign-in Failed', ...)` shows it.
 
 ```
 
+## Phase 2b: Auth — Google sign-in links to existing user by email
+
+**Today**
+
+`LoginWithClerk` tried `FindByProviderAccountID("clerk", sub)` first. If a Google account was
+used before (even without a business), that stale no-business user was returned and the mobile
+client routed to `/auth/business-setup`, making the user create a new business. Email matching
+only happened if the provider link missed.
+
+**Proposed**
+
+Email is now the primary identity: `LoginWithClerk` looks up the user by email first (trying every
+email on the Clerk account, not just the first) and links the Clerk provider/sub to that user.
+`provider_account_id` is updated when it differs from the current sub. This guarantees that signing
+in with email code, then later with Google (same email), lands on the same user and business.
+
+```callstack [LoginWithClerk email-first resolution]
+ resp = LoginWithClerk(token)
+├── claims = VerifyToken(token)
+├── emails = [claims.Email] + fetchClerkUserEmails(secret, sub)
+├── email = first candidate that already exists in DB (else first)
+├── if u := FindByEmail(email): link provider/sub, UpsertAccount, issue(u)  // same business
+├── else if existing := FindByProviderAccountID(clerk, sub): issue(existing)
+├── else if acc := FindAccount(clerk, sub): issue(acc.user)
+└── else: create new user, issue
+```
+
+```changes
+
+```
+
 ## Phase 3: UI — Google-only sign-in with brand colors
 
 **Today**
