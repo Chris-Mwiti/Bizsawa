@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
 } from 'react-native'
 import NetInfo from '@react-native-community/netinfo'
+import { Mail } from 'lucide-react-native'
 import { useRouter } from 'expo-router'
 import { useSSO } from '@clerk/clerk-expo'
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -15,6 +16,7 @@ import { api, AUTH_STORAGE_KEYS } from '../../lib/api'
 import {
   AuthShell,
   SocialRow,
+  OrDivider,
 } from '../../components/auth/AuthShell'
 
 /** Google brand colors for recognition on the sign-in button. */
@@ -112,6 +114,20 @@ export default function LoginScreen() {
       </View>
 
       <SocialRow onGoogle={handleGoogleSignIn} />
+
+      <OrDivider />
+
+      <TouchableOpacity
+        onPress={() =>
+          router.push({
+            pathname: '/auth/verify-otp',
+          } as any)
+        }
+        className='border border-hairline rounded-full py-3.5 items-center bg-surface flex-row justify-center gap-2'
+      >
+        <Mail size={16} color='#0E1F1C' />
+        <Text className='font-geist-semibold text-ink font-semibold text-sm'>Sign in with email code</Text>
+      </TouchableOpacity>
 
       {isLoading ? (
         <View className='flex-row justify-center mt-4'>
