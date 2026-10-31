@@ -82,7 +82,7 @@ Registered in `app.json` plugins:
 Local workaround already applied to `mobile/android/app/src/main/AndroidManifest.xml`
 (gitignored, regenerated — the plugin is the source of truth).
 
-## Phase 2: Google Sign In wiring decision (documented, not auto-fixed)
+## Phase 2: Google Sign In — keep Clerk OAuth (decision)
 
 **Today**
 
@@ -90,24 +90,27 @@ Local workaround already applied to `mobile/android/app/src/main/AndroidManifest
 OAuth flow. The `@react-native-google-signin/google-signin` native module is installed + plugged but **never
 `GoogleSignIn.configure()`d**, so if native Google Sign In is intended, it will not load/run.
 
-**Proposed**
+**Decision**
 
-Choose one path and remove the dead weight:
+Keep Clerk OAuth as the single Google sign-in path. The native `@react-native-google-signin/google-signin`
+module/package is unused dead weight: leave it installed/plugged but do not add `GoogleSignIn.configure()`.
+If native Sign In is ever wanted later, add `GoogleSignIn.configure({ webClientId })`, register the Android
+SHA-1 fingerprint in Google Cloud Console, and replace `handleGoogleSignIn` — but that is out of scope.
 
-- **Keep Clerk OAuth** (current code path): ensure Google OAuth is enabled in the Clerk dashboard for the
-  publishable key in `.env.development`. No code change needed; the native google-signin plugin/package can be
-  removed to avoid confusion.
-- **Use native Google Sign In**: add `GoogleSignIn.configure({ webClientId, offlineAccess: true })` in an
-  auth initializer, replace `handleGoogleSignIn` with `GoogleSignIn.signIn()`, and register the Android
-  signing-cert SHA-1 fingerprint in Google Cloud Console.
+**Prerequisite (do this in Clerk dashboard, not code)**
 
-```callstack [Current Google sign-in flow]
+Enable Google as a social connection in the Clerk dashboard for the publishable key in `.env.development`
+(`pk_test_aW1tZW5zZS1zYWxtb24tMTc4Ny5jbGVyay5hY2NvdW50cy5kZWIk`), with the configured redirect/deep-link
+scheme (`bizsawa` / `exp+bizsawa-mobile`). Without this, `startSSOFlow({ strategy: 'oauth_google' })` returns
+an error and `Alert.alert('Google Sign-in Failed', ...)` shows it.
+
+```callstack [Current Google sign-in flow — Clerk OAuth]
  result = handleGoogleSignIn()
 ├── existingClerk = getClerkInstance()
 ├── if existingClerk.session: syncClerkSession() → router.replace
 └── else: result = startSSOFlow({ strategy: 'oauth_google' })
     ├── if result.createdSessionId: syncClerkSession() → router.replace
-    └── catch: Alert.alert('Google Sign-in Failed', ...)
+    └── catch (not ERR_CANCELED): Alert.alert('Google Sign-in Failed', ...)
 ```
 
 ```changes
