@@ -55,7 +55,7 @@ A public HTTPS endpoint accepts PesaCast deliveries, verifies credentials, ignor
 Call stack for a valid transaction:
 
 ```callstack [Webhook request flow]
- status = PesacastWebhook(request) [[1b90439:backend/internal/payments/pesacast.go#PesacastWebhook]]
+ status = PesacastWebhook(request) [[1b90439:backend/internal/payments/pesacast.go#L167-L207]]
 ├── raw = readBody(request)
 ├── if !PesacastAuth(cfg, headers, raw): return 401
 ├── status, message = HandlePesacastWebhook(ctx, businessID, headers, raw)
@@ -190,8 +190,6 @@ Replace consent orchestration with broadcast drain polling. Parsing, hashing, qu
 638b4a7
 mobile/lib/mpesa-sms/autoCapture.ts
 mobile/hooks/api/useSmsAutoCapture.ts
-05c358e
-mobile/lib/mpesa-sms/__tests__/autoCapture.test.ts
 ```
 
 ### ✅ Phase 4: Web captures view
