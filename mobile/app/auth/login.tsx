@@ -61,27 +61,38 @@ export default function LoginScreen() {
   const { startSSOFlow } = useSSO()
   const router = useRouter()
 
+  const resolveBusinessAndRoute = async (): Promise<boolean> => {
+    try {
+      const res = await api.get<{ businesses: any[] }>('/businesses')
+      const businesses = Array.isArray(res.data.businesses) ? res.data.businesses : []
+      if (businesses.length > 0) {
+        const businessId = businesses[0].id
+        await AsyncStorage.setItem(AUTH_STORAGE_KEYS.businessId, businessId)
+        router.replace('/(tabs)')
+        return true
+      }
+    } catch {
+      // Fall through to business-setup if we can't probe.
+    }
+    return false
+  }
+
   const handleGoogleSignIn = async () => {
     setIsLoading(true)
     try {
-      // If a Clerk session already exists (e.g. previous sign-in), don't
-      // start a new SSO flow — Clerk rejects it with session_exists.
       const { getClerkInstance } = await import('@clerk/clerk-expo');
       const existingClerk = getClerkInstance();
       if (existingClerk?.session) {
         await syncClerkSession()
-        const businessId = await AsyncStorage.getItem(AUTH_STORAGE_KEYS.businessId)
-        router.replace(businessId ? '/(tabs)' : '/auth/business-setup')
+        const hadBusiness = await resolveBusinessAndRoute()
+        if (!hadBusiness) router.replace('/auth/business-setup')
         return
       }
       const result = await startSSOFlow({ strategy: 'oauth_google' })
       if (result.createdSessionId) {
         await syncClerkSession()
-        // The backend resolves the business for the signed-in account and
-        // returns it, so Google sign-in lands on exactly the same business
-        // as an email-code sign-in for the same email.
-        const businessId = await AsyncStorage.getItem(AUTH_STORAGE_KEYS.businessId)
-        router.replace(businessId ? '/(tabs)' : '/auth/business-setup')
+        const hadBusiness = await resolveBusinessAndRoute()
+        if (!hadBusiness) router.replace('/auth/business-setup')
       }
     } catch (error: any) {
       if (error?.code !== 'ERR_CANCELED') {
@@ -341,8 +352,6 @@ export default function LoginScreen() {
 
         <SocialRow
           onGoogle={handleGoogleSignIn}
-          onApple={() => Alert.alert('Coming soon', 'Apple sign-in is not available yet. Please use email/password or email code.')}
-          onFacebook={() => Alert.alert('Coming soon', 'Facebook sign-in is not available yet. Please use email/password or email code.')}
         />
       </View>
     </AuthShell>

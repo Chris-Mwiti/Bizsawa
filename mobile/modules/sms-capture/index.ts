@@ -97,6 +97,17 @@ export async function stopSmsUserConsent(): Promise<void> {
   await getNativeModule()?.stopUserConsent().catch(() => {})
 }
 
+export async function getPendingSms(): Promise<string[]> {
+  try {
+    const mod = getNativeModule()
+    if (!mod || typeof mod.getPendingSms !== 'function') return []
+    const res = await mod.getPendingSms()
+    return Array.isArray(res) ? res : []
+  } catch {
+    return []
+  }
+}
+
 export function addSmsReceivedListener(cb: SmsListener): { remove: () => void } {
   const em = getEmitter()
   // Never degrade to a no-op: a silent listener means status 'listening'

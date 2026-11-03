@@ -24,6 +24,7 @@ type Config struct {
 	WhatsApp        WhatsAppConfig
 	Crypto          CryptoConfig
 	Mpesa           MpesaConfig
+	PesaCast        PesaCastConfig
 	Email           EmailConfig
 	Observability   ObservabilityConfig
 }
@@ -104,6 +105,14 @@ type MpesaConfig struct {
 	C2BConfirmationURL     string
 	C2BValidationURL       string
 	DefaultTransactionDesc string
+}
+
+type PesaCastConfig struct {
+	SigningSecret string
+	BearerToken   string
+	MaxClockSkew  time.Duration
+	MaxBodyBytes  int64
+	AllowInsecure bool
 }
 
 type EmailConfig struct {
@@ -227,6 +236,13 @@ func Load() Config {
 			C2BConfirmationURL:     env("MPESA_C2B_CONFIRMATION_URL", ""),
 			C2BValidationURL:       env("MPESA_C2B_VALIDATION_URL", ""),
 			DefaultTransactionDesc: env("MPESA_DEFAULT_TRANSACTION_DESC", "BizSawa payment"),
+		},
+		PesaCast: PesaCastConfig{
+			SigningSecret: env("PESACAST_SIGNING_SECRET", ""),
+			BearerToken:   env("PESACAST_BEARER_TOKEN", ""),
+			MaxClockSkew:  durationEnv("PESACAST_MAX_CLOCK_SKEW", 5*time.Minute),
+			MaxBodyBytes:  int64Env("PESACAST_MAX_BODY_BYTES", 1<<20),
+			AllowInsecure: boolEnv("PESACAST_ALLOW_INSECURE", false),
 		},
 		Email: EmailConfig{
 			Provider:     env("EMAIL_PROVIDER", ""),

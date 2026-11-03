@@ -36,6 +36,19 @@ class SmsCaptureModule : Module() {
 
         Events("onSmsReceived", "onSmsTimeout")
 
+        OnCreate {
+            instance = this@SmsCaptureModule
+        }
+
+        OnDestroy {
+            instance = null
+            unregister()
+        }
+
+        Function("getPendingSms") {
+            SmsBroadcastReceiver.drain(appContext.reactContext ?: return@Function emptyList<String>())
+        }
+
         // Field diagnostics: the JS test screen renders this so a stale
         // native build on-device is visible (bump on any native change).
         Function("getNativeVersion") { NATIVE_VERSION }
@@ -139,8 +152,10 @@ class SmsCaptureModule : Module() {
     }
 
     companion object {
+        @Volatile
+        var instance: SmsCaptureModule? = null
         const val TAG = "SmsCapture"
         /** Bump on ANY native change; the JS test screen renders it. */
-        const val NATIVE_VERSION = "2"
+        const val NATIVE_VERSION = "3"
     }
 }

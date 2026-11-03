@@ -27,7 +27,7 @@ import {
 } from '../lib/mpesa-sms/queue'
 import { SMS_TEMPLATES } from '../lib/mpesa-sms/templates'
 import { formatAutoCaptureDebug } from '../lib/mpesa-sms/autoCaptureDebug'
-import { AUTO_CAPTURE_SENDER } from '../lib/mpesa-sms/autoCapture'
+// AUTO_CAPTURE_SENDER removed; broadcast capture accepts MPESA sender only.
 import { SMS_PARSER_VERSION, SMS_CONSENT_VERSION } from '../lib/mpesa-sms/types'
 
 export default function SmsTestScreen() {
@@ -49,7 +49,7 @@ function SmsTestBody({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false)
   const [autoOn, setAutoOn] = useState(false)
   const [consented, setConsented] = useState<boolean | null>(null)
-  const auto = useSmsAutoCapture(autoOn && consented === true)
+  const auto = useSmsAutoCapture(autoOn)
   // Native build marker — proves which native code is actually installed.
   const [nativeVersion] = React.useState(() => getSmsCaptureNativeVersion())
 
@@ -73,7 +73,7 @@ function SmsTestBody({ onClose }: { onClose: () => void }) {
   // no heartbeat and no message, Play Services never delivered (or the GMS
   // task hung and the promise never settled). The filter label confirms
   // which JS bundle is running on the device.
-  const filterLabel = AUTO_CAPTURE_SENDER ?? 'any'
+  const filterLabel = 'MPESA'
   React.useEffect(() => {
     append(`auto-capture status: ${auto.status} (filter: ${filterLabel})`)
   }, [auto.status])

@@ -192,32 +192,37 @@ type ClerkLoginResponse struct {
 
 
 
-func fetchClerkUserEmail(ctx context.Context, secretKey, userID string) (string, error) {
+func fetchClerkUserEmails(ctx context.Context, secretKey, userID string) ([]string, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.clerk.com/v1/users/"+userID, nil)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	req.Header.Set("Authorization", "Bearer "+secretKey)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("clerk api status %d", resp.StatusCode)
+		return nil, fmt.Errorf("clerk api status %d", resp.StatusCode)
 	}
 	var body struct {
 		EmailAddresses []struct {
 			EmailAddress string `json:"email_address"`
 		} `json:"email_addresses"`
+		PrimaryEmailAddressID string `json:"primary_email_address_id"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		return "", err
+		return nil, err
 	}
-	if len(body.EmailAddresses) > 0 {
-		return body.EmailAddresses[0].EmailAddress, nil
+	// Prefer the primary email first, then the rest.
+	emails := make([]string, 0, len(body.EmailAddresses))
+	for _, e := range body.EmailAddresses {
+		if e.EmailAddress != "" {
+			emails = append(emails, strings.ToLower(strings.TrimSpace(e.EmailAddress)))
+		}
 	}
-	return "", nil
+	return emails, nil
 }
 
 func (s *Service) LoginWithClerk(ctx context.Context, req ClerkLoginRequest) (*AuthResponse, error) {
@@ -230,16 +235,46 @@ func (s *Service) LoginWithClerk(ctx context.Context, req ClerkLoginRequest) (*A
 		return nil, ErrUnauthorized.WithMessage("invalid clerk token: " + err.Error())
 	}
 
+	// Resolve the email. Prefer the token claim; if missing or if it does not
+	// match an existing user, try every email on the Clerk account so a user
+	// who signed up with email-code and later signs in with Google (or vice
+	// versa) still links to the same account instead of creating a new one.
 	email := strings.ToLower(strings.TrimSpace(claims.Email))
-	if email == "" && s.clerkVerifier != nil && s.clerkVerifier.cfg.SecretKey != "" {
-		// Clerk's default session token may omit email; fetch from Backend API.
+	candidateEmails := []string{}
+	if email != "" {
+		candidateEmails = append(candidateEmails, email)
+	}
+	if s.clerkVerifier != nil && s.clerkVerifier.cfg.SecretKey != "" {
 		sub := strings.TrimSpace(claims.Subject)
 		if sub != "" {
-			fetched, err := fetchClerkUserEmail(ctx, s.clerkVerifier.cfg.SecretKey, sub)
-			if err == nil && fetched != "" {
-				email = strings.ToLower(strings.TrimSpace(fetched))
+			if fetched, err := fetchClerkUserEmails(ctx, s.clerkVerifier.cfg.SecretKey, sub); err == nil {
+				for _, e := range fetched {
+					if e != "" {
+						candidateEmails = append(candidateEmails, e)
+					}
+				}
 			}
 		}
+	}
+	// Dedupe while preserving order.
+	seenEmail := map[string]bool{}
+	uniqueEmails := []string{}
+	for _, e := range candidateEmails {
+		if !seenEmail[e] {
+			seenEmail[e] = true
+			uniqueEmails = append(uniqueEmails, e)
+		}
+	}
+	// Pick the first candidate that already has an account; otherwise the first.
+	email = ""
+	for _, e := range uniqueEmails {
+		if _, err := s.repo.FindByEmail(ctx, e); err == nil {
+			email = e
+			break
+		}
+	}
+	if email == "" && len(uniqueEmails) > 0 {
+		email = uniqueEmails[0]
 	}
 	if email == "" {
 		return nil, ErrUnauthorized.WithMessage("clerk email missing")
@@ -262,6 +297,58 @@ func (s *Service) LoginWithClerk(ctx context.Context, req ClerkLoginRequest) (*A
 		if parsed, err := uuid.Parse(*req.BusinessID); err == nil {
 			businessID = parsed
 		}
+	}
+
+	// Email is the primary identity: if an account already exists for this
+	// email, link the Clerk provider to it and reuse its business. This must
+	// take precedence over the provider-account link so a user who signed up
+	// with email-code/password and later signs in with Google (same email)
+	// lands on the same business instead of creating a new one.
+	if u, err := s.repo.FindByEmail(ctx, email); err == nil && u != nil {
+		if !u.IsActive {
+			return nil, ErrInactiveUser
+		}
+
+		updates := map[string]any{}
+		if u.Provider == "credential" || u.Provider == "" {
+			updates["provider"] = "clerk"
+		}
+		if u.ProviderAccountID == nil || *u.ProviderAccountID == "" || *u.ProviderAccountID != sub {
+			updates["provider_account_id"] = sub
+		}
+		if claims.EmailVerified {
+			updates["email_verified"] = true
+		}
+		if image != "" && u.Image == "" {
+			updates["image"] = image
+		}
+		if name != "" && u.Name == "" {
+			updates["name"] = name
+		}
+
+		if len(updates) > 0 {
+			if err := s.repo.db.WithContext(ctx).Model(&User{}).Where("id = ?", u.ID).Updates(updates).Error; err != nil {
+				slog.ErrorContext(ctx, "failed to update user for clerk link", "user", u.ID, "err", err)
+			}
+		}
+
+		if err := s.repo.UpsertAccount(ctx, &Account{
+			UserID:            u.ID,
+			Provider:          "clerk",
+			ProviderAccountID: sub,
+			IDToken:           req.Token,
+		}); err != nil {
+			slog.ErrorContext(ctx, "failed to upsert clerk account for email-linked user", "user", u.ID, "err", err)
+		}
+
+		roles := []string(nil)
+		if businessID != uuid.Nil && s.memberships != nil {
+			if role, err := s.memberships.RoleForUser(ctx, businessID, u.ID); err == nil {
+				roles = []string{string(role)}
+			}
+		}
+
+		return s.issue(ctx, u.ID, businessID, businessID, roles)
 	}
 
 	// Try provider link first (better-auth account table)
@@ -324,7 +411,7 @@ func (s *Service) LoginWithClerk(ctx context.Context, req ClerkLoginRequest) (*A
 		if u.Provider == "credential" || u.Provider == "" {
 			updates["provider"] = "clerk"
 		}
-		if u.ProviderAccountID == nil || *u.ProviderAccountID == "" {
+		if u.ProviderAccountID == nil || *u.ProviderAccountID == "" || *u.ProviderAccountID != sub {
 			updates["provider_account_id"] = sub
 		}
 		if claims.EmailVerified {

@@ -408,6 +408,11 @@ api.interceptors.response.use(
       }
     } else if (error.response?.status === 401) {
       await clearAuthStorage()
+      // Force the app back to the login screen on any 401 that could not be
+      // refreshed — the session is gone, not just the access token.
+      if (typeof window !== 'undefined') {
+        window.location.href = '/auth/login'
+      }
     }
 
     return Promise.reject(error)
