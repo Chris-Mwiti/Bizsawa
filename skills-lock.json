@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "generate-diffmap": {
+      "source": "tanishqkancharla/diffmap",
+      "sourceType": "github",
+      "skillPath": "skills/generate-diffmap/SKILL.md",
+      "computedHash": "35b815430ca2e7f5616e571d4719eeb765dd85aeae7cdab20a5633282c5bae53"
+    },
+    "hallmark": {
+      "source": "nutlope/hallmark",
+      "sourceType": "github",
+      "skillPath": "skills/hallmark/SKILL.md",
+      "computedHash": "32269cfda7e467ba1e2534428a1186c1b7b28d196d0f3b3227d293512fa5f7ec"
+    }
+  }
+}

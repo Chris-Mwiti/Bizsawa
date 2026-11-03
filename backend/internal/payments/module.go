@@ -7,6 +7,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/riverqueue/river"
 	"gorm.io/gorm"
+
+	sharedconfig "github.com/Codecx-Org/FinAI/backend/internal/shared/config"
 )
 
 type Module struct {
@@ -15,9 +17,10 @@ type Module struct {
 	logger         *slog.Logger
 	orderService   OrderPayment
 	invoiceService InvoicePayment
+	pesacastCfg    sharedconfig.PesaCastConfig
 }
 
-func New(db *gorm.DB, outboxRepo *river.Client[*sql.Tx], logger *slog.Logger, provider Provider, orderService OrderPayment, invoiceService InvoicePayment) *Module {
+func New(db *gorm.DB, outboxRepo *river.Client[*sql.Tx], logger *slog.Logger, provider Provider, orderService OrderPayment, invoiceService InvoicePayment, pesacastCfg sharedconfig.PesaCastConfig) *Module {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -30,7 +33,12 @@ func New(db *gorm.DB, outboxRepo *river.Client[*sql.Tx], logger *slog.Logger, pr
 		logger:         logger,
 		orderService:   orderService,
 		invoiceService: invoiceService,
+		pesacastCfg:    pesacastCfg,
 	}
+}
+
+func (m *Module) ConfigurePesaCast(cfg sharedconfig.PesaCastConfig) {
+	m.pesacastCfg = cfg
 }
 
 func (m *Module) RegisterRoutes(r chi.Router) {
@@ -61,6 +69,11 @@ func (m *Module) RegisterPublicRoutes(r chi.Router) {
 	r.Post("/c2b/validation", h.MpesaValidation)
 	r.Post("/b2c/result", h.MpesaCallback)
 	r.Post("/timeout", h.MpesaCallback)
+}
+
+func (m *Module) RegisterPesacastRoutes(r chi.Router) {
+	h := Handler{svc: m.svc, pesacastCfg: m.pesacastCfg}
+	r.Post("/webhook/{businessID}", h.PesacastWebhook)
 }
 
 func (m *Module) RegisterWorkers(workers *river.Workers) {
