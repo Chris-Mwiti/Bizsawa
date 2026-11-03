@@ -62,6 +62,13 @@ export default function LoginScreen() {
   const router = useRouter()
 
   const resolveBusinessAndRoute = async (): Promise<boolean> => {
+    // Trust the business the backend resolved for this account first — this is
+    // what keeps a Google SSO sign-in on the same business as an email sign-in.
+    const stored = await AsyncStorage.getItem(AUTH_STORAGE_KEYS.businessId)
+    if (stored) {
+      router.replace('/(tabs)')
+      return true
+    }
     try {
       const res = await api.get<{ businesses: any[] }>('/businesses')
       const businesses = Array.isArray(res.data.businesses) ? res.data.businesses : []
@@ -88,7 +95,12 @@ export default function LoginScreen() {
         if (!hadBusiness) router.replace('/auth/business-setup')
         return
       }
-      const result = await startSSOFlow({ strategy: 'oauth_google' })
+      const result = await startSSOFlow({
+        strategy: 'oauth_google',
+        // Force Google's account chooser so a different email can be picked
+        // after sign-out instead of silently reusing the previous session.
+        additionalData: { prompt: 'select_account' },
+      } as any)
       if (result.createdSessionId) {
         await syncClerkSession()
         const hadBusiness = await resolveBusinessAndRoute()

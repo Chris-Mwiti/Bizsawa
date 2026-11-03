@@ -1,6 +1,18 @@
 import axios, { type AxiosResponse, type AxiosError, type InternalAxiosRequestConfig } from "axios";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5564/api/v1";
+function resolveApiUrl(): string {
+  const env = (import.meta.env.VITE_API_URL as string | undefined)?.trim();
+  if (env) return env.replace(/\/+$/, '');
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    if (host && host !== 'localhost' && host !== '127.0.0.1') {
+      const apiHost = host.startsWith('app.') ? `api.${host.slice(4)}` : host;
+      return `https://${apiHost}/api/v1`;
+    }
+  }
+  return 'http://localhost:5564/api/v1';
+}
+const API_URL = resolveApiUrl();
 
 export const api = axios.create({
   baseURL: API_URL,

@@ -181,6 +181,7 @@ func (v *ClerkVerifier) ClearCache() {
 
 type ClerkLoginRequest struct {
 	Token      string  `json:"token"`
+	Email      string  `json:"email,omitempty"`
 	BusinessID *string `json:"businessId,omitempty"`
 }
 
@@ -243,6 +244,9 @@ func (s *Service) LoginWithClerk(ctx context.Context, req ClerkLoginRequest) (*A
 	candidateEmails := []string{}
 	if email != "" {
 		candidateEmails = append(candidateEmails, email)
+	}
+	if strings.TrimSpace(req.Email) != "" {
+		candidateEmails = append(candidateEmails, strings.ToLower(strings.TrimSpace(req.Email)))
 	}
 	if s.clerkVerifier != nil && s.clerkVerifier.cfg.SecretKey != "" {
 		sub := strings.TrimSpace(claims.Subject)

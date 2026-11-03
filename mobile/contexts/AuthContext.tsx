@@ -92,6 +92,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
   const [userData, setUserData] = useState<UserData | null>(null)
   const [authTokens, setAuthTokens] = useState<AuthTokens | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const { signOut: clerkSignOut } = useClerkAuth()
 
   useEffect(() => {
     void checkAuthStatus()
@@ -348,8 +349,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
           // for the signed-in account (owner membership first), so the same
           // email always lands on the same business regardless of whether
           // the user signed in with Google, an email code, or a password.
+          const clerkUser = clerk.user as any
+          const primaryEmail =
+            clerkUser?.primaryEmailAddress?.emailAddress ||
+            clerkUser?.emailAddresses?.[0]?.emailAddress ||
+            ''
           const response = await api.post<AuthResponse>('/auth/clerk', {
             token: clerkToken,
+            email: primaryEmail,
           });
           await applyAuth(response.data);
           // The business the session was scoped to, resolved server-side.
@@ -434,6 +441,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
 
   const logout = async () => {
     try {
+      // Fully end the Clerk session so a subsequent sign-in can pick a
+      // different account instead of silently reusing the previous one.
+      try {
+        await clerkSignOut()
+      } catch {}
       await clearAuthStorage()
       await clearSecureAuth()
       // Keep offline cred for 7 days? On explicit logout we clear it for security
