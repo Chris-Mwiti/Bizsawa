@@ -10,7 +10,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { SSOCallbackPage } from "./pages/SSOCallbackPage";
 import type { Lang } from "./data";
 
-const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY || "";
+const PUBLISHABLE_KEY = import.meta.env.CLERK_PUBLISHABLE_KEY || "";
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isSignedIn, isLoading } = useAuth();
