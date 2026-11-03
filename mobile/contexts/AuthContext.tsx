@@ -58,7 +58,7 @@ interface AuthContextType {
   isLoading: boolean
   login: (credentials: LoginRequest) => Promise<void>
   loginWithBiometrics: (email: string) => Promise<void>
-  syncClerkSession: () => Promise<void>
+  syncClerkSession: () => Promise<boolean>
   // Email OTP — BetterAuth EmailOTP plugin parity (Agents_Documents/BetterAuth/EmailOTP.md)
   sendVerificationOtp: (email: string, type: 'sign-in' | 'email-verification' | 'forget-password') => Promise<void>
   checkVerificationOtp: (email: string, type: 'sign-in' | 'email-verification' | 'forget-password', otp: string) => Promise<boolean>
@@ -338,39 +338,39 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
     }
   }
 
-  const syncClerkSession = async () => {
+  const syncClerkSession = async (): Promise<boolean> => {
     try {
       const { getClerkInstance } = await import('@clerk/clerk-expo');
       const clerk = getClerkInstance();
-      if (clerk?.session) {
-        const clerkToken = await clerk.session.getToken();
-        if (clerkToken) {
-          // Don't send a stale businessId: the backend resolves the business
-          // for the signed-in account (owner membership first), so the same
-          // email always lands on the same business regardless of whether
-          // the user signed in with Google, an email code, or a password.
-          const clerkUser = clerk.user as any
-          const primaryEmail =
-            clerkUser?.primaryEmailAddress?.emailAddress ||
-            clerkUser?.emailAddresses?.[0]?.emailAddress ||
-            ''
-          const response = await api.post<AuthResponse>('/auth/clerk', {
-            token: clerkToken,
-            email: primaryEmail,
-          });
-          await applyAuth(response.data);
-          // The business the session was scoped to, resolved server-side.
-          if (response.data.businessId) {
-            await AsyncStorage.setItem(
-              AUTH_STORAGE_KEYS.businessId,
-              response.data.businessId,
-            )
-            primeAuthCache({ businessId: response.data.businessId })
-          }
-        }
+      if (!clerk?.session) return false;
+      const clerkToken = await clerk.session.getToken();
+      if (!clerkToken) return false;
+      // Don't send a stale businessId: the backend resolves the business
+      // for the signed-in account (owner membership first), so the same
+      // email always lands on the same business regardless of whether
+      // the user signed in with Google, an email code, or a password.
+      const clerkUser = clerk.user as any
+      const primaryEmail =
+        clerkUser?.primaryEmailAddress?.emailAddress ||
+        clerkUser?.emailAddresses?.[0]?.emailAddress ||
+        ''
+      const response = await api.post<AuthResponse>('/auth/clerk', {
+        token: clerkToken,
+        email: primaryEmail,
+      });
+      await applyAuth(response.data);
+      // The business the session was scoped to, resolved server-side.
+      if (response.data.businessId) {
+        await AsyncStorage.setItem(
+          AUTH_STORAGE_KEYS.businessId,
+          response.data.businessId,
+        )
+        primeAuthCache({ businessId: response.data.businessId })
       }
+      return true;
     } catch (e: any) {
       console.error('[Auth] Clerk session sync error', e);
+      return false;
     }
   }
 

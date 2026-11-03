@@ -25,6 +25,7 @@ import {
 import { useBusinessContext } from '../../contexts/BusinessContext'
 import NetInfo from '@react-native-community/netinfo'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { AUTH_STORAGE_KEYS } from '../../lib/api'
 
 const STEPS = [
   { title: 'Business core', icon: Building2 },
@@ -53,6 +54,15 @@ export default function BusinessSetup() {
     mpesaPaymentType: '' as '' | 'paybill' | 'pochi_biashara' | 'buy_goods',
     mpesaShortcode: '',
   })
+
+  useEffect(() => {
+    // Safety net: if a returning user was routed here (e.g. the business
+    // probe failed during sign-in), send them straight to their business
+    // instead of showing the create-business wizard again.
+    AsyncStorage.getItem(AUTH_STORAGE_KEYS.businessId).then((id) => {
+      if (id) router.replace('/(tabs)')
+    })
+  }, [router])
 
   useEffect(() => {
     AsyncStorage.getItem('bizsawa_pending_business_prefill').then((raw) => {

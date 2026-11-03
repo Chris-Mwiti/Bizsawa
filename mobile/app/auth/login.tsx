@@ -90,7 +90,11 @@ export default function LoginScreen() {
       const { getClerkInstance } = await import('@clerk/clerk-expo');
       const existingClerk = getClerkInstance();
       if (existingClerk?.session) {
-        await syncClerkSession()
+        const synced = await syncClerkSession()
+        if (!synced) {
+          Alert.alert('Sign-in Failed', 'Could not reach the server. Check your connection and try again.')
+          return
+        }
         const hadBusiness = await resolveBusinessAndRoute()
         if (!hadBusiness) router.replace('/auth/business-setup')
         return
@@ -102,7 +106,18 @@ export default function LoginScreen() {
         additionalData: { prompt: 'select_account' },
       } as any)
       if (result.createdSessionId) {
-        await syncClerkSession()
+        // Clerk's SSO flow only *creates* the session; it must be activated
+        // before clerk.session (and therefore the Clerk JWT) exists. Without
+        // this, syncClerkSession no-ops and the user falls through to the
+        // create-business screen even though they already own a business.
+        if (result.setActive) {
+          await result.setActive({ session: result.createdSessionId })
+        }
+        const synced = await syncClerkSession()
+        if (!synced) {
+          Alert.alert('Sign-in Failed', 'Could not reach the server. Check your connection and try again.')
+          return
+        }
         const hadBusiness = await resolveBusinessAndRoute()
         if (!hadBusiness) router.replace('/auth/business-setup')
       }
@@ -163,13 +178,8 @@ export default function LoginScreen() {
 
     try {
       await login(formData)
-      try {
-        const res = await api.get<{ businesses: any[] }>('/businesses')
-        const hasBusiness = Array.isArray(res.data.businesses) && res.data.businesses.length > 0
-        router.replace(hasBusiness ? '/(tabs)' : '/auth/business-setup')
-      } catch {
-        router.replace('/(tabs)')
-      }
+      const hadBusiness = await resolveBusinessAndRoute()
+      if (!hadBusiness) router.replace('/auth/business-setup')
     } catch (error: any) {
       Alert.alert('Login Failed', error.message)
     } finally {
