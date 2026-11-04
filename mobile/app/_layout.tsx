@@ -1,3 +1,4 @@
+import '../lib/disableConsole'
 import '../polyfills'
 import { useEffect, useState } from 'react'
 import { View, StatusBar, Platform } from 'react-native'
