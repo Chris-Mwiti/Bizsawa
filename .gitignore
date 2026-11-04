@@ -5,6 +5,7 @@ node_modules/
 !.env.*.example
 .agents
 graphify-out/ 
+.atlas
 
 .gradle/
 build/
@@ -47,3 +48,5 @@ Thumbs.db
 # --------------------------
 coverage.out
 coverage.html   
+.vercel
+.env*
