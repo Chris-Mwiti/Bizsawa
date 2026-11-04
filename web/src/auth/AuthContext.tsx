@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { useAuth as useClerkAuth, useSession } from "@clerk/clerk-react";
-import { api } from "./api";
+import { api, onSessionExpired, resetSessionExpired } from "./api";
 
 interface User {
   id: string;
@@ -30,8 +30,17 @@ export function useAuth() {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const { isSignedIn, isLoaded, signOut: clerkSignOut } = useClerkAuth();
   const { session } = useSession();
+
+  useEffect(() => {
+    return onSessionExpired(() => {
+      setUser(null);
+      setSessionExpired(true);
+      void clerkSignOut().catch(() => {});
+    });
+  }, [clerkSignOut]);
 
   useEffect(() => {
     if (isLoaded && isSignedIn && session) {
@@ -69,6 +78,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.setItem("businessId", businessId);
       }
 
+      resetSessionExpired();
+      setSessionExpired(false);
       setUser({
         id: userId,
         email: response.data.email,
@@ -101,6 +112,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.setItem("businessId", businessId);
       }
 
+      resetSessionExpired();
+      setSessionExpired(false);
       setUser({
         id: userId,
         email: response.data.email,
@@ -113,6 +126,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
+    resetSessionExpired();
+    setSessionExpired(false);
     try {
       await clerkSignOut();
     } catch {}
@@ -134,6 +149,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }}
     >
       {children}
+      {sessionExpired && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-6">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+            <h2 className="text-lg font-semibold text-ink">Session expired</h2>
+            <p className="mt-2 text-sm text-ink/60">
+              Your session has expired. Please sign in again to continue.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setSessionExpired(false);
+                window.location.href = "/login";
+              }}
+              className="mt-5 w-full rounded-xl bg-accent px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+            >
+              Sign in
+            </button>
+          </div>
+        </div>
+      )}
     </AuthContext.Provider>
   );
 }

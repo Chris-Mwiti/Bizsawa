@@ -253,6 +253,74 @@ export async function clearAuthStorage(): Promise<void> {
 
 let refreshPromise: Promise<string | null> | null = null
 
+type SessionExpiredListener = () => void
+
+const sessionExpiredListeners = new Set<SessionExpiredListener>()
+let sessionExpiredEmitted = false
+
+export function onSessionExpired(listener: SessionExpiredListener): () => void {
+  sessionExpiredListeners.add(listener)
+  return () => {
+    sessionExpiredListeners.delete(listener)
+  }
+}
+
+export function resetSessionExpired(): void {
+  sessionExpiredEmitted = false
+}
+
+function emitSessionExpired(): void {
+  if (sessionExpiredEmitted) return
+  sessionExpiredEmitted = true
+  for (const listener of sessionExpiredListeners) {
+    try {
+      listener()
+    } catch {}
+  }
+}
+
+const UNAUTHENTICATED_ENDPOINTS = [
+  '/auth/login',
+  '/auth/register',
+  '/auth/refresh',
+  '/auth/email-otp',
+  '/auth/sign-in',
+  '/auth/google',
+  '/auth/check-email',
+  '/auth/otp',
+  '/auth/forgot-password',
+  '/auth/reset-password-otp',
+  '/auth/clerk',
+]
+
+function isUnauthenticatedEndpoint(url: string | undefined): boolean {
+  if (!url) return false
+  const path = url.split('?')[0]
+  return UNAUTHENTICATED_ENDPOINTS.some((endpoint) =>
+    path.includes(endpoint),
+  )
+}
+
+function hasAuthorizationHeader(headers: unknown): boolean {
+  if (!headers) return false
+  const maybeHeaders = headers as {
+    get?: (name: string) => unknown
+    Authorization?: unknown
+    authorization?: unknown
+  }
+  if (typeof maybeHeaders.get === 'function') {
+    return Boolean(maybeHeaders.get('Authorization'))
+  }
+  return Boolean(maybeHeaders.Authorization ?? maybeHeaders.authorization)
+}
+
+async function expireSession(): Promise<void> {
+  try {
+    await clearAuthStorage()
+  } catch {}
+  emitSessionExpired()
+}
+
 // In-memory auth header cache. The request interceptor used to perform 3
 // sequential AsyncStorage reads (3 bridge round-trips) on EVERY request —
 // with 3-6 queries per tab that was 9-18 round-trips per navigation. Now the
@@ -438,11 +506,13 @@ api.interceptors.response.use(
       status: error.response?.status ?? 0,
       retried401: error.response?.status === 401 && !originalRequest?._retry,
     })
-    if (
+    const isSessionRequest =
       error.response?.status === 401 &&
-      originalRequest &&
-      !originalRequest._retry
-    ) {
+      Boolean(originalRequest) &&
+      !isUnauthenticatedEndpoint(originalRequest?.url) &&
+      hasAuthorizationHeader(originalRequest?.headers)
+
+    if (isSessionRequest && !originalRequest._retry) {
       originalRequest._retry = true
       try {
         const accessToken = await refreshAccessToken()
@@ -450,16 +520,10 @@ api.interceptors.response.use(
           originalRequest.headers.Authorization = `Bearer ${accessToken}`
           return api(originalRequest)
         }
-      } catch {
-        await clearAuthStorage()
-      }
-    } else if (error.response?.status === 401) {
-      await clearAuthStorage()
-      // Force the app back to the login screen on any 401 that could not be
-      // refreshed — the session is gone, not just the access token.
-      if (typeof window !== 'undefined') {
-        window.location.href = '/auth/login'
-      }
+      } catch {}
+      await expireSession()
+    } else if (isSessionRequest) {
+      await expireSession()
     }
 
     return Promise.reject(error)
