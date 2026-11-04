@@ -1,8 +1,28 @@
 import axios, { type AxiosResponse, type AxiosError, type InternalAxiosRequestConfig } from "axios";
 
+const BIZSAWA_FRONTEND_HOST = 'bizsawa.chrismwiti.me'
+const BIZSAWA_API_HOST = `api.${BIZSAWA_FRONTEND_HOST}`
+
+function normalizeApiHost(host: string): string {
+  if (!host || host === BIZSAWA_API_HOST) return host
+  const apex = host.replace(/^(app|www)\./, '')
+  return apex === BIZSAWA_FRONTEND_HOST ? BIZSAWA_API_HOST : host
+}
+
+function normalizeApiUrl(url: string): string {
+  try {
+    const parsed = new URL(url)
+    const fixed = normalizeApiHost(parsed.hostname)
+    if (fixed !== parsed.hostname) parsed.hostname = fixed
+    return parsed.toString().replace(/\/+$/, '')
+  } catch {
+    return url.replace(/\/+$/, '')
+  }
+}
+
 function resolveApiUrl(): string {
   const env = (import.meta.env.VITE_API_URL as string | undefined)?.trim();
-  if (env) return env.replace(/\/+$/, '');
+  if (env) return normalizeApiUrl(env);
   if (typeof window !== 'undefined') {
     const host = window.location.hostname;
     if (host && host !== 'localhost' && host !== '127.0.0.1') {

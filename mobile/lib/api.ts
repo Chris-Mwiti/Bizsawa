@@ -78,17 +78,43 @@ function browserHostname(): string | null {
   return host && host.trim() ? host.trim() : null
 }
 
+// Production deployments sometimes carry an API URL that points at the
+// frontend origin (e.g. EXPO_PUBLIC_API_URL=https://app.bizsawa.chrismwiti.me
+// /api/v1). Vercel serves static files only, so POSTs to that host return
+// 405. Normalise any known frontend host to the api.* subdomain at runtime
+// so a stale/misconfigured env var cannot break auth again.
+const BIZSAWA_FRONTEND_HOST = 'bizsawa.chrismwiti.me'
+const BIZSAWA_API_HOST = `api.${BIZSAWA_FRONTEND_HOST}`
+
+function normalizeApiHost(host: string): string {
+  if (!host || host === BIZSAWA_API_HOST) return host
+  const apex = host.replace(/^(app|www)\./, '')
+  if (apex === BIZSAWA_FRONTEND_HOST) return BIZSAWA_API_HOST
+  return host
+}
+
+function normalizeApiUrl(url: string): string {
+  try {
+    const parsed = new URL(url)
+    const fixed = normalizeApiHost(parsed.hostname)
+    if (fixed !== parsed.hostname) parsed.hostname = fixed
+    return parsed.toString().replace(/\/$/, '')
+  } catch {
+    return url.replace(/\/$/, '')
+  }
+}
+
 export function getApiUrl(): string {
   if (Platform.OS === 'web') {
     // 1. Explicit web override wins (points the web build at staging/prod).
     const webUrl = (process.env.EXPO_PUBLIC_WEB_API_URL as string)?.trim()
-    if (webUrl) return webUrl.replace(/\/$/, '')
+    if (webUrl) return normalizeApiUrl(webUrl)
 
     const envUrl = (process.env.EXPO_PUBLIC_API_URL as string)?.trim()
     if (envUrl) {
       // 2. A public deployment URL is a deliberate target — keep it as-is.
       const host = hostFromUrl(envUrl)
-      if (host && !isHostLocalAddress(host)) return envUrl.replace(/\/$/, '')
+      if (host && !isHostLocalAddress(host)) return normalizeApiUrl(envUrl)
     }
 
     // 3. Otherwise derive the API host from the browser's own location so it
@@ -117,7 +143,7 @@ export function getApiUrl(): string {
     const host = hostFromUrl(envUrl)
     // A LAN/dev address baked into a production bundle can never be reached
     // from a real device, so fall through to the hosted API instead.
-    if (__DEV__ || !isHostLocalAddress(host)) return envUrl.replace(/\/$/, '')
+    if (__DEV__ || !isHostLocalAddress(host)) return normalizeApiUrl(envUrl)
   }
 
   const expoHost = getExpoDevHost()
