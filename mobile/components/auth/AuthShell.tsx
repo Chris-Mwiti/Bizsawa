@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
   ScrollView,
   type TextInputProps,
   type TouchableOpacityProps,
@@ -176,11 +177,15 @@ function SocialCircle({
   onPress,
   label,
   children,
+  loading = false,
+  disabled = false,
   variant = 'google',
 }: {
   onPress: () => void
   label: string
   children: React.ReactNode
+  loading?: boolean
+  disabled?: boolean
   variant?: 'google' | 'apple' | 'facebook'
 }) {
   // Google brand segments: blue #4285F4, red #DB4437, yellow #F4B400, green #0F9D58
@@ -196,25 +201,34 @@ function SocialCircle({
   return (
     <TouchableOpacity
       onPress={onPress}
+      disabled={disabled || loading}
       accessibilityRole='button'
       accessibilityLabel={label}
+      accessibilityState={{ disabled: disabled || loading, busy: loading }}
       className='w-[56px] h-[56px] rounded-full bg-surface border border-hairline items-center justify-center shadow-clinical-sm relative overflow-hidden'
-      style={{ minWidth: 56, minHeight: 56 }}
+      style={{ minWidth: 56, minHeight: 56, opacity: disabled || loading ? 0.6 : 1 }}
     >
       {googleSegments}
-      {children}
+      {loading ? <ActivityIndicator color='#0E1F1C' /> : children}
     </TouchableOpacity>
   )
 }
 
 export function SocialRow({
   onGoogle,
+  loading = false,
 }: {
   onGoogle: () => void
+  loading?: boolean
 }) {
   return (
     <View className='flex-row justify-center items-center'>
-      <SocialCircle onPress={onGoogle} label='Continue with Google' variant='google'>
+      <SocialCircle
+        onPress={onGoogle}
+        label='Continue with Google'
+        variant='google'
+        loading={loading}
+      >
         <Text className='font-geist-bold text-xl font-bold text-ink z-10'>G</Text>
       </SocialCircle>
     </View>

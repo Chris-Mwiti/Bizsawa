@@ -31,6 +31,7 @@ import {
   SwitchLink,
 } from '../../components/auth/AuthShell'
 import { useSSO } from '@clerk/clerk-expo'
+import Toast from 'react-native-toast-message'
 
 type Mode = 'otp' | 'password'
 
@@ -88,8 +89,16 @@ export default function RegisterScreen() {
   const validateEmail = (v: string) => /\S+@\S+\.\S+/.test(v)
 
   const handleGoogle = async () => {
+    if (isGoogleLoading) return
     setIsGoogleLoading(true)
     try {
+      // A leftover Clerk session would silently reuse the previous account.
+      // Sign it out first so the chooser always drives account creation.
+      try {
+        const { getClerkInstance } = await import('@clerk/clerk-expo')
+        const clerk = getClerkInstance()
+        if (clerk?.session) await clerk.signOut()
+      } catch {}
       const result = await startSSOFlow({
         strategy: 'oauth_google',
         // Always show Google's account chooser so a previous session is not
@@ -104,7 +113,11 @@ export default function RegisterScreen() {
         }
         const synced = await syncClerkSession()
         if (!synced) {
-          Alert.alert('Sign-up failed', 'Could not reach the server. Check your connection and try again.')
+          Toast.show({
+            type: 'error',
+            text1: 'Sign-up failed',
+            text2: 'Could not reach the server. Check your connection and try again.',
+          })
           return
         }
         // syncClerkSession persists the backend-resolved businessId, so trust
@@ -129,10 +142,22 @@ export default function RegisterScreen() {
           // because the probe failed; let the tabs gate handle it.
           router.replace('/(tabs)')
         }
+        return
+      }
+      if (result.authSessionResult?.type !== 'dismiss' && result.authSessionResult?.type !== 'cancel') {
+        Toast.show({
+          type: 'error',
+          text1: 'Google sign-up failed',
+          text2: 'The Google window did not complete. Allow pop-ups and try again.',
+        })
       }
     } catch (e: any) {
       if (e?.code !== 'ERR_CANCELED') {
-        Alert.alert('Google sign-up failed', e.message || 'Try again')
+        Toast.show({
+          type: 'error',
+          text1: 'Google sign-up failed',
+          text2: e?.message || 'Try again or use email code.',
+        })
       }
     } finally {
       setIsGoogleLoading(false)
@@ -303,11 +328,8 @@ export default function RegisterScreen() {
         />
       }
     >
-      {/* Social — Google sign-up (temporarily disabled, silent OAuth callback) */}
-      <SocialRow
-        onGoogle={() => Alert.alert('Temporarily disabled', 'Google sign-up is paused while we fix the OAuth callback. Please use Email code or Password.')}
-      />
-      <Text className="font-sans text-xs text-ink-subtle text-center mt-2">Google re-enabling soon — Email code works today.</Text>
+      {/* Social — Google sign-up */}
+      <SocialRow onGoogle={handleGoogle} loading={isGoogleLoading} />
 
       <OrDivider />
 
