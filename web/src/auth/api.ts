@@ -6,7 +6,12 @@ function resolveApiUrl(): string {
   if (typeof window !== 'undefined') {
     const host = window.location.hostname;
     if (host && host !== 'localhost' && host !== '127.0.0.1') {
-      const apiHost = host.startsWith('app.') ? `api.${host.slice(4)}` : host;
+      // Deployed hosts are static-only: posting to bizsawa.chrismwiti.me or
+      // app.bizsawa.chrismwiti.me returns 405. The API always lives on the
+      // api.<apex-domain> subdomain.
+      const apiHost = host.startsWith('api.')
+        ? host
+        : `api.${host.replace(/^(app|www)\./, '')}`;
       return `https://${apiHost}/api/v1`;
     }
   }

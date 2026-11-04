@@ -101,9 +101,11 @@ export function getApiUrl(): string {
       // Deployed web (e.g. app.bizsawa.chrismwiti.me) must talk to the API
       // subdomain, not to its own static host — POSTing to the static host
       // returns 405 and breaks every auth call.
-      const apiHost = browserHost.startsWith('app.')
-        ? `api.${browserHost.slice(4)}`
-        : browserHost
+      // Any deployed static host (app.*, www.*, or the apex domain) must
+      // talk to the api.* subdomain; posting to the static host returns 405.
+      const apiHost = browserHost.startsWith('api.')
+        ? browserHost
+        : `api.${browserHost.replace(/^(app|www)\./, '')}`
       return `https://${apiHost}`
     }
 
