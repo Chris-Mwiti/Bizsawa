@@ -1,11 +1,19 @@
 import React, {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
   useState,
   ReactNode,
 } from 'react'
+import {
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import NetInfo from '@react-native-community/netinfo'
 import { router } from 'expo-router'
@@ -13,8 +21,10 @@ import {
   api,
   AUTH_STORAGE_KEYS,
   clearAuthStorage,
+  onSessionExpired,
   persistAuthResponse,
   primeAuthCache,
+  resetSessionExpired,
 } from '../lib/api'
 import { useAuth as useClerkAuth } from '@clerk/clerk-expo'
 import {
@@ -92,11 +102,40 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
   const [userData, setUserData] = useState<UserData | null>(null)
   const [authTokens, setAuthTokens] = useState<AuthTokens | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [sessionExpired, setSessionExpired] = useState(false)
   const { signOut: clerkSignOut } = useClerkAuth()
+
+  const handleSessionExpired = useCallback(async () => {
+    setSessionExpired(true)
+    setIsAuthenticated(false)
+    setUserId(null)
+    setUserData(null)
+    setAuthTokens(null)
+    try {
+      await clearAuthStorage()
+    } catch {}
+    try {
+      await clearSecureAuth()
+    } catch {}
+    try {
+      await clerkSignOut()
+    } catch {}
+  }, [clerkSignOut])
 
   useEffect(() => {
     void checkAuthStatus()
   }, [])
+
+  useEffect(() => {
+    return onSessionExpired(() => {
+      void handleSessionExpired()
+    })
+  }, [handleSessionExpired])
+
+  const handleSignInAfterExpiry = () => {
+    setSessionExpired(false)
+    router.replace('/auth/login')
+  }
 
   const loadBusinessBackCompat = async (
     storedUserId: UUID,
@@ -216,6 +255,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
     email?: string,
     password?: string,
   ) => {
+    resetSessionExpired()
+    setSessionExpired(false)
     await persistAuthResponse(data)
     await persistSecureAuth({
       accessToken: data.accessToken,
@@ -441,6 +482,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
 
   const logout = async () => {
     try {
+      resetSessionExpired()
+      setSessionExpired(false)
       // Fully end the Clerk session so a subsequent sign-in can pick a
       // different account instead of silently reusing the previous one.
       try {
@@ -486,5 +529,72 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
     [isAuthenticated, userId, userData, authTokens, isLoading],
   )
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+  return (
+    <>
+      <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+      <Modal
+        transparent
+        visible={sessionExpired}
+        animationType='fade'
+        onRequestClose={handleSignInAfterExpiry}
+      >
+        <View style={styles.backdrop}>
+          <View style={styles.dialog}>
+            <Text style={styles.title}>Session expired</Text>
+            <Text style={styles.body}>
+              Your session has expired. Please sign in again to continue.
+            </Text>
+            <Pressable
+              accessibilityRole='button'
+              style={styles.button}
+              onPress={handleSignInAfterExpiry}
+            >
+              <Text style={styles.buttonText}>Sign in</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+    </>
+  )
 }
+
+const styles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(15, 46, 42, 0.55)',
+    padding: 24,
+  },
+  dialog: {
+    width: '100%',
+    maxWidth: 360,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    padding: 24,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0F2E2A',
+  },
+  body: {
+    marginTop: 8,
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#5B6B67',
+  },
+  button: {
+    marginTop: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 10,
+    backgroundColor: '#006B5F',
+    paddingVertical: 12,
+  },
+  buttonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+})

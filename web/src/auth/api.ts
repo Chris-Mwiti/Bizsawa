@@ -46,6 +46,60 @@ export const api = axios.create({
   },
 });
 
+type SessionExpiredListener = () => void;
+
+const sessionExpiredListeners = new Set<SessionExpiredListener>();
+let sessionExpiredEmitted = false;
+
+export function onSessionExpired(listener: SessionExpiredListener): () => void {
+  sessionExpiredListeners.add(listener);
+  return () => {
+    sessionExpiredListeners.delete(listener);
+  };
+}
+
+export function resetSessionExpired(): void {
+  sessionExpiredEmitted = false;
+}
+
+function emitSessionExpired(): void {
+  if (sessionExpiredEmitted) return;
+  sessionExpiredEmitted = true;
+  for (const listener of sessionExpiredListeners) {
+    try {
+      listener();
+    } catch {}
+  }
+}
+
+const UNAUTHENTICATED_ENDPOINTS = [
+  "/auth/login",
+  "/auth/register",
+  "/auth/refresh",
+  "/auth/email-otp",
+  "/auth/sign-in",
+  "/auth/google",
+  "/auth/check-email",
+  "/auth/otp",
+  "/auth/forgot-password",
+  "/auth/reset-password-otp",
+  "/auth/clerk",
+];
+
+function isUnauthenticatedEndpoint(url: string | undefined): boolean {
+  if (!url) return false;
+  const path = url.split("?")[0];
+  return UNAUTHENTICATED_ENDPOINTS.some((endpoint) => path.includes(endpoint));
+}
+
+function expireSession(): void {
+  localStorage.removeItem("accessToken");
+  localStorage.removeItem("refreshToken");
+  localStorage.removeItem("userId");
+  localStorage.removeItem("businessId");
+  emitSessionExpired();
+}
+
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const token = localStorage.getItem("accessToken");
   if (token) {
@@ -64,25 +118,35 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 api.interceptors.response.use(
   (response: AxiosResponse) => response,
   async (error: AxiosError) => {
-    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
-      try {
-        const refreshToken = localStorage.getItem("refreshToken");
-        if (refreshToken) {
+    const originalRequest = error.config as
+      | (InternalAxiosRequestConfig & { _retry?: boolean })
+      | undefined;
+    const hadAuthorization = Boolean(
+      originalRequest?.headers?.Authorization ||
+        localStorage.getItem("accessToken"),
+    );
+    const isSessionRequest =
+      error.response?.status === 401 &&
+      Boolean(originalRequest) &&
+      hadAuthorization &&
+      !isUnauthenticatedEndpoint(originalRequest?.url);
+
+    if (isSessionRequest && !originalRequest!._retry) {
+      originalRequest!._retry = true;
+      const refreshToken = localStorage.getItem("refreshToken");
+      if (refreshToken) {
+        try {
           const response = await axios.post(`${API_URL}/auth/refresh`, { refreshToken });
           const { accessToken, refreshToken: newRefreshToken } = response.data;
           localStorage.setItem("accessToken", accessToken);
           localStorage.setItem("refreshToken", newRefreshToken);
-          originalRequest.headers.Authorization = `Bearer ${accessToken}`;
-          return api(originalRequest);
-        }
-      } catch (refreshError) {
-        localStorage.removeItem("accessToken");
-        localStorage.removeItem("refreshToken");
-        localStorage.removeItem("userId");
-        window.location.href = "/login";
+          originalRequest!.headers.Authorization = `Bearer ${accessToken}`;
+          return api(originalRequest!);
+        } catch {}
       }
+      expireSession();
+    } else if (isSessionRequest) {
+      expireSession();
     }
     return Promise.reject(error);
   }
