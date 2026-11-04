@@ -11,7 +11,7 @@ import {
 import { Mail, RefreshCw } from 'lucide-react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useAuth } from '../../contexts/AuthContext'
-import { api } from '../../lib/api'
+import { api, AUTH_STORAGE_KEYS } from '../../lib/api'
 import { withTimeout } from '../../lib/async'
 import { AuthShell, SwitchLink } from '../../components/auth/AuthShell'
 
@@ -141,23 +141,29 @@ export default function VerifyOtpScreen() {
         25000,
         'Sign-in',
       )
-      // Business-aware redirect, but NEVER hang the spinner on it: the probe
-      // is best-effort (8s) and defaults to business-setup, which itself
-      // handles users that turn out to already have a business.
-      let hasBusiness = false
-      try {
-        const res = await withTimeout(
-          api.get<{ businesses: any[] }>('/businesses'),
-          8000,
-          'Loading businesses',
-        )
-        hasBusiness = Array.isArray(res.data.businesses) && res.data.businesses.length > 0
-      } catch {
-        hasBusiness = false
+      // The backend resolves the account's business on sign-in and
+      // applyAuth persists it. Trust that first: probing is only for
+      // genuinely new accounts, and a failed probe must not send an
+      // existing user back through business setup.
+      const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default
+      let hasBusiness = !!(await AsyncStorage.getItem(AUTH_STORAGE_KEYS.businessId))
+      if (!hasBusiness) {
+        try {
+          const res = await withTimeout(
+            api.get<{ businesses: any[] }>('/businesses'),
+            8000,
+            'Loading businesses',
+          )
+          hasBusiness = Array.isArray(res.data.businesses) && res.data.businesses.length > 0
+          if (hasBusiness && res.data.businesses[0]?.id) {
+            await AsyncStorage.setItem(AUTH_STORAGE_KEYS.businessId, res.data.businesses[0].id)
+          }
+        } catch {
+          hasBusiness = false
+        }
       }
       if (!hasBusiness) {
         try {
-          const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default
           const existing = await AsyncStorage.getItem('bizsawa_pending_business_prefill')
           if (!existing) {
             await AsyncStorage.setItem(

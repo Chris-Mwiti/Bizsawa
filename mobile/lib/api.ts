@@ -17,6 +17,9 @@ function spanNameFor(config: { method?: string; url?: string }): string {
 
 const DEFAULT_API_PORT = 5504
 
+// Last-resort target for production builds where no env var was injected.
+const PRODUCTION_API_URL = 'https://api.bizsawa.chrismwiti.me/api/v1'
+
 export const AUTH_STORAGE_KEYS = {
   accessToken: 'bizsawa_access_token',
   refreshToken: 'bizsawa_refresh_token',
@@ -91,13 +94,29 @@ export function getApiUrl(): string {
     // 3. Otherwise derive the API host from the browser's own location so it
     //    can never go stale (no hardcoded LAN IP in the bundle).
     const browserHost = browserHostname()
-    if (browserHost) return `http://${browserHost}:${DEFAULT_API_PORT}`
+    if (browserHost && isHostLocalAddress(browserHost)) {
+      return `http://${browserHost}:${DEFAULT_API_PORT}`
+    }
+    if (browserHost) {
+      // Deployed web (e.g. app.bizsawa.chrismwiti.me) must talk to the API
+      // subdomain, not to its own static host — POSTing to the static host
+      // returns 405 and breaks every auth call.
+      const apiHost = browserHost.startsWith('app.')
+        ? `api.${browserHost.slice(4)}`
+        : browserHost
+      return `https://${apiHost}`
+    }
 
     return `http://localhost:${DEFAULT_API_PORT}`
   }
 
   const envUrl = (process.env.EXPO_PUBLIC_API_URL as string)?.trim()
-  if (envUrl) return envUrl.replace(/\/$/, '')
+  if (envUrl) {
+    const host = hostFromUrl(envUrl)
+    // A LAN/dev address baked into a production bundle can never be reached
+    // from a real device, so fall through to the hosted API instead.
+    if (__DEV__ || !isHostLocalAddress(host)) return envUrl.replace(/\/$/, '')
+  }
 
   const expoHost = getExpoDevHost()
 
@@ -126,7 +145,7 @@ export function getApiUrl(): string {
       `[api] EXPO_PUBLIC_API_URL unset and Expo hostUri missing; API calls may fail. ENV=${(process.env.EXPO_PUBLIC_ENV as string) || (__DEV__?'development':'production')}`,
     )
   }
-  return `http://localhost:${DEFAULT_API_PORT}`
+  return PRODUCTION_API_URL
 }
 
 function withApiPrefix(hostRoot: string): string {

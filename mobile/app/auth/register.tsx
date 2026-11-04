@@ -21,7 +21,7 @@ import {
 } from 'lucide-react-native'
 import { useRouter } from 'expo-router'
 import { useAuth } from '../../contexts/AuthContext'
-import { api } from '../../lib/api'
+import { api, AUTH_STORAGE_KEYS } from '../../lib/api'
 import { withTimeout } from '../../lib/async'
 import { Tabs } from 'tamagui'
 import {
@@ -90,20 +90,44 @@ export default function RegisterScreen() {
   const handleGoogle = async () => {
     setIsGoogleLoading(true)
     try {
-      const result = await startSSOFlow({ strategy: 'oauth_google' })
+      const result = await startSSOFlow({
+        strategy: 'oauth_google',
+        // Always show Google's account chooser so a previous session is not
+        // silently reused after the user signs out.
+        additionalData: { prompt: 'select_account' },
+      } as any)
       if (result.createdSessionId) {
-        await syncClerkSession()
-        // After Google auth, check if business exists
+        // Activate the Clerk session before syncing; otherwise clerk.session
+        // is null and the backend never resolves the user's business.
+        if (result.setActive) {
+          await result.setActive({ session: result.createdSessionId })
+        }
+        const synced = await syncClerkSession()
+        if (!synced) {
+          Alert.alert('Sign-up failed', 'Could not reach the server. Check your connection and try again.')
+          return
+        }
+        // syncClerkSession persists the backend-resolved businessId, so trust
+        // it first and only probe when the account truly has no business.
+        const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default
+        const storedBusinessId = await AsyncStorage.getItem('bizsawa_business_id')
+        if (storedBusinessId) {
+          router.replace('/(tabs)')
+          return
+        }
         try {
           const res = await api.get<{ businesses: any[] }>('/businesses')
-          const hasBusiness = Array.isArray(res.data.businesses) && res.data.businesses.length > 0
-          if (!hasBusiness) {
-            router.replace('/auth/business-setup')
-          } else {
+          const businesses = Array.isArray(res.data.businesses) ? res.data.businesses : []
+          if (businesses.length > 0) {
+            await AsyncStorage.setItem('bizsawa_business_id', businesses[0].id)
             router.replace('/(tabs)')
+          } else {
+            router.replace('/auth/business-setup')
           }
         } catch {
-          router.replace('/auth/business-setup')
+          // Do not strand an existing user on the create-business screen just
+          // because the probe failed; let the tabs gate handle it.
+          router.replace('/(tabs)')
         }
       }
     } catch (e: any) {
@@ -179,20 +203,26 @@ export default function RegisterScreen() {
         // Prefill is cosmetic — never block navigation on storage.
       }
 
-      // After OTP sign-up, new user has no business -> go to business-setup
-      // Check just in case user already has business (re-login via OTP).
-      // Bounded probe: never hang the spinner; default to business-setup.
+      // The backend resolves an existing account's business during OTP
+      // sign-in and applyAuth persists it. Use that before probing so a
+      // returning user is never shown business setup again.
       // Object-form href bypasses the NavigationGate prefetch hold for tabs.
-      let hasBusiness = false
-      try {
-        const res = await withTimeout(
-          api.get<{ businesses: any[] }>('/businesses'),
-          8000,
-          'Loading businesses',
-        )
-        hasBusiness = Array.isArray(res.data.businesses) && res.data.businesses.length > 0
-      } catch {
-        hasBusiness = false
+      const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default
+      let hasBusiness = !!(await AsyncStorage.getItem(AUTH_STORAGE_KEYS.businessId))
+      if (!hasBusiness) {
+        try {
+          const res = await withTimeout(
+            api.get<{ businesses: any[] }>('/businesses'),
+            8000,
+            'Loading businesses',
+          )
+          hasBusiness = Array.isArray(res.data.businesses) && res.data.businesses.length > 0
+          if (hasBusiness && res.data.businesses[0]?.id) {
+            await AsyncStorage.setItem(AUTH_STORAGE_KEYS.businessId, res.data.businesses[0].id)
+          }
+        } catch {
+          hasBusiness = false
+        }
       }
       router.replace({ pathname: hasBusiness ? '/(tabs)' : '/auth/business-setup' } as any)
     } catch (e: any) {

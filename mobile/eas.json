@@ -8,7 +8,9 @@
       "distribution": "internal",
       "channel": "development",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://api.bizsawa.chrismwiti.me/api/v1"
+        "EXPO_PUBLIC_API_URL": "https://api.bizsawa.chrismwiti.me/api/v1",
+        "EXPO_PUBLIC_WEB_API_URL": "https://api.bizsawa.chrismwiti.me/api/v1",
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_aW1tZW5zZS1zYWxtb24tMTc4Ny5jbGVyay5hY2NvdW50cy5kZXYk"
       },
       "ios": {
         "resourceClass": "m-medium"
@@ -19,7 +21,9 @@
       "channel": "preview",
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://api.bizsawa.chrismwiti.me/api/v1"
+        "EXPO_PUBLIC_API_URL": "https://api.bizsawa.chrismwiti.me/api/v1",
+        "EXPO_PUBLIC_WEB_API_URL": "https://api.bizsawa.chrismwiti.me/api/v1",
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_aW1tZW5zZS1zYWxtb24tMTc4Ny5jbGVyay5hY2NvdW50cy5kZXYk"
       },
       "android": {
         "buildType": "apk"
@@ -29,7 +33,9 @@
       "channel": "production",
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://api.bizsawa.chrismwiti.me/api/v1"
+        "EXPO_PUBLIC_API_URL": "https://api.bizsawa.chrismwiti.me/api/v1",
+        "EXPO_PUBLIC_WEB_API_URL": "https://api.bizsawa.chrismwiti.me/api/v1",
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_aW1tZW5zZS1zYWxtb24tMTc4Ny5jbGVyay5hY2NvdW50cy5kZXYk"
       }
     },
     "development-simulator": {
@@ -38,10 +44,20 @@
       "ios": {
         "simulator": true
       },
-      "environment": "development"
+      "environment": "development",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.bizsawa.chrismwiti.me/api/v1",
+        "EXPO_PUBLIC_WEB_API_URL": "https://api.bizsawa.chrismwiti.me/api/v1",
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_aW1tZW5zZS1zYWxtb24tMTc4Ny5jbGVyay5hY2NvdW50cy5kZXYk"
+      }
     },
     "production-simulator": {
-      "extends": "production"
+      "extends": "production",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.bizsawa.chrismwiti.me/api/v1",
+        "EXPO_PUBLIC_WEB_API_URL": "https://api.bizsawa.chrismwiti.me/api/v1",
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_aW1tZW5zZS1zYWxtb24tMTc4Ny5jbGVyay5hY2NvdW50cy5kZXYk"
+      }
     }
   },
   "submit": {

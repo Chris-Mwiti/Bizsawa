@@ -84,7 +84,7 @@ export function Nav({
               ))}
             </div>
             <button
-              onClick={() => go("features")}
+              onClick={() => window.location.href = "https://app.bizsawa.chrismwiti.me"}
               className="hidden rounded-full bg-ink px-6 py-2.5 text-xs font-semibold tracking-[0.18em] text-white transition-transform duration-300 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] sm:block"
             >
               {t.start}

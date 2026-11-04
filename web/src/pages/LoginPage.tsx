@@ -38,9 +38,16 @@ export function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-paper p-4">
       <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-ink mb-2">Welcome to BizWorth</h1>
-          <p className="text-muted">Sign in to continue</p>
+        <div className="mb-8 text-center">
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-accent">
+            BizSawa
+          </p>
+          <h1 className="mt-2 font-display text-4xl font-semibold text-ink">
+            Welcome back
+          </h1>
+          <p className="mt-2 text-sm text-ink-muted">
+            Sign in to manage your business
+          </p>
         </div>
 
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 border border-gray-200 dark:border-gray-700">
