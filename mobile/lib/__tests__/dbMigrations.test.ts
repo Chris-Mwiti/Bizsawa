@@ -10,7 +10,7 @@ import { schema } from '../../db/schema'
 describe('watermelon migrations spec', () => {
   it('covers every version from 2 to the schema version without gaps', () => {
     const versions = migrations.sortedMigrations.map((m: any) => m.toVersion)
-    expect(versions).toEqual([2, 3, 4, 5, 6])
+    expect(versions).toEqual([2, 3, 4, 5, 6, 7])
     expect(migrations.maxVersion).toBe(schema.version)
   })
 
@@ -25,8 +25,15 @@ describe('watermelon migrations spec', () => {
     ])
   })
 
+  it('migrates 6 -> 7 by creating assistant_threads', () => {
+    const steps = stepsForMigration({ migrations, fromVersion: 6, toVersion: 7 }) as any[]
+    expect(steps).toHaveLength(1)
+    expect(steps[0].type).toBe('create_table')
+    expect(steps[0].schema.name).toBe('assistant_threads')
+  })
+
   it('resolves steps for a fresh v1 install through to current', () => {
-    const steps = stepsForMigration({ migrations, fromVersion: 1, toVersion: 6 }) as any[]
+    const steps = stepsForMigration({ migrations, fromVersion: 1, toVersion: 7 }) as any[]
     expect(steps.length).toBeGreaterThan(0)
   })
 })

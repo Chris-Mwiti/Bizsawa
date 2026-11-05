@@ -1,0 +1,37 @@
+{
+  "tool": "list_invoices",
+  "now": "2026-11-05T09:00:00Z",
+  "args": {
+    "limit": 10,
+    "offset": 0
+  },
+  "output": {
+    "results": [
+      {
+        "invoice_id": "44444444-4444-4444-8444-444444444444",
+        "invoice_number": "INV-0042",
+        "status": "sent",
+        "total": "5800",
+        "amount_paid": "0",
+        "amount_due": "5800",
+        "currency": "KES",
+        "due_at": "2026-11-12T00:00:00Z",
+        "sent_at": "2026-10-29T00:00:00Z",
+        "paid_at": null,
+        "customer_id": "33333333-3333-4333-8333-333333333333"
+      },
+      {
+        "invoice_id": "55555555-5555-4555-8555-555555555555",
+        "invoice_number": "INV-0041",
+        "status": "partial",
+        "total": "3200",
+        "amount_paid": "1200",
+        "amount_due": "2000",
+        "currency": "KES",
+        "due_at": "2026-11-01T00:00:00Z",
+        "sent_at": "2026-10-20T00:00:00Z",
+        "paid_at": null
+      }
+    ]
+  }
+}

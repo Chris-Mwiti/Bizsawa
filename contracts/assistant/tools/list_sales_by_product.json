@@ -1,0 +1,36 @@
+{
+  "name": "list_sales_by_product",
+  "input": {
+    "type": "object",
+    "properties": {
+      "limit": {
+        "type": "integer",
+        "description": "Maximum records to return; default 10, max 50.",
+        "minimum": 1,
+        "maximum": 50
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "type": "object",
+    "properties": {
+      "results": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "key": { "type": "string" },
+            "total": { "type": "string", "pattern": "^-?[0-9]+(\\.[0-9]+)?$" },
+            "count": { "type": "integer", "minimum": 0 },
+            "currency": { "type": "string", "const": "KES" }
+          },
+          "required": ["key", "total", "count", "currency"],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": ["results"],
+    "additionalProperties": false
+  }
+}

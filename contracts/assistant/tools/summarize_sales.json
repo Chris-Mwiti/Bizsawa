@@ -1,0 +1,39 @@
+{
+  "name": "summarize_sales",
+  "input": {
+    "type": "object",
+    "properties": {
+      "from": {
+        "type": "string",
+        "description": "RFC3339 start time; defaults to one month ago."
+      },
+      "to": {
+        "type": "string",
+        "description": "RFC3339 end time; defaults to now."
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "type": "object",
+    "properties": {
+      "count": { "type": "integer", "minimum": 0 },
+      "subtotal": { "type": "string", "pattern": "^-?[0-9]+(\\.[0-9]+)?$" },
+      "tax_amount": { "type": "string", "pattern": "^-?[0-9]+(\\.[0-9]+)?$" },
+      "total": { "type": "string", "pattern": "^-?[0-9]+(\\.[0-9]+)?$" },
+      "currency": { "type": "string", "const": "KES" },
+      "from": { "type": "string", "format": "date-time" },
+      "to": { "type": "string", "format": "date-time" }
+    },
+    "required": [
+      "count",
+      "subtotal",
+      "tax_amount",
+      "total",
+      "currency",
+      "from",
+      "to"
+    ],
+    "additionalProperties": false
+  }
+}

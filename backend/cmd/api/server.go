@@ -72,6 +72,7 @@ var corsAllowedHeaders = []string{
 	"Content-Type",
 	"X-Idempotency-Key",
 	"X-Request-ID",
+	"X-Run-Id", // TanStack AI stream run correlation
 	"X-Business-ID",
 	"X-Device-Id", // device attribution (mobile/lib/deviceId) — read by middleware.TenantResolution
 }
@@ -246,6 +247,7 @@ func NewRouter(deps Dependencies) http.Handler {
 				})
 				r.Route("/chat", func(r chi.Router) {
 					r.Post("/business-owner", deps.Chat.Handler().Chat)
+					r.Post("/stream", deps.Chat.Handler().Stream)
 				})
 			}
 

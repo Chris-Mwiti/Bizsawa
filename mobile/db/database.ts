@@ -16,6 +16,7 @@ import InventoryItem from './models/InventoryItem'
 import StockMovement from './models/StockMovement'
 import Payment from './models/Payment'
 import Conflict from './models/Conflict'
+import AssistantThread from './models/AssistantThread'
 
 // SQLiteAdapter via @morrowdigital/watermelondb-expo-plugin (disableJsi:false) → JSI in dev-client
 // Expo Go has no native module — must use dev-client build (see guide below)
@@ -61,6 +62,7 @@ export const database = new Database({
     StockMovement as any,
     Payment as any,
     Conflict as any,
+    AssistantThread as any,
   ],
 })
 

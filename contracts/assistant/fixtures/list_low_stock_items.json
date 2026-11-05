@@ -1,0 +1,21 @@
+{
+  "tool": "list_low_stock_items",
+  "now": "2026-11-05T09:00:00Z",
+  "args": {
+    "limit": 10
+  },
+  "output": {
+    "results": [
+      {
+        "product_id": "11111111-1111-4111-8111-111111111111",
+        "quantity": "2",
+        "low_stock_threshold": "5"
+      },
+      {
+        "product_id": "22222222-2222-4222-8222-222222222222",
+        "quantity": "0",
+        "low_stock_threshold": "3"
+      }
+    ]
+  }
+}

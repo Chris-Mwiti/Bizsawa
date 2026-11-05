@@ -7,6 +7,7 @@ export default defineConfig({
       'lib/**/__tests__/**/*.test.ts',
       'sync/**/__tests__/**/*.test.ts',
       'hooks/**/__tests__/**/*.test.ts',
+      'assistant/**/__tests__/**/*.test.ts',
     ],
     testTimeout: 30000,
     hookTimeout: 30000,

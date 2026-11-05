@@ -5,6 +5,7 @@ import Constants from 'expo-constants'
 import * as Device from 'expo-device'
 import type { AuthResponse } from './api-dtos'
 import { perf } from './perf'
+import { decodeJwtExp } from './offlineAuth'
 
 /** Config key carrying the in-flight perf span (never sent over the wire). */
 const PERF_SPAN_KEY = '__perfSpan'
@@ -185,6 +186,10 @@ function withApiPrefix(hostRoot: string): string {
 
 const apiRoot = withApiPrefix(getApiUrl())
 
+export function getApiRoot(): string {
+  return apiRoot
+}
+
 export const api = axios.create({
   baseURL: apiRoot,
   timeout: 30000,
@@ -339,6 +344,29 @@ export function primeAuthCache(patch: Partial<CachedAuth>): void {
 
 export function invalidateAuthCache(): void {
   cachedAuth = null
+}
+
+// Non-axios transports (e.g. TanStack AI's XHR stream adapter) bypass the
+// request interceptor, so they reuse the same stored auth/business headers.
+export async function getApiAuthHeaders(): Promise<Record<string, string>> {
+  const { token: storedToken, businessId } = await readStoredAuth()
+  const deviceId = await import('./deviceId')
+    .then((m) => m.getDeviceId())
+    .catch(() => '')
+
+  let token = storedToken
+  const expiresAt = token ? decodeJwtExp(token) : null
+  if (!token || (expiresAt !== null && Date.now() > expiresAt - 5_000)) {
+    token = (await refreshAccessToken()) ?? token
+  }
+
+  const headers: Record<string, string> = {}
+
+  if (token) headers.Authorization = `Bearer ${token}`
+  if (deviceId) headers['X-Device-Id'] = deviceId
+  if (businessId) headers['X-Business-ID'] = businessId
+
+  return headers
 }
 
 async function readStoredAuth(): Promise<CachedAuth> {
