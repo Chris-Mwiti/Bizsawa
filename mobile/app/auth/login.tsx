@@ -16,6 +16,7 @@ import {
 import NetInfo from '@react-native-community/netinfo'
 import { useRouter } from 'expo-router'
 import { useSSO } from '@clerk/clerk-expo'
+import Toast from 'react-native-toast-message'
 
 // Lazy-load so missing native module (dev-client without rebuild) doesn't crash bundle
 let LocalAuthentication: any = null
@@ -85,6 +86,7 @@ export default function LoginScreen() {
   }
 
   const handleGoogleSignIn = async () => {
+    if (isLoading) return
     setIsLoading(true)
     try {
       const { getClerkInstance } = await import('@clerk/clerk-expo');
@@ -92,7 +94,11 @@ export default function LoginScreen() {
       if (existingClerk?.session) {
         const synced = await syncClerkSession()
         if (!synced) {
-          Alert.alert('Sign-in Failed', 'Could not reach the server. Check your connection and try again.')
+          Toast.show({
+            type: 'error',
+            text1: 'Sign-in failed',
+            text2: 'Could not reach the server. Check your connection and try again.',
+          })
           return
         }
         const hadBusiness = await resolveBusinessAndRoute()
@@ -115,15 +121,31 @@ export default function LoginScreen() {
         }
         const synced = await syncClerkSession()
         if (!synced) {
-          Alert.alert('Sign-in Failed', 'Could not reach the server. Check your connection and try again.')
+          Toast.show({
+            type: 'error',
+            text1: 'Sign-in failed',
+            text2: 'Could not reach the server. Check your connection and try again.',
+          })
           return
         }
         const hadBusiness = await resolveBusinessAndRoute()
         if (!hadBusiness) router.replace('/auth/business-setup')
+        return
+      }
+      if (result.authSessionResult?.type !== 'dismiss' && result.authSessionResult?.type !== 'cancel') {
+        Toast.show({
+          type: 'error',
+          text1: 'Google sign-in failed',
+          text2: 'The Google window did not complete. Allow pop-ups and try again.',
+        })
       }
     } catch (error: any) {
       if (error?.code !== 'ERR_CANCELED') {
-        Alert.alert('Google Sign-in Failed', error.message)
+        Toast.show({
+          type: 'error',
+          text1: 'Google sign-in failed',
+          text2: error?.message || 'Try again or use email code.',
+        })
       }
     } finally {
       setIsLoading(false)
@@ -374,6 +396,7 @@ export default function LoginScreen() {
 
         <SocialRow
           onGoogle={handleGoogleSignIn}
+          loading={isLoading}
         />
       </View>
     </AuthShell>

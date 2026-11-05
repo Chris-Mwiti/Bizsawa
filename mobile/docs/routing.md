@@ -32,15 +32,15 @@ Backward-compat: `app/orders.tsx` / `app/invoices.tsx` redirect to the tab equiv
 
 | Screen | Flow (all through `AuthContext` + `api`) |
 |---|---|
-| `login.tsx` | Email/password validate → `login` → `GET /businesses` → `/(tabs)` or `/auth/business-setup`. Extras: offline chip (`WifiOff`), grace chip (`hasOfflineCredential/getOfflineGraceDaysLeft`), biometric (`authenticateAsync → loginWithBiometrics(email)`), `→ /auth/verify-otp` (email-code sign-in), `Forgot password?`. SocialRow currently alerts (Google paused, Apple/Facebook soon) |
-| `register.tsx` | `register({email,password}) → POST /auth/register` → auto `applyAuth` → business-setup |
+| `login.tsx` | Email/password validate → `login` → `GET /businesses` → `/(tabs)` or `/auth/business-setup`. Extras: offline chip (`WifiOff`), grace chip (`hasOfflineCredential/getOfflineGraceDaysLeft`), biometric (`authenticateAsync → loginWithBiometrics(email)`), `→ /auth/verify-otp` (email-code sign-in), `Forgot password?`. SocialRow starts Clerk Google SSO (`useSSO`, `oauth_google`, forced account chooser), activates the session, then syncs via `POST /auth/clerk` |
+| `register.tsx` | Email code or password sign-up; Google SSO uses the same Clerk flow as login (clears any stale Clerk session first) |
 | `verify-otp.tsx` | `sendVerificationOtp(email,'sign-in')` + `signInWithOtp(email,otp,…) → POST /auth/sign-in/email-otp` |
 | `verify-email.tsx` | `sendVerificationOtp(email,'email-verification')` + `verifyEmailWithOtp → POST /auth/email-otp/verify-email` |
 | `forgot-password.tsx` | `requestPasswordResetOtp → POST /auth/email-otp/request-password-reset`, then `resetPasswordWithOtp → POST /auth/email-otp/reset-password` |
 | `accept-invite.tsx` | Invite-code accept (`useInvites`) |
 | `business-setup.tsx` | `BusinessContext.createBusiness` (works offline via queued optimistic UUID — see state-data) |
 
-Google native path exists in `AuthContext.loginWithGoogle` (`GoogleSignin → POST /auth/google {idToken, businessId}`) but the login screen currently disables it. Biometric = OS gate + offline-credential lookup (no password, 7-day grace).
+Google SSO runs through Clerk (`useSSO` → `syncClerkSession → POST /auth/clerk`); the older native `AuthContext.loginWithGoogle` (`GoogleSignin → POST /auth/google`) path is not used by the auth screens. Biometric = OS gate + offline-credential lookup (no password, 7-day grace).
 
 ## 4. Guards (no single router guard — four layers)
 
