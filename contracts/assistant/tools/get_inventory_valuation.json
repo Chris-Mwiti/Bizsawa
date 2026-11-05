@@ -1,0 +1,34 @@
+{
+  "name": "get_inventory_valuation",
+  "input": {
+    "type": "object",
+    "properties": {
+      "limit": {
+        "type": "integer",
+        "description": "Maximum records to return; default 10, max 50.",
+        "minimum": 1,
+        "maximum": 50
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "type": "object",
+    "properties": {
+      "results": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "product_id": { "type": "string" },
+            "quantity": { "type": "string", "pattern": "^-?[0-9]+(\\.[0-9]+)?$" }
+          },
+          "required": ["product_id", "quantity"],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": ["results"],
+    "additionalProperties": false
+  }
+}

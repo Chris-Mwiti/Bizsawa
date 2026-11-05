@@ -1,0 +1,44 @@
+{
+  "name": "summarize_expenses_by_category",
+  "input": {
+    "type": "object",
+    "properties": {
+      "from": {
+        "type": "string",
+        "description": "RFC3339 start time; defaults to one month ago."
+      },
+      "to": {
+        "type": "string",
+        "description": "RFC3339 end time; defaults to now."
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "type": "object",
+    "properties": {
+      "results": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "category": { "type": "string" },
+            "amount": { "type": "string", "pattern": "^-?[0-9]+(\\.[0-9]+)?$" },
+            "tax_amount": {
+              "type": "string",
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?$"
+            },
+            "count": { "type": "integer", "minimum": 0 },
+            "currency": { "type": "string", "const": "KES" }
+          },
+          "required": ["category", "amount", "tax_amount", "count", "currency"],
+          "additionalProperties": false
+        }
+      },
+      "from": { "type": "string", "format": "date-time" },
+      "to": { "type": "string", "format": "date-time" }
+    },
+    "required": ["results", "from", "to"],
+    "additionalProperties": false
+  }
+}

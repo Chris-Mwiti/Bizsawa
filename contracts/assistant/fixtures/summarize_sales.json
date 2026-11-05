@@ -1,0 +1,17 @@
+{
+  "tool": "summarize_sales",
+  "now": "2026-11-05T09:00:00Z",
+  "args": {
+    "from": "2026-10-01T00:00:00Z",
+    "to": "2026-11-01T00:00:00Z"
+  },
+  "output": {
+    "count": 3,
+    "subtotal": "2500",
+    "tax_amount": "400",
+    "total": "2900",
+    "currency": "KES",
+    "from": "2026-10-01T00:00:00Z",
+    "to": "2026-11-01T00:00:00Z"
+  }
+}

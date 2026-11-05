@@ -97,5 +97,22 @@ export const migrations = schemaMigrations({
         },
       ],
     },
+    {
+      toVersion: 7,
+      steps: [
+        {
+          type: 'create_table',
+          schema: tableSchema({
+            name: 'assistant_threads',
+            columns: [
+              { name: 'business_id', type: 'string', isIndexed: true },
+              { name: 'thread_id', type: 'string', isIndexed: true },
+              { name: 'state', type: 'string' },
+              { name: 'updated_at_ms', type: 'number' },
+            ],
+          }),
+        },
+      ],
+    },
   ],
 })

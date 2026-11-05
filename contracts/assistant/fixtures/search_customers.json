@@ -1,0 +1,19 @@
+{
+  "tool": "search_customers",
+  "now": "2026-11-05T09:00:00Z",
+  "args": {
+    "query": "wanjiku",
+    "limit": 10
+  },
+  "output": {
+    "results": [
+      {
+        "customer_id": "33333333-3333-4333-8333-333333333333",
+        "name": "Wanjiku Kamau",
+        "phone_last4": "5678",
+        "email_domain": "example.co.ke",
+        "loyalty_points": 120
+      }
+    ]
+  }
+}

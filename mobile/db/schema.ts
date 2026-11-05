@@ -4,7 +4,7 @@ import { appSchema, tableSchema } from '@nozbe/watermelondb'
 // All syncable Postgres tables mirrored; sync_version stays server-side but cached locally for conflict check (§4)
 // Watermelon auto-adds id, created_at, updated_at; we add deleted_at soft-delete + business_id + sync_version
 export const schema = appSchema({
-  version: 6,
+  version: 7,
   tables: [
     tableSchema({
       name: 'products',
@@ -267,6 +267,17 @@ export const schema = appSchema({
         { name: 'client_device_id', type: 'string', isOptional: true },
         { name: 'server_device_id', type: 'string', isOptional: true },
         { name: 'resolution', type: 'string', isOptional: true },
+      ],
+    }),
+    // Local-only assistant transcript cache. Not part of the sync protocol:
+    // chat threads stay on the device and are scoped by business.
+    tableSchema({
+      name: 'assistant_threads',
+      columns: [
+        { name: 'business_id', type: 'string', isIndexed: true },
+        { name: 'thread_id', type: 'string', isIndexed: true },
+        { name: 'state', type: 'string' },
+        { name: 'updated_at_ms', type: 'number' },
       ],
     }),
   ],

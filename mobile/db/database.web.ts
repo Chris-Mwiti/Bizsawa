@@ -16,6 +16,7 @@ import InventoryItem from './models/InventoryItem'
 import StockMovement from './models/StockMovement'
 import Payment from './models/Payment'
 import Conflict from './models/Conflict'
+import AssistantThread from './models/AssistantThread'
 
 import { migrations } from './migrations'
 import { makeWritesDurable } from './durableWrites'
@@ -51,6 +52,7 @@ export const database = makeWritesDurable(
       StockMovement as any,
       Payment as any,
       Conflict as any,
+      AssistantThread as any,
     ],
   }),
 )

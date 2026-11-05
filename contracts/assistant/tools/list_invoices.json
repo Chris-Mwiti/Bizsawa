@@ -1,0 +1,78 @@
+{
+  "name": "list_invoices",
+  "input": {
+    "type": "object",
+    "properties": {
+      "limit": {
+        "type": "integer",
+        "description": "Maximum records to return; default 10, max 50.",
+        "minimum": 1,
+        "maximum": 50
+      },
+      "offset": {
+        "type": "integer",
+        "description": "Zero-based result offset.",
+        "minimum": 0,
+        "maximum": 100000
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "type": "object",
+    "properties": {
+      "results": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "invoice_id": { "type": "string" },
+            "invoice_number": { "type": "string" },
+            "status": {
+              "type": "string",
+              "enum": [
+                "draft",
+                "sent",
+                "viewed",
+                "partial",
+                "paid",
+                "overdue",
+                "cancelled"
+              ]
+            },
+            "total": { "type": "string", "pattern": "^-?[0-9]+(\\.[0-9]+)?$" },
+            "amount_paid": {
+              "type": "string",
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?$"
+            },
+            "amount_due": {
+              "type": "string",
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?$"
+            },
+            "currency": { "type": "string" },
+            "due_at": { "type": ["string", "null"], "format": "date-time" },
+            "sent_at": { "type": ["string", "null"], "format": "date-time" },
+            "paid_at": { "type": ["string", "null"], "format": "date-time" },
+            "customer_id": { "type": "string" },
+            "order_id": { "type": "string" }
+          },
+          "required": [
+            "invoice_id",
+            "invoice_number",
+            "status",
+            "total",
+            "amount_paid",
+            "amount_due",
+            "currency",
+            "due_at",
+            "sent_at",
+            "paid_at"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": ["results"],
+    "additionalProperties": false
+  }
+}

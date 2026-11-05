@@ -69,6 +69,7 @@ func TestCORSAllowedHeadersCoverClientHeaders(t *testing.T) {
 		"X-Device-Id",
 		"X-Idempotency-Key",
 		"X-Request-ID",
+		"X-Run-Id",
 	} {
 		found := false
 		for _, h := range corsAllowedHeaders {
