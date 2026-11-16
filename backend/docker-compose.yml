@@ -1,6 +1,16 @@
 services:
   postgres:
     image: postgres:16-alpine
+    # Logical replication is required by PowerSync. wal_level is a startup
+    # parameter, so it must be set here rather than in a SQL migration.
+    command:
+      - postgres
+      - -c
+      - wal_level=logical
+      - -c
+      - max_wal_senders=10
+      - -c
+      - max_replication_slots=10
     env_file:
       - path: ${ENV_FILE:-.env.development}
         required: true
@@ -9,14 +19,97 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     ports:
-      - "5432:5432"
+      # Override with POSTGRES_PORT when a system Postgres already binds 5432.
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - default
+      - powersync-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
+
+  # Idempotent bootstrap for PowerSync: creates the replication role and the
+  # `powersync` publication. Runs every time it is invoked (unlike
+  # docker-entrypoint-initdb.d, which only runs on a fresh data volume), so it
+  # also upgrades existing local databases.
+  powersync-init:
+    image: postgres:16-alpine
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - path: ${ENV_FILE:-.env.development}
+        required: true
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      POWERSYNC_DB_USER: ${POWERSYNC_DB_USER:-powersync_role}
+      POWERSYNC_DB_PASSWORD: ${POWERSYNC_DB_PASSWORD:-powersync_local_password}
+    volumes:
+      - ./scripts/powersync-init.sql:/powersync-init.sql:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        psql -h postgres -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -v ON_ERROR_STOP=1 \
+          -v powersync_user="$$POWERSYNC_DB_USER" \
+          -v powersync_password="$$POWERSYNC_DB_PASSWORD" \
+          -v powersync_db="$$POSTGRES_DB" \
+          -f /powersync-init.sql
+    restart: "no"
+    profiles:
+      - powersync
+
+  # Self-hosted PowerSync Service (sync engine). Replicates the compose
+  # Postgres into each client's local SQLite. Uses Postgres for bucket storage.
+  powersync:
+    image: journeyapps/powersync-service:${POWERSYNC_IMAGE_TAG:-latest}
+    command: ["start", "-r", "unified"]
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      powersync-init:
+        condition: service_completed_successfully
+    environment:
+      POWERSYNC_CONFIG_PATH: /config/${POWERSYNC_CONFIG_FILE:-service.dev.yaml}
+      PS_PORT: "8080"
+      # Replication source (the BizSawa database). Override PS_DATA_* for Supabase.
+      PS_DATA_HOST: ${POWERSYNC_DATA_HOST:-postgres}
+      PS_DATA_PORT: ${POWERSYNC_DATA_PORT:-5432}
+      PS_DATA_DB: ${POWERSYNC_DATA_DB:-bizsawa}
+      PS_DATA_USER: ${POWERSYNC_DB_USER:-powersync_role}
+      PS_DATA_PASSWORD: ${POWERSYNC_DB_PASSWORD:-powersync_local_password}
+      PS_DATA_SSLMODE: ${POWERSYNC_DATA_SSLMODE:-disable}
+      # Bucket storage (separate database, same server by default).
+      PS_STORAGE_HOST: ${POWERSYNC_STORAGE_HOST:-postgres}
+      PS_STORAGE_PORT: ${POWERSYNC_STORAGE_PORT:-5432}
+      PS_STORAGE_DB: ${POWERSYNC_STORAGE_DB:-powersync_storage}
+      PS_STORAGE_USER: ${POWERSYNC_STORAGE_USER:-postgres}
+      PS_STORAGE_PASSWORD: ${POSTGRES_PASSWORD}
+      PS_STORAGE_SSLMODE: ${POWERSYNC_STORAGE_SSLMODE:-disable}
+      # service.dev.yaml: static HS256 key. service.prod.yaml: JWKS (Clerk).
+      PS_CLIENT_AUTH_KEY: ${POWERSYNC_CLIENT_AUTH_KEY:-cG93ZXJzeW5jLWRldi1vbmx5LWtleS0zMi1ieXRlcyEh}
+      PS_JWKS_URI: ${POWERSYNC_JWKS_URI:-}
+      PS_API_TOKEN: ${POWERSYNC_API_TOKEN:-powersync-dev-admin-token}
+    volumes:
+      - ./powersync:/config:ro
+    ports:
+      # Host port; 8080 is commonly taken (Coolify/Traefik). Internal is 8080.
+      - "${POWERSYNC_PORT:-8090}:8080"
+    networks:
+      - default
+      - powersync-network
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:8080/probes/liveness').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    profiles:
+      - powersync
 
   redis:
     image: redis:7-alpine
@@ -179,6 +272,11 @@ services:
       WHATSAPP_DEFAULT_ENGINE: GOWS
     profiles:
       - whatsapp
+
+networks:
+  # Shared with the self-hosted PowerSync service so it can reach Postgres.
+  powersync-network:
+    name: powersync-network
 
 volumes:
   postgres_data:

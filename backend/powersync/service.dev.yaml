@@ -1,0 +1,53 @@
+# yaml-language-server: $schema=https://unpkg.com/@powersync/cli-schemas@latest/json-schema/service-config.json
+#
+# PowerSync Service — local development.
+#
+# Source database:  the compose Postgres, database ${POSTGRES_DB}.
+# Bucket storage:   the same Postgres, database powersync_storage (created by
+#                   scripts/powersync-init.sql).
+# Client auth:      static HS256 key (DEV ONLY). Production uses Clerk's JWKS
+#                   via service.prod.yaml instead.
+#
+# Secrets are injected by docker-compose.yml from the env file.
+
+_type: self-hosted
+
+telemetry:
+  disable_telemetry_sharing: true
+
+replication:
+  connections:
+    - type: postgresql
+      hostname: !env PS_DATA_HOST
+      port: !env PS_DATA_PORT
+      database: !env PS_DATA_DB
+      username: !env PS_DATA_USER
+      password: !env PS_DATA_PASSWORD
+      sslmode: !env PS_DATA_SSLMODE
+
+storage:
+  type: postgresql
+  hostname: !env PS_STORAGE_HOST
+  port: !env PS_STORAGE_PORT
+  database: !env PS_STORAGE_DB
+  username: !env PS_STORAGE_USER
+  password: !env PS_STORAGE_PASSWORD
+  sslmode: !env PS_STORAGE_SSLMODE
+
+port: !env PS_PORT
+
+sync_config:
+  path: sync-config.yaml
+
+client_auth:
+  jwks:
+    keys:
+      - kty: oct
+        alg: HS256
+        kid: powersync-dev
+        k: !env PS_CLIENT_AUTH_KEY
+  audience: ["powersync"]
+
+api:
+  tokens:
+    - !env PS_API_TOKEN

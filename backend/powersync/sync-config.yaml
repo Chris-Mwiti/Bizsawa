@@ -1,0 +1,18 @@
+# yaml-language-server: $schema=https://unpkg.com/@powersync/service-sync-rules@latest/schema/sync_config.json
+#
+# Sync Streams — what each client is allowed to sync.
+#
+# This is the Phase 1 starting point: one tenant-scoped stream over `sales`.
+# `business_id` must be present as a claim in the client's PowerSync JWT;
+# the Go backend adds it when minting tokens. Extend with one stream per
+# domain/table as the mobile client is migrated off WatermelonDB.
+#
+# Docs: https://docs.powersync.com/sync/streams/overview
+
+config:
+  edition: 3
+
+streams:
+  business_sales:
+    auto_subscribe: true
+    query: SELECT * FROM sales WHERE business_id = auth.parameter('business_id')

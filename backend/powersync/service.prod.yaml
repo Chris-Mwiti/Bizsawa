@@ -1,0 +1,50 @@
+# yaml-language-server: $schema=https://unpkg.com/@powersync/cli-schemas@latest/json-schema/service-config.json
+#
+# PowerSync Service — production.
+#
+# Client auth uses Clerk's JWKS endpoint (POWERSYNC_JWKS_URI, normally the same
+# value as CLERK_JWKS_URL). Set POWERSYNC_API_TOKEN to a strong random value.
+#
+# For Supabase (or any external Postgres), override POWERSYNC_DATA_* and
+# POWERSYNC_STORAGE_* in the production env file. Otherwise the compose
+# Postgres is used.
+
+_type: self-hosted
+
+telemetry:
+  disable_telemetry_sharing: true
+
+replication:
+  connections:
+    - type: postgresql
+      hostname: !env PS_DATA_HOST
+      port: !env PS_DATA_PORT
+      database: !env PS_DATA_DB
+      username: !env PS_DATA_USER
+      password: !env PS_DATA_PASSWORD
+      sslmode: !env PS_DATA_SSLMODE
+
+storage:
+  type: postgresql
+  hostname: !env PS_STORAGE_HOST
+  port: !env PS_STORAGE_PORT
+  database: !env PS_STORAGE_DB
+  username: !env PS_STORAGE_USER
+  password: !env PS_STORAGE_PASSWORD
+  sslmode: !env PS_STORAGE_SSLMODE
+
+port: !env PS_PORT
+
+sync_config:
+  path: sync-config.yaml
+
+client_auth:
+  jwks_uri: !env PS_JWKS_URI
+  # Clerk tokens do not carry a "powersync" audience by default. Add the
+  # audience here only if you configure one in Clerk (and in the Go token
+  # minting path).
+  # audience: ["powersync"]
+
+api:
+  tokens:
+    - !env PS_API_TOKEN
