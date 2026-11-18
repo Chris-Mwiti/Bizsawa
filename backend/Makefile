@@ -44,7 +44,7 @@ dev-observability-down:
 
 # Production — uses .env.production (never commit real secrets)
 prod-up:
-	@grep -Eq '^POWERSYNC_JWKS_URI=.+' .env.production || (echo "Set POWERSYNC_JWKS_URI in .env.production (Clerk JWKS URL)"; exit 1)
+	@grep -Eq '^POWERSYNC_JWT_SIGNING_KEY=.+' .env.production || (echo "Set POWERSYNC_JWT_SIGNING_KEY in .env.production (base64url HS256 key)"; exit 1)
 	@grep -Eq '^POWERSYNC_API_TOKEN=.+' .env.production || (echo "Set POWERSYNC_API_TOKEN in .env.production"; exit 1)
 	@grep -Eq '^POWERSYNC_DB_PASSWORD=.+' .env.production || (echo "Set POWERSYNC_DB_PASSWORD in .env.production"; exit 1)
 	ENV_FILE=.env.production POWERSYNC_CONFIG_FILE=service.prod.yaml docker compose --env-file .env.production --profile powersync build --no-cache
@@ -89,9 +89,9 @@ dev-powersync-config:
 	ENV_FILE=.env.development POWERSYNC_CONFIG_FILE=service.dev.yaml docker compose --env-file .env.development --profile powersync config
 
 # PowerSync (self-hosted) — production
-# Uses .env.production + powersync/service.prod.yaml (Clerk JWKS via POWERSYNC_JWKS_URI).
+# Uses .env.production + powersync/service.prod.yaml (backend-minted HS256 via POWERSYNC_JWT_SIGNING_KEY).
 prod-powersync-up:
-	@grep -Eq '^POWERSYNC_JWKS_URI=.+' .env.production || (echo "Set POWERSYNC_JWKS_URI in .env.production (Clerk JWKS URL)"; exit 1)
+	@grep -Eq '^POWERSYNC_JWT_SIGNING_KEY=.+' .env.production || (echo "Set POWERSYNC_JWT_SIGNING_KEY in .env.production (base64url HS256 key)"; exit 1)
 	@grep -Eq '^POWERSYNC_API_TOKEN=.+' .env.production || (echo "Set POWERSYNC_API_TOKEN in .env.production"; exit 1)
 	@grep -Eq '^POWERSYNC_DB_PASSWORD=.+' .env.production || (echo "Set POWERSYNC_DB_PASSWORD in .env.production"; exit 1)
 	ENV_FILE=.env.production POWERSYNC_CONFIG_FILE=service.prod.yaml docker compose --env-file .env.production --profile powersync up -d postgres powersync-init powersync
