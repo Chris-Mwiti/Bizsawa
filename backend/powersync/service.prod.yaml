@@ -2,8 +2,10 @@
 #
 # PowerSync Service — production.
 #
-# Client auth uses Clerk's JWKS endpoint (POWERSYNC_JWKS_URI, normally the same
-# value as CLERK_JWKS_URL). Set POWERSYNC_API_TOKEN to a strong random value.
+# Option A client auth: the Go API mints short-lived HS256 tokens via
+# POST /api/v1/powersync/token and PowerSync verifies them with the shared
+# base64url key in POWERSYNC_JWT_SIGNING_KEY / PS_JWT_SIGNING_KEY.
+# Set POWERSYNC_API_TOKEN to a strong random value.
 #
 # For Supabase (or any external Postgres), override POWERSYNC_DATA_* and
 # POWERSYNC_STORAGE_* in the production env file. Otherwise the compose
@@ -39,11 +41,13 @@ sync_config:
   path: sync-config.yaml
 
 client_auth:
-  jwks_uri: !env PS_JWKS_URI
-  # Clerk tokens do not carry a "powersync" audience by default. Add the
-  # audience here only if you configure one in Clerk (and in the Go token
-  # minting path).
-  # audience: ["powersync"]
+  jwks:
+    keys:
+      - kty: oct
+        alg: HS256
+        kid: powersync-prod
+        k: !env PS_JWT_SIGNING_KEY
+  audience: ["powersync"]
 
 api:
   tokens:
