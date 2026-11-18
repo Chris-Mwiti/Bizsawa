@@ -20,6 +20,7 @@ type Config struct {
 	JWT             JWTConfig
 	Google          GoogleConfig
 	Clerk           ClerkConfig
+	PowerSync       PowerSyncConfig
 	MCP             MCPConfig
 	WhatsApp        WhatsAppConfig
 	Crypto          CryptoConfig
@@ -89,6 +90,19 @@ type ClerkConfig struct {
 	PublishableKey string
 	SecretKey      string
 	JWKSURL        string // e.g. https://your-instance.clerk.accounts.dev/.well-known/jwks.json
+}
+
+// PowerSyncConfig configures the backend's PowerSync auth bridge (Option A).
+// The backend mints short-lived HS256 tokens carrying business_id; the
+// self-hosted PowerSync service verifies them with the same base64url key in
+// client_auth.jwks.
+type PowerSyncConfig struct {
+	JWTSigningKey string // base64url-encoded HMAC key (raw strings are also accepted)
+	JWTKeyID      string // kid matching client_auth.jwks in the PowerSync service config
+	JWTIssuer     string
+	JWTAudience   string
+	JWTTTL        time.Duration
+	URL           string // public PowerSync endpoint returned to clients
 }
 
 type MpesaConfig struct {
@@ -201,6 +215,14 @@ func Load() Config {
 			PublishableKey: env("CLERK_PUBLISHABLE_KEY", ""),
 			SecretKey:      env("CLERK_SECRET_KEY", ""),
 			JWKSURL:        env("CLERK_JWKS_URL", ""),
+		},
+		PowerSync: PowerSyncConfig{
+			JWTSigningKey: env("POWERSYNC_JWT_SIGNING_KEY", "powersync-dev-only-key-32-bytes!!"),
+			JWTKeyID:      env("POWERSYNC_JWT_KEY_ID", "powersync-dev"),
+			JWTIssuer:     env("POWERSYNC_JWT_ISSUER", env("JWT_ISSUER", "bizsawa")),
+			JWTAudience:   env("POWERSYNC_JWT_AUDIENCE", "powersync"),
+			JWTTTL:        durationEnv("POWERSYNC_JWT_TTL", 15*time.Minute),
+			URL:           env("POWERSYNC_URL", "http://localhost:8090"),
 		},
 		MCP: MCPConfig{
 			Addr:                  env("MCP_ADDR", ":5574"),
