@@ -2,10 +2,17 @@
 #
 # Sync Streams — what each client is allowed to sync.
 #
-# This is the Phase 1 starting point: one tenant-scoped stream over `sales`.
-# `business_id` must be present as a claim in the client's PowerSync JWT;
-# the Go backend adds it when minting tokens. Extend with one stream per
-# domain/table as the mobile client is migrated off WatermelonDB.
+# Every stream is tenant-scoped by the `business_id` claim in the PowerSync JWT
+# minted by the Go API (POST /api/v1/powersync/token). Soft-deleted rows are
+# excluded; PowerSync removes them from the client bucket, which the SDK turns
+# into a local delete (matching the WatermelonDB protocol this replaces).
+#
+# Sync rules are READ-ONLY. All mutations still go through the Go REST API
+# (PowerSync uploadData -> existing endpoints); the service never writes to the
+# source database.
+#
+# Keep this list in sync with syncableTables in
+# backend/internal/sync/types.go.
 #
 # Docs: https://docs.powersync.com/sync/streams/overview
 
@@ -13,6 +20,61 @@ config:
   edition: 3
 
 streams:
-  business_sales:
+  products:
     auto_subscribe: true
-    query: SELECT * FROM sales WHERE business_id = auth.parameter('business_id')
+    query: SELECT * FROM products WHERE business_id = auth.parameter('business_id') AND deleted_at IS NULL
+
+  product_variants:
+    auto_subscribe: true
+    query: SELECT * FROM product_variants WHERE business_id = auth.parameter('business_id') AND deleted_at IS NULL
+
+  customers:
+    auto_subscribe: true
+    query: SELECT * FROM customers WHERE business_id = auth.parameter('business_id') AND deleted_at IS NULL
+
+  inventory_items:
+    auto_subscribe: true
+    query: SELECT * FROM inventory_items WHERE business_id = auth.parameter('business_id') AND deleted_at IS NULL
+
+  stock_movements:
+    auto_subscribe: true
+    query: SELECT * FROM stock_movements WHERE business_id = auth.parameter('business_id') AND deleted_at IS NULL
+
+  orders:
+    auto_subscribe: true
+    query: SELECT * FROM orders WHERE business_id = auth.parameter('business_id') AND deleted_at IS NULL
+
+  order_lines:
+    auto_subscribe: true
+    query: SELECT * FROM order_lines WHERE business_id = auth.parameter('business_id') AND deleted_at IS NULL
+
+  sales:
+    auto_subscribe: true
+    query: SELECT * FROM sales WHERE business_id = auth.parameter('business_id') AND deleted_at IS NULL
+
+  sale_lines:
+    auto_subscribe: true
+    query: SELECT * FROM sale_lines WHERE business_id = auth.parameter('business_id') AND deleted_at IS NULL
+
+  expenses:
+    auto_subscribe: true
+    query: SELECT * FROM expenses WHERE business_id = auth.parameter('business_id') AND deleted_at IS NULL
+
+  invoices:
+    auto_subscribe: true
+    query: SELECT * FROM invoices WHERE business_id = auth.parameter('business_id') AND deleted_at IS NULL
+
+  invoice_lines:
+    auto_subscribe: true
+    query: SELECT * FROM invoice_lines WHERE business_id = auth.parameter('business_id') AND deleted_at IS NULL
+
+  # READ-ONLY: server-owned payment state (M-Pesa/STK). Clients may sync it
+  # down for display but must never upload writes for this table; any
+  # client-side mutation is rejected by the Go API.
+  payment_commands:
+    auto_subscribe: true
+    query: SELECT * FROM payment_commands WHERE business_id = auth.parameter('business_id') AND deleted_at IS NULL
+
+  tax_rules:
+    auto_subscribe: true
+    query: SELECT * FROM tax_rules WHERE business_id = auth.parameter('business_id') AND deleted_at IS NULL
