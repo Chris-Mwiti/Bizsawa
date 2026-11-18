@@ -37,6 +37,15 @@ var syncableTables = []string{
 	"tax_rules",
 }
 
+// readOnlySyncTables are server-owned. Clients may sync them down for display
+// (they are in syncableTables), but uploads must be rejected: the server alone
+// creates payment state from M-Pesa/STK callbacks.
+var readOnlySyncTables = map[string]bool{
+	"payment_commands": true,
+}
+
+func isReadOnly(table string) bool { return readOnlySyncTables[table] }
+
 // Pull caps: full pulls are the mobile cold-start bottleneck (F5).
 // Default 1000 rows/table, max 5000; ordered by updated_at so cursors page
 // deterministically when callers pass the returned timestamp back as ?since=.
