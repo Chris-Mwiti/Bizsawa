@@ -20,6 +20,7 @@ import (
 	"github.com/Codecx-Org/FinAI/backend/internal/invoices"
 	"github.com/Codecx-Org/FinAI/backend/internal/orders"
 	"github.com/Codecx-Org/FinAI/backend/internal/payments"
+	"github.com/Codecx-Org/FinAI/backend/internal/powersync"
 	"github.com/Codecx-Org/FinAI/backend/internal/products"
 	"github.com/Codecx-Org/FinAI/backend/internal/sales"
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/authz"
@@ -54,6 +55,7 @@ type Dependencies struct {
 	Authz     *authz.Enforcer
 	Chat      *chat.Module
 	Sync      *sync.Module
+	Powersync *powersync.Module
 }
 
 // corsAllowedHeaders lists every request header the clients send.
@@ -253,6 +255,12 @@ func NewRouter(deps Dependencies) http.Handler {
 
 			if deps.Sync != nil {
 				r.Route("/sync", deps.Sync.RegisterRoutes)
+			}
+
+			if deps.Powersync != nil {
+				// POST /api/v1/powersync/token — mints the HS256 token the
+				// PowerSync SDK uses as its client credential.
+				r.Route("/powersync", deps.Powersync.RegisterRoutes)
 			}
 		})
 	})
