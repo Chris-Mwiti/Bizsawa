@@ -90,9 +90,10 @@ services:
       PS_STORAGE_USER: ${POWERSYNC_STORAGE_USER:-postgres}
       PS_STORAGE_PASSWORD: ${POSTGRES_PASSWORD}
       PS_STORAGE_SSLMODE: ${POWERSYNC_STORAGE_SSLMODE:-disable}
-      # service.dev.yaml: static HS256 key. service.prod.yaml: JWKS (Clerk).
+      # service.dev.yaml: PS_CLIENT_AUTH_KEY. service.prod.yaml: PS_JWT_SIGNING_KEY
+      # (backend-minted HS256 tokens). Both values are base64url keys.
       PS_CLIENT_AUTH_KEY: ${POWERSYNC_CLIENT_AUTH_KEY:-cG93ZXJzeW5jLWRldi1vbmx5LWtleS0zMi1ieXRlcyEh}
-      PS_JWKS_URI: ${POWERSYNC_JWKS_URI:-}
+      PS_JWT_SIGNING_KEY: ${POWERSYNC_JWT_SIGNING_KEY:-cG93ZXJzeW5jLWRldi1vbmx5LWtleS0zMi1ieXRlcyEh}
       PS_API_TOKEN: ${POWERSYNC_API_TOKEN:-powersync-dev-admin-token}
     volumes:
       - ./powersync:/config:ro
@@ -114,7 +115,8 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      # Override with REDIS_PORT when a system Redis already binds 6379.
+      - "${REDIS_PORT:-6379}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
