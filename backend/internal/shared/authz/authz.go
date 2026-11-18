@@ -99,6 +99,12 @@ func ResourceAction(r *http.Request) (string, string) {
 		resource = "whatsapp"
 	}
 
+	// Minting a PowerSync token is a read-only credential operation even
+	// though the endpoint uses POST.
+	if resource == "powersync" {
+		return resource, "read"
+	}
+
 	switch r.Method {
 	case http.MethodGet:
 		return resource, "read"
@@ -128,11 +134,11 @@ func (e *Enforcer) allow(role Role, resource string, actions ...string) {
 }
 
 func (e *Enforcer) seedDefaults() {
-	for _, resource := range []string{"businesses", "members", "products", "customers", "orders", "sales", "inventory", "expenses", "taxes", "invoices", "payments", "devices", "reports", "visualizations", "insights", "analytics", "chatbot", "chat", "sync", "ai", "whatsapp", "waha"} {
+	for _, resource := range []string{"businesses", "members", "products", "customers", "orders", "sales", "inventory", "expenses", "taxes", "invoices", "payments", "devices", "reports", "visualizations", "insights", "analytics", "chatbot", "chat", "sync", "powersync", "ai", "whatsapp", "waha"} {
 		e.allow(RoleOwner, resource, "read", "write", "delete", "generate", "configure")
 	}
 
-	for _, resource := range []string{"businesses", "members", "products", "customers", "orders", "sales", "inventory", "expenses", "taxes", "invoices", "payments", "devices", "reports", "visualizations", "insights", "analytics", "chatbot", "chat", "sync", "ai", "whatsapp", "waha"} {
+	for _, resource := range []string{"businesses", "members", "products", "customers", "orders", "sales", "inventory", "expenses", "taxes", "invoices", "payments", "devices", "reports", "visualizations", "insights", "analytics", "chatbot", "chat", "sync", "powersync", "ai", "whatsapp", "waha"} {
 		e.allow(RoleManager, resource, "read", "write", "generate", "configure")
 	}
 
@@ -152,9 +158,10 @@ func (e *Enforcer) seedDefaults() {
 	e.allow(RoleCashier, "waha", "read", "write")
 	e.allow(RoleCashier, "whatsapp", "read", "write")
 	e.allow(RoleCashier, "sync", "read", "write")
+	e.allow(RoleCashier, "powersync", "read")
 	e.allow(RoleCashier, "visualizations", "read")
 
-	for _, resource := range []string{"products", "customers", "orders", "sales", "inventory", "reports", "visualizations", "insights", "analytics", "chatbot", "chat", "sync"} {
+	for _, resource := range []string{"products", "customers", "orders", "sales", "inventory", "reports", "visualizations", "insights", "analytics", "chatbot", "chat", "sync", "powersync"} {
 		e.allow(RoleViewer, resource, "read")
 	}
 }
