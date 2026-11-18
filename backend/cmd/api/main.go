@@ -33,6 +33,7 @@ import (
 	"github.com/Codecx-Org/FinAI/backend/internal/mcp"
 	"github.com/Codecx-Org/FinAI/backend/internal/orders"
 	"github.com/Codecx-Org/FinAI/backend/internal/payments"
+	"github.com/Codecx-Org/FinAI/backend/internal/powersync"
 	"github.com/Codecx-Org/FinAI/backend/internal/products"
 	"github.com/Codecx-Org/FinAI/backend/internal/sales"
 	"github.com/Codecx-Org/FinAI/backend/internal/shared/authz"
@@ -201,6 +202,7 @@ func main() {
 	})
 	chatModule := chat.NewModule(chatRegistry)
 	syncModule := sync.New(gormDB)
+	powersyncModule := powersync.New(cfg.PowerSync)
 
 	workers := river.NewWorkers()
 	salesModule.RegisterWorkers(workers)
@@ -249,6 +251,7 @@ func main() {
 			Authz:     authzEnforcer,
 			Chat:      chatModule,
 			Sync:      syncModule,
+			Powersync: powersyncModule,
 		}),
 	}
 
