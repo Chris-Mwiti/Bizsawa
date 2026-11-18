@@ -48,6 +48,10 @@ func (s *Service) PushWithUser(ctx context.Context, businessID uuid.UUID, userID
 				result.Errors[table] = append(result.Errors[table], "table not syncable")
 				continue
 			}
+			if isReadOnly(table) {
+				result.Errors[table] = append(result.Errors[table], "table is read-only")
+				continue
+			}
 			s.pushCreated(pctx, tx, businessID, userID, deviceID, table, changes.Created, result)
 			s.pushUpdated(pctx, tx, businessID, userID, deviceID, table, changes.Updated, result)
 			s.pushDeleted(pctx, tx, businessID, table, changes.Deleted, result)
