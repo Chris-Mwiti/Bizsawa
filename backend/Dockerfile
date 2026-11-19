@@ -15,5 +15,6 @@ COPY --from=builder /out/migrate /app/migrate
 COPY migrations /app/migrations
 # .env files are not copied; env injected at runtime
 EXPOSE 5504 5564
-HEALTHCHECK --interval=10s --timeout=3s --retries=5 CMD curl -f http://localhost:${APP_ADDR:-5504}/health || curl -f http://localhost:5504/health || exit 1
-CMD ["/app/api"]
+HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=5 CMD curl -fsS http://127.0.0.1:5504/health || exit 1
+# Single replica: migrate, then start. Fails closed if a migration fails.
+CMD ["/bin/sh", "-c", "/app/migrate up && exec /app/api"]

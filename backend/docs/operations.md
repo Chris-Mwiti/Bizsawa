@@ -65,8 +65,8 @@ WhatsApp rules: `docs/WAHA_RULES_IMPLEMENTATION.md`. Observability: `docs/OBSERV
 |---|---|---|---|
 | postgres | `postgres:16-alpine`, `pg_isready` health | 5432 | primary store + River queue |
 | redis | `redis:7-alpine` | host 6378→6379 | Streams bus (unused), readiness, MCP health |
-| migrate | profile `migrate` | — | runs `/app/migrate up`, then exits |
-| api | — | 5504 + 9464 (metrics) | needs postgres/redis/otel |
+| migrate | profile `migrate` | — | manual/multi-replica fallback; runs `/app/migrate up`, then exits |
+| api | — | 5504 + 9464 (metrics) | needs postgres/redis/otel; runs `/app/migrate up` before serving (single replica) |
 | mcp | profile `mcp` | 5574 | standalone tool server |
 | otel-collector | — | 4317/4318/8888/13133 | Honeycomb passthrough (`otel-collector-config.yaml`) |
 | jaeger | — | 16686 | local traces |
