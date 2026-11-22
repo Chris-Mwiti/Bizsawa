@@ -143,7 +143,7 @@ export function Landing({
             </h2>
             <button
               onClick={() => {
-                window.location.href = "https://app.bizsawa.chrismwiti.me";
+                window.location.href = "https://app-bizsawa.chrismwiti.me";
                 window.scrollTo({ top: 0 });
               }}
               className="group flex items-center gap-2 rounded-full border border-ink/20 px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-accent hover:text-accent"
@@ -274,7 +274,7 @@ export function Landing({
             Open at 7am. Trust the books at night.
           </h2>
           <div className="mt-8 flex justify-center">
-            <ShimmerButton onClick={() => { window.location.href = "https://app.bizsawa.chrismwiti.me"; window.scrollTo({ top: 0 }); }} label="Start with BizSawa">
+            <ShimmerButton onClick={() => { window.location.href = "https://app-bizsawa.chrismwiti.me"; window.scrollTo({ top: 0 }); }} label="Start with BizSawa">
               START
             </ShimmerButton>
           </div>
