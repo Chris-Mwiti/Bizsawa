@@ -1,12 +1,21 @@
 import axios, { type AxiosResponse, type AxiosError, type InternalAxiosRequestConfig } from "axios";
 
-const BIZSAWA_FRONTEND_HOST = 'bizsawa.chrismwiti.me'
-const BIZSAWA_API_HOST = `api.${BIZSAWA_FRONTEND_HOST}`
+// Hostnames are deliberately ONE level under chrismwiti.me: Cloudflare's free
+// Universal SSL certificate only covers *.chrismwiti.me, so two-level names
+// such as api.bizsawa.chrismwiti.me fail the TLS handshake.
+const BIZSAWA_API_HOST = 'api-bizsawa.chrismwiti.me'
+const BIZSAWA_STATIC_HOSTS = new Set([
+  'bizsawa.chrismwiti.me', // landing page
+  'www.bizsawa.chrismwiti.me',
+  'app-bizsawa.chrismwiti.me', // PWA
+  // Legacy two-level names (no valid edge certificate). Rewriting them keeps
+  // stale bundles and env vars working.
+  'app.bizsawa.chrismwiti.me',
+  'api.bizsawa.chrismwiti.me',
+])
 
 function normalizeApiHost(host: string): string {
-  if (!host || host === BIZSAWA_API_HOST) return host
-  const apex = host.replace(/^(app|www)\./, '')
-  return apex === BIZSAWA_FRONTEND_HOST ? BIZSAWA_API_HOST : host
+  return BIZSAWA_STATIC_HOSTS.has(host) ? BIZSAWA_API_HOST : host
 }
 
 function normalizeApiUrl(url: string): string {
@@ -27,12 +36,9 @@ function resolveApiUrl(): string {
     const host = window.location.hostname;
     if (host && host !== 'localhost' && host !== '127.0.0.1') {
       // Deployed hosts are static-only: posting to bizsawa.chrismwiti.me or
-      // app.bizsawa.chrismwiti.me returns 405. The API always lives on the
-      // api.<apex-domain> subdomain.
-      const apiHost = host.startsWith('api.')
-        ? host
-        : `api.${host.replace(/^(app|www)\./, '')}`;
-      return `https://${apiHost}/api/v1`;
+      // app-bizsawa.chrismwiti.me returns 405. The API always lives on its
+      // own host.
+      return `https://${BIZSAWA_API_HOST}/api/v1`;
     }
   }
   return 'http://localhost:5564/api/v1';

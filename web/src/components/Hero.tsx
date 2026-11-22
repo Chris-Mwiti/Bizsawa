@@ -105,7 +105,7 @@ export function Hero({
           </p>
           <div className="mt-7 flex flex-wrap items-center gap-3">
             <ShimmerButton
-              onClick={() => window.location.href = "https://app.bizsawa.chrismwiti.me"}
+              onClick={() => window.location.href = "https://app-bizsawa.chrismwiti.me"}
               label="Start with BizSawa"
               tone="light"
             >
@@ -185,7 +185,7 @@ export function Hero({
                       loading="lazy"
                     />
                     <button
-                      onClick={() => window.location.href = "https://app.bizsawa.chrismwiti.me"}
+                      onClick={() => window.location.href = "https://app-bizsawa.chrismwiti.me"}
                       aria-label="Meet the AI coach"
                       className="absolute inset-0 flex items-center justify-center bg-ink/25 transition-colors hover:bg-ink/15"
                     >

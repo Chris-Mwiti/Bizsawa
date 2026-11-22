@@ -6,7 +6,7 @@
 # execute the smoke suite directly against the same target.
 #
 # Env:
-#   BASE_URL    API base (default https://api.bizsawa.chrismwiti.me/api/v1)
+#   BASE_URL    API base (default https://api-bizsawa.chrismwiti.me/api/v1)
 #   TEST_EMAIL  override (default k6-bootstrap-<timestamp>@example.com)
 #   TEST_PASSWORD override (default K6Bootstrap!123)
 #   BIZ_NAME    override (default "k6 Bootstrap Shop <timestamp>")
@@ -19,7 +19,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-BASE_URL="${BASE_URL:-https://api.bizsawa.chrismwiti.me/api/v1}"
+BASE_URL="${BASE_URL:-https://api-bizsawa.chrismwiti.me/api/v1}"
 BASE_URL="${BASE_URL%/}"
 TS="$(date +%s)"
 TEST_EMAIL="${TEST_EMAIL:-k6-bootstrap-${TS}@example.com}"

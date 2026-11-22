@@ -19,7 +19,7 @@ function spanNameFor(config: { method?: string; url?: string }): string {
 const DEFAULT_API_PORT = 5504
 
 // Last-resort target for production builds where no env var was injected.
-const PRODUCTION_API_URL = 'https://api.bizsawa.chrismwiti.me/api/v1'
+const PRODUCTION_API_URL = 'https://api-bizsawa.chrismwiti.me/api/v1'
 
 export const AUTH_STORAGE_KEYS = {
   accessToken: 'bizsawa_access_token',
@@ -79,19 +79,29 @@ function browserHostname(): string | null {
   return host && host.trim() ? host.trim() : null
 }
 
-// Production deployments sometimes carry an API URL that points at the
-// frontend origin (e.g. EXPO_PUBLIC_API_URL=https://app.bizsawa.chrismwiti.me
-// /api/v1). Vercel serves static files only, so POSTs to that host return
-// 405. Normalise any known frontend host to the api.* subdomain at runtime
-// so a stale/misconfigured env var cannot break auth again.
-const BIZSAWA_FRONTEND_HOST = 'bizsawa.chrismwiti.me'
-const BIZSAWA_API_HOST = `api.${BIZSAWA_FRONTEND_HOST}`
+// Production deployments sometimes carry an API URL that points at a static
+// frontend origin (e.g. EXPO_PUBLIC_API_URL=https://app-bizsawa.chrismwiti.me
+// /api/v1). Static hosts only serve files, so POSTs to them return 405.
+// Normalise any known frontend host to the API host at runtime so a
+// stale/misconfigured env var cannot break auth again.
+//
+// Hostnames are deliberately ONE level under chrismwiti.me: Cloudflare's free
+// Universal SSL certificate only covers *.chrismwiti.me, so two-level names
+// such as api.bizsawa.chrismwiti.me fail the TLS handshake
+// (ERR_SSL_VERSION_OR_CIPHER_MISMATCH).
+const BIZSAWA_API_HOST = 'api-bizsawa.chrismwiti.me'
+const BIZSAWA_STATIC_HOSTS = new Set([
+  'bizsawa.chrismwiti.me', // landing page
+  'www.bizsawa.chrismwiti.me',
+  'app-bizsawa.chrismwiti.me', // PWA
+  // Legacy two-level names (no valid edge certificate). Rewriting them keeps
+  // stale bundles and env vars working.
+  'app.bizsawa.chrismwiti.me',
+  'api.bizsawa.chrismwiti.me',
+])
 
 function normalizeApiHost(host: string): string {
-  if (!host || host === BIZSAWA_API_HOST) return host
-  const apex = host.replace(/^(app|www)\./, '')
-  if (apex === BIZSAWA_FRONTEND_HOST) return BIZSAWA_API_HOST
-  return host
+  return BIZSAWA_STATIC_HOSTS.has(host) ? BIZSAWA_API_HOST : host
 }
 
 function normalizeApiUrl(url: string): string {
@@ -125,15 +135,10 @@ export function getApiUrl(): string {
       return `http://${browserHost}:${DEFAULT_API_PORT}`
     }
     if (browserHost) {
-      // Deployed web (e.g. app.bizsawa.chrismwiti.me) must talk to the API
-      // subdomain, not to its own static host — POSTing to the static host
-      // returns 405 and breaks every auth call.
-      // Any deployed static host (app.*, www.*, or the apex domain) must
-      // talk to the api.* subdomain; posting to the static host returns 405.
-      const apiHost = browserHost.startsWith('api.')
-        ? browserHost
-        : `api.${browserHost.replace(/^(app|www)\./, '')}`
-      return `https://${apiHost}`
+      // Deployed web (the landing page or the PWA at app-bizsawa.chrismwiti.me)
+      // must talk to the API host, not to its own static host — POSTing to a
+      // static host returns 405 and breaks every auth call.
+      return `https://${BIZSAWA_API_HOST}`
     }
 
     return `http://localhost:${DEFAULT_API_PORT}`

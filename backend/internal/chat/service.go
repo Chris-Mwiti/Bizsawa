@@ -162,7 +162,7 @@ func (s *Service) postCompletion(ctx context.Context, body map[string]any) ([]by
 		req, _ := http.NewRequestWithContext(attemptCtx, "POST", s.openAIBase+"/chat/completions", bytes.NewReader(b))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+s.openAIKey)
-		req.Header.Set("HTTP-Referer", "https://api.bizsawa.chrismwiti.me")
+		req.Header.Set("HTTP-Referer", "https://api-bizsawa.chrismwiti.me")
 		req.Header.Set("X-Title", "BizSawa")
 
 		resp, err := s.httpClient.Do(req)

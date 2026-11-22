@@ -68,16 +68,34 @@ describe('getApiUrl on web', () => {
   })
 
   it('keeps a public deployment URL from EXPO_PUBLIC_API_URL', () => {
-    process.env.EXPO_PUBLIC_API_URL = 'https://api.bizsawa.chrismwiti.me/api/v1'
+    process.env.EXPO_PUBLIC_API_URL = 'https://api-bizsawa.chrismwiti.me/api/v1'
     setLocation('localhost')
-    expect(getApiUrl()).toBe('https://api.bizsawa.chrismwiti.me/api/v1')
+    expect(getApiUrl()).toBe('https://api-bizsawa.chrismwiti.me/api/v1')
   })
 
   it('lets EXPO_PUBLIC_WEB_API_URL override everything', () => {
-    process.env.EXPO_PUBLIC_API_URL = 'https://api.bizsawa.chrismwiti.me/api/v1'
+    process.env.EXPO_PUBLIC_API_URL = 'https://api-bizsawa.chrismwiti.me/api/v1'
     process.env.EXPO_PUBLIC_WEB_API_URL = 'https://staging.example.com/api/v1'
     setLocation('localhost')
     expect(getApiUrl()).toBe('https://staging.example.com/api/v1')
+  })
+
+  it('sends the PWA host (app-bizsawa) to the API host', () => {
+    setLocation('app-bizsawa.chrismwiti.me')
+    expect(getApiUrl()).toBe('https://api-bizsawa.chrismwiti.me')
+  })
+
+  it('sends the landing host to the API host', () => {
+    setLocation('bizsawa.chrismwiti.me')
+    expect(getApiUrl()).toBe('https://api-bizsawa.chrismwiti.me')
+  })
+
+  it('rewrites a stale env URL that points at a static or legacy two-level host', () => {
+    process.env.EXPO_PUBLIC_API_URL = 'https://app-bizsawa.chrismwiti.me/api/v1'
+    expect(getApiUrl()).toBe('https://api-bizsawa.chrismwiti.me/api/v1')
+
+    process.env.EXPO_PUBLIC_API_URL = 'https://api.bizsawa.chrismwiti.me/api/v1'
+    expect(getApiUrl()).toBe('https://api-bizsawa.chrismwiti.me/api/v1')
   })
 
   it('falls back to localhost when there is no browser location', () => {
