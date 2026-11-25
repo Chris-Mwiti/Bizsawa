@@ -11,6 +11,14 @@ import { useBusinessContext } from '../../contexts/BusinessContext'
 import { useAuth } from '../../contexts/AuthContext'
 import { shortId } from '../../lib/ids'
 import { toISO, nowMillis } from '../../lib/syncDates'
+import {
+  getPowerSyncDatabase,
+  psDelete,
+  psInsert,
+  psWriteTransaction,
+} from '../../sync/powersync'
+import { isPowerSyncEnabledForPlatform } from '../../sync/powersync/config'
+import { SALES_SQL, usePowerSyncEnabledQuery } from './usePowerSyncReads'
 
 export interface CreateSaleInput {
   orderId?: UUID | null
@@ -85,9 +93,16 @@ export const useSales = () => {
     }
   })()
   const bid = activeBusinessId || ''
+  const psSales = usePowerSyncEnabledQuery<any>(SALES_SQL, [bid])
+  const powerSyncActive = psSales.active
   const [local, setLocal] = useState<Sale[]>([])
   const [isLocalLoading, setIsLocalLoading] = useState(true)
   useEffect(() => {
+    if (powerSyncActive) {
+      setLocal([])
+      setIsLocalLoading(false)
+      return
+    }
     if (!bid) {
       setLocal([])
       setIsLocalLoading(false)
@@ -102,7 +117,7 @@ export const useSales = () => {
         setIsLocalLoading(false)
       })
     return () => sub.unsubscribe()
-  }, [bid])
+  }, [bid, powerSyncActive])
 
   const getSales = useQuery({
     queryKey: ['sales', bid],
@@ -110,7 +125,7 @@ export const useSales = () => {
       const res = await api.get<{ sales: Sale[] }>('/sales', { signal })
       return res.data.sales || []
     },
-    enabled: !!bid,
+    enabled: !!bid && !powerSyncActive,
   })
 
   const createSale = useMutation({
@@ -126,6 +141,90 @@ export const useSales = () => {
         0,
       )
       const now = nowMillis()
+      const nowIso = new Date(now).toISOString()
+
+      if (isPowerSyncEnabledForPlatform()) {
+        const db = getPowerSyncDatabase()
+        await psWriteTransaction(db, async (tx) => {
+          await psInsert(tx, 'sales', {
+            id,
+            business_id: bid,
+            tenant_id: bid,
+            order_id: req.orderId || null,
+            customer_id: req.customerId || null,
+            receipt_number: receipt,
+            staff_id: userId,
+            payment_method: req.paymentMethod || 'cash',
+            subtotal: toDecimalString(total),
+            tax_amount: toDecimalString(0),
+            total: toDecimalString(total),
+            status: 'completed',
+            idempotency_key: id,
+            sold_at: nowIso,
+            created_at: nowIso,
+            updated_at: nowIso,
+            sync_version: 1,
+          })
+          for (const line of req.lines) {
+            await psInsert(tx, 'sale_lines', {
+              id: randomUUID(),
+              business_id: bid,
+              sale_id: id,
+              product_id: line.productId,
+              product_variant_id: (line as any).variantId || null,
+              quantity: toDecimalString(line.quantity),
+              unit_price: toDecimalString(line.unitPrice),
+              line_total: toDecimalString(
+                toNumber(line.quantity) * toNumber(line.unitPrice),
+              ),
+              sync_version: 1,
+              created_at: nowIso,
+              updated_at: nowIso,
+            })
+          }
+          // Standalone (walk-in) sales deduct stock immediately; order-linked
+          // sales deduct at order confirm instead. Aggregate by product so a
+          // single reference+product movement is pushed once.
+          if (!req.orderId) {
+            const byProduct = new Map<string, number>()
+            for (const line of req.lines) {
+              const prev = byProduct.get(line.productId) ?? 0
+              byProduct.set(line.productId, prev + toNumber(line.quantity))
+            }
+            for (const [productId, qty] of byProduct) {
+              if (qty <= 0) continue
+              await psInsert(tx, 'stock_movements', {
+                id: randomUUID(),
+                business_id: bid,
+                product_id: productId,
+                quantity_delta: toDecimalString(-qty),
+                movement_type: 'out',
+                reference_type: 'sale',
+                reference_id: id,
+                notes: 'sale created',
+                occurred_at: nowIso,
+                sync_version: 1,
+                created_at: nowIso,
+                updated_at: nowIso,
+              })
+            }
+          }
+        })
+        queryClient.invalidateQueries({ queryKey: ['sales'] })
+        queryClient.invalidateQueries({ queryKey: ['analytics'] })
+        queryClient.invalidateQueries({ queryKey: ['inventory'] })
+        import('../../lib/api').then(({ api }) =>
+          api
+            .post('/analytics/refresh', {}, { params: { timeframe: 'week' } })
+            .catch(() => {}),
+        )
+        return {
+          id,
+          receiptNumber: receipt,
+          total: toDecimalString(total),
+        } as any
+      }
+
       await (database as any).write(async () => {
         const col: any = (database as any).get('sales')
         await col.create((rec: any) => {
@@ -140,7 +239,7 @@ export const useSales = () => {
           rec.taxAmount = toDecimalString(0)
           rec.total = toDecimalString(total)
           rec.status = 'completed'
-          rec.soldAt = now
+          rec.soldAt = nowMillis()
           rec.syncVersion = 1
         })
         const lineCol: any = (database as any).get('sale_lines')
@@ -150,7 +249,6 @@ export const useSales = () => {
             rec.businessId = bid
             rec.saleId = id
             rec.productId = line.productId
-            // variant-aware: store variant if selected, else null
             rec.productVariantId = (line as any).variantId || null
             rec.quantity = toDecimalString(line.quantity)
             rec.unitPrice = toDecimalString(line.unitPrice)
@@ -161,8 +259,6 @@ export const useSales = () => {
           })
         }
       })
-      // Local ledger mirror for standalone (walk-in) sales — order-linked sales are
-      // deducted at order confirm instead. Idempotent via stock_movements.
       if (!req.orderId) {
         try {
           const { applyLocalStockLedgerBatch } = await import('../../db/stockOps')
@@ -173,21 +269,24 @@ export const useSales = () => {
             side: 'out',
             movementType: 'out',
             notes: 'sale created',
-            lines: req.lines.map((l) => ({
-              productId: l.productId,
-              quantity: l.quantity,
+            lines: req.lines.map((line) => ({
+              productId: line.productId,
+              quantity: line.quantity,
             })),
           })
         } catch (e) {
-          console.warn('[Sales] local inventory mirror failed', (e as any)?.message)
+          console.warn(
+            '[Sales] local inventory deduction failed',
+            (e as any)?.message,
+          )
         }
       }
-      import('../../sync/client').then((m) => m.syncNow().catch((e) => console.warn('[Sales] auto-sync after create failed', e?.message)))
+      import('../../sync/client').then((m) =>
+        m.syncNow().catch(() => {}),
+      )
       queryClient.invalidateQueries({ queryKey: ['sales'] })
       queryClient.invalidateQueries({ queryKey: ['analytics'] })
       queryClient.invalidateQueries({ queryKey: ['inventory'] })
-      // poke backend to ensure snapshot reflects new sale within seconds (sync push also invalidates server-side)
-      import('../../lib/api').then(({ api }) => api.post('/analytics/refresh', {}, { params: { timeframe: 'week' } }).catch(()=>{}))
       return {
         id,
         receiptNumber: receipt,
@@ -198,6 +297,22 @@ export const useSales = () => {
 
   const voidSale = useMutation({
     mutationFn: async (id: UUID) => {
+      if (isPowerSyncEnabledForPlatform()) {
+        const db = getPowerSyncDatabase()
+        await psWriteTransaction(db, async (tx) => {
+          await psDelete(tx, 'sales', id)
+        })
+        queryClient.invalidateQueries({ queryKey: ['sales'] })
+        queryClient.invalidateQueries({ queryKey: ['analytics'] })
+        queryClient.invalidateQueries({ queryKey: ['inventory'] })
+        import('../../lib/api').then(({ api }) =>
+          api
+            .post('/analytics/refresh', {}, { params: { timeframe: 'week' } })
+            .catch(() => {}),
+        )
+        return
+      }
+
       await (database as any).write(async () => {
         const rec: any = await (database as any).get('sales').find(id)
         await rec.update((r: any) => {
@@ -241,16 +356,21 @@ export const useSales = () => {
   // Offline-first merge: a locally-edited sale keeps its optimistic status until the
   // server confirms the push. Sales are normally minted server-side by ensureSaleForOrder,
   // so only the fields a client can legitimately change are overlaid.
-  const sales = mergeLocalFirst<Sale>(getSales.data as Sale[] | undefined, local, {
-    overlayFields: ['status', 'paymentMethod'] as (keyof Sale)[],
-  })
+  const sales = powerSyncActive
+    ? psSales.rows.map(mapRaw)
+    : mergeLocalFirst<Sale>(getSales.data as Sale[] | undefined, local, {
+        overlayFields: ['status', 'paymentMethod'] as (keyof Sale)[],
+      })
   return {
     sales,
-    isLoading:
-      (getSales.isLoading && !local.length) ||
-      (isLocalLoading && !getSales.data),
-    error: (getSales.error as ApiError)?.friendlyMessage || null,
-    refetch: getSales.refetch,
+    isLoading: powerSyncActive
+      ? psSales.isLoading
+      : (getSales.isLoading && !local.length) ||
+        (isLocalLoading && !getSales.data),
+    error: powerSyncActive
+      ? psSales.error
+      : (getSales.error as ApiError)?.friendlyMessage || null,
+    refetch: powerSyncActive ? async () => {} : getSales.refetch,
     createSale: createSale.mutateAsync,
     isCreating: createSale.isPending,
     updateSale: async () => {

@@ -31,6 +31,9 @@ module.exports = function (api) {
         ],
       },
     ],
-    plugins: ['react-native-worklets/plugin'],
+    plugins: [
+      '@babel/plugin-transform-async-generator-functions',
+      'react-native-worklets/plugin',
+    ],
   }
 }

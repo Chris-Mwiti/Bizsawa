@@ -3,6 +3,7 @@ node_modules/
 
 # Expo
 .expo/
+public/@powersync/
 dist/
 dist-pwa/
 web-build/

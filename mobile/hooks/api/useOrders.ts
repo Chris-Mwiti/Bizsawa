@@ -11,6 +11,15 @@ import { useBusinessContext } from '../../contexts/BusinessContext'
 import { useAuth } from '../../contexts/AuthContext'
 import { toISO, nowMillis } from '../../lib/syncDates'
 import { shortId } from '../../lib/ids'
+import {
+  getPowerSyncDatabase,
+  psDelete,
+  psInsert,
+  psUpdate,
+  psWriteTransaction,
+} from '../../sync/powersync'
+import { isPowerSyncEnabledForPlatform } from '../../sync/powersync/config'
+import { ORDERS_SQL, usePowerSyncEnabledQuery } from './usePowerSyncReads'
 
 export enum OrderStatus {
   draft = 'draft',
@@ -98,10 +107,17 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
     }
   })()
   const limit = options.limit ?? 25
+  const psOrders = usePowerSyncEnabledQuery<any>(ORDERS_SQL, [bid])
+  const powerSyncActive = psOrders.active
   const [offset, setOffset] = useState(0)
   const [local, setLocal] = useState<Order[]>([])
   const [isLocalLoading, setIsLocalLoading] = useState(true)
   useEffect(() => {
+    if (powerSyncActive) {
+      setLocal([])
+      setIsLocalLoading(false)
+      return
+    }
     if (!bid) {
       setLocal([])
       setIsLocalLoading(false)
@@ -116,7 +132,7 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
         setIsLocalLoading(false)
       })
     return () => sub.unsubscribe()
-  }, [bid])
+  }, [bid, powerSyncActive])
 
   const getOrders = useQuery({
     queryKey: ['orders', { limit, offset, status: options.status, bid }],
@@ -127,21 +143,24 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
       )
       return res.data
     },
-    enabled: !!bid,
+    enabled: !!bid && !powerSyncActive,
     placeholderData: (prev: any) => prev,
   })
 
   // Offline-first merge: a locally-edited order keeps its optimistic values until the
   // server confirms the push. Money fields (subtotal/taxAmount/total) stay
   // server-authoritative because the backend derives them from order lines.
-  const allOrdersMerged = mergeLocalFirst<Order>(
-    getOrders.data?.orders as Order[] | undefined,
-    local,
-    { overlayFields: ['status', 'customerId', 'paymentMethod'] as (keyof Order)[] },
-  )
+  const allOrdersMerged = powerSyncActive
+    ? psOrders.rows.map(mapRaw)
+    : mergeLocalFirst<Order>(
+        getOrders.data?.orders as Order[] | undefined,
+        local,
+        { overlayFields: ['status', 'customerId', 'paymentMethod'] as (keyof Order)[] },
+      )
   const orders = allOrdersMerged.slice(offset, offset + limit)
-  const total =
-    getOrders.data?.total !== undefined
+  const total = powerSyncActive
+    ? allOrdersMerged.length
+    : getOrders.data?.total !== undefined
       ? (getOrders.data.total as any) +
         (allOrdersMerged.length - (getOrders.data?.orders?.length || 0))
       : allOrdersMerged.length
@@ -164,6 +183,48 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
       // Backend tax is 16% — mirror exactly to avoid sync_version conflicts (§ tax divergence fix)
       const tax = Math.round(subtotal * 0.16 * 100) / 100
       const total = Math.round((subtotal + tax) * 100) / 100
+      const nowIso = new Date().toISOString()
+
+      if (isPowerSyncEnabledForPlatform()) {
+        const db = getPowerSyncDatabase()
+        await psWriteTransaction(db, async (tx) => {
+          await psInsert(tx, 'orders', {
+            id,
+            business_id: bid,
+            tenant_id: bid,
+            customer_id: req.customerId || null,
+            status: 'draft',
+            subtotal: toDecimalString(subtotal),
+            tax_amount: toDecimalString(tax),
+            total: toDecimalString(total),
+            payment_method: req.paymentMethod || 'cash',
+            payment_status: 'pending',
+            sync_version: 1,
+            created_at: nowIso,
+            updated_at: nowIso,
+          })
+          for (const line of req.lines) {
+            await psInsert(tx, 'order_lines', {
+              id: randomUUID(),
+              business_id: bid,
+              order_id: id,
+              product_id: line.productId,
+              product_variant_id: (line as any).variantId || null,
+              quantity: toDecimalString(line.quantity),
+              unit_price: toDecimalString(line.unitPrice),
+              line_total: toDecimalString(
+                toNumber(line.quantity) * toNumber(line.unitPrice),
+              ),
+              sync_version: 1,
+              created_at: nowIso,
+              updated_at: nowIso,
+            })
+          }
+        })
+        queryClient.invalidateQueries({ queryKey: ['orders'] })
+        return { id, status: 'draft', total: toDecimalString(total) } as any
+      }
+
       await (database as any).write(async () => {
         const col: any = (database as any).get('orders')
         await col.create((rec: any) => {
@@ -218,6 +279,42 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
       }
       const customerPhoneForConfirm = safeData?.customerPhone as string | undefined
       if ('customerPhone' in safeData) delete safeData.customerPhone
+
+      if (isPowerSyncEnabledForPlatform()) {
+        if (!newStatus) {
+          queryClient.invalidateQueries({ queryKey: ['orders'] })
+          return { id } as any
+        }
+        const db = getPowerSyncDatabase()
+        const nowIso = new Date().toISOString()
+        const patch: any = {
+          status: newStatus,
+          updated_at: nowIso,
+        }
+        if (newStatus === 'confirmed' && !(patch as any).confirmed_at) {
+          patch.confirmed_at = nowIso
+          patch.payment_status = 'confirmed'
+        }
+        if (newStatus === 'fulfilled') {
+          patch.fulfilled_at = nowIso
+          patch.payment_status = 'fulfilled'
+        }
+        if (newStatus === 'cancelled' || newStatus === 'refunded') {
+          patch.payment_status = newStatus
+        }
+        await psWriteTransaction(db, async (tx) => {
+          await psUpdate(tx, 'orders', id, patch)
+        })
+        queryClient.invalidateQueries({ queryKey: ['orders'] })
+        if (newStatus === 'confirmed' || newStatus === 'cancelled' || newStatus === 'refunded') {
+          queryClient.invalidateQueries({ queryKey: ['inventory'] })
+        }
+        if (newStatus === 'fulfilled') {
+          queryClient.invalidateQueries({ queryKey: ['sales'] })
+          queryClient.invalidateQueries({ queryKey: ['invoices'] })
+        }
+        return { id } as any
+      }
 
       // Online-first: try REST endpoints directly when connected so backend transactional
       // Confirm → invoice + inventory + payment init runs on server (fixes sync bypass)
@@ -484,6 +581,16 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
 
   const deleteOrder = useMutation({
     mutationFn: async (id: UUID) => {
+      if (isPowerSyncEnabledForPlatform()) {
+        const db = getPowerSyncDatabase()
+        await psWriteTransaction(db, async (tx) => {
+          await psDelete(tx, 'orders', id)
+        })
+        queryClient.invalidateQueries({ queryKey: ['orders'] })
+        queryClient.invalidateQueries({ queryKey: ['inventory'] })
+        return
+      }
+
       let prevStatus = ''
       await (database as any).write(async () => {
         const rec: any = await (database as any).get('orders').find(id)
@@ -536,6 +643,39 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
     useQuery({
       queryKey: ['orders', id],
       queryFn: async () => {
+        if (isPowerSyncEnabledForPlatform()) {
+          const db = getPowerSyncDatabase()
+          const raw: any = await db.get(
+            'SELECT * FROM orders WHERE id = ? AND deleted_at IS NULL',
+            [id],
+          )
+          if (!raw) throw new Error(`Order ${id} not found`)
+          const lines: any[] = await db.getAll(
+            'SELECT * FROM order_lines WHERE order_id = ? AND deleted_at IS NULL',
+            [id],
+          )
+          return {
+            id: raw.id,
+            businessId: raw.business_id,
+            customerId: raw.customer_id,
+            status: raw.status,
+            subtotal: raw.subtotal,
+            taxAmount: raw.tax_amount,
+            total: raw.total,
+            paymentMethod: raw.payment_method,
+            createdAt: toISO(raw.created_at),
+            updatedAt: toISO(raw.updated_at),
+            lines: lines.map((l: any) => ({
+              id: l.id,
+              orderId: l.order_id,
+              productId: l.product_id,
+              description: l.description || '',
+              quantity: l.quantity,
+              unitPrice: l.unit_price,
+              lineTotal: l.line_total,
+            })),
+          } as any
+        }
         // Prefer local Watermelon first (offline)
         try {
           const rec: any = await (database as any).get('orders').find(id)
@@ -585,11 +725,12 @@ export const useOrders = (options: UseOrdersOptions = {}) => {
     nextPage,
     previousPage,
     resetPagination,
-    isLoading:
-      ((getOrders.isLoading as any) || isLocalLoading) && orders.length === 0,
-    isFetching: getOrders.isFetching as any,
-    error: getOrders.error,
-    refetch: getOrders.refetch,
+    isLoading: powerSyncActive
+      ? psOrders.isLoading
+      : ((getOrders.isLoading as any) || isLocalLoading) && orders.length === 0,
+    isFetching: powerSyncActive ? false : (getOrders.isFetching as any),
+    error: powerSyncActive ? psOrders.error : getOrders.error,
+    refetch: powerSyncActive ? async () => {} : getOrders.refetch,
     createOrder: createOrder.mutateAsync,
     isCreating: createOrder.isPending,
     updateOrder: updateOrder.mutateAsync,

@@ -3,6 +3,32 @@ const { withNativeWind } = require('nativewind/metro')
 
 const config = getDefaultConfig(__dirname)
 
+config.resolver.unstable_enablePackageExports = true
+config.resolver.unstable_conditionsByPlatform ??= {}
+config.resolver.unstable_conditionsByPlatform.web ??= []
+if (!config.resolver.unstable_conditionsByPlatform.web.includes('react-native-web')) {
+  config.resolver.unstable_conditionsByPlatform.web.push('react-native-web')
+}
+
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (platform === 'web') {
+    if (
+      ['react-native-prompt-android', '@powersync/react-native'].includes(
+        moduleName,
+      )
+    ) {
+      return { type: 'empty' }
+    }
+    if (moduleName === 'react-native') {
+      return context.resolveRequest(context, 'react-native-web', platform)
+    }
+  } else if (moduleName === '@powersync/web') {
+    return { type: 'empty' }
+  }
+
+  return context.resolveRequest(context, moduleName, platform)
+}
+
 // Never watch native build outputs: watermelondb's android-jsi .cxx trees
 // alone contain tens of thousands of files and exhaust the kernel's
 // inotify budget (ENOSPC: file watchers limit), killing `android:lan`.

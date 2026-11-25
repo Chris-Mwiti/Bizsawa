@@ -23,11 +23,14 @@ import type {
   AssistantToolName,
 } from '../../assistant/types'
 import { createAssistantConnection } from '../../assistant/connection'
+import { createPowerSyncStore } from '../../assistant/powerSyncStore'
 import { createWatermelonStore } from '../../assistant/watermelonStore'
 import { createWatermelonChatPersistence } from '../../assistant/persistence'
 import { getAssistantThreadId } from '../../assistant/thread'
 import { useBusinessContext } from '../../contexts/BusinessContext'
 import { database } from '../../db/database'
+import { getPowerSyncDatabase } from '../../sync/powersync'
+import { isPowerSyncEnabledForPlatform } from '../../sync/powersync/config'
 import { CoachMessageMarkdown } from '../CoachMessageMarkdown'
 import { AssistantCards } from './AssistantCards'
 
@@ -176,20 +179,27 @@ export function CoachPanel() {
     }
 
     let cancelled = false
-    database
-      .get('products')
-      .query(Q.where('business_id', activeBusinessId))
-      .fetch()
-      .then((rows: any[]) => {
+    ;(async () => {
+      try {
+        let rows: any[]
+        if (isPowerSyncEnabledForPlatform()) {
+          const db = getPowerSyncDatabase()
+          rows = await db.getAll(
+            'SELECT id, name FROM products WHERE business_id = ? AND deleted_at IS NULL',
+            [activeBusinessId],
+          )
+        } else {
+          rows = await database
+            .get('products')
+            .query(Q.where('business_id', activeBusinessId))
+            .fetch()
+        }
         if (cancelled) return
-        setProductNames(
-          Object.fromEntries(rows.map((row) => [row.id, row.name])),
-        )
-      })
-      .catch(() => {
+        setProductNames(Object.fromEntries(rows.map((row) => [row.id, row.name])))
+      } catch {
         if (!cancelled) setProductNames({})
-      })
-
+      }
+    })()
     return () => {
       cancelled = true
     }
@@ -235,7 +245,9 @@ export function CoachPanel() {
   const store = useMemo(
     () =>
       activeBusinessId
-        ? createWatermelonStore(database, activeBusinessId)
+        ? isPowerSyncEnabledForPlatform()
+          ? createPowerSyncStore(activeBusinessId)
+          : createWatermelonStore(database, activeBusinessId)
         : null,
     [activeBusinessId],
   )

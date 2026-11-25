@@ -11,9 +11,19 @@ import { randomUUID } from 'expo-crypto'
 import { useBusinessContext } from '../../contexts/BusinessContext'
 import { Q } from '@nozbe/watermelondb'
 import { useEffect, useState } from 'react'
+import { usePowerSyncProducts } from './usePowerSyncProducts'
+import {
+  getPowerSyncDatabase,
+  psDelete,
+  psInsert,
+  psUpdate,
+  psWriteTransaction,
+} from '../../sync/powersync'
 
-// Offline-first wrapper — Phase 2.2 (§3.6): all local writes go through WatermelonDB writers
-// Reads remain TanStack Query for now, but writes are local-first and sync via synchronize()
+// Offline-first wrapper — Phase 3 (PWA): core-domain writes go through
+// PowerSync local SQLite and upload via POST /api/v1/sync/push. Reads use
+// PowerSync when active; legacy WatermelonDB remains the fallback/write path
+// until each domain is migrated.
 
 export interface Product extends Omit<BackendProduct, 'price' | 'cost'> {
   price: number
@@ -158,19 +168,120 @@ export const useProducts = () => {
     variants: localVariants.filter((v: any) => v.productId === p.id),
   }))
 
+  const powerSync = usePowerSyncProducts(bid)
+  const powerSyncActive =
+    powerSync.enabled &&
+    !powerSync.error &&
+    (powerSync.hasSynced || powerSync.products.length > 0)
+
+  const overlayFields = [
+    'name',
+    'category',
+    'price',
+    'cost',
+    'description',
+    'sku',
+    'barcode',
+    'imageUrl',
+    'taxRuleId',
+    'variants',
+  ] as unknown as (keyof Product)[]
+  const keepLocalWhenServerEmpty = ['variants'] as unknown as (keyof Product)[]
+
   const getProducts = useQuery({
     queryKey: ['products', bid],
     queryFn: async ({ signal }) => {
       const res = await api.get<{ products: BackendProduct[] }>('/products', { signal })
       return (res.data.products || []).map(mapProduct)
     },
-    enabled: !!bid,
+    enabled: !!bid && !powerSyncActive,
   })
 
   const createProduct = useMutation({
     mutationFn: async (data: CreateProductInput) => {
       if (!bid) throw new Error('Select a business first')
       const id = randomUUID()
+      const now = new Date().toISOString()
+      const price = toDecimalString(data.price)
+      const cost = toDecimalString(data.cost ?? data.buyingPrice ?? 0)
+
+      const productOut: any = {
+        id,
+        businessId: bid as any,
+        tenantId: bid as any,
+        name: data.name.trim(),
+        category: data.category?.trim() || 'Other',
+        price,
+        cost,
+        isActive: true,
+        description: (data as any).description?.trim() ?? null,
+        sku: (data as any).sku?.trim() ?? null,
+        barcode: (data as any).barcode?.trim() ?? null,
+        imageUrl: (data as any).imageUrl?.trim() ?? null,
+        taxRuleId: (data as any).taxRuleId ?? null,
+        variants: data.variants,
+        createdAt: now,
+        updatedAt: now,
+      } as any
+
+      if (powerSync.enabled) {
+        const db = getPowerSyncDatabase()
+        await psWriteTransaction(db, async (tx) => {
+          await psInsert(tx, 'products', {
+            id,
+            business_id: bid,
+            tenant_id: bid,
+            name: productOut.name,
+            category: productOut.category,
+            price,
+            cost,
+            is_active: 1,
+            description: productOut.description,
+            sku: productOut.sku,
+            barcode: productOut.barcode,
+            image_url: productOut.imageUrl,
+            tax_rule_id: productOut.taxRuleId,
+            sync_version: 1,
+            created_at: now,
+            updated_at: now,
+          })
+          if (data.variants?.length) {
+            for (const v of data.variants) {
+              if (!v.name?.trim()) continue
+              const vid = v.id || randomUUID()
+              await psInsert(tx, 'product_variants', {
+                id: vid,
+                business_id: bid,
+                product_id: id,
+                name: v.name.trim(),
+                sku: v.sku?.trim() || '',
+                barcode: v.barcode?.trim() || '',
+                price: toDecimalString(v.price),
+                cost: toDecimalString(v.cost ?? v.price),
+                is_active: v.isActive ?? true,
+                sync_version: 1,
+                created_at: now,
+                updated_at: now,
+              })
+            }
+          }
+          if (data.stockQuantity !== undefined || data.minStockLevel != null) {
+            await psInsert(tx, 'inventory_items', {
+              id: randomUUID(),
+              business_id: bid,
+              product_id: id,
+              quantity: toDecimalString(data.stockQuantity ?? 0),
+              low_stock_threshold: toDecimalString(data.minStockLevel ?? 0),
+              sync_version: 1,
+              created_at: now,
+              updated_at: now,
+            })
+          }
+        })
+        queryClient.invalidateQueries({ queryKey: ['products'] })
+        return productOut
+      }
+
       await (database as any).write(async () => {
         const col: any = (database as any).get('products')
         await col.create((rec: any) => {
@@ -179,18 +290,16 @@ export const useProducts = () => {
           rec.tenantId = bid
           rec.name = data.name.trim()
           rec.category = data.category?.trim() || 'Other'
-          rec.price = toDecimalString(data.price)
-          rec.cost = toDecimalString(data.cost ?? data.buyingPrice ?? 0)
+          rec.price = price
+          rec.cost = cost
           rec.isActive = true
           rec.syncVersion = 1
-          // DTO-safe: model now has description/sku/barcode/imageUrl — use field setters so _changed is tracked correctly
           if ((data as any).description !== undefined) rec.description = (data as any).description?.trim() || null
           if ((data as any).sku !== undefined) rec.sku = (data as any).sku?.trim() || null
           if ((data as any).barcode !== undefined) rec.barcode = (data as any).barcode?.trim() || null
           if ((data as any).imageUrl !== undefined) rec.imageUrl = (data as any).imageUrl?.trim() || null
           if ((data as any).taxRuleId !== undefined) rec.taxRuleId = (data as any).taxRuleId || null
         })
-        // Create variants locally — they sync via product_variants table
         if (data.variants?.length) {
           const vcol: any = (database as any).get('product_variants')
           for (const v of data.variants) {
@@ -209,9 +318,6 @@ export const useProducts = () => {
             })
           }
         }
-        // Opening stock in the SAME write: the product row and its inventory
-        // row land atomically, so observers fire once with complete data and
-        // the list never flashes 0 quantity after an add.
         if (data.stockQuantity !== undefined || data.minStockLevel != null) {
           const icol: any = (database as any).get('inventory_items')
           await icol.create((rec: any) => {
@@ -225,14 +331,7 @@ export const useProducts = () => {
         }
       })
       import('../../sync/client').then((m) => m.syncNow().catch(() => {}))
-      return mapProduct({
-        id,
-        businessId: bid as any,
-        name: data.name,
-        price: toDecimalString(data.price),
-        cost: toDecimalString(data.cost ?? data.buyingPrice ?? 0),
-        variants: data.variants,
-      } as any)
+      return productOut
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['products'] }),
   })
@@ -245,6 +344,57 @@ export const useProducts = () => {
       id: UUID
       data: UpdateProductInput
     }) => {
+      const patch: any = {}
+      if (data.name) patch.name = data.name.trim()
+      if (data.category) patch.category = data.category.trim()
+      if (data.price !== undefined) patch.price = toDecimalString(data.price)
+      if (data.cost !== undefined || data.buyingPrice !== undefined)
+        patch.cost = toDecimalString((data.cost ?? data.buyingPrice) as any)
+      if ((data as any).description !== undefined)
+        patch.description = (data as any).description?.trim() || null
+      if ((data as any).sku !== undefined) patch.sku = (data as any).sku?.trim() || null
+      if ((data as any).barcode !== undefined)
+        patch.barcode = (data as any).barcode?.trim() || null
+      if ((data as any).imageUrl !== undefined)
+        patch.image_url = (data as any).imageUrl?.trim() || null
+      if ((data as any).taxRuleId !== undefined)
+        patch.tax_rule_id = (data as any).taxRuleId || null
+
+      if (powerSync.enabled) {
+        const db = getPowerSyncDatabase()
+        await psWriteTransaction(db, async (tx) => {
+          await psUpdate(tx, 'products', id, patch)
+          if (data.variants !== undefined) {
+            const existing: any[] = await tx.getAll(
+              'SELECT id FROM product_variants WHERE product_id = ?',
+              [id]
+            )
+            for (const ex of existing) {
+              await psDelete(tx, 'product_variants', ex.id)
+            }
+            for (const v of data.variants || []) {
+              if (!v.name?.trim()) continue
+              await psInsert(tx, 'product_variants', {
+                id: (v as any).id || randomUUID(),
+                business_id: bid,
+                product_id: id,
+                name: v.name.trim(),
+                sku: v.sku?.trim() || '',
+                barcode: v.barcode?.trim() || '',
+                price: toDecimalString(v.price),
+                cost: toDecimalString(v.cost ?? v.price),
+                is_active: v.isActive ?? true,
+                sync_version: 1,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              })
+            }
+          }
+        })
+        queryClient.invalidateQueries({ queryKey: ['products'] })
+        return mapProduct({ id } as any)
+      }
+
       await (database as any).write(async () => {
         const col: any = (database as any).get('products')
         const rec: any = await col.find(id)
@@ -254,14 +404,17 @@ export const useProducts = () => {
           if (data.price !== undefined) r.price = toDecimalString(data.price)
           if (data.cost !== undefined || data.buyingPrice !== undefined)
             r.cost = toDecimalString((data.cost ?? data.buyingPrice) as any)
-          if ((data as any).description !== undefined) r.description = (data as any).description?.trim() || null
-          if ((data as any).sku !== undefined) r.sku = (data as any).sku?.trim() || null
-          if ((data as any).barcode !== undefined) r.barcode = (data as any).barcode?.trim() || null
-          if ((data as any).imageUrl !== undefined) r.imageUrl = (data as any).imageUrl?.trim() || null
-          if ((data as any).taxRuleId !== undefined) r.taxRuleId = (data as any).taxRuleId || null
-          // NOTE: never bump syncVersion here — see useCustomers.ts.
+          if ((data as any).description !== undefined)
+            r.description = (data as any).description?.trim() || null
+          if ((data as any).sku !== undefined)
+            r.sku = (data as any).sku?.trim() || null
+          if ((data as any).barcode !== undefined)
+            r.barcode = (data as any).barcode?.trim() || null
+          if ((data as any).imageUrl !== undefined)
+            r.imageUrl = (data as any).imageUrl?.trim() || null
+          if ((data as any).taxRuleId !== undefined)
+            r.taxRuleId = (data as any).taxRuleId || null
         })
-        // Replace variants: delete existing, create new (offline-first)
         if (data.variants !== undefined) {
           const vcol: any = (database as any).get('product_variants')
           const existing = await vcol.query(Q.where('product_id', id)).fetch()
@@ -297,6 +450,30 @@ export const useProducts = () => {
   const deleteProduct = useMutation({
     mutationFn: async (id: UUID) => {
       if (!id) throw new Error('Product id is required')
+
+      if (powerSync.enabled) {
+        const db = getPowerSyncDatabase()
+        await psWriteTransaction(db, async (tx) => {
+          const variants: any[] = await tx.getAll(
+            'SELECT id FROM product_variants WHERE product_id = ?',
+            [id]
+          )
+          for (const v of variants) {
+            await psDelete(tx, 'product_variants', v.id)
+          }
+          const invs: any[] = await tx.getAll(
+            'SELECT id FROM inventory_items WHERE product_id = ?',
+            [id]
+          )
+          for (const inv of invs) {
+            await psDelete(tx, 'inventory_items', inv.id)
+          }
+          await psDelete(tx, 'products', id)
+        })
+        queryClient.invalidateQueries({ queryKey: ['products'] })
+        return
+      }
+
       await (database as any).write(async () => {
         const rec: any = await (database as any).get('products').find(id)
         await rec.update((r: any) => {
@@ -341,28 +518,33 @@ export const useProducts = () => {
   // server confirms the push. Previously the server response always won for rows it
   // already knew about, so an optimistic edit was visually reverted until the round trip
   // completed. Server-owned fields (stock counts, timestamps) still come from the server.
-  const productsData = mergeLocalFirst<Product>(getProducts.data as Product[] | undefined, localProductsWithVariants as Product[], {
-    overlayFields: [
-      'name',
-      'category',
-      'price',
-      'cost',
-      'description',
-      'sku',
-      'barcode',
-      'imageUrl',
-      'taxRuleId',
-      'variants',
-    ] as unknown as (keyof Product)[],
-    keepLocalWhenServerEmpty: ['variants'] as unknown as (keyof Product)[],
-  })
+  const legacyProducts = mergeLocalFirst<Product>(
+    getProducts.data as Product[] | undefined,
+    localProductsWithVariants as Product[],
+    { overlayFields, keepLocalWhenServerEmpty },
+  )
+  const pendingLocalProducts = localProductsWithVariants.filter(
+    (product: any) =>
+      product._status === 'created' || product._status === 'updated',
+  )
+  const powerSyncProducts = powerSyncActive
+    ? mergeLocalFirst<Product>(
+        powerSync.products,
+        pendingLocalProducts as Product[],
+        { overlayFields, keepLocalWhenServerEmpty },
+      )
+    : null
+  const productsData = powerSyncProducts ?? legacyProducts
+
   return {
     products: productsData || [],
     isLoading:
-      getProducts.isLoading &&
+      (powerSyncActive ? powerSync.isLoading : getProducts.isLoading) &&
       !localProducts.length &&
       productsData.length === 0,
-    error: (getProducts.error as ApiError)?.friendlyMessage || null,
+    error: powerSyncActive
+      ? null
+      : (getProducts.error as ApiError)?.friendlyMessage || null,
     refetch: getProducts.refetch,
     createProduct: createProduct.mutateAsync,
     isCreating: createProduct.isPending,

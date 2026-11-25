@@ -4,7 +4,14 @@ import prettierConfig from 'eslint-config-prettier'
 
 export default [
   {
-    ignores: ['node_modules/**', '.expo/**', 'dist/**', 'ios/**', 'android/**'],
+    ignores: [
+      'node_modules/**',
+      '.expo/**',
+      'dist/**',
+      'ios/**',
+      'android/**',
+      'public/@powersync/**',
+    ],
   },
   {
     files: ['**/*.{js,jsx,ts,tsx}'],

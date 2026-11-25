@@ -13,6 +13,7 @@ import tamaguiConfig from '../tamagui.config'
 import { AuthProvider } from '../contexts/AuthContext'
 import { BusinessProvider } from '../contexts/BusinessContext'
 import { SyncProvider } from '../sync/SyncProvider'
+import { PowerSyncProvider } from '../sync/powersync/PowerSyncProvider'
 import { TourProvider } from '../contexts/TourContext'
 import { OfflineBanner } from '../components/OfflineBanner'
 import { PwaInstallBanner } from '../components/PwaInstallBanner'
@@ -86,8 +87,9 @@ export default function RootLayout() {
           <AuthProvider>
             <BusinessProvider>
               {!fontsReady ? null : (
-              <SyncProvider>
-                <TourProvider>
+              <PowerSyncProvider>
+                <SyncProvider>
+                  <TourProvider>
                   <NavigationGateProvider>
                 {/* Fix status-bar covering: opaque bar, dark content, never translucent so swipe-down shade stays reachable */}
                 <StatusBar
@@ -177,8 +179,9 @@ export default function RootLayout() {
                   <RouteLoadingChip />
                 </View>
                 </NavigationGateProvider>
-              </TourProvider>
-            </SyncProvider>
+                  </TourProvider>
+                </SyncProvider>
+              </PowerSyncProvider>
             )}
           </BusinessProvider>
         </AuthProvider>

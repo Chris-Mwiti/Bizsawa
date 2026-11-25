@@ -6,7 +6,7 @@ import React, {
   useCallback,
   useRef,
 } from 'react'
-import { InteractionManager } from 'react-native'
+import { Platform, InteractionManager } from 'react-native'
 import NetInfo from '@react-native-community/netinfo'
 import { useRouter, usePathname } from 'expo-router'
 import {
@@ -17,6 +17,7 @@ import {
   debugSyncState,
   pushPendingOnly,
 } from './client'
+import { isPowerSyncEnabledForPlatform } from '../sync/powersync/config'
 
 type SyncState = 'online' | 'offline' | 'syncing' | 'conflict'
 
@@ -39,6 +40,26 @@ const Ctx = createContext<{
 export const useSync = () => useContext(Ctx)
 
 export function SyncProvider({ children }: { children: React.ReactNode }) {
+  // On web/PWA with PowerSync active, WatermelonDB sync is disabled: PowerSync
+  // owns reads and uploads. Return a no-op context so the rest of the tree keeps
+  // rendering without starting WatermelonDB scans or /sync polls.
+  if (Platform.OS === 'web' && isPowerSyncEnabledForPlatform()) {
+    return (
+      <Ctx.Provider
+        value={{
+          state: 'offline' as const,
+          lastSyncAt: null,
+          pendingCount: 0,
+          conflictCount: 0,
+          refreshCounts: async () => {},
+          trigger: async () => {},
+        }}
+      >
+        {children}
+      </Ctx.Provider>
+    )
+  }
+
   const [state, setState] = useState<SyncState>('offline')
   const [lastSyncAt, setLastSyncAt] = useState<number | null>(null)
   const [pendingCount, setPendingCount] = useState(0)

@@ -57,4 +57,4 @@ All writes remain server-authoritative: PowerSync uploads call the existing Go R
 - `[[backend/internal/sync/push.go]]`
 - `[[backend/docker-compose.yml]]`
 - `[[backend/Makefile]]`
-- `[[mobile/lib/sync/client.ts]]`
+- `[[mobile/sync/client.ts]]`

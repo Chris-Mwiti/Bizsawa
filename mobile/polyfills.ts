@@ -3,3 +3,4 @@
 // but this polyfill is kept as defensive coverage for any remaining
 // transitive consumers of global crypto.getRandomValues.
 import 'react-native-get-random-values'
+import '@azure/core-asynciterator-polyfill'

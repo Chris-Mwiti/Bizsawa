@@ -9,6 +9,14 @@ import { Q } from '@nozbe/watermelondb'
 import { useEffect, useState } from 'react'
 import { useBusinessContext } from '../../contexts/BusinessContext'
 import { toISO, toMillis, nowMillis } from '../../lib/syncDates'
+import {
+  getPowerSyncDatabase,
+  psDelete,
+  psInsert,
+  psWriteTransaction,
+} from '../../sync/powersync'
+import { isPowerSyncEnabledForPlatform } from '../../sync/powersync/config'
+import { EXPENSES_SQL, usePowerSyncEnabledQuery } from './usePowerSyncReads'
 
 export interface Expense extends BackendExpense {
   type: string
@@ -64,9 +72,16 @@ export const useExpenses = () => {
     }
   })()
   const bid = activeBusinessId || ''
+  const psExpenses = usePowerSyncEnabledQuery<any>(EXPENSES_SQL, [bid])
+  const powerSyncActive = psExpenses.active
   const [local, setLocal] = useState<Expense[]>([])
   const [isLocalLoading, setIsLocalLoading] = useState(true)
   useEffect(() => {
+    if (powerSyncActive) {
+      setLocal([])
+      setIsLocalLoading(false)
+      return
+    }
     if (!bid) {
       setLocal([])
       setIsLocalLoading(false)
@@ -81,7 +96,7 @@ export const useExpenses = () => {
         setIsLocalLoading(false)
       })
     return () => sub.unsubscribe()
-  }, [bid])
+  }, [bid, powerSyncActive])
 
   const getExpenses = useQuery({
     queryKey: ['expenses', bid],
@@ -89,7 +104,7 @@ export const useExpenses = () => {
       const res = await api.get<{ expenses: BackendExpense[] }>('/expenses', { signal })
       return (res.data.expenses || []).map(mapExpense)
     },
-    enabled: !!bid,
+    enabled: !!bid && !powerSyncActive,
   })
 
   const createExpense = useMutation({
@@ -99,6 +114,44 @@ export const useExpenses = () => {
       if (!category) throw new Error('Category required')
       const id = randomUUID()
       const spentAt = toMillis(data.spentAt) || nowMillis()
+      const now = new Date().toISOString()
+
+      if (isPowerSyncEnabledForPlatform()) {
+        const db = getPowerSyncDatabase()
+        await psWriteTransaction(db, async (tx) => {
+          await psInsert(tx, 'expenses', {
+            id,
+            business_id: bid,
+            tenant_id: bid,
+            category,
+            description: data.description?.trim() || null,
+            vendor: data.vendor?.trim() || null,
+            amount: toDecimalString(data.amount),
+            tax_amount: toDecimalString(data.taxAmount ?? 0),
+            is_recurring: !!data.isRecurring,
+            recurring_interval:
+              data.recurringInterval || data.frequency || null,
+            spent_at: new Date(spentAt).toISOString(),
+            created_by: bid,
+            sync_version: 1,
+            created_at: now,
+            updated_at: now,
+          })
+        })
+        queryClient.invalidateQueries({ queryKey: ['expenses'] })
+        queryClient.invalidateQueries({ queryKey: ['analytics'] })
+        import('../../lib/api').then(({ api }) =>
+          api
+            .post('/analytics/refresh', {}, { params: { timeframe: 'week' } })
+            .catch(() => {}),
+        )
+        return {
+          id,
+          category,
+          amount: toDecimalString(data.amount),
+        } as any
+      }
+
       await (database as any).write(async () => {
         const col: any = (database as any).get('expenses')
         await col.create((rec: any) => {
@@ -119,13 +172,36 @@ export const useExpenses = () => {
       import('../../sync/client').then((m) => m.syncNow().catch(() => {}))
       queryClient.invalidateQueries({ queryKey: ['expenses'] })
       queryClient.invalidateQueries({ queryKey: ['analytics'] })
-      import('../../lib/api').then(({ api }) => api.post('/analytics/refresh', {}, { params: { timeframe: 'week' } }).catch(()=>{}))
-      return { id, category, amount: toDecimalString(data.amount) } as any
+      import('../../lib/api').then(({ api }) =>
+        api
+          .post('/analytics/refresh', {}, { params: { timeframe: 'week' } })
+          .catch(() => {}),
+      )
+      return {
+        id,
+        category,
+        amount: toDecimalString(data.amount),
+      } as any
     },
   })
 
   const deleteExpense = useMutation({
     mutationFn: async (id: UUID) => {
+      if (isPowerSyncEnabledForPlatform()) {
+        const db = getPowerSyncDatabase()
+        await psWriteTransaction(db, async (tx) => {
+          await psDelete(tx, 'expenses', id)
+        })
+        queryClient.invalidateQueries({ queryKey: ['expenses'] })
+        queryClient.invalidateQueries({ queryKey: ['analytics'] })
+        import('../../lib/api').then(({ api }) =>
+          api
+            .post('/analytics/refresh', {}, { params: { timeframe: 'week' } })
+            .catch(() => {}),
+        )
+        return
+      }
+
       await (database as any).write(async () => {
         const rec: any = await (database as any).get('expenses').find(id)
         await rec.update((r: any) => {
@@ -136,36 +212,45 @@ export const useExpenses = () => {
       import('../../sync/client').then((m) => m.syncNow().catch(() => {}))
       queryClient.invalidateQueries({ queryKey: ['expenses'] })
       queryClient.invalidateQueries({ queryKey: ['analytics'] })
-      import('../../lib/api').then(({ api }) => api.post('/analytics/refresh', {}, { params: { timeframe: 'week' } }).catch(()=>{}))
+      import('../../lib/api').then(({ api }) =>
+        api
+          .post('/analytics/refresh', {}, { params: { timeframe: 'week' } })
+          .catch(() => {}),
+      )
     },
   })
 
   // Offline-first merge: a locally-edited expense keeps its optimistic values until the
   // server confirms the push. Expense amounts are user-entered, not server-derived.
-  const expenses = mergeLocalFirst<Expense>(getExpenses.data as Expense[] | undefined, local, {
-    overlayFields: [
-      'category',
-      'description',
-      'vendor',
-      'amount',
-      'taxAmount',
-      'isRecurring',
-      'recurringInterval',
-      'spentAt',
-      'type',
-      'frequency',
-    ] as (keyof Expense)[],
-  })
+  const expenses = powerSyncActive
+    ? psExpenses.rows.map(mapRaw)
+    : mergeLocalFirst<Expense>(getExpenses.data as Expense[] | undefined, local, {
+        overlayFields: [
+          'category',
+          'description',
+          'vendor',
+          'amount',
+          'taxAmount',
+          'isRecurring',
+          'recurringInterval',
+          'spentAt',
+          'type',
+          'frequency',
+        ] as (keyof Expense)[],
+      })
   return {
     expenses,
     totalExpenseAmount: expenses.reduce(
       (s: number, e: any) => s + toNumber(e.amount),
       0,
     ),
-    isLoading:
-      (isLocalLoading || getExpenses.isLoading) && expenses.length === 0,
-    error: (getExpenses.error as ApiError)?.friendlyMessage || null,
-    refetch: getExpenses.refetch,
+    isLoading: powerSyncActive
+      ? psExpenses.isLoading
+      : (isLocalLoading || getExpenses.isLoading) && expenses.length === 0,
+    error: powerSyncActive
+      ? psExpenses.error
+      : (getExpenses.error as ApiError)?.friendlyMessage || null,
+    refetch: powerSyncActive ? async () => {} : getExpenses.refetch,
     createExpense: createExpense.mutateAsync,
     isCreating: createExpense.isPending,
     updateExpense: async () => {

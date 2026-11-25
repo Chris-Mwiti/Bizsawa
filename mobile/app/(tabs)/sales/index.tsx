@@ -9,7 +9,7 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams } from 'expo-router'
-import { Plus, Receipt, ArrowUpRight } from 'lucide-react-native'
+import { Plus, Receipt, ArrowUpRight, ChevronRight } from 'lucide-react-native'
 import {
   Card,
   CardContent,
@@ -17,6 +17,7 @@ import {
 import { Sheet } from '../../../components/ui/Sheet'
 import { Button } from '../../../components/ui/Button'
 import { SalesEntryModal, DraftLine } from '../../../components/SalesEntryModal'
+import { SaleReceiptSheet } from '../../../components/SaleReceiptSheet'
 import { SuccessCelebration } from '../../../components/ui/SuccessCelebration'
 import { DashboardSkeleton } from '../../../components/ui/Skeleton'
 import { TAB_BAR_SCROLL_PADDING } from '../../../constants/tabBar'
@@ -41,6 +42,7 @@ export default function SalesTab() {
   const [quantity, setQuantity] = useState('1')
   const [showSuccess, setShowSuccess] = useState(false)
   const [inlineError, setInlineError] = useState<string | null>(null)
+  const [receiptSaleId, setReceiptSaleId] = useState<string | null>(null)
 
   const { products, isLoading: productsLoading } = useProducts()
   const { data: customers = [], isLoading: customersLoading } = useCustomers() as any
@@ -291,33 +293,44 @@ export default function SalesTab() {
         ) : (
           <View className='gap-3'>
             {sales.map((sale) => (
-              <Card key={sale.id}>
-                <CardContent className='p-6'>
-                  <View className='flex-row justify-between gap-3'>
-                    <View className='flex-1'>
-                      <Text
-                        className='font-geist-bold text-sm font-bold text-ink'
-                        numberOfLines={1}
-                      >
-                        {sale.receiptNumber}
-                      </Text>
-                      <Text className='font-sans text-xs text-ink-muted mt-1'>
-                        {formatDate(sale.soldAt)} • {sale.paymentMethod}
-                      </Text>
-                    </View>
-                    <View className='items-end gap-1'>
-                      <Text className='font-geist-mono-bold text-sm font-bold tracking-tight text-ink'>
-                        {formatCurrency(toNumber(sale.total))}
-                      </Text>
-                      <View className='px-2 py-1 rounded-full bg-paper border border-hairline'>
-                        <Text className='font-geist-bold text-xs font-bold text-ink-muted tracking-wide'>
-                          {String(sale.status).toUpperCase()}
+              <Pressable
+                key={sale.id}
+                onPress={() => setReceiptSaleId(sale.id)}
+                accessibilityRole='button'
+                accessibilityLabel={`View receipt ${sale.receiptNumber}`}
+                className='active:opacity-80'
+              >
+                <Card>
+                  <CardContent className='p-6'>
+                    <View className='flex-row justify-between gap-3'>
+                      <View className='flex-1'>
+                        <Text
+                          className='font-geist-bold text-sm font-bold text-ink'
+                          numberOfLines={1}
+                        >
+                          {sale.receiptNumber}
+                        </Text>
+                        <Text className='font-sans text-xs text-ink-muted mt-1'>
+                          {formatDate(sale.soldAt)} • {sale.paymentMethod}
                         </Text>
                       </View>
+                      <View className='items-end gap-1'>
+                        <Text className='font-geist-mono-bold text-sm font-bold tracking-tight text-ink'>
+                          {formatCurrency(toNumber(sale.total))}
+                        </Text>
+                        <View className='flex-row items-center gap-1'>
+                          <View className='px-2 py-1 rounded-full bg-paper border border-hairline'>
+                            <Text className='font-geist-bold text-xs font-bold text-ink-muted tracking-wide'>
+                              {String(sale.status).toUpperCase()}
+                            </Text>
+                          </View>
+                          <ChevronRight size={14} color='#9CA3AF' />
+                        </View>
+                      </View>
                     </View>
-                  </View>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              </Pressable>
             ))}
           </View>
         )}
@@ -411,6 +424,12 @@ export default function SalesTab() {
           }
         />
       </Sheet>
+
+      <SaleReceiptSheet
+        visible={!!receiptSaleId}
+        saleId={receiptSaleId}
+        onClose={() => setReceiptSaleId(null)}
+      />
     </View>
   )
 }

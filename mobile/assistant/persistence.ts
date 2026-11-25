@@ -1,10 +1,10 @@
-import { Q } from '@nozbe/watermelondb'
+import { randomUUID } from 'expo-crypto'
 import type {
   ChatClientPersistence,
   ChatPersistedState,
 } from '@tanstack/ai-react'
-import { database } from '../db/database'
-import AssistantThread from '../db/models/AssistantThread'
+import { getPowerSyncDatabase } from '../sync/powersync'
+import { isPowerSyncEnabledForPlatform } from '../sync/powersync/config'
 
 function reviveState(raw: string): ChatPersistedState | null {
   try {
@@ -32,24 +32,22 @@ function reviveState(raw: string): ChatPersistedState | null {
 export function createWatermelonChatPersistence(
   businessId: string,
 ): ChatClientPersistence {
-  const collection = database.get<AssistantThread>('assistant_threads')
+  const db = getPowerSyncDatabase()
 
-  async function find(threadId: string): Promise<AssistantThread | undefined> {
-    const rows = await collection
-      .query(
-        Q.where('business_id', businessId),
-        Q.where('thread_id', threadId),
-      )
-      .fetch()
-
-    return rows[0]
+  async function findState(threadId: string): Promise<string | null> {
+    if (!isPowerSyncEnabledForPlatform()) return null
+    const rows: any[] = await db.getAll(
+      'SELECT state FROM assistant_threads WHERE business_id = ? AND thread_id = ?',
+      [businessId, threadId],
+    )
+    return rows[0]?.state ?? null
   }
 
   return {
     async getItem(threadId) {
       try {
-        const row = await find(threadId)
-        return row ? reviveState(row.state) : undefined
+        const raw = await findState(threadId)
+        return raw ? reviveState(raw) : undefined
       } catch {
         return undefined
       }
@@ -57,25 +55,21 @@ export function createWatermelonChatPersistence(
 
     async setItem(threadId, state) {
       try {
+        if (!isPowerSyncEnabledForPlatform()) return
         const serialized = JSON.stringify(state)
-        const existing = await find(threadId)
-
-        await database.write(async () => {
-          if (existing) {
-            await existing.update((record) => {
-              record.state = serialized
-              record.updatedAtMs = Date.now()
-            })
-            return
-          }
-
-          await collection.create((record) => {
-            record.businessId = businessId
-            record.threadId = threadId
-            record.state = serialized
-            record.updatedAtMs = Date.now()
-          })
-        })
+        const now = Date.now()
+        const existing = await findState(threadId)
+        if (existing !== null) {
+          await db.execute(
+            'UPDATE assistant_threads SET state = ?, updated_at_ms = ? WHERE business_id = ? AND thread_id = ?',
+            [serialized, now, businessId, threadId],
+          )
+        } else {
+          await db.execute(
+            'INSERT INTO assistant_threads (id, business_id, thread_id, state, updated_at_ms) VALUES (?, ?, ?, ?, ?)',
+            [randomUUID(), businessId, threadId, serialized, now],
+          )
+        }
       } catch {
         // Persistence is best-effort; a failed write must not break the chat.
       }
@@ -83,12 +77,11 @@ export function createWatermelonChatPersistence(
 
     async removeItem(threadId) {
       try {
-        const row = await find(threadId)
-        if (!row) return
-
-        await database.write(async () => {
-          await row.destroyPermanently()
-        })
+        if (!isPowerSyncEnabledForPlatform()) return
+        await db.execute(
+          'DELETE FROM assistant_threads WHERE thread_id = ? AND business_id = ?',
+          [threadId, businessId],
+        )
       } catch {
         // Best-effort.
       }

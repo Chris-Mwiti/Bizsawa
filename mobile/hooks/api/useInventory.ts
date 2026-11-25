@@ -8,6 +8,18 @@ import { useEffect, useState } from 'react'
 import { useBusinessContext } from '../../contexts/BusinessContext'
 import { randomUUID } from 'expo-crypto'
 import { toISO, nowMillis } from '../../lib/syncDates'
+import {
+  getPowerSyncDatabase,
+  psInsert,
+  psUpdate,
+  psWriteTransaction,
+} from '../../sync/powersync'
+import { isPowerSyncEnabledForPlatform } from '../../sync/powersync/config'
+import {
+  INVENTORY_SQL,
+  STOCK_MOVEMENTS_SQL,
+  usePowerSyncEnabledQuery,
+} from './usePowerSyncReads'
 
 export interface InventoryItem {
   id: UUID
@@ -73,10 +85,18 @@ export const useInventory = () => {
     }
   })()
   const bid = activeBusinessId || ''
+  const psInventory = usePowerSyncEnabledQuery<any>(INVENTORY_SQL, [bid])
+  const psMovements = usePowerSyncEnabledQuery<any>(STOCK_MOVEMENTS_SQL, [bid])
+  const powerSyncActive = psInventory.active
   const [localInv, setLocalInv] = useState<InventoryItem[]>([])
   const [localMov, setLocalMov] = useState<StockMovement[]>([])
   const [_, setLoading] = useState(true)
   useEffect(() => {
+    if (powerSyncActive) {
+      setLocalInv([])
+      setLoading(false)
+      return
+    }
     if (!bid) {
       setLocalInv([])
       setLoading(false)
@@ -91,16 +111,19 @@ export const useInventory = () => {
         setLoading(false)
       })
     return () => sub.unsubscribe()
-  }, [bid])
+  }, [bid, powerSyncActive])
   useEffect(() => {
-    if (!bid) return
+    if (!bid || powerSyncActive) {
+      setLocalMov([])
+      return
+    }
     const col: any = (database as any).get('stock_movements')
     const sub = col
       .query(Q.where('business_id', bid))
       .observe()
       .subscribe((rows: any[]) => setLocalMov(rows.map(mapRawMovement)))
     return () => sub.unsubscribe()
-  }, [bid])
+  }, [bid, powerSyncActive])
 
   const getInventory = useQuery({
     queryKey: ['inventory', bid],
@@ -114,7 +137,7 @@ export const useInventory = () => {
         lowStockThreshold: toNumber(r.lowStockThreshold),
       })) as any
     },
-    enabled: !!bid,
+    enabled: !!bid && !powerSyncActive,
   })
   const getStockMovements = useQuery({
     queryKey: ['inventory', 'movements', bid],
@@ -122,13 +145,64 @@ export const useInventory = () => {
       const res = await api.get<{ movements: any[] }>('/inventory/movements')
       return (res.data.movements || []).map(mapRawMovement)
     },
-    enabled: !!bid,
+    enabled: !!bid && !powerSyncActive,
   })
 
   const adjustStock = useMutation({
     mutationFn: async (input: AdjustStockInput) => {
       const delta = toDecimalString(input.quantityDelta)
-      const now = nowMillis()
+      const now = new Date().toISOString()
+      const movementType = toNumber(delta) >= 0 ? 'in' : 'out'
+
+      if (isPowerSyncEnabledForPlatform()) {
+        const db = getPowerSyncDatabase()
+        await psWriteTransaction(db, async (tx) => {
+          const existing: any[] = await tx.getAll(
+            'SELECT id, quantity, low_stock_threshold FROM inventory_items WHERE product_id = ? AND business_id = ?',
+            [input.productId, bid]
+          )
+          if (existing.length) {
+            const rec = existing[0]
+            const patch: any = {
+              quantity: String(toNumber(rec.quantity) + toNumber(delta)),
+            }
+            if (input.lowStockThreshold !== undefined)
+              patch.low_stock_threshold = toDecimalString(input.lowStockThreshold)
+            await psUpdate(tx, 'inventory_items', rec.id, patch)
+          } else {
+            await psInsert(tx, 'inventory_items', {
+              id: randomUUID(),
+              business_id: bid,
+              product_id: input.productId,
+              quantity: delta,
+              low_stock_threshold: toDecimalString(
+                input.lowStockThreshold ?? 0
+              ),
+              sync_version: 1,
+              created_at: now,
+              updated_at: now,
+            })
+          }
+          await psInsert(tx, 'stock_movements', {
+            id: randomUUID(),
+            business_id: bid,
+            product_id: input.productId,
+            quantity_delta: delta,
+            movement_type: movementType,
+            notes: input.notes || '',
+            occurred_at: now,
+            sync_version: 1,
+            created_at: now,
+            updated_at: now,
+          })
+        })
+        queryClient.invalidateQueries({ queryKey: ['inventory'] })
+        return {
+          productId: input.productId,
+          quantityDelta: toNumber(delta),
+        } as any
+      }
+
       await (database as any).write(async () => {
         // upsert inventory_items
         const col: any = (database as any).get('inventory_items')
@@ -165,9 +239,9 @@ export const useInventory = () => {
           rec.businessId = bid
           rec.productId = input.productId
           rec.quantityDelta = delta
-          rec.movementType = toNumber(delta) >= 0 ? 'in' : 'out'
+          rec.movementType = movementType
           rec.notes = input.notes || ''
-          rec.occurredAt = now
+          rec.occurredAt = nowMillis()
           rec.syncVersion = 1
         })
       })
@@ -181,29 +255,36 @@ export const useInventory = () => {
   })
 
   // Merge pending local inventory (not yet on server) with server data — ensures new stock adjustments appear immediately
-  const inventoryMerged = (() => {
-    const server = getInventory.data as any[] | undefined
-    if (server === undefined) return localInv
-    if (!localInv.length) return server
-    const ids = new Set(server.map((s: any) => s.id))
-    const pending = localInv.filter((l: any) => !ids.has(l.id))
-    return pending.length ? [...server, ...pending] : server
-  })()
-  const movementsMerged = (() => {
-    const server = getStockMovements.data as any[] | undefined
-    if (server === undefined) return localMov
-    if (!localMov.length) return server
-    const ids = new Set(server.map((s: any) => s.id))
-    const pending = localMov.filter((l: any) => !ids.has(l.id))
-    return pending.length ? [...server, ...pending] : server
-  })()
+  const inventoryMerged = powerSyncActive
+    ? psInventory.rows.map(mapRawItem)
+    : (() => {
+        const server = getInventory.data as any[] | undefined
+        if (server === undefined) return localInv
+        if (!localInv.length) return server
+        const ids = new Set(server.map((s: any) => s.id))
+        const pending = localInv.filter((l: any) => !ids.has(l.id))
+        return pending.length ? [...server, ...pending] : server
+      })()
+  const movementsMerged = powerSyncActive
+    ? psMovements.rows.map(mapRawMovement)
+    : (() => {
+        const server = getStockMovements.data as any[] | undefined
+        if (server === undefined) return localMov
+        if (!localMov.length) return server
+        const ids = new Set(server.map((s: any) => s.id))
+        const pending = localMov.filter((l: any) => !ids.has(l.id))
+        return pending.length ? [...server, ...pending] : server
+      })()
   return {
     inventory: inventoryMerged,
-    isLoadingInventory:
-      (getInventory.isLoading as any) &&
-      !localInv.length &&
-      inventoryMerged.length === 0,
-    inventoryError: (getInventory.error as ApiError)?.friendlyMessage || null,
+    isLoadingInventory: powerSyncActive
+      ? psInventory.isLoading
+      : (getInventory.isLoading as any) &&
+        !localInv.length &&
+        inventoryMerged.length === 0,
+    inventoryError: powerSyncActive
+      ? psInventory.error
+      : (getInventory.error as ApiError)?.friendlyMessage || null,
     lowStockItems: [] as any,
     isLoadingLowStock: false,
     movements: movementsMerged,
@@ -212,6 +293,8 @@ export const useInventory = () => {
     isLoadingValuation: false,
     adjustStock: adjustStock.mutateAsync,
     isAdjustingStock: adjustStock.isPending,
-    refetchInventory: getInventory.refetch,
+    refetchInventory: powerSyncActive
+      ? async () => {}
+      : getInventory.refetch,
   }
 }

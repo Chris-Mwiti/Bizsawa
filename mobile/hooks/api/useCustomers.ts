@@ -11,6 +11,14 @@ import { Q } from '@nozbe/watermelondb'
 import { useEffect, useState } from 'react'
 import { useBusinessContext } from '../../contexts/BusinessContext'
 import { toISO } from '../../lib/syncDates'
+import {
+  getPowerSyncDatabase,
+  psInsert,
+  psUpdate,
+  psWriteTransaction,
+} from '../../sync/powersync'
+import { isPowerSyncEnabledForPlatform } from '../../sync/powersync/config'
+import { CUSTOMERS_SQL, usePowerSyncEnabledQuery } from './usePowerSyncReads'
 
 export interface Customer extends BackendCustomer {}
 export interface CreateCustomerRequest extends CustomerRequest {
@@ -64,10 +72,17 @@ export const useCustomers = () => {
     }
   })()
   const bid = activeBusinessId || ''
+  const psCustomers = usePowerSyncEnabledQuery<any>(CUSTOMERS_SQL, [bid])
+  const powerSyncActive = psCustomers.active
   const [local, setLocal] = useState<Customer[]>([])
   const [isLocalLoading, setIsLocalLoading] = useState(true)
 
   useEffect(() => {
+    if (powerSyncActive) {
+      setLocal([])
+      setIsLocalLoading(false)
+      return
+    }
     if (!bid) {
       setLocal([])
       setIsLocalLoading(false)
@@ -82,15 +97,15 @@ export const useCustomers = () => {
         setIsLocalLoading(false)
       })
     return () => sub.unsubscribe()
-  }, [bid])
+  }, [bid, powerSyncActive])
 
   // Trigger background sync hydration when business becomes active so Watermelon local is populated
   useEffect(() => {
-    if (!bid) return
+    if (!bid || powerSyncActive) return
     // fire-and-forget sync pull; local observer will update when pull completes
     import('../../sync/client').then((m) => m.syncNow().catch(() => {}))
     // also ensure server fetch runs via query below
-  }, [bid])
+  }, [bid, powerSyncActive])
 
   const getCustomers = useQuery({
     queryKey: ['customers', bid],
@@ -98,30 +113,34 @@ export const useCustomers = () => {
       const res = await api.get<{ customers: Customer[] }>('/customers', { signal })
       return res.data.customers || []
     },
-    enabled: !!bid,
+    enabled: !!bid && !powerSyncActive,
     staleTime: 30 * 1000,
   })
 
   // Merge server + pending local reactively (not via separate query, so it updates when either changes)
-  const merged = (() => {
-    const server = getCustomers.data as any[] | undefined
-    if (server === undefined) return local
-    if (!local.length) return server
-    const ids = new Set(server.map((s: any) => s.id))
-    const pending = local.filter((l: any) => !ids.has(l.id))
-    return pending.length ? [...server, ...pending] : server
-  })()
+  const merged = powerSyncActive
+    ? psCustomers.rows.map(mapRawToCustomer)
+    : (() => {
+        const server = getCustomers.data as any[] | undefined
+        if (server === undefined) return local
+        if (!local.length) return server
+        const ids = new Set(server.map((s: any) => s.id))
+        const pending = local.filter((l: any) => !ids.has(l.id))
+        return pending.length ? [...server, ...pending] : server
+      })()
 
   // If local has data, we are not loading even if server is still fetching; only loading when both empty
-  const isLoading = isLocalLoading || (getCustomers.isLoading && merged.length === 0)
+  const isLoading = powerSyncActive
+    ? psCustomers.isLoading
+    : isLocalLoading || (getCustomers.isLoading && merged.length === 0)
 
   // Expose Query-like shape expected by callers: { data, isLoading, refetch, error, isFetching }
   return {
     data: merged,
     isLoading,
-    isFetching: getCustomers.isFetching,
-    error: getCustomers.error,
-    refetch: getCustomers.refetch,
+    isFetching: powerSyncActive ? false : getCustomers.isFetching,
+    error: powerSyncActive ? psCustomers.error : getCustomers.error,
+    refetch: powerSyncActive ? async () => {} : getCustomers.refetch,
   } as any as { data: Customer[]; isLoading: boolean; refetch: () => any }
 }
 
@@ -153,6 +172,32 @@ export const useCreateCustomer = () => {
     mutationFn: async (data: CreateCustomerRequest) => {
       if (!bid) throw new Error('Select a business first')
       const id = randomUUID()
+      const now = new Date().toISOString()
+
+      if (isPowerSyncEnabledForPlatform()) {
+        const db = getPowerSyncDatabase()
+        await psWriteTransaction(db, async (tx) => {
+          await psInsert(tx, 'customers', {
+            id,
+            business_id: bid,
+            tenant_id: bid,
+            name: data.name.trim(),
+            phone: (data as any).phone?.trim() || null,
+            email: (data as any).email?.trim() || null,
+            address: (data as any).address?.trim() || null,
+            tags: JSON.stringify((data as any).tags || []),
+            notes: (data as any).notes || null,
+            loyalty_points: 0,
+            total_spend: '0',
+            sync_version: 1,
+            created_at: now,
+            updated_at: now,
+          })
+        })
+        queryClient.invalidateQueries({ queryKey: ['customers'] })
+        return { id, name: data.name } as any
+      }
+
       await (database as any).write(async () => {
         const col: any = (database as any).get('customers')
         await col.create((rec: any) => {
@@ -181,6 +226,28 @@ export const useUpdateCustomer = () => {
   return useMutation({
     mutationFn: async (data: Partial<CustomerRequest> & { id: UUID }) => {
       const { id, ...payload } = data
+      const patch: any = {}
+      if ((payload as any).name) patch.name = (payload as any).name.trim()
+      if ((payload as any).phone !== undefined)
+        patch.phone = (payload as any).phone?.trim() || null
+      if ((payload as any).email !== undefined)
+        patch.email = (payload as any).email?.trim() || null
+      if ((payload as any).address !== undefined)
+        patch.address = (payload as any).address?.trim() || null
+      if ((payload as any).tags !== undefined)
+        patch.tags = JSON.stringify((payload as any).tags || [])
+      if ((payload as any).notes !== undefined)
+        patch.notes = (payload as any).notes || null
+
+      if (isPowerSyncEnabledForPlatform()) {
+        const db = getPowerSyncDatabase()
+        await psWriteTransaction(db, async (tx) => {
+          await psUpdate(tx, 'customers', id, patch)
+        })
+        queryClient.invalidateQueries({ queryKey: ['customers'] })
+        return { id } as any
+      }
+
       await (database as any).write(async () => {
         const rec: any = await (database as any).get('customers').find(id)
         await rec.update((r: any) => {
@@ -195,10 +262,6 @@ export const useUpdateCustomer = () => {
             r.tags = JSON.stringify((payload as any).tags || [])
           if ((payload as any).notes !== undefined)
             r.notes = (payload as any).notes || null
-          // NOTE: never bump syncVersion here. The client must send the
-          // last-pulled server version so the version protocol can compare
-          // honestly; the server increments on apply. Local +1 guarantees
-          // a permanent mismatch (false conflict on every offline edit).
         })
       })
       import('../../sync/client').then((m) => m.syncNow().catch(() => {}))

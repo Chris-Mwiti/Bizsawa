@@ -13,7 +13,8 @@
     "ios": "expo run:ios",
     "ios:dev": "NODE_ENV=development expo run:ios",
     "web": "expo start --web --port 3046",
-    "postinstall": "patch-package",
+    "postinstall": "patch-package && powersync-web copy-assets -o public",
+    "powersync:assets": "powersync-web copy-assets -o public",
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
     "lint:fix": "eslint . --ext .js,.jsx,.ts,.tsx --fix",
     "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,md}\"",
@@ -28,6 +29,7 @@
     "build:web:dev": "expo export -p web --dev && node scripts/patch-web-pwa.js"
   },
   "dependencies": {
+    "@azure/core-asynciterator-polyfill": "^1.0.2",
     "@clerk/clerk-expo": "^2.20.1",
     "@clerk/clerk-react": "^5.61.10",
     "@expo-google-fonts/geist": "^0.4.2",
@@ -35,6 +37,11 @@
     "@lottiefiles/dotlottie-react": "^0.20.0",
     "@morrowdigital/watermelondb-expo-plugin": "^2.4.0-beta.0",
     "@nozbe/watermelondb": "^0.28.0",
+    "@op-engineering/op-sqlite": "18.2.5",
+    "@powersync/common": "2.5.0",
+    "@powersync/react": "2.2.1",
+    "@powersync/react-native": "2.4.1",
+    "@powersync/web": "2.7.0",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/netinfo": "11.4.1",
     "@react-native-google-signin/google-signin": "^16.1.2",
@@ -87,6 +94,7 @@
   },
   "devDependencies": {
     "@babel/plugin-proposal-decorators": "^8.0.2",
+    "@babel/plugin-transform-async-generator-functions": "^8.0.6",
     "@babel/plugin-transform-class-properties": "^7.25.4",
     "@types/react": "~19.1.0",
     "@typescript-eslint/eslint-plugin": "8.26.0",

@@ -13,6 +13,14 @@ import { Q } from '@nozbe/watermelondb'
 import { useEffect, useState } from 'react'
 import { useBusinessContext } from '../../contexts/BusinessContext'
 import { toISO, nowMillis, toMillis } from '../../lib/syncDates'
+import {
+  getPowerSyncDatabase,
+  psInsert,
+  psUpdate,
+  psWriteTransaction,
+} from '../../sync/powersync'
+import { isPowerSyncEnabledForPlatform } from '../../sync/powersync/config'
+import { INVOICES_SQL, usePowerSyncEnabledQuery } from './usePowerSyncReads'
 
 export interface CreateInvoiceInput {
   customerId: UUID
@@ -62,9 +70,16 @@ export const useInvoices = () => {
     }
   })()
   const bid = activeBusinessId || ''
+  const psInvoices = usePowerSyncEnabledQuery<any>(INVOICES_SQL, [bid])
+  const powerSyncActive = psInvoices.active
   const [local, setLocal] = useState<InvoiceListItem[]>([])
   const [isLocalLoading, setIsLocalLoading] = useState(true)
   useEffect(() => {
+    if (powerSyncActive) {
+      setLocal([])
+      setIsLocalLoading(false)
+      return
+    }
     if (!bid) {
       setLocal([])
       setIsLocalLoading(false)
@@ -79,7 +94,7 @@ export const useInvoices = () => {
         setIsLocalLoading(false)
       })
     return () => sub.unsubscribe()
-  }, [bid])
+  }, [bid, powerSyncActive])
 
   const getInvoices = useQuery({
     queryKey: ['invoices', bid],
@@ -87,13 +102,51 @@ export const useInvoices = () => {
       const res = await api.get<{ invoices: InvoiceListItem[] }>('/invoices')
       return res.data.invoices || []
     },
-    enabled: !!bid,
+    enabled: !!bid && !powerSyncActive,
   })
 
   const getInvoice = (id: UUID) =>
     useQuery<InvoiceDetail>({
       queryKey: ['invoices', id],
       queryFn: async () => {
+        if (isPowerSyncEnabledForPlatform()) {
+          const db = getPowerSyncDatabase()
+          const raw: any = await db.get(
+            'SELECT * FROM invoices WHERE id = ? AND deleted_at IS NULL',
+            [id],
+          )
+          if (!raw) throw new Error(`Invoice ${id} not found`)
+          const lines: any[] = await db.getAll(
+            'SELECT * FROM invoice_lines WHERE invoice_id = ? AND deleted_at IS NULL',
+            [id],
+          )
+          return {
+            id: raw.id,
+            invoiceNumber:
+              raw.invoice_number ||
+              `INV-${String(raw.id).slice(0, 6).toUpperCase()}`,
+            customerId: raw.customer_id || null,
+            customerName: '',
+            status: raw.status || 'draft',
+            total: raw.total || '0',
+            subtotal: raw.subtotal || '0',
+            taxAmount: raw.tax_amount || '0',
+            amountPaid: raw.amount_paid || '0',
+            amountDue: raw.amount_due || '0',
+            currency: raw.currency || 'KES',
+            dueAt: toISO(raw.due_at),
+            createdAt: toISO(raw.created_at),
+            lines: lines.map((l: any) => ({
+              id: l.id,
+              productId: l.product_id || null,
+              description: l.description,
+              quantity: l.quantity,
+              unitPrice: l.unit_price,
+              lineTotal: l.line_total,
+            })),
+            payments: [],
+          } as any
+        }
         // Prefer local — keep customerId and productId for name resolution in UI
         try {
           const rec: any = await (database as any).get('invoices').find(id)
@@ -152,6 +205,52 @@ export const useInvoices = () => {
       const dueAt = data.dueAt
         ? toMillis(data.dueAt)
         : nowMillis() + 7 * 86400000
+      const now = new Date().toISOString()
+
+      if (isPowerSyncEnabledForPlatform()) {
+        const db = getPowerSyncDatabase()
+        await psWriteTransaction(db, async (tx) => {
+          await psInsert(tx, 'invoices', {
+            id,
+            business_id: bid,
+            tenant_id: bid,
+            customer_id: data.customerId || null,
+            invoice_number: number,
+            status: 'draft',
+            subtotal: toDecimalString(subtotal),
+            tax_amount: toDecimalString(tax),
+            total: toDecimalString(total),
+            amount_paid: toDecimalString(0),
+            amount_due: toDecimalString(total),
+            currency: 'KES',
+            notes: data.notes || null,
+            due_at: new Date(dueAt).toISOString(),
+            sync_version: 1,
+            created_at: now,
+            updated_at: now,
+          })
+          for (const line of data.lines) {
+            await psInsert(tx, 'invoice_lines', {
+              id: randomUUID(),
+              business_id: bid,
+              invoice_id: id,
+              product_id: (line as any).productId || null,
+              description: line.description,
+              quantity: toDecimalString(line.quantity),
+              unit_price: toDecimalString(line.unitPrice),
+              line_total: toDecimalString(
+                toNumber(line.quantity) * toNumber(line.unitPrice),
+              ),
+              sync_version: 1,
+              created_at: now,
+              updated_at: now,
+            })
+          }
+        })
+        queryClient.invalidateQueries({ queryKey: ['invoices'] })
+        return { id, invoiceNumber: number } as any
+      }
+
       await (database as any).write(async () => {
         const col: any = (database as any).get('invoices')
         await col.create((rec: any) => {
@@ -227,26 +326,60 @@ export const useInvoices = () => {
       if (toNumber(amountStr) <= 0) throw new Error('Payment amount must be positive')
       // Offline-first: update local invoice immediately
       let localResult: any = null
-      try {
-        await (database as any).write(async () => {
-          const rec: any = await (database as any).get('invoices').find(id)
-          const raw = rec._raw
-          const total = toNumber(raw.total ?? raw._raw?.total ?? rec.total)
-          const prevPaid = toNumber(raw.amount_paid ?? rec.amountPaid ?? '0')
+      if (isPowerSyncEnabledForPlatform()) {
+        const db = getPowerSyncDatabase()
+        await psWriteTransaction(db, async (tx) => {
+          const rec: any = await tx.get(
+            'SELECT id, total, amount_paid FROM invoices WHERE id = ? AND business_id = ?',
+            [id, bid],
+          )
+          if (!rec) throw new Error('invoice not found locally')
+          const total = toNumber(rec.total)
+          const prevPaid = toNumber(rec.amount_paid)
           const newPaid = prevPaid + toNumber(amountStr)
           const newDue = Math.max(0, total - newPaid)
           const newStatus = newDue <= 0.005 ? 'paid' : 'partial'
-          await rec.update((r: any) => {
-            r.amountPaid = toDecimalString(newPaid)
-            r.amountDue = toDecimalString(newDue)
-            r.status = newStatus
-            // NOTE: never bump syncVersion here — see useCustomers.ts.
+          await psUpdate(tx, 'invoices', id, {
+            amount_paid: toDecimalString(newPaid),
+            amount_due: toDecimalString(newDue),
+            status: newStatus,
           })
-          localResult = { id, amount: amountStr, amountPaid: toDecimalString(newPaid), amountDue: toDecimalString(newDue), status: newStatus }
+          localResult = {
+            id,
+            amount: amountStr,
+            amountPaid: toDecimalString(newPaid),
+            amountDue: toDecimalString(newDue),
+            status: newStatus,
+          }
         })
-      } catch (e: any) {
-        // If invoice not found locally, fallback to server (e.g. legacy server-only invoice)
-        console.warn('[Invoices] recordPayment local update failed, will try server', e?.message)
+      } else {
+        try {
+          await (database as any).write(async () => {
+            const rec: any = await (database as any).get('invoices').find(id)
+            const raw = rec._raw
+            const total = toNumber(raw.total ?? raw._raw?.total ?? rec.total)
+            const prevPaid = toNumber(raw.amount_paid ?? rec.amountPaid ?? '0')
+            const newPaid = prevPaid + toNumber(amountStr)
+            const newDue = Math.max(0, total - newPaid)
+            const newStatus = newDue <= 0.005 ? 'paid' : 'partial'
+            await rec.update((r: any) => {
+              r.amountPaid = toDecimalString(newPaid)
+              r.amountDue = toDecimalString(newDue)
+              r.status = newStatus
+              // NOTE: never bump syncVersion here — see useCustomers.ts.
+            })
+            localResult = {
+              id,
+              amount: amountStr,
+              amountPaid: toDecimalString(newPaid),
+              amountDue: toDecimalString(newDue),
+              status: newStatus,
+            }
+          })
+        } catch (e: any) {
+          // If invoice not found locally, fallback to server (e.g. legacy server-only invoice)
+          console.warn('[Invoices] recordPayment local update failed, will try server', e?.message)
+        }
       }
       import('../../sync/client').then((m) => m.syncNow().catch(() => {}))
       queryClient.invalidateQueries({ queryKey: ['invoices'] })
@@ -287,6 +420,108 @@ export const useInvoices = () => {
       const amountStr = toDecimalString(amount)
       if (toNumber(amountStr) <= 0) throw new Error('Payment amount must be positive')
       if (!customerId) throw new Error('customerId required')
+
+      if (isPowerSyncEnabledForPlatform()) {
+        const db = getPowerSyncDatabase()
+        let psResult: any = {
+          allocations: [],
+          totalApplied: '0',
+          remainingCredit: amountStr,
+        }
+        try {
+          await psWriteTransaction(db, async (tx) => {
+            const rows: any[] = await tx.getAll(
+              'SELECT id, invoice_number, total, amount_paid, amount_due, status, due_at, created_at FROM invoices WHERE business_id = ? AND customer_id = ? AND deleted_at IS NULL',
+              [bid, customerId],
+            )
+            const unpaid = rows
+              .map((row: any) => ({
+                row,
+                dueAt: new Date(row.due_at || row.created_at || 0).getTime() || 0,
+                total: toNumber(row.total),
+                paid: toNumber(row.amount_paid),
+                due: toNumber(row.amount_due),
+              }))
+              .filter(
+                (x: any) =>
+                  x.due > 0.005 &&
+                  !['paid', 'cancelled'].includes(String(x.row.status)),
+              )
+              .sort((a: any, b: any) => a.dueAt - b.dueAt)
+            if (!unpaid.length)
+              throw new Error('no unpaid invoices for this customer (local)')
+            let remaining = toNumber(amountStr)
+            const allocations: any[] = []
+            let totalApplied = 0
+            for (const item of unpaid) {
+              if (remaining <= 0.005) break
+              const apply = Math.min(remaining, item.due)
+              const newPaid = item.paid + apply
+              const newDue = Math.max(0, item.total - newPaid)
+              const newStatus = newDue <= 0.005 ? 'paid' : 'partial'
+              await psUpdate(tx, 'invoices', item.row.id, {
+                amount_paid: toDecimalString(newPaid),
+                amount_due: toDecimalString(newDue),
+                status: newStatus,
+              })
+              allocations.push({
+                invoiceId: item.row.id,
+                invoiceNumber: item.row.invoice_number,
+                amount: toDecimalString(apply),
+                status: newStatus,
+              })
+              totalApplied += apply
+              remaining = Math.max(0, remaining - apply)
+            }
+            if (!allocations.length)
+              throw new Error('payment could not be applied to any invoice')
+            psResult = {
+              allocations,
+              totalApplied: toDecimalString(totalApplied),
+              remainingCredit: toDecimalString(remaining),
+            }
+          })
+        } catch (e: any) {
+          console.warn('[Invoices] settleCustomerPayment local failed', e?.message)
+          try {
+            const { default: NetInfo } = await import(
+              '@react-native-community/netinfo'
+            )
+            const s: any = await NetInfo.fetch()
+            if (s.isConnected) {
+              const res = await api.post(
+                `/invoices/customer/${customerId}/settle`,
+                { amount: amountStr, method: method || 'cash', reference },
+              )
+              return res.data
+            }
+          } catch {}
+          throw e
+        }
+        queryClient.invalidateQueries({ queryKey: ['invoices'] })
+        try {
+          const { default: NetInfo } = await import(
+            '@react-native-community/netinfo'
+          )
+          const s: any = await NetInfo.fetch()
+          if (s.isConnected) {
+            api
+              .post(`/invoices/customer/${customerId}/settle`, {
+                amount: amountStr,
+                method: method || 'cash',
+                reference,
+              })
+              .catch((err: any) =>
+                console.warn(
+                  '[Invoices] settle API background failed',
+                  err?.message,
+                ),
+              )
+          }
+        } catch {}
+        return psResult
+      }
+
       // Local FIFO settlement
       let result: any = { allocations: [], totalApplied: '0', remainingCredit: amountStr }
       try {
@@ -352,19 +587,24 @@ export const useInvoices = () => {
   // Offline-first merge: a locally-edited invoice keeps its optimistic values until the
   // server confirms the push. total/amountDue stay server-authoritative because the
   // backend derives them from invoice lines.
-  const invoices = mergeLocalFirst<InvoiceListItem>(
-    getInvoices.data as InvoiceListItem[] | undefined,
-    local,
-    { overlayFields: ['status', 'dueAt', 'customerId'] as (keyof InvoiceListItem)[] },
-  )
+  const invoices = powerSyncActive
+    ? psInvoices.rows.map(mapRaw)
+    : mergeLocalFirst<InvoiceListItem>(
+        getInvoices.data as InvoiceListItem[] | undefined,
+        local,
+        { overlayFields: ['status', 'dueAt', 'customerId'] as (keyof InvoiceListItem)[] },
+      )
   // Use local loading to avoid flash when offline
   void isLocalLoading
   return {
     invoices,
-    isLoading:
-      (isLocalLoading || getInvoices.isLoading) && invoices.length === 0,
-    error: (getInvoices.error as ApiError)?.friendlyMessage || null,
-    refetch: getInvoices.refetch,
+    isLoading: powerSyncActive
+      ? psInvoices.isLoading
+      : (isLocalLoading || getInvoices.isLoading) && invoices.length === 0,
+    error: powerSyncActive
+      ? psInvoices.error
+      : (getInvoices.error as ApiError)?.friendlyMessage || null,
+    refetch: powerSyncActive ? async () => {} : getInvoices.refetch,
     getInvoice,
     createInvoice: createInvoice.mutateAsync,
     isCreating: createInvoice.isPending,
